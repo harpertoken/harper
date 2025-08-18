@@ -1,0 +1,191 @@
+name: Release
+
+permissions:
+  contents: write
+  packages: write
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: 1
+  RUSTFLAGS: "-D warnings"
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.get_tag.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get tag name
+        id: get_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate release notes (changes + GitHub @usernames)
+        id: release_notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          CURR_TAG=${{ steps.get_tag.outputs.tag }}
+          PREV_TAG=$(git describe --tags --abbrev=0 "${CURR_TAG}^" 2>/dev/null || echo "")
+          ROOT_SHA=$(git rev-list --max-parents=0 HEAD | tail -n1)
+
+          if [ -n "$PREV_TAG" ]; then
+            BASE_REF="$PREV_TAG"
+            RANGE="$PREV_TAG..$CURR_TAG"
+          else
+            BASE_REF="$ROOT_SHA"
+            RANGE="$ROOT_SHA..$CURR_TAG"
+          fi
+
+          {
+            echo "## Release $CURR_TAG"
+            echo
+            echo "### Changes"
+          } > RELEASE_NOTES.md
+
+          git log "$RANGE" --pretty=format:"- %s" >> RELEASE_NOTES.md || true
+          if ! grep -q "^- " RELEASE_NOTES.md; then
+            echo "- None" >> RELEASE_NOTES.md
+          fi
+
+          {
+            echo
+            echo "### Contributors"
+          } >> RELEASE_NOTES.md
+
+          gh api "repos/${{ github.repository }}/compare/${BASE_REF}...${CURR_TAG}" \
+            -q '.commits[].author.login' 2>/dev/null | \
+            grep -v '^$' | sort -u | sed 's/^/- @/' >> RELEASE_NOTES.md || true
+
+          if ! tail -n +1 RELEASE_NOTES.md | awk '/^### Contributors/{p=1;next} /^### /{p=0} p' | grep -q "^- @"; then
+            echo "- None" >> RELEASE_NOTES.md
+          fi
+
+          echo "----- RELEASE_NOTES.md -----"
+          cat RELEASE_NOTES.md
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          name: "Harper ${{ steps.get_tag.outputs.tag }}"
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ contains(steps.get_tag.outputs.tag, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-release:
+    name: Build Release
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: harper-linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: harper-windows-x86_64.exe
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: harper-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: harper-macos-aarch64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev pkg-config
+
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install sqlite3 pkg-config
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+          cache-on-failure: true
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }} --locked
+
+      - name: Run tests on release binary
+        run: cargo test --release --target ${{ matrix.target }} --locked
+
+      - name: Strip binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: strip target/${{ matrix.target }}/release/harper
+
+      - name: Prepare binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cp target/${{ matrix.target }}/release/harper ${{ matrix.name }}
+          chmod +x ${{ matrix.name }}
+
+      - name: Prepare binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cp "target/${{ matrix.target }}/release/harper.exe" "${{ matrix.name }}"
+        shell: bash
+
+      - name: Calculate checksums
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            certutil -hashfile ${{ matrix.name }} SHA256 > ${{ matrix.name }}.sha256
+          else
+            shasum -a 256 ${{ matrix.name }} > ${{ matrix.name }}.sha256
+          fi
+        shell: bash
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag_name }}
+          files: |
+            ${{ github.workspace }}/${{ matrix.name }}
+            ${{ github.workspace }}/${{ matrix.name }}.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

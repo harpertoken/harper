@@ -1,0 +1,68 @@
+# Target platforms to check dependencies for
+[graph]
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },  # 64-bit Linux
+    { triple = "x86_64-apple-darwin" },      # 64-bit macOS (Intel)
+    { triple = "aarch64-apple-darwin" },     # 64-bit macOS (Apple Silicon)
+    { triple = "x86_64-pc-windows-msvc" },   # 64-bit Windows (MSVC)
+]
+
+# Security advisory settings
+[advisories]
+db-path = "~/.cargo/advisory-db"
+# Source for security advisories
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Allow unmaintained crates but report them (set to "deny-unmaintained" to block)
+unmaintained = "all"
+# Warn about yanked versions of crates
+yanked = "warn"
+# List of advisory IDs to ignore (e.g., { id = "RUSTSEC-YYYY-XXXX" })
+ignore = []
+
+# License configuration
+[licenses]
+# Whitelist of allowed licenses
+allow = [
+    "MIT",                          # Permissive license
+    "Apache-2.0",                   # Permissive with patent grant
+    "Apache-2.0 WITH LLVM-exception", # For LLVM-related crates
+    "BSD-2-Clause",                 # Simplified BSD
+    "BSD-3-Clause",                 # New BSD
+    "ISC",                         # ISC License (similar to MIT)
+    "Unicode-DFS-2016",            # Unicode License
+    "MPL-2.0",                     # Mozilla Public License 2.0
+    "Zlib",                        # zlib/libpng license
+    "Unicode-3.0",                 # For Unicode-related crates
+]  # Add other permissive licenses as needed
+confidence-threshold = 0.8
+clarify = []
+
+# Dependency banning rules
+[bans]
+# Warn about multiple versions of the same crate
+multiple-versions = "warn"
+# Allow wildcard version requirements
+wildcards = "allow"
+# Highlight all versions of duplicate packages
+highlight = "all"
+# Allow workspace crates to use default features
+workspace-default-features = "allow"
+# Allow external crates to use default features
+external-default-features = "allow"
+# Explicitly allowed crates (none by default)
+allow = []
+# Explicitly denied crates with version constraints
+deny = [
+    # Deny old OpenSSL versions with known vulnerabilities
+    { name = "openssl", version = "<0.10.55" },
+    # Deny old Tokio versions with known issues
+    { name = "tokio", version = "<1.20.0" },
+]
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
