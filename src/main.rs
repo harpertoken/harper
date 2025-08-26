@@ -1,23 +1,28 @@
 use chrono::Datelike;
 use colored::*;
-use dotenvy::dotenv;
+use mcp_client::{
+    transport::{sse::SseTransportHandle, SseTransport},
+    McpClient, McpClientTrait, McpService, Transport,
+};
 use rusqlite::Connection;
-use std::env;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Write};
 use std::time::Duration;
+use tower::timeout::Timeout;
 use uuid::Uuid;
 
+mod config;
 mod core;
 mod providers;
 mod storage;
 mod ui;
 mod utils;
 
+use config::HarperConfig;
 use core::*;
 use providers::*;
 use storage::*;
-// use ui::*;  // Currently unused
 use utils::*;
 
 fn list_sessions(conn: &Connection) {
@@ -70,7 +75,11 @@ fn export_session(conn: &Connection) {
     println!("Session exported to {}", filename.bold().yellow());
 }
 
-async fn start_chat_session(conn: &Connection, config: &ApiConfig) {
+async fn start_chat_session(
+    conn: &Connection,
+    config: &ApiConfig,
+    mcp_client: Option<&McpClient<Timeout<McpService<SseTransportHandle>>>>,
+) {
     let session_id = Uuid::new_v4().to_string();
     save_session(conn, &session_id).unwrap();
 
@@ -139,7 +148,7 @@ Tool format:
             .build()
             .unwrap();
 
-        match call_llm(&client, config, &history).await {
+        match call_llm(&client, config, &history, mcp_client).await {
             Ok(mut assistant_reply) => {
                 let trimmed_reply = assistant_reply
                     .trim()
@@ -223,7 +232,7 @@ Tool format:
                 }
 
                 if tool_used {
-                    match call_llm(&client, config, &history).await {
+                    match call_llm(&client, config, &history, mcp_client).await {
                         Ok(final_reply) => {
                             assistant_reply = final_reply;
                         }
@@ -259,45 +268,74 @@ Tool format:
 
 #[tokio::main]
 async fn main() {
-    dotenv().ok();
-
-    println!("{}", "Select an API Provider:".bold().yellow());
-    println!("1. OpenAI (gpt-4-turbo)");
-    println!("2. Sambanova (Meta-Llama-3.2-1B-Instruct)");
-    println!("3. Google Gemini (gemini-2.0-flash)");
-    print!("Enter your choice: ");
-    io::stdout().flush().unwrap();
-
-    let mut choice = String::new();
-    io::stdin().read_line(&mut choice).unwrap();
-
-    let config = match choice.trim() {
-        "1" => ApiConfig {
-            provider: ApiProvider::OpenAI,
-            api_key: env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY not set in .env for OpenAI"),
-            base_url: "https://api.openai.com/v1/chat/completions".to_string(),
-            model_name: "gpt-4-turbo".to_string(),
-        },
-        "2" => ApiConfig {
-            provider: ApiProvider::Sambanova,
-            api_key: env::var("SAMBANOVA_API_KEY").expect("SAMBANOVA_API_KEY not set in .env for Sambanova"),
-            base_url: "https://api.sambanova.ai/v1/chat/completions".to_string(),
-            model_name: "Meta-Llama-3.2-1B-Instruct".to_string(),
-        },
-        "3" => ApiConfig {
-            provider: ApiProvider::Gemini,
-            api_key: env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY not set in .env for Google Gemini"),
-            base_url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent".to_string(),
-            model_name: "gemini-2.0-flash".to_string(),
-        },
-        _ => {
-            println!("{}", "Invalid choice. Exiting.".red());
+    let config = match HarperConfig::new() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to load configuration: {}", e);
             return;
         }
     };
 
-    let conn = Connection::open("chat_sessions.db").unwrap();
+    let api_config = ApiConfig {
+        provider: match config.api.provider.as_str() {
+            "OpenAI" => ApiProvider::OpenAI,
+            "Sambanova" => ApiProvider::Sambanova,
+            "Gemini" => ApiProvider::Gemini,
+            _ => {
+                println!(
+                    "{}",
+                    "Invalid API provider in configuration. Exiting.".red()
+                );
+                return;
+            }
+        },
+        api_key: config.api.api_key.clone(),
+        base_url: config.api.base_url.clone(),
+        model_name: config.api.model_name.clone(),
+    };
+
+    let conn = Connection::open(&config.database.path).unwrap();
     init_db(&conn).unwrap();
+
+    let mcp_client = if config.mcp.enabled {
+        // Create SSE transport
+        let transport = SseTransport::new(config.mcp.server_url.clone(), HashMap::new());
+
+        // Start transport and get handle
+        let handle = match transport.start().await {
+            Ok(handle) => handle,
+            Err(e) => {
+                eprintln!("Failed to start MCP transport: {}", e);
+                return;
+            }
+        };
+
+        // Create service with timeout
+        let service = McpService::with_timeout(handle, Duration::from_secs(30));
+
+        // Create client
+        let mut client = McpClient::new(service);
+
+        // Initialize client
+        match client
+            .initialize(
+                mcp_client::client::ClientInfo {
+                    name: "harper".into(),
+                    version: "0.1.0".into(),
+                },
+                mcp_client::client::ClientCapabilities::default(),
+            )
+            .await
+        {
+            Ok(_) => Some(client),
+            Err(e) => {
+                eprintln!("Failed to initialize MCP client: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     loop {
         println!("\n{}", "Main Menu".bold().yellow());
@@ -313,7 +351,7 @@ async fn main() {
         io::stdin().read_line(&mut menu_choice).unwrap();
 
         match menu_choice.trim() {
-            "1" => start_chat_session(&conn, &config).await,
+            "1" => start_chat_session(&conn, &api_config, mcp_client.as_ref()).await,
             "2" => list_sessions(&conn),
             "3" => view_session(&conn),
             "4" => export_session(&conn),

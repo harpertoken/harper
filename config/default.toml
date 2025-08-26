@@ -1,0 +1,12 @@
+[api]
+provider = "OpenAI"
+api_key = "your_api_key_here"
+base_url = "https://api.openai.com/v1/chat/completions"
+model_name = "gpt-4-turbo"
+
+[database]
+path = "chat_sessions.db"
+
+[mcp]
+enabled = false
+server_url = "http://localhost:5000"

@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+pub mod crypto;
+
 pub async fn web_search(query: &str) -> Result<String, reqwest::Error> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))

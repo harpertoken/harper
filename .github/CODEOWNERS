@@ -1,0 +1,23 @@
+# Default owners for the entire repository
+*       @bniladridas
+
+# Core functionality
+/src/core/        @bniladridas
+/src/providers/   @bniladridas
+/src/storage/     @bniladridas
+/src/ui/          @bniladridas
+
+# Configuration
+/config/          @bniladridas @harper/backend
+
+# CI/CD and build
+.github/          @bniladridas @harper/devops
+
+# Documentation
+*.md              @bniladridas @harper/docs
+
+# Tests
+/tests/           @bniladridas @harper/qa
+
+# Scripts
+/scripts/         @bniladridas @harper/devops

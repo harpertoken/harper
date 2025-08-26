@@ -1,30 +1,28 @@
+# Harper AI Agent
+
 [![CI](https://github.com/bniladridas/harper/actions/workflows/ci.yml/badge.svg)](https://github.com/bniladridas/harper/actions/workflows/ci.yml)
 [![Release](https://github.com/bniladridas/harper/actions/workflows/release.yml/badge.svg)](https://github.com/bniladridas/harper/actions/workflows/release.yml)
 
-<div style="display: flex; align-items: flex-start; justify-content: space-between;">
-  <p>
-    Welcome to Harper AI Agent! A tool that connects to multiple AI providers, executes shell commands, and maintains conversation history, all on your system.
-  </p>
-  <img 
-    src="https://github.com/user-attachments/assets/55c24e02-82ac-470f-b83b-1560e6b6fcd7" 
-    alt="Harper AI Agent" 
-    width="300" 
-    style="margin-left: 20px;"
-  />
-</div>
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/55c24e02-82ac-470f-b83b-1560e6b6fcd7" alt="Harper Logo" width="300"/>
+</p>
 
-# Harper AI Agent Guide
+**Harper AI Agent** is a Rust-based tool for connecting to multiple AI providers, executing shell commands, integrating with MCP (Model Context Protocol), and maintaining conversation history — all locally.
 
-## Getting Started
+---
 
-### System Requirements
-- Rust 1.70.0 or later
-- Internet connection
-- Supported OS: Linux, macOS, Windows (WSL2 recommended for Windows)
+## System Requirements
 
-### Quick Installation
+* Rust 1.70.0 or later
+* Internet connection
+* Supported OS: Linux, macOS, Windows (WSL2 recommended)
+
+---
+
+## Quick Start
+
 ```bash
-# Install Rust (if not already installed)
+# Install Rust (if needed)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Clone and build Harper
@@ -32,13 +30,23 @@ git clone https://github.com/bniladridas/harper.git
 cd harper
 make build
 
-# Configure your API keys
+# Configure API keys
 cp env.example .env
-# Edit .env with your preferred API key
+# Edit .env with your preferred API keys
 
 # Run Harper
 make run
-````
+```
+
+**Example Usage**
+
+```text
+[SEARCH: rust crates]
+[RUN_COMMAND echo "Hello, Harper!"]
+[TOOL: tool_name] { "parameter": "value" }
+```
+
+---
 
 ## Core Features
 
@@ -50,85 +58,112 @@ make run
 | Sambanova     | Meta-Llama-3.2-1B-Instruct | Open-source alternative          |
 | Google Gemini | Gemini 2.0 Flash           | Multimodal capabilities          |
 
-### Command Execution
+### Model Context Protocol (MCP)
 
-Execute shell commands directly from your conversation:
+Harper supports MCP for enhanced tool integration. Enable in `config/default.toml` or `config/local.toml`:
 
+```toml
+[mcp]
+enabled = true
+server_url = "http://localhost:5000"
 ```
-[RUN_COMMAND ls -la]
+
+Run an MCP-compatible server (e.g., [Codex MCP](https://github.com/bniladridas/codex)):
+
+```bash
+git clone https://github.com/bniladridas/codex.git
+cd codex
+cargo run
 ```
 
-### Web Search
+Once running, Harper connects automatically. MCP features include tool discovery, resource access, and prompt generation.
 
-Perform web searches without leaving the interface:
+### Command Execution & Web Search
 
-```
-[SEARCH: latest AI developments]
-```
+* Run shell commands: `[RUN_COMMAND <command>]`
+* Perform searches: `[SEARCH: <query>]`
+
+### Cryptography & Security
+
+* AES-GCM Encryption/Decryption (256-bit)
+* SHA-256 Hashing
+* Zero-Knowledge Proofs (via MCL)
+* Nonce Management
+
+Supports secure storage, encrypted messaging, and data integrity verification.
 
 ### Session Management
 
-* Save and load conversation history
+* Save/load conversation history
 * Export conversations in multiple formats
 * Persistent storage using SQLite
 
-## Command Reference
+---
 
-### Basic Commands
+## Dependencies
 
-```bash
-make run       # Run Harper
-make build     # Build release version
-make test      # Run tests
-```
+* [MCL](https://github.com/herumi/mcl) — elliptic curve and cryptography library
+* [MCP](https://modelcontextprotocol.io) — model context protocol
 
-### Development Commands
+---
 
-```bash
-make fmt       # Format code
-make lint      # Run linter
-make doc       # Generate documentation
-make clean     # Clean build artifacts
-```
+## Commands Reference
+
+| Command                                                                    | Description                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `make build`                                                               | Build release version                                  |
+| `make run`                                                                 | Run Harper                                             |
+| `cargo test --all-features --workspace --verbose`                          | Run all tests across the workspace                     |
+| `cargo test --all-features --workspace --release --verbose`                | Run all tests in release mode                          |
+| `rustup default 1.70.0 && cargo test --all-features --workspace --verbose` | Set Rust version to 1.70.0 and run all workspace tests |
+| `make fmt`                                                                 | Format code locally                                    |
+| `cargo fmt --all -- --check`                                               | Check code formatting (CI/verification)                |
+| `make lint`                                                                | Run linter                                             |
+| `cargo clippy --all-targets --all-features --workspace -- -D warnings`     | Run Clippy and treat all warnings as errors            |
+| `make doc`                                                                 | Generate documentation                                 |
+| `make clean`                                                               | Clean build artifacts                                  |
+| `gh run list -w ci.yml --limit 1`                                          | Show the latest CI workflow run using GitHub CLI       |
+
+---
 
 ## Configuration
 
-Create a `.env` file with your API keys:
+Create a `.env` file:
 
-```
+```text
 # Choose one provider
 OPENAI_API_KEY=your_openai_key
 SAMBASTUDIO_API_KEY=your_sambanova_key
 GEMINI_API_KEY=your_gemini_key
 ```
 
+---
+
 ## Error Handling
 
 * Syntax errors with exact locations
 * Code quality checks via Clippy
-* Test failures with detailed stack traces
+* Detailed stack traces for test failures
 * Security vulnerability scanning
+
+---
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
 
 ## License
 
-Apache License 2.0 - See [LICENSE](LICENSE) for details.
+Apache License 2.0 — see [LICENSE](LICENSE).
 
-## Support
+---
 
-* **Bug Reports**: Open an issue on GitHub
-* **Feature Requests**: Start a discussion
-* **Questions**: Check FAQ or open a discussion
+## Community & Support
 
-## Community
+* GitHub Discussions: [Link](https://github.com/bniladridas/harper/discussions)
+* Discord Server: [Link](https://discord.gg/ENUnDfjA)
+* X: [Link](https://x.com/harper56889360)
 
-* [GitHub Discussions](https://github.com/bniladridas/harper/discussions)
-* [Discord Server](https://discord.gg/ENUnDfjA)
-* [X](https://x.com/harper56889360)
-
-## Philosophy
-
-Harper empowers personal growth and self-understanding. By valuing our own capabilities, we create better tools and foster healthier relationships with technology.
+Submit **bug reports** as issues or start a discussion for feature requests/questions.

@@ -1,0 +1,12 @@
+[api]
+provider = "Sambanova"
+api_key = "your_api_key_here"
+base_url = "https://api.sambanova.ai/v1/chat/completions"
+model_name = "Llama-4-Maverick-17B-128E-Instruct"
+
+[database]
+path = "test_chat_sessions.db"
+
+[mcp]
+enabled = true
+server_url = "http://localhost:5000"

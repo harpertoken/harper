@@ -13,7 +13,9 @@ pub struct ApiConfig {
     pub model_name: String,
 }
 
-#[derive(Debug)]
+use serde::Serialize;
+
+#[derive(Debug, Serialize)]
 pub struct Message {
     pub role: String,
     pub content: String,
