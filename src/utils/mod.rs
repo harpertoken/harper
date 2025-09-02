@@ -1,10 +1,28 @@
-use std::time::Duration;
+//! Utility functions for web search and cryptography
+//!
+//! This module provides helper functions for web searching and cryptographic operations.
+
+use crate::core::constants::timeouts;
+use crate::core::error::HarperResult;
 
 pub mod crypto;
 
-pub async fn web_search(query: &str) -> Result<String, reqwest::Error> {
+/// Perform a web search using DuckDuckGo API
+///
+/// Searches the web for the given query and returns the results.
+/// This is used by the AI assistant to gather information when needed.
+///
+/// # Arguments
+/// * `query` - The search query string
+///
+/// # Returns
+/// Search results as a string, or an error message if the search fails
+///
+/// # Errors
+/// Returns `HarperError::WebSearch` if the API request fails
+pub async fn web_search(query: &str) -> HarperResult<String> {
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(15))
+        .timeout(timeouts::WEB_SEARCH)
         .build()?;
     let url = format!("https://api.duckduckgo.com/?q={}&format=json", query);
     let response = client.get(&url).send().await?;
@@ -21,5 +39,5 @@ pub async fn web_search(query: &str) -> Result<String, reqwest::Error> {
         return Ok(error_text);
     }
 
-    response.text().await
+    Ok(response.text().await?)
 }
