@@ -1,42 +1,68 @@
 # Changelog
 
-All notable changes to this project are documented here.  
-Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [Unreleased]
-No unreleased changes yet.
-
-## [0.1.1] - 2025-08-26
-Feature-rich release with improved functionality, code quality, and documentation.
 
 ### Added
-- Model Context Protocol (MCP) integration with configurable options
-- Advanced configuration system with environment and file support
-- Comprehensive test suite with unit and integration tests
-- Cryptographic utilities including AES-GCM, SHA-256 hashing, key generation, and nonce management
-- Persistent session export and management improvements
-- Enhanced CLI interactivity and tool commands
-- Updated CONTRIBUTING.md with detailed contribution guidelines
+- Privacy policy document
+- API response caching system
+- Named constants for magic numbers
+- Service layer architecture (ChatService, SessionService)
+- Configuration validation with error messages
+- Custom HarperError enum with error variants
+- Unit tests (21 total) for core functionality
+- Performance optimizations with caching
+- Security enhancements in cryptographic utilities
+- CodeQL security analysis workflow
+- Clean script output (removed emojis)
 
 ### Fixed
-- Clippy warnings across the codebase
-- Potential index out-of-bounds issue in provider selection
-- Error handling improvements in cryptographic utilities
+- Compilation errors and warnings
+- Import resolution conflicts
+- Memory safety issues
+- Clippy warnings and formatting
+- Security vulnerabilities in dependencies
 
 ### Changed
-- Improved code documentation and formatting
-- Enhanced error messages for better debugging
+- Refactored monolithic functions into smaller components
+- Enhanced error messages with context
+- Added documentation for public APIs
+- Cleaned up and updated dependencies
+- Updated README structure
+- Cleaned up test scripts
 
-## [0.1.0] - 2025-08-21
-Initial release of Harper AI Agent.
+### Security
+- Enhanced cryptographic utilities
+- Improved sensitive data handling
+- Added input validation
+
+## [0.1.1] - 2025-08-26
 
 ### Added
-- Multi-provider AI agent support (OpenAI, Sambanova, Google Gemini)
-- Shell command execution and web search capabilities
-- Session management with SQLite
+- MCP integration with configuration
+- Advanced configuration system
+- Test suite with unit and integration tests
+- Cryptographic utilities (AES-GCM, SHA-256, key generation, nonce management)
+- Session export and management improvements
+- Enhanced CLI interactivity
+- Updated contribution guidelines
+
+### Fixed
+- Clippy warnings
+- Index out-of-bounds in provider selection
+- Error handling in cryptographic utilities
+
+### Changed
+- Improved documentation and formatting
+- Enhanced error messages
+
+## [0.1.0] - 2025-08-21
+
+### Added
+- Multi-provider AI support (OpenAI, Sambanova, Gemini)
+- Shell command execution and web search
+- SQLite session management
 - Interactive CLI with colored output
 - Session export functionality
-- Persistent benchmark results
 - GitHub Actions CI/CD workflow
-- Automated release process via GitHub Releases
-- Basic project structure and documentation
+- Automated release process
+- Basic project structure
