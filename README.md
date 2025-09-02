@@ -7,15 +7,11 @@
 
 **Harper AI Agent** is a Rust-based tool for connecting to multiple AI providers, executing shell commands, integrating with MCP (Model Context Protocol), and maintaining conversation history — all locally.
 
----
-
 ## System Requirements
 
 * Rust 1.70.0 or later
 * Internet connection
 * Supported OS: Linux, macOS, Windows (WSL2 recommended)
-
----
 
 ## Quick Start
 
@@ -43,8 +39,6 @@ make run
 [RUN_COMMAND echo "Hello, Harper!"]
 [TOOL: tool_name] { "parameter": "value" }
 ```
-
----
 
 ## Core Features
 
@@ -96,14 +90,10 @@ Supports secure storage, encrypted messaging, and data integrity verification.
 * Export conversations in multiple formats
 * Persistent storage using SQLite
 
----
-
 ## Dependencies
 
 * [MCL](https://github.com/herumi/mcl) — elliptic curve and cryptography library
 * [MCP](https://modelcontextprotocol.io) — model context protocol
-
----
 
 ## Commands Reference
 
@@ -122,8 +112,6 @@ Supports secure storage, encrypted messaging, and data integrity verification.
 | `make clean`                                                               | Clean build artifacts                                  |
 | `gh run list -w ci.yml --limit 1`                                          | Show the latest CI workflow run using GitHub CLI       |
 
----
-
 ## Configuration
 
 Create a `.env` file:
@@ -134,8 +122,6 @@ OPENAI_API_KEY=your_openai_key
 SAMBASTUDIO_API_KEY=your_sambanova_key
 GEMINI_API_KEY=your_gemini_key
 ```
-
----
 
 ## Privacy & Data Collection
 
@@ -178,16 +164,12 @@ You can:
 
 For more information about our data practices, see our [Privacy Policy](PRIVACY.md).
 
----
-
 ## Error Handling
 
 * Syntax errors with exact locations
 * Code quality checks via Clippy
 * Detailed stack traces for test failures
 * Security vulnerability scanning
-
----
 
 ## Contributing
 
@@ -197,13 +179,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 For detailed documentation, patterns, and guides, visit our [Wiki](https://github.com/harpertoken/harper/wiki).
 
----
-
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
-
----
 
 ## Community & Support
 
