@@ -1,66 +1,53 @@
-# Harper AI Agent
+# Harper
 
-[![CI](https://github.com/bniladridas/harper/actions/workflows/ci.yml/badge.svg)](https://github.com/bniladridas/harper/actions/workflows/ci.yml)
-[![Release](https://github.com/bniladridas/harper/actions/workflows/release.yml/badge.svg)](https://github.com/bniladridas/harper/actions/workflows/release.yml)
+A Rust-based AI agent for multi-provider integration, command execution, and MCP protocol support with local SQLite storage.
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/55c24e02-82ac-470f-b83b-1560e6b6fcd7" alt="Harper Logo" width="300"/>
-</p>
+## Requirements
 
-**Harper AI Agent** is a Rust-based tool for connecting to multiple AI providers, executing shell commands, integrating with MCP (Model Context Protocol), and maintaining conversation history — all locally.
+* Rust 1.70.0+
+* Network connectivity for API calls
+* Linux, macOS, or Windows (WSL2 recommended)
 
----
-
-## System Requirements
-
-* Rust 1.70.0 or later
-* Internet connection
-* Supported OS: Linux, macOS, Windows (WSL2 recommended)
-
----
-
-## Quick Start
+## Installation
 
 ```bash
-# Install Rust (if needed)
+# Install Rust toolchain
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Clone and build Harper
-git clone https://github.com/bniladridas/harper.git
+# Build project
+git clone https://github.com/harpertoken/harper.git
 cd harper
 make build
 
-# Configure API keys
+# Configure environment
 cp env.example .env
-# Edit .env with your preferred API keys
+# Set API keys in .env file
 
-# Run Harper
+# Execute
 make run
 ```
 
-**Example Usage**
+## Usage
 
 ```text
-[SEARCH: rust crates]
-[RUN_COMMAND echo "Hello, Harper!"]
-[TOOL: tool_name] { "parameter": "value" }
+[SEARCH: query]
+[RUN_COMMAND command]
+[TOOL: name] { "param": "value" }
 ```
 
----
+## Features
 
-## Core Features
+### AI Provider Integration
 
-### Multi-Provider AI Integration
+| Provider  | Model                      | Capabilities              |
+|-----------|----------------------------|---------------------------|
+| OpenAI    | GPT-4 Turbo               | Text generation, coding   |
+| Sambanova | Meta-Llama-3.2-1B-Instruct| Open-source LLM           |
+| Gemini    | Gemini 2.0 Flash          | Multimodal processing     |
 
-| Provider      | Model                      | Best For                         |
-| ------------- | -------------------------- | -------------------------------- |
-| OpenAI        | GPT-4 Turbo                | General purpose, code generation |
-| Sambanova     | Meta-Llama-3.2-1B-Instruct | Open-source alternative          |
-| Google Gemini | Gemini 2.0 Flash           | Multimodal capabilities          |
+### Model Context Protocol
 
-### Model Context Protocol (MCP)
-
-Harper supports MCP for enhanced tool integration. Enable in `config/default.toml` or `config/local.toml`:
+MCP integration for tool discovery and resource access. Configuration in `config/default.toml`:
 
 ```toml
 [mcp]
@@ -68,102 +55,75 @@ enabled = true
 server_url = "http://localhost:5000"
 ```
 
-Run an MCP-compatible server (e.g., [Codex MCP](https://github.com/bniladridas/codex)):
+### Command Execution
 
-```bash
-git clone https://github.com/bniladridas/codex.git
-cd codex
-cargo run
-```
+Shell command execution via `[RUN_COMMAND <command>]` syntax.
 
-Once running, Harper connects automatically. MCP features include tool discovery, resource access, and prompt generation.
+### Web Search
 
-### Command Execution & Web Search
+Web search functionality via `[SEARCH: <query>]` syntax.
 
-* Run shell commands: `[RUN_COMMAND <command>]`
-* Perform searches: `[SEARCH: <query>]`
+### Cryptographic Operations
 
-### Cryptography & Security
+* AES-GCM-256 encryption/decryption
+* SHA-256 hashing
+* MCL-based zero-knowledge proofs
+* Cryptographic nonce management
 
-* AES-GCM Encryption/Decryption (256-bit)
-* SHA-256 Hashing
-* Zero-Knowledge Proofs (via MCL)
-* Nonce Management
+### Data Persistence
 
-Supports secure storage, encrypted messaging, and data integrity verification.
-
-### Session Management
-
-* Save/load conversation history
-* Export conversations in multiple formats
-* Persistent storage using SQLite
-
----
+SQLite-based storage for conversation history and session data.
 
 ## Dependencies
 
-* [MCL](https://github.com/herumi/mcl) — elliptic curve and cryptography library
-* [MCP](https://modelcontextprotocol.io) — model context protocol
+* [MCL](https://github.com/herumi/mcl) - Elliptic curve cryptography
+* [MCP](https://modelcontextprotocol.io) - Model Context Protocol
 
----
+## Build Commands
 
-## Commands Reference
-
-| Command                                                                    | Description                                            |
-| -------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `make build`                                                               | Build release version                                  |
-| `make run`                                                                 | Run Harper                                             |
-| `cargo test --all-features --workspace --verbose`                          | Run all tests across the workspace                     |
-| `cargo test --all-features --workspace --release --verbose`                | Run all tests in release mode                          |
-| `rustup default 1.70.0 && cargo test --all-features --workspace --verbose` | Set Rust version to 1.70.0 and run all workspace tests |
-| `make fmt`                                                                 | Format code locally                                    |
-| `cargo fmt --all -- --check`                                               | Check code formatting (CI/verification)                |
-| `make lint`                                                                | Run linter                                             |
-| `cargo clippy --all-targets --all-features --workspace -- -D warnings`     | Run Clippy and treat all warnings as errors            |
-| `make doc`                                                                 | Generate documentation                                 |
-| `make clean`                                                               | Clean build artifacts                                  |
-| `gh run list -w ci.yml --limit 1`                                          | Show the latest CI workflow run using GitHub CLI       |
-
----
+| Command                                       | Function                          |
+|-----------------------------------------------|-----------------------------------|
+| `make build`                                  | Release build                     |
+| `make run`                                    | Execute binary                    |
+| `cargo test --all-features --workspace`       | Run test suite                    |
+| `cargo fmt --all -- --check`                  | Verify code formatting            |
+| `cargo clippy --all-targets --all-features`   | Static analysis                   |
+| `make doc`                                    | Generate documentation            |
+| `make clean`                                  | Remove build artifacts            |
 
 ## Configuration
 
-Create a `.env` file:
+Environment variables in `.env`:
 
-```text
-# Choose one provider
-OPENAI_API_KEY=your_openai_key
-SAMBASTUDIO_API_KEY=your_sambanova_key
-GEMINI_API_KEY=your_gemini_key
+```bash
+OPENAI_API_KEY=key
+SAMBASTUDIO_API_KEY=key
+GEMINI_API_KEY=key
 ```
 
----
+## Data Handling
 
-## Error Handling
+### Storage
+- Conversation history: Local SQLite database
+- API credentials: Local environment file
+- Configuration: Local TOML files
 
-* Syntax errors with exact locations
-* Code quality checks via Clippy
-* Detailed stack traces for test failures
-* Security vulnerability scanning
+### Network Transmission
+- API requests sent directly to provider endpoints
+- No data transmitted to third-party servers
+- All processing occurs locally
 
----
+## Analysis
+
+* **Static Analysis**: Clippy linting with security rules
+* **Security Scanning**: DevSkim vulnerability detection
+* **Error Reporting**: Syntax errors with line/column positions
+* **SARIF Integration**: Security findings to GitHub Security tab
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
+[CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE).
-
----
-
-## Community & Support
-
-* GitHub Discussions: [Link](https://github.com/bniladridas/harper/discussions)
-* Discord Server: [Link](https://discord.gg/ENUnDfjA)
-* X: [Link](https://x.com/harper56889360)
-
-Submit **bug reports** as issues or start a discussion for feature requests/questions.
+Apache 2.0 - [LICENSE](LICENSE)
