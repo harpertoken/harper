@@ -3,9 +3,9 @@
 //! This module handles communication with different AI providers (OpenAI, Sambanova, Gemini)
 //! and provides cryptographic functions for secure data handling.
 
-use crate::core::{ApiConfig, ApiProvider, Message};
-use crate::core::error::{HarperError, HarperResult};
 use crate::core::constants::crypto::*;
+use crate::core::error::{HarperError, HarperResult};
+use crate::core::{ApiConfig, ApiProvider, Message};
 use mcp_client::{transport::sse::SseTransportHandle, McpClient, McpClientTrait, McpService};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use ring::{
@@ -125,10 +125,16 @@ pub async fn call_llm(
             .text()
             .await
             .unwrap_or_else(|_| "Could not read error body".to_string());
-        return Err(HarperError::Api(format!("API Error: {} ({})", error_text, status)));
+        return Err(HarperError::Api(format!(
+            "API Error: {} ({})",
+            error_text, status
+        )));
     }
 
-    let resp_json: serde_json::Value = res.json().await.map_err(|e| HarperError::Api(e.to_string()))?;
+    let resp_json: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|e| HarperError::Api(e.to_string()))?;
 
     let assistant_reply = match config.provider {
         ApiProvider::OpenAI | ApiProvider::Sambanova => resp_json["choices"][0]["message"]
@@ -257,11 +263,11 @@ pub fn decrypt_data(encrypted_data: &[u8], key: &[u8]) -> HarperResult<Vec<u8>> 
     Ok(decrypted.to_vec())
 }
 
-    #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use hex_literal::hex;
     use crate::core::constants::test_data;
+    use hex_literal::hex;
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
@@ -326,10 +332,7 @@ mod tests {
     fn test_decrypt_invalid_data_fails() {
         // Test with empty data
         assert!(
-            matches!(
-                decrypt_data(&[], &[0u8; 32]),
-                Err(HarperError::Crypto(_))
-            ),
+            matches!(decrypt_data(&[], &[0u8; 32]), Err(HarperError::Crypto(_))),
             "Decryption with empty data should fail with Crypto error"
         );
 
@@ -359,15 +362,27 @@ mod tests {
     fn test_error_messages() {
         // Test error message formatting
         let key_error = HarperError::Crypto("Invalid key: test".to_string());
-        assert_eq!(format!("{}", key_error), "Cryptography error: Invalid key: test");
+        assert_eq!(
+            format!("{}", key_error),
+            "Cryptography error: Invalid key: test"
+        );
 
         let nonce_error = HarperError::Crypto("Invalid nonce: test".to_string());
-        assert_eq!(format!("{}", nonce_error), "Cryptography error: Invalid nonce: test");
+        assert_eq!(
+            format!("{}", nonce_error),
+            "Cryptography error: Invalid nonce: test"
+        );
 
         let decryption_error = HarperError::Crypto("Decryption failed: test".to_string());
-        assert_eq!(format!("{}", decryption_error), "Cryptography error: Decryption failed: test");
+        assert_eq!(
+            format!("{}", decryption_error),
+            "Cryptography error: Decryption failed: test"
+        );
 
         let input_error = HarperError::Crypto("Invalid input: test".to_string());
-        assert_eq!(format!("{}", input_error), "Cryptography error: Invalid input: test");
+        assert_eq!(
+            format!("{}", input_error),
+            "Cryptography error: Invalid input: test"
+        );
     }
 }

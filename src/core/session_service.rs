@@ -3,7 +3,6 @@
 //! This module provides functionality for managing chat sessions,
 //! including listing, viewing, and exporting sessions.
 
-
 use crate::core::error::HarperResult;
 use crate::load_history;
 use colored::*;
@@ -24,12 +23,12 @@ impl<'a> SessionService<'a> {
 
     /// List all previous sessions
     pub fn list_sessions(&self) -> HarperResult<()> {
-        let mut stmt = self.conn
+        let mut stmt = self
+            .conn
             .prepare("SELECT id, created_at FROM sessions ORDER BY created_at DESC")?;
-        let rows = stmt
-            .query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
 
         println!("{}", "Previous Sessions:".bold().yellow());
         for (i, row) in rows.enumerate() {

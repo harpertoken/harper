@@ -3,8 +3,8 @@
 //! This module provides functions for storing and retrieving chat sessions
 //! and messages using SQLite as the backend.
 
-use crate::core::Message;
 use crate::core::error::HarperResult;
+use crate::core::Message;
 use rusqlite::{params, Connection};
 
 /// Initialize the database schema

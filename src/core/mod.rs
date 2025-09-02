@@ -3,9 +3,9 @@
 //! This module contains the fundamental types and services used throughout the application.
 
 pub mod cache;
+pub mod chat_service;
 pub mod constants;
 pub mod error;
-pub mod chat_service;
 pub mod session_service;
 
 /// Supported AI API providers

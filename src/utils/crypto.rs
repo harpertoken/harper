@@ -1,11 +1,10 @@
 #![allow(dead_code)]
 
-use crate::core::error::{HarperError, HarperResult};
 use crate::core::constants::crypto;
+use crate::core::error::{HarperError, HarperResult};
 use ring::{
     aead, digest,
     rand::{SecureRandom, SystemRandom},
-
 };
 
 /// Type alias for the return type of encrypt_message
@@ -67,7 +66,7 @@ impl CryptoUtils {
     }
 }
 
-    #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::core::constants::crypto;

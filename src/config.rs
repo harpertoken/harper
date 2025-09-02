@@ -1,5 +1,5 @@
-use crate::core::ApiProvider;
 use crate::core::error::{HarperError, HarperResult};
+use crate::core::ApiProvider;
 use config::{ConfigBuilder, File};
 use serde::Deserialize;
 use std::path::Path;
@@ -62,36 +62,34 @@ impl ApiConfig {
         // Validate provider
         match self.provider.as_str() {
             "OpenAI" | "Sambanova" | "Gemini" => {}
-            _ => return Err(HarperError::Config(format!(
-                "Invalid API provider: {}. Supported providers: OpenAI, Sambanova, Gemini",
-                self.provider
-            ))),
+            _ => {
+                return Err(HarperError::Config(format!(
+                    "Invalid API provider: {}. Supported providers: OpenAI, Sambanova, Gemini",
+                    self.provider
+                )))
+            }
         }
 
         // Validate API key
         if self.api_key.trim().is_empty() {
-            return Err(HarperError::Config(
-                "API key cannot be empty".to_string()
-            ));
+            return Err(HarperError::Config("API key cannot be empty".to_string()));
         }
 
         // Validate base URL
         if self.base_url.trim().is_empty() {
-            return Err(HarperError::Config(
-                "Base URL cannot be empty".to_string()
-            ));
+            return Err(HarperError::Config("Base URL cannot be empty".to_string()));
         }
 
         if !self.base_url.starts_with("http://") && !self.base_url.starts_with("https://") {
             return Err(HarperError::Config(
-                "Base URL must start with http:// or https://".to_string()
+                "Base URL must start with http:// or https://".to_string(),
             ));
         }
 
         // Validate model name
         if self.model_name.trim().is_empty() {
             return Err(HarperError::Config(
-                "Model name cannot be empty".to_string()
+                "Model name cannot be empty".to_string(),
             ));
         }
 
@@ -105,7 +103,8 @@ impl ApiConfig {
             "Sambanova" => Ok(ApiProvider::Sambanova),
             "Gemini" => Ok(ApiProvider::Gemini),
             _ => Err(HarperError::Config(format!(
-                "Unsupported provider: {}", self.provider
+                "Unsupported provider: {}",
+                self.provider
             ))),
         }
     }
@@ -116,7 +115,7 @@ impl DatabaseConfig {
     fn validate(&self) -> HarperResult<()> {
         if self.path.trim().is_empty() {
             return Err(HarperError::Config(
-                "Database path cannot be empty".to_string()
+                "Database path cannot be empty".to_string(),
             ));
         }
 
@@ -140,13 +139,13 @@ impl McpConfig {
         if self.enabled {
             if self.server_url.trim().is_empty() {
                 return Err(HarperError::Config(
-                    "MCP server URL cannot be empty when MCP is enabled".to_string()
+                    "MCP server URL cannot be empty when MCP is enabled".to_string(),
                 ));
             }
 
             if !self.server_url.starts_with("http://") && !self.server_url.starts_with("https://") {
                 return Err(HarperError::Config(
-                    "MCP server URL must start with http:// or https://".to_string()
+                    "MCP server URL must start with http:// or https://".to_string(),
                 ));
             }
         }

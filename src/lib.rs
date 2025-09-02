@@ -20,8 +20,8 @@ pub use utils::*;
 mod tests {
     use super::*;
     // Use full paths in tests to avoid conflicts
-    use crate::core::error::HarperError;
     use crate::core::chat_service::ChatService;
+    use crate::core::error::HarperError;
 
     #[test]
     fn test_api_provider_variants() {
@@ -80,7 +80,10 @@ mod tests {
     #[test]
     fn test_harper_error_display() {
         let config_error = HarperError::Config("test config error".to_string());
-        assert_eq!(format!("{}", config_error), "Configuration error: test config error");
+        assert_eq!(
+            format!("{}", config_error),
+            "Configuration error: test config error"
+        );
 
         let api_error = HarperError::Api("test api error".to_string());
         assert_eq!(format!("{}", api_error), "API error: test api error");
