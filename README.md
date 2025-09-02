@@ -1,8 +1,5 @@
 # Harper
 
-[![CI](https://github.com/harpertoken/harper/actions/workflows/ci.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/ci.yml)
-[![Release](https://github.com/harpertoken/harper/actions/workflows/release.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/release.yml)
-
 A Rust-based AI agent for multi-provider integration, command execution, and MCP protocol support with local SQLite storage.
 
 ## Requirements
@@ -82,16 +79,6 @@ SQLite-based storage for conversation history and session data.
 * [MCL](https://github.com/herumi/mcl) - Elliptic curve cryptography
 * [MCP](https://modelcontextprotocol.io) - Model Context Protocol
 
-## CI/CD Pipeline
-
-Automated workflows for quality assurance:
-
-* **Continuous Integration**: Build verification and testing
-* **Code Formatting**: Automated rustfmt checks
-* **Security Scanning**: DevSkim and Clippy analysis
-* **Release Automation**: Automated binary releases
-* **SARIF Reports**: Security findings integration with GitHub Security
-
 ## Build Commands
 
 | Command                                       | Function                          |
@@ -126,34 +113,17 @@ GEMINI_API_KEY=key
 - No data transmitted to third-party servers
 - All processing occurs locally
 
-## Error Handling
+## Analysis
 
-* Syntax error reporting with line/column positions
-* Clippy static analysis
-* Stack trace generation for debugging
-* Security vulnerability detection
-
-## Security Analysis
-
-Automated security scanning via CI/CD:
-
-* **DevSkim**: Static analysis for security vulnerabilities in source code
-* **Clippy**: Rust linter with security-focused rules
-* **SARIF Integration**: Security findings uploaded to GitHub Security tab
-* **Scheduled Scans**: Weekly automated security assessments
+* **Static Analysis**: Clippy linting with security rules
+* **Security Scanning**: DevSkim vulnerability detection
+* **Error Reporting**: Syntax errors with line/column positions
+* **SARIF Integration**: Security findings to GitHub Security tab
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Documentation
-
-[Wiki](https://github.com/harpertoken/harper/wiki)
+[CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
-Apache 2.0 - see [LICENSE](LICENSE)
-
-## Issues
-
-Report bugs and request features via [GitHub Issues](https://github.com/harpertoken/harper/issues)
+Apache 2.0 - [LICENSE](LICENSE)
