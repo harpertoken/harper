@@ -4,9 +4,9 @@
 //! including user input processing, AI API calls, and tool execution.
 
 use super::{ApiConfig, Message};
+use crate::core::cache::{ApiCacheKey, ApiResponseCache};
+use crate::core::constants::{exit_commands, timeouts, tools};
 use crate::core::error::{HarperError, HarperResult};
-use crate::core::cache::{ApiResponseCache, ApiCacheKey};
-use crate::core::constants::{timeouts, exit_commands, tools};
 use crate::utils::web_search;
 use chrono::Datelike;
 use colored::*;
@@ -26,7 +26,7 @@ pub struct ChatService<'a> {
     conn: &'a Connection,
     config: &'a ApiConfig,
     mcp_client: Option<&'a McpClient<Timeout<McpService<SseTransportHandle>>>>,
-        api_cache: Option<&'a mut ApiResponseCache>,
+    api_cache: Option<&'a mut ApiResponseCache>,
 }
 
 impl<'a> ChatService<'a> {
@@ -41,7 +41,7 @@ impl<'a> ChatService<'a> {
         conn: &'a Connection,
         config: &'a ApiConfig,
         mcp_client: Option<&'a McpClient<Timeout<McpService<SseTransportHandle>>>>,
-    api_cache: Option<&'a mut ApiResponseCache>,
+        api_cache: Option<&'a mut ApiResponseCache>,
     ) -> Self {
         Self {
             conn,
@@ -85,7 +85,8 @@ impl<'a> ChatService<'a> {
 
         self.display_session_start();
 
-        self.run_chat_loop(&session_id, &mut history, web_search_enabled).await
+        self.run_chat_loop(&session_id, &mut history, web_search_enabled)
+            .await
     }
 
     /// Save a session to the database
@@ -168,7 +169,9 @@ Tool format:
 
     /// Check if user wants to exit
     pub fn should_exit(&self, input: &str) -> bool {
-        input.is_empty() || input.eq_ignore_ascii_case(exit_commands::EXIT) || input.eq_ignore_ascii_case(exit_commands::QUIT)
+        input.is_empty()
+            || input.eq_ignore_ascii_case(exit_commands::EXIT)
+            || input.eq_ignore_ascii_case(exit_commands::QUIT)
     }
 
     /// Display session end message
@@ -177,7 +180,12 @@ Tool format:
     }
 
     /// Add user message to history and save to database
-    fn add_user_message(&self, history: &mut Vec<Message>, session_id: &str, content: &str) -> HarperResult<()> {
+    fn add_user_message(
+        &self,
+        history: &mut Vec<Message>,
+        session_id: &str,
+        content: &str,
+    ) -> HarperResult<()> {
         history.push(Message {
             role: "user".to_string(),
             content: content.to_string(),
@@ -186,15 +194,22 @@ Tool format:
     }
 
     /// Process a message and get AI response
-    async fn process_message(&mut self, history: &[Message], web_search_enabled: bool) -> HarperResult<String> {
-        let client = Client::builder()
-            .timeout(timeouts::API_REQUEST)
-            .build()?;
+    async fn process_message(
+        &mut self,
+        history: &[Message],
+        web_search_enabled: bool,
+    ) -> HarperResult<String> {
+        let client = Client::builder().timeout(timeouts::API_REQUEST).build()?;
 
         let mut response = self.call_llm(&client, history).await?;
-        let trimmed_response = response.trim().trim_matches(|c| c == '\'' || c == '\"' || c == '`');
+        let trimmed_response = response
+            .trim()
+            .trim_matches(|c| c == '\'' || c == '\"' || c == '`');
 
-        if let Some(tool_result) = self.handle_tool_use(&client, history, trimmed_response, web_search_enabled).await? {
+        if let Some(tool_result) = self
+            .handle_tool_use(&client, history, trimmed_response, web_search_enabled)
+            .await?
+        {
             response = tool_result;
         }
 
@@ -242,11 +257,15 @@ Tool format:
     ) -> HarperResult<Option<String>> {
         if response.to_uppercase().starts_with(tools::RUN_COMMAND) {
             let command_result = self.execute_command(response)?;
-            let final_response = self.call_llm_after_tool(client, history, &command_result).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &command_result)
+                .await?;
             Ok(Some(final_response))
         } else if web_search_enabled && response.to_uppercase().starts_with(tools::SEARCH) {
             let search_result = self.perform_web_search(response).await?;
-            let final_response = self.call_llm_after_tool(client, history, &search_result).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &search_result)
+                .await?;
             Ok(Some(final_response))
         } else {
             Ok(None)
@@ -304,21 +323,27 @@ Tool format:
     }
 
     /// Call LLM after tool usage
-    async fn call_llm_after_tool(&mut self, client: &Client, history: &[Message], _tool_result: &str) -> HarperResult<String> {
+    async fn call_llm_after_tool(
+        &mut self,
+        client: &Client,
+        history: &[Message],
+        _tool_result: &str,
+    ) -> HarperResult<String> {
         self.call_llm(client, history).await
     }
 
     /// Display assistant response
     fn display_response(&self, response: &str) {
-        println!(
-            "{} {}\n",
-            "Assistant:".bold().green(),
-            response.green()
-        );
+        println!("{} {}\n", "Assistant:".bold().green(), response.green());
     }
 
     /// Add assistant message to history and save to database
-    fn add_assistant_message(&self, history: &mut Vec<Message>, session_id: &str, content: &str) -> HarperResult<()> {
+    fn add_assistant_message(
+        &self,
+        history: &mut Vec<Message>,
+        session_id: &str,
+        content: &str,
+    ) -> HarperResult<()> {
         history.push(Message {
             role: "assistant".to_string(),
             content: content.to_string(),
