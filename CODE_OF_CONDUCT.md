@@ -24,7 +24,7 @@ Unacceptable behavior includes:
 This Code applies to all community spaces (online and offline) and when representing the community publicly (official email, social media, or events).
 
 ## Enforcement
-Report violations to **[bniladridas@icloud.com](mailto:bniladridas@icloud.com)**. Complaints will be handled promptly and fairly, respecting reporter privacy.
+Report violations to **[harpertoken@icloud.com](mailto:harpertoken@icloud.com)**. Complaints will be handled promptly and fairly, respecting reporter privacy.
 
 ### Enforcement Guidelines
 1. **Correction**  
@@ -44,7 +44,7 @@ Report violations to **[bniladridas@icloud.com](mailto:bniladridas@icloud.com)**
    *Consequence:* Permanent ban from all community interactions  
 
 ## Reporting and Escalation
-- Send detailed reports to **[bniladridas@icloud.com](mailto:bniladridas@icloud.com)** (links, screenshots, timestamps)  
+- Send detailed reports to **[harpertoken@icloud.com](mailto:harpertoken@icloud.com)** (links, screenshots, timestamps)  
 - The team will review and respond in a timely manner  
 - Retaliation against reporters is prohibited  
 

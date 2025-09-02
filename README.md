@@ -1,11 +1,9 @@
 # Harper AI Agent
 
-[![CI](https://github.com/bniladridas/harper/actions/workflows/ci.yml/badge.svg)](https://github.com/bniladridas/harper/actions/workflows/ci.yml)
-[![Release](https://github.com/bniladridas/harper/actions/workflows/release.yml/badge.svg)](https://github.com/bniladridas/harper/actions/workflows/release.yml)
+[![CI](https://github.com/harpertoken/harper/actions/workflows/ci.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/ci.yml)
+[![Release](https://github.com/harpertoken/harper/actions/workflows/release.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/release.yml)
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/55c24e02-82ac-470f-b83b-1560e6b6fcd7" alt="Harper Logo" width="300"/>
-</p>
+
 
 **Harper AI Agent** is a Rust-based tool for connecting to multiple AI providers, executing shell commands, integrating with MCP (Model Context Protocol), and maintaining conversation history — all locally.
 
@@ -26,7 +24,7 @@
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Clone and build Harper
-git clone https://github.com/bniladridas/harper.git
+git clone https://github.com/harpertoken/harper.git
 cd harper
 make build
 
@@ -68,10 +66,10 @@ enabled = true
 server_url = "http://localhost:5000"
 ```
 
-Run an MCP-compatible server (e.g., [Codex MCP](https://github.com/bniladridas/codex)):
+Run an MCP-compatible server (e.g., [Codex MCP](https://github.com/harpertoken/codex)):
 
 ```bash
-git clone https://github.com/bniladridas/codex.git
+git clone https://github.com/harpertoken/codex.git
 cd codex
 cargo run
 ```
@@ -139,6 +137,49 @@ GEMINI_API_KEY=your_gemini_key
 
 ---
 
+## Privacy & Data Collection
+
+**Harper AI Agent** respects your privacy and is designed with data protection in mind.
+
+### Data Collection & Usage
+
+We collect and process data to provide and improve our AI assistant service:
+
+**Essential Data (Required for functionality):**
+- API keys for AI provider authentication (stored locally only)
+- Conversation history and session data (stored in local SQLite database)
+- Configuration settings (stored locally in TOML files)
+
+**Performance & Analytics Data:**
+- Usage statistics to understand service performance
+- Error logs for debugging and improvement
+- Device identifiers for session management
+
+**Data Sharing:**
+- AI provider requests are sent directly to their respective APIs
+- No conversation data is shared with third parties
+- Usage analytics may be collected anonymously for service improvement
+
+### Data Storage
+
+- All conversation history is stored locally in a SQLite database
+- API keys are stored in local environment files
+- No data is transmitted to our servers unless explicitly configured
+
+### Your Rights
+
+You can:
+- Delete your conversation history at any time
+- Modify or delete stored API keys
+- Opt out of analytics by not using the application
+- Review and update your configuration settings
+
+### Learn More
+
+For more information about our data practices, see our [Privacy Policy](PRIVACY.md).
+
+---
+
 ## Error Handling
 
 * Syntax errors with exact locations
@@ -152,6 +193,10 @@ GEMINI_API_KEY=your_gemini_key
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
+## Documentation
+
+For detailed documentation, patterns, and guides, visit our [Wiki](https://github.com/harpertoken/harper/wiki).
+
 ---
 
 ## License
@@ -162,7 +207,7 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 
 ## Community & Support
 
-* GitHub Discussions: [Link](https://github.com/bniladridas/harper/discussions)
+* GitHub Discussions: [Link](https://github.com/harpertoken/harper/discussions)
 * Discord Server: [Link](https://discord.gg/ENUnDfjA)
 * X: [Link](https://x.com/harper56889360)
 
