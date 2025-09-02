@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🧪 Running comprehensive Harper tests..."
+echo "Running comprehensive Harper tests..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -120,5 +120,5 @@ else
     print_warning "cargo-deny not installed. Run 'cargo install cargo-deny' to enable dependency checks."
 fi
 
-print_success "All tests completed successfully! 🎉"
+print_success "All tests completed successfully!"
 print_status "Harper is ready for deployment."

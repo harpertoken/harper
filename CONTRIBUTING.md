@@ -17,6 +17,10 @@ Harper welcomes contributions of all types, including bug reports, new features,
 * [License](#license)
 * [Questions](#questions)
 
+## Documentation
+
+For detailed patterns, reading guides, and development documentation, visit our [Wiki](https://github.com/harpertoken/harper/wiki).
+
 ---
 
 ## Code of Conduct
@@ -31,13 +35,13 @@ This project and all participants are governed by the [Code of Conduct](CODE_OF_
 2. Clone the fork locally:
 
    ```bash
-   git clone https://github.com/bniladridas/harper.git
+   git clone https://github.com/harpertoken/harper.git
    cd harper
    ```
 3. Add the upstream remote:
 
    ```bash
-   git remote add upstream https://github.com/bniladridas/harper.git
+   git remote add upstream https://github.com/harpertoken/harper.git
    ```
 4. Create a new branch for changes:
 
