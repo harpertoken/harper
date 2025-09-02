@@ -2,9 +2,8 @@
 //!
 //! This module provides helper functions for web searching and cryptographic operations.
 
-use crate::core::error::HarperResult;
 use crate::core::constants::timeouts;
-
+use crate::core::error::HarperResult;
 
 pub mod crypto;
 
