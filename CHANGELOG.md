@@ -15,12 +15,15 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic V
 - **Expanded Test Coverage**: Added extensive unit tests covering core functionality, configuration validation, and edge cases (21 total tests)
 - **Performance Optimizations**: Implemented caching and optimized string operations for better performance
 - **Security Enhancements**: Removed debug print statements from cryptographic utilities and improved security practices
+- **CodeQL Security Analysis**: Added automated security vulnerability scanning with weekly CodeQL analysis workflow
+- **Clean Script Output**: Removed emojis from test scripts for professional, clean output formatting
 
 ### Fixed
 - **Compilation Errors**: Resolved all compilation errors and warnings throughout the codebase
 - **Import Conflicts**: Fixed import resolution issues between different modules and external crates
 - **Memory Safety**: Improved error handling to prevent potential memory safety issues
 - **Code Quality**: Fixed Clippy warnings and improved code formatting consistency
+- **Dependencies**: Updated tracing-subscriber to fix potential security vulnerabilities
 
 ### Changed
 - **Code Organization**: Refactored monolithic functions into smaller, focused, and testable components
@@ -28,6 +31,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic V
 - **Documentation**: Added comprehensive documentation for all public functions and modules
 - **Dependencies**: Cleaned up unused dependencies and updated to latest compatible versions
 - **README**: Updated with privacy policy information and improved structure
+- **Scripts**: Cleaned up test scripts by removing emojis for professional output
 
 ### Security
 - **Cryptographic Improvements**: Enhanced cryptographic utilities with better error handling and security practices
