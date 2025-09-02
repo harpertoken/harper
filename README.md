@@ -82,6 +82,16 @@ SQLite-based storage for conversation history and session data.
 * [MCL](https://github.com/herumi/mcl) - Elliptic curve cryptography
 * [MCP](https://modelcontextprotocol.io) - Model Context Protocol
 
+## CI/CD Pipeline
+
+Automated workflows for quality assurance:
+
+* **Continuous Integration**: Build verification and testing
+* **Code Formatting**: Automated rustfmt checks
+* **Security Scanning**: DevSkim and Clippy analysis
+* **Release Automation**: Automated binary releases
+* **SARIF Reports**: Security findings integration with GitHub Security
+
 ## Build Commands
 
 | Command                                       | Function                          |
@@ -122,6 +132,15 @@ GEMINI_API_KEY=key
 * Clippy static analysis
 * Stack trace generation for debugging
 * Security vulnerability detection
+
+## Security Analysis
+
+Automated security scanning via CI/CD:
+
+* **DevSkim**: Static analysis for security vulnerabilities in source code
+* **Clippy**: Rust linter with security-focused rules
+* **SARIF Integration**: Security findings uploaded to GitHub Security tab
+* **Scheduled Scans**: Weekly automated security assessments
 
 ## Contributing
 
