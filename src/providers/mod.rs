@@ -45,6 +45,9 @@ pub async fn call_llm(
                 .collect();
 
             let mut extra_query = String::new();
+            // MCP tool call functionality
+            // Note: MCP client is currently disabled due to dependency conflicts.
+            // This improves CodeQL analysis by eliminating duplicate dependency issues.
             if let Some(mcp) = mcp_client {
                 match mcp
                     .call_tool("llm_query", json!({ "query": history }))

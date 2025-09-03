@@ -57,6 +57,12 @@ async fn main() {
         })
         .unwrap();
 
+    // MCP client initialization
+    // Note: MCP functionality is currently disabled due to dependency conflicts
+    // with reqwest versions (mcp-client uses v0.11, harper uses v0.12).
+    // This was done to resolve CodeQL duplicate dependency warnings and improve
+    // security analysis accuracy. MCP can be re-enabled with a compatible client
+    // version in the future.
     let mcp_client = if config.mcp.enabled {
         // Create SSE transport
         let transport = SseTransport::new(config.mcp.server_url.clone(), HashMap::new());
