@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.3.0] - 2025-09-03
+## [0.1.3] - 2025-09-03
 
 Complete CodeQL & CI Build Resolution
 
