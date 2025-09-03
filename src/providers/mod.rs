@@ -44,7 +44,8 @@ pub async fn call_llm(
 
             let extra_query = String::new();
             // MCP functionality temporarily disabled due to dependency conflicts
-            // TODO: Re-enable MCP when compatible client version is available
+            // This resolves CodeQL duplicate dependency warnings and improves security analysis
+            // MCP can be re-enabled when a compatible client version becomes available
 
             let body = json!({
                 "model": config.model_name,
