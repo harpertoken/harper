@@ -15,7 +15,8 @@ use config::HarperConfig;
 
 use crate::core::cache::new_api_cache;
 use crate::core::chat_service::ChatService;
-use crate::core::constants::{menu, timeouts};
+use crate::core::constants::menu;
+// use crate::core::constants::timeouts; // Temporarily unused
 use crate::core::session_service::SessionService;
 use providers::*;
 use storage::*;
@@ -65,7 +66,7 @@ async fn main() {
     // version in the future.
     // MCP client temporarily disabled due to dependency conflicts
     // This resolves CodeQL duplicate dependency warnings and improves security analysis
-    let mcp_client: Option<()> = None;
+    let _mcp_client: Option<()> = None;
 
     loop {
         println!("\n{}", "Main Menu".bold().yellow());
