@@ -50,10 +50,10 @@ version = "1.0"
 version = "0.6"
 [dependencies.sync_wrapper]
 version = "1.0"
-[dependencies.system-configuration]
-version = "0.6"
-[dependencies.system-configuration-sys]
-version = "0.6"
+# [dependencies.system-configuration]
+# version = "0.6"  # Removed due to compilation errors in v0.6.1
+# [dependencies.system-configuration-sys]
+# version = "0.6"  # Removed due to compilation errors in v0.6.1
 [dependencies.thiserror]
 version = "2.0"
 [dependencies.thiserror-impl]
