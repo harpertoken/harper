@@ -32,7 +32,7 @@ cargo run --release
 <summary>Install from Release</summary>
 
 ```bash
-cargo install --git https://github.com/harpertoken/harper.git --tag v1.3
+cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.3
 ```
 </details>
 
@@ -72,7 +72,7 @@ cargo install --git https://github.com/harpertoken/harper.git --tag v1.3
 
 ### MCP Protocol
 
-MCP disabled in v1.3.0 due to dependency conflicts.
+MCP disabled in v0.1.3 due to dependency conflicts.
 
 <details>
 <summary>MCP Configuration</summary>
@@ -159,7 +159,7 @@ ttl_seconds = 300
 - Dependency auditing
 - Input validation
 
-## v1.3.0 Changes
+## v0.1.3 Changes
 
 - Fixed 20+ CodeQL dependency conflicts
 - Resolved CI build failures across all platforms
