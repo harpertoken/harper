@@ -14,8 +14,8 @@ pub mod timeouts {
     /// Web search request timeout (15 seconds)
     pub const WEB_SEARCH: Duration = Duration::from_secs(15);
 
-    /// MCP service timeout (30 seconds)
-    pub const MCP_SERVICE: Duration = Duration::from_secs(30);
+    // MCP service timeout (30 seconds) - temporarily disabled
+    // pub const MCP_SERVICE: Duration = Duration::from_secs(30);
 }
 
 /// Cache configuration

@@ -10,12 +10,12 @@ use crate::core::error::{HarperError, HarperResult};
 use crate::utils::web_search;
 use chrono::Datelike;
 use colored::*;
-use mcp_client::{transport::sse::SseTransportHandle, McpClient, McpService};
+// use mcp_client::{transport::sse::SseTransportHandle, McpClient, McpService}; // Temporarily disabled
 use reqwest::Client;
 use rusqlite::Connection;
 use std::io::{self, Write};
 
-use tower::timeout::Timeout;
+// use tower::timeout::Timeout; // Temporarily disabled
 use uuid::Uuid;
 
 /// Service for handling chat sessions and interactions
@@ -25,7 +25,7 @@ use uuid::Uuid;
 pub struct ChatService<'a> {
     conn: &'a Connection,
     config: &'a ApiConfig,
-    mcp_client: Option<&'a McpClient<Timeout<McpService<SseTransportHandle>>>>,
+    // mcp_client: Option<&'a McpClient<Timeout<McpService<SseTransportHandle>>>>, // Temporarily disabled
     api_cache: Option<&'a mut ApiResponseCache>,
 }
 
@@ -35,18 +35,17 @@ impl<'a> ChatService<'a> {
     /// # Arguments
     /// * `conn` - Database connection for storing conversation history
     /// * `config` - API configuration for the AI provider
-    /// * `mcp_client` - Optional MCP client for enhanced functionality
     /// * `api_cache` - Optional cache for API responses
     pub fn new(
         conn: &'a Connection,
         config: &'a ApiConfig,
-        mcp_client: Option<&'a McpClient<Timeout<McpService<SseTransportHandle>>>>,
+        // mcp_client: Option<&'a McpClient<Timeout<McpService<SseTransportHandle>>>>, // Temporarily disabled
         api_cache: Option<&'a mut ApiResponseCache>,
     ) -> Self {
         Self {
             conn,
             config,
-            mcp_client,
+            // mcp_client, // Temporarily disabled
             api_cache,
         }
     }
@@ -58,7 +57,7 @@ impl<'a> ChatService<'a> {
         Self {
             conn,
             config,
-            mcp_client: None,
+            // mcp_client: None, // Temporarily disabled
             api_cache: None,
         }
     }
@@ -232,7 +231,7 @@ Tool format:
         }
 
         // Make API call
-        let response = crate::call_llm(client, self.config, history, self.mcp_client).await?;
+        let response = crate::call_llm(client, self.config, history).await?;
 
         // Cache the response
         if let Some(cache) = &mut self.api_cache {
