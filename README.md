@@ -1,31 +1,40 @@
 # Harper
 
-A Rust-based AI agent for multi-provider integration, command execution, and MCP protocol support with local SQLite storage.
+[![CI Status](https://github.com/harpertoken/harper/actions/workflows/ci.yml/badge.svg)](https://github.com/harpertoken/harper/actions)
+[![Security Audit](https://github.com/harpertoken/harper/actions/workflows/security.yml/badge.svg)](https://github.com/harpertoken/harper/actions)
+[![Release](https://img.shields.io/github/v/release/harpertoken/harper)](https://github.com/harpertoken/harper/releases)
+
+AI agent for multi-provider integration, command execution, and MCP protocol support with SQLite storage.
 
 ## Requirements
 
-* Rust 1.70.0+
-* Network connectivity for API calls
-* Linux, macOS, or Windows (WSL2 recommended)
+- Rust 1.70.0+
+- Network connectivity
+- Linux, macOS, or Windows
+- SQLite3
 
 ## Installation
 
-```bash
-# Install Rust toolchain
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+<details>
+<summary>Local Build</summary>
 
-# Build project
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 git clone https://github.com/harpertoken/harper.git
 cd harper
-make build
-
-# Configure environment
+cargo build --release
 cp env.example .env
-# Set API keys in .env file
-
-# Execute
-make run
+cargo run --release
 ```
+</details>
+
+<details>
+<summary>Install from Release</summary>
+
+```bash
+cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.3
+```
+</details>
 
 ## Usage
 
@@ -37,7 +46,7 @@ make run
 
 ## Features
 
-### AI Provider Integration
+### AI Providers
 
 | Provider  | Model                      | Capabilities              |
 |-----------|----------------------------|---------------------------|
@@ -45,85 +54,138 @@ make run
 | Sambanova | Meta-Llama-3.2-1B-Instruct| Open-source LLM           |
 | Gemini    | Gemini 2.0 Flash          | Multimodal processing     |
 
-### Model Context Protocol
+### Core Functions
 
-MCP integration for tool discovery and resource access. Configuration in `config/default.toml`:
+- Command execution with validation
+- Web search integration
+- SQLite session management
+- Session export
+- Interactive CLI
+
+### Security
+
+- CodeQL vulnerability detection
+- DevSkim security scanning
+- Dependency auditing
+- AES-GCM-256 encryption
+- Input validation
+
+### MCP Protocol
+
+MCP disabled in v0.1.3 due to dependency conflicts.
+
+<details>
+<summary>MCP Configuration</summary>
 
 ```toml
 [mcp]
 enabled = true
 server_url = "http://localhost:5000"
 ```
+</details>
 
-### Command Execution
+### Data Storage
 
-Shell command execution via `[RUN_COMMAND <command>]` syntax.
+- SQLite database
+- Local credentials
+- Session persistence
+- Export functionality
 
-### Web Search
+## Build
 
-Web search functionality via `[SEARCH: <query>]` syntax.
+| Command                | Function              |
+|------------------------|-----------------------|
+| `cargo build --release` | Release build        |
+| `cargo run --release`  | Run binary           |
+| `cargo test`           | Run tests            |
+| `cargo clippy`         | Static analysis      |
+| `cargo fmt -- --check` | Check formatting     |
+| `cargo doc`            | Generate docs        |
+| `cargo clean`          | Clean artifacts      |
 
-### Cryptographic Operations
+<details>
+<summary>Cross-Platform Builds</summary>
 
-* AES-GCM-256 encryption/decryption
-* SHA-256 hashing
-* MCL-based zero-knowledge proofs
-* Cryptographic nonce management
+```bash
+# Linux
+cargo build --release --target x86_64-unknown-linux-gnu
 
-### Data Persistence
+# Windows
+cargo build --release --target x86_64-pc-windows-msvc
 
-SQLite-based storage for conversation history and session data.
+# macOS Intel
+cargo build --release --target x86_64-apple-darwin
 
-## Dependencies
-
-* [MCL](https://github.com/herumi/mcl) - Elliptic curve cryptography
-* [MCP](https://modelcontextprotocol.io) - Model Context Protocol
-
-## Build Commands
-
-| Command                                       | Function                          |
-|-----------------------------------------------|-----------------------------------|
-| `make build`                                  | Release build                     |
-| `make run`                                    | Execute binary                    |
-| `cargo test --all-features --workspace`       | Run test suite                    |
-| `cargo fmt --all -- --check`                  | Verify code formatting            |
-| `cargo clippy --all-targets --all-features`   | Static analysis                   |
-| `make doc`                                    | Generate documentation            |
-| `make clean`                                  | Remove build artifacts            |
+# macOS ARM
+cargo build --release --target aarch64-apple-darwin
+```
+</details>
 
 ## Configuration
 
-Environment variables in `.env`:
+<details>
+<summary>Environment Setup</summary>
 
 ```bash
 OPENAI_API_KEY=key
 SAMBASTUDIO_API_KEY=key
 GEMINI_API_KEY=key
+DATABASE_PATH=./harper.db
 ```
+</details>
 
-## Data Handling
+<details>
+<summary>Advanced Config</summary>
 
-### Storage
-- Conversation history: Local SQLite database
-- API credentials: Local environment file
-- Configuration: Local TOML files
+```toml
+[api]
+timeout = 90
+retry_attempts = 3
 
-### Network Transmission
-- API requests sent directly to provider endpoints
-- No data transmitted to third-party servers
-- All processing occurs locally
+[cache]
+enabled = true
+ttl_seconds = 300
+```
+</details>
 
-## Analysis
+## Security
 
-* **Static Analysis**: Clippy linting with security rules
-* **Security Scanning**: DevSkim vulnerability detection
-* **Error Reporting**: Syntax errors with line/column positions
-* **SARIF Integration**: Security findings to GitHub Security tab
+- Local SQLite storage
+- No external data transmission
+- Environment-based credentials
+- AES-GCM-256 encryption
+- CodeQL vulnerability detection
+- DevSkim security scanning
+- Dependency auditing
+- Input validation
+
+## v0.1.3 Changes
+
+- Fixed 20+ CodeQL dependency conflicts
+- Resolved CI build failures across all platforms
+- Enhanced security analysis with DevSkim integration
+- Verified cross-platform compatibility
 
 ## Contributing
 
-[CONTRIBUTING.md](CONTRIBUTING.md)
+See [CONTRIBUTING.md](CONTRIBUTING.md)
 
-## License
+<details>
+<summary>Development Setup</summary>
 
-Apache 2.0 - [LICENSE](LICENSE)
+```bash
+git clone https://github.com/harpertoken/harper.git
+cd harper
+cargo fetch
+cargo test
+cargo clippy
+cargo fmt -- --check
+```
+</details>
+
+## Links
+
+- [Issues](https://github.com/harpertoken/harper/issues)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [License](LICENSE)
