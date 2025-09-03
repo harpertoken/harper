@@ -4,11 +4,10 @@
 [![Security Audit](https://github.com/harpertoken/harper/actions/workflows/security.yml/badge.svg)](https://github.com/harpertoken/harper/actions)
 [![Release](https://img.shields.io/github/v/release/harpertoken/harper)](https://github.com/harpertoken/harper/releases)
 
-A high-performance Rust-based AI agent for multi-provider integration, secure command execution, and advanced security analysis with local SQLite storage.
+Rust-based AI agent for multi-provider integration, command execution, and MCP protocol support with local SQLite storage.
 
 ## Latest Release: v1.3.0
 
-**Major Quality & Reliability Update** - Complete CodeQL & CI Build Resolution
 - Resolved CodeQL dependency conflicts (20+ → 9 minor conflicts)
 - Fixed CI build failures across all platforms (Linux, Windows, macOS)
 - Enhanced security analysis with improved DevSkim integration
@@ -16,38 +15,33 @@ A high-performance Rust-based AI agent for multi-provider integration, secure co
 
 ## Requirements
 
-* **Rust:** 1.70.0+ (MSRV verified)
-* **Network:** Connectivity for API calls
-* **Platform:** Linux, macOS, or Windows
-* **Storage:** SQLite3 for data persistence
+- Rust 1.70.0+
+- Network connectivity for API calls
+- Linux, macOS, or Windows
+- SQLite3 for data persistence
 
-## Quick Start
-
-### Installation
+## Installation
 
 ```bash
-# Install Rust toolchain (if not already installed)
+# Install Rust toolchain
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Clone and build
 git clone https://github.com/harpertoken/harper.git
 cd harper
-
-# Build release version
 cargo build --release
 
 # Configure environment
 cp env.example .env
-# Edit .env with your API keys
+# Set API keys in .env file
 
 # Run
 cargo run --release
 ```
 
-### Alternative: Install from Release
+### Install from Release
 
 ```bash
-# Install directly from GitHub release
 cargo install --git https://github.com/harpertoken/harper.git --tag v1.3
 ```
 
@@ -59,107 +53,89 @@ cargo install --git https://github.com/harpertoken/harper.git --tag v1.3
 [TOOL: name] { "param": "value" }
 ```
 
-## Key Features
+## Features
 
-### Multi-Provider AI Integration
+### AI Provider Integration
 
-| Provider  | Model                      | Capabilities              | Status |
-|-----------|----------------------------|---------------------------|--------|
-| OpenAI    | GPT-4 Turbo               | Text generation, coding   | Active |
-| Sambanova | Meta-Llama-3.2-1B-Instruct| Open-source LLM           | Active |
-| Gemini    | Gemini 2.0 Flash          | Multimodal processing     | Active |
+| Provider  | Model                      | Capabilities              |
+|-----------|----------------------------|---------------------------|
+| OpenAI    | GPT-4 Turbo               | Text generation, coding   |
+| Sambanova | Meta-Llama-3.2-1B-Instruct| Open-source LLM           |
+| Gemini    | Gemini 2.0 Flash          | Multimodal processing     |
 
-### Advanced Capabilities
+### Capabilities
 
-- Secure Command Execution - Safe shell command execution with validation
-- Intelligent Web Search - Integrated web search functionality
-- Session Management - Persistent conversation history with SQLite
-- Multi-format Export - Export sessions in various formats
-- Real-time Interaction - Interactive CLI with colored output
+- Command execution with validation
+- Web search integration
+- Session management with SQLite
+- Session export functionality
+- Interactive CLI interface
 
-### Security & Quality
+### Security
 
-- CodeQL Integration - Advanced security vulnerability detection
-- DevSkim Scanning - Automated security analysis
-- Dependency Auditing - Regular security updates and checks
-- Cryptographic Operations - AES-GCM-256, SHA-256, secure key management
-- Input Validation - Comprehensive security validation
+- CodeQL vulnerability detection
+- DevSkim security scanning
+- Dependency auditing
+- AES-GCM-256 encryption
+- Input validation
 
-### Performance & Reliability
+### Model Context Protocol
 
-- Cross-Platform - Verified builds on Linux, Windows, macOS (Intel + ARM)
-- CI/CD Pipeline - Automated testing across all platforms
-- Memory Safe - Rust's memory safety guarantees
-- Optimized Builds - Release builds with performance optimizations
-
-### Model Context Protocol (MCP)
-
-Note: MCP functionality is temporarily disabled in v1.3.0 to resolve dependency conflicts. It can be re-enabled with a compatible client version.
+MCP functionality is temporarily disabled in v1.3.0 to resolve dependency conflicts.
 
 ```toml
-# Future MCP configuration (when re-enabled)
 [mcp]
 enabled = true
 server_url = "http://localhost:5000"
 ```
 
-### Data Management
+### Data Storage
 
-- SQLite Storage - Local database for conversation history
-- Session Persistence - Never lose your conversation context
-- Export Capabilities - Save and share conversation sessions
-- Secure Credentials - Local environment-based API key storage
+- SQLite database for conversations
+- Local environment for credentials
+- Session persistence
+- Export functionality
 
-## Build & Development
+## Build Commands
 
-### Build Commands
+| Command                              | Description               |
+|--------------------------------------|---------------------------|
+| `cargo build --release`             | Release build             |
+| `cargo run --release`               | Run release binary        |
+| `cargo test`                        | Run tests                 |
+| `cargo fmt -- --check`              | Check formatting          |
+| `cargo clippy`                      | Static analysis           |
+| `cargo doc`                         | Generate documentation    |
+| `cargo clean`                       | Clean build artifacts     |
 
-| Command                                       | Description                      |
-|-----------------------------------------------|----------------------------------|
-| `cargo build --release`                       | Optimized release build          |
-| `cargo run --release`                         | Execute release binary           |
-| `cargo test --all-features --workspace`       | Run complete test suite          |
-| `cargo fmt --all -- --check`                  | Verify code formatting           |
-| `cargo clippy --all-targets --all-features`   | Static analysis & linting        |
-| `cargo doc --open`                            | Generate and open documentation  |
-| `cargo clean`                                 | Remove build artifacts           |
-| `make build`                                  | Alternative build via Makefile   |
-
-### Cross-Platform Building
+### Cross-Platform Builds
 
 ```bash
-# Linux (x86_64)
+# Linux
 cargo build --release --target x86_64-unknown-linux-gnu
 
-# Windows (x86_64)
+# Windows
 cargo build --release --target x86_64-pc-windows-msvc
 
-# macOS (Intel)
+# macOS Intel
 cargo build --release --target x86_64-apple-darwin
 
-# macOS (Apple Silicon)
+# macOS ARM
 cargo build --release --target aarch64-apple-darwin
 ```
 
-## ⚙️ Configuration
+## Configuration
 
-### Environment Setup
-
-Create `.env` file with your API keys:
+Create `.env` file:
 
 ```bash
-# Required API Keys
-OPENAI_API_KEY=your_openai_key_here
-SAMBASTUDIO_API_KEY=your_sambanova_key_here
-GEMINI_API_KEY=your_gemini_key_here
-
-# Optional: Database path (defaults to local SQLite)
+OPENAI_API_KEY=key
+SAMBASTUDIO_API_KEY=key
+GEMINI_API_KEY=key
 DATABASE_PATH=./harper.db
 ```
 
-### Advanced Configuration
-
-Edit `config/default.toml` for advanced settings:
+Edit `config/default.toml`:
 
 ```toml
 [api]
@@ -169,94 +145,53 @@ retry_attempts = 3
 [cache]
 enabled = true
 ttl_seconds = 300
-
-[logging]
-level = "info"
-format = "json"
 ```
 
-## Security & Privacy
+## Security
 
-### Data Handling
-- Local Storage Only - All data stored locally in SQLite database
-- No Data Transmission - API keys and conversations never leave your machine
-- Secure Credentials - Environment-based API key storage
-- Encrypted Operations - AES-GCM-256 for sensitive data
-
-### Security Features
-- CodeQL Integration - Automated security vulnerability detection
-- DevSkim Scanning - Static security analysis
-- Dependency Auditing - Regular security updates
-- Input Validation - Comprehensive security checks
-- Memory Safety - Rust's compile-time memory safety guarantees
-
-### Analysis & Scanning
-- Static Analysis: Clippy with security-focused rules
-- Security Scanning: DevSkim vulnerability detection
-- Dependency Audit: Automated security vulnerability checks
-- SARIF Integration: Security findings reported to GitHub Security tab
-- Cross-Platform Verification: Security checks on all supported platforms
+- Local SQLite storage only
+- No data transmission to external servers
+- Environment-based credential storage
+- AES-GCM-256 encryption
+- CodeQL vulnerability detection
+- DevSkim security scanning
+- Dependency auditing
+- Input validation
+- Memory safety guarantees
 
 ## Recent Updates (v1.3.0)
 
-### Major Improvements
-- Dependency Resolution: Fixed 20+ CodeQL conflicts → 9 minor conflicts
-- CI/CD Reliability: All platforms building successfully
-- Security Enhancement: Improved CodeQL and DevSkim integration
-- Cross-Platform: Verified builds on Linux, Windows, macOS
-
-### Technical Fixes
-- Cargo.lock Sync: Resolved lock file synchronization issues
-- Build Compatibility: Fixed `--locked` flag conflicts
-- Security Scanning: Enhanced vulnerability detection
-- Code Quality: Clippy clean with zero warnings
-
-### Quality Metrics
-- CI Checks: 15/15 passing across all platforms
-- Security Audit: Clean results
-- Test Coverage: Comprehensive test suite
-- Performance: Optimized release builds
+- Fixed 20+ CodeQL dependency conflicts
+- Resolved CI build failures across all platforms
+- Enhanced security analysis with DevSkim integration
+- Verified cross-platform compatibility
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ### Development Setup
+
 ```bash
-# Clone repository
 git clone https://github.com/harpertoken/harper.git
 cd harper
-
-# Install dependencies
 cargo fetch
-
-# Run tests
-cargo test --all-features
-
-# Check code quality
-cargo clippy --all-targets --all-features
-cargo fmt --all -- --check
+cargo test
+cargo clippy
+cargo fmt -- --check
 ```
 
-### Reporting Issues
+### Issues
+
 - Bug Reports: [GitHub Issues](https://github.com/harpertoken/harper/issues)
 - Security Issues: [Security Policy](SECURITY.md)
-- Feature Requests: [Discussions](https://github.com/harpertoken/harper/discussions)
 
-## License & Legal
+## License
 
-License: Apache 2.0 - See [LICENSE](LICENSE) for details
+Apache 2.0 - See [LICENSE](LICENSE)
 
-Privacy: See [PRIVACY.md](PRIVACY.md) for our privacy policy
+## Links
 
-Security: See [SECURITY.md](SECURITY.md) for security information
-
-## Acknowledgments
-
-- Rust Community - For the excellent ecosystem and tools
-- Open Source Contributors - For their valuable contributions
-- Security Researchers - For helping improve our security posture
-
----
-
-Built with Rust | Latest Release: v1.3.0 | License: Apache 2.0
+- [Contributing Guide](CONTRIBUTING.md)
+- [Privacy Policy](PRIVACY.md)
+- [Security Policy](SECURITY.md)
