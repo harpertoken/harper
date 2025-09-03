@@ -500,8 +500,6 @@ dependencies = [
  "serde_json",
  "socket2",
  "sync_wrapper",
- "system-configuration",
- "system-configuration-sys",
  "tempfile",
  "thiserror",
  "thiserror-impl",
