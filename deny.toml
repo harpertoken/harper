@@ -29,7 +29,7 @@ allow = [
     "BSD-2-Clause",                 # Simplified BSD
     "BSD-3-Clause",                 # New BSD
     "ISC",                         # ISC License (similar to MIT)
-    "Unicode-DFS-2016",            # Unicode License
+    # "Unicode-DFS-2016",            # Unicode License - temporarily disabled
     "MPL-2.0",                     # Mozilla Public License 2.0
     "Zlib",                        # zlib/libpng license
     "Unicode-3.0",                 # For Unicode-related crates
