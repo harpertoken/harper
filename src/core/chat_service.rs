@@ -57,7 +57,7 @@ impl<'a> ChatService<'a> {
         Self {
             conn,
             config,
-            mcp_client: None,
+            // mcp_client: None, // Temporarily disabled
             api_cache: None,
         }
     }
