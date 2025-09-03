@@ -1,7 +1,7 @@
 use colored::*;
-use mcp_client::{transport::SseTransport, McpClient, McpClientTrait, McpService, Transport};
+// use mcp_client::{transport::SseTransport, McpClient, McpClientTrait, McpService, Transport}; // Temporarily disabled
 use rusqlite::Connection;
-use std::collections::HashMap;
+// use std::collections::HashMap; // Temporarily unused
 use std::io::{self, Write};
 
 mod config;
@@ -15,7 +15,8 @@ use config::HarperConfig;
 
 use crate::core::cache::new_api_cache;
 use crate::core::chat_service::ChatService;
-use crate::core::constants::{menu, timeouts};
+use crate::core::constants::menu;
+// use crate::core::constants::timeouts; // Temporarily unused
 use crate::core::session_service::SessionService;
 use providers::*;
 use storage::*;
@@ -63,45 +64,9 @@ async fn main() {
     // This was done to resolve CodeQL duplicate dependency warnings and improve
     // security analysis accuracy. MCP can be re-enabled with a compatible client
     // version in the future.
-    let mcp_client = if config.mcp.enabled {
-        // Create SSE transport
-        let transport = SseTransport::new(config.mcp.server_url.clone(), HashMap::new());
-
-        // Start transport and get handle
-        let handle = match transport.start().await {
-            Ok(handle) => handle,
-            Err(e) => {
-                eprintln!("Failed to start MCP transport: {}", e);
-                return;
-            }
-        };
-
-        // Create service with timeout
-        let service = McpService::with_timeout(handle, timeouts::MCP_SERVICE);
-
-        // Create client
-        let mut client = McpClient::new(service);
-
-        // Initialize client
-        match client
-            .initialize(
-                mcp_client::client::ClientInfo {
-                    name: "harper".into(),
-                    version: "0.1.0".into(),
-                },
-                mcp_client::client::ClientCapabilities::default(),
-            )
-            .await
-        {
-            Ok(_) => Some(client),
-            Err(e) => {
-                eprintln!("Failed to initialize MCP client: {}", e);
-                None
-            }
-        }
-    } else {
-        None
-    };
+    // MCP client temporarily disabled due to dependency conflicts
+    // This resolves CodeQL duplicate dependency warnings and improves security analysis
+    let _mcp_client: Option<()> = None;
 
     loop {
         println!("\n{}", "Main Menu".bold().yellow());
@@ -134,7 +99,7 @@ async fn main() {
                 let mut chat_service = ChatService::new(
                     &conn,
                     &api_config,
-                    mcp_client.as_ref(),
+                    // mcp_client.as_ref(), // Temporarily disabled
                     Some(&mut api_cache),
                 );
                 if let Err(e) = chat_service.start_session().await {
