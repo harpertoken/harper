@@ -6,25 +6,24 @@
 use crate::core::constants::crypto::*;
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::{ApiConfig, ApiProvider, Message};
-use mcp_client::{transport::sse::SseTransportHandle, McpClient, McpClientTrait, McpService};
+// use mcp_client::{transport::sse::SseTransportHandle, McpClient, McpClientTrait, McpService}; // Temporarily disabled
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use ring::{
     aead::{self},
     rand::{SecureRandom, SystemRandom},
 };
 use serde_json::json;
-use tower::timeout::Timeout;
+// use tower::timeout::Timeout; // Temporarily disabled
 
 /// Call the configured LLM API with conversation history
 ///
 /// Sends a request to the configured AI provider with the conversation history
-/// and returns the AI's response. Supports MCP integration for enhanced functionality.
+/// and returns the AI's response.
 ///
 /// # Arguments
 /// * `client` - HTTP client for making API requests
 /// * `config` - API configuration including provider, key, and model
 /// * `history` - Conversation history as a slice of messages
-/// * `mcp_client` - Optional MCP client for additional processing
 ///
 /// # Returns
 /// The AI's response as a string
@@ -35,7 +34,6 @@ pub async fn call_llm(
     client: &reqwest::Client,
     config: &ApiConfig,
     history: &[Message],
-    mcp_client: Option<&McpClient<Timeout<McpService<SseTransportHandle>>>>,
 ) -> HarperResult<String> {
     let res = match config.provider {
         ApiProvider::OpenAI | ApiProvider::Sambanova => {
@@ -44,25 +42,27 @@ pub async fn call_llm(
                 .map(|m| json!({"role": m.role, "content": m.content}))
                 .collect();
 
-            let mut extra_query = String::new();
-            if let Some(mcp) = mcp_client {
-                match mcp
-                    .call_tool("llm_query", json!({ "query": history }))
-                    .await
-                {
-                    Ok(result) => {
-                        if let Some(content) = result.content.first() {
-                            if let Some(text) = content.as_text() {
-                                extra_query = text.to_string();
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        // Log the error but continue without the extra query
-                        eprintln!("MCP tool call failed: {}", e);
-                    }
-                }
-            }
+            let extra_query = String::new();
+            // MCP client temporarily disabled due to dependency conflicts
+            // TODO: Re-enable MCP functionality with a compatible client version
+            // if let Some(mcp) = mcp_client {
+            //     match mcp
+            //         .call_tool("llm_query", json!({ "query": history }))
+            //         .await
+            //     {
+            //         Ok(result) => {
+            //             if let Some(content) = result.content.first() {
+            //                 if let Some(text) = content.as_text() {
+            //                     extra_query = text.to_string();
+            //                 }
+            //             }
+            //         }
+            //         Err(e) => {
+            //             // Log the error but continue without the extra query
+            //             eprintln!("MCP tool call failed: {}", e);
+            //         }
+            //     }
+            // }
 
             let body = json!({
                 "model": config.model_name,
