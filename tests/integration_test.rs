@@ -68,9 +68,10 @@ async fn test_web_search_mock() {
             // If successful, should contain some content
             assert!(!response.is_empty(), "Search response should not be empty");
         }
-        Err(_) => {
+        Err(e) => {
             // If it fails, it should be due to network issues, not a panic
-            // This is acceptable in CI environments without network access
+            // This is acceptable in CI, but we should log the error for visibility
+            eprintln!("Web search test ignored an error, likely due to network issues: {:?}", e);
         }
     }
 }
