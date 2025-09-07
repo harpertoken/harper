@@ -56,8 +56,25 @@ fn test_message_creation() {
 async fn test_web_search_mock() {
     use harper::utils::web_search;
 
+    // Skip this test in CI environments where network access might be restricted
+    if std::env::var("CI").is_ok() {
+        println!("Skipping web search test in CI environment");
+        return;
+    }
+
     // Test with a simple query - this will actually hit DuckDuckGo API
-    // In a real test environment, you'd mock this
+    // In local environments, we expect this to work
     let result = web_search("rust programming").await;
-    assert!(result.is_ok());
+
+    // In local development, we expect the search to succeed
+    match result {
+        Ok(response) => {
+            // If successful, should contain some content
+            assert!(!response.is_empty(), "Search response should not be empty");
+        }
+        Err(e) => {
+            // If it fails locally, it's unexpected - fail the test
+            panic!("Web search failed unexpectedly: {:?}", e);
+        }
+    }
 }
