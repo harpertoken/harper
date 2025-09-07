@@ -56,25 +56,25 @@ fn test_message_creation() {
 async fn test_web_search_mock() {
     use harper::utils::web_search;
 
+    // Skip this test in CI environments where network access might be restricted
+    if std::env::var("CI").is_ok() {
+        println!("Skipping web search test in CI environment");
+        return;
+    }
+
     // Test with a simple query - this will actually hit DuckDuckGo API
-    // In CI environments, network requests might fail, so we check that the function
-    // handles errors gracefully rather than panicking
+    // In local environments, we expect this to work
     let result = web_search("rust programming").await;
 
-    // The function should either succeed or return a handled error message
-    // It should not panic or return an unhandled error
+    // In local development, we expect the search to succeed
     match result {
         Ok(response) => {
             // If successful, should contain some content
             assert!(!response.is_empty(), "Search response should not be empty");
         }
         Err(e) => {
-            // If it fails, it should be due to network issues, not a panic
-            // This is acceptable in CI, but we should log the error for visibility
-            eprintln!(
-                "Web search test ignored an error, likely due to network issues: {:?}",
-                e
-            );
+            // If it fails locally, it's unexpected - fail the test
+            panic!("Web search failed unexpectedly: {:?}", e);
         }
     }
 }
