@@ -366,11 +366,8 @@ Tool format:
     fn trim_history(&self, history: &mut Vec<Message>) {
         if history.len() > MAX_HISTORY {
             // Keep system message and the most recent messages
-            let system_msg = history[0].clone();
-            let start_idx = history.len() - (MAX_HISTORY - 1);
-            let recent_messages = history[start_idx..].to_vec();
-            *history = vec![system_msg];
-            history.extend(recent_messages);
+            let to_remove_count = history.len() - MAX_HISTORY;
+            history.drain(1..1 + to_remove_count);
         }
     }
 }
