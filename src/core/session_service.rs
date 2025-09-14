@@ -52,11 +52,7 @@ impl<'a> SessionService<'a> {
 
         // Show only the last 20 messages to prevent overwhelming output
         const MAX_DISPLAY: usize = 20;
-        let display_start = if total_messages > MAX_DISPLAY {
-            total_messages - MAX_DISPLAY
-        } else {
-            0
-        };
+        let display_start = total_messages.saturating_sub(MAX_DISPLAY);
 
         println!(
             "\n{} (showing last {} of {} messages)\n",
