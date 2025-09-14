@@ -110,10 +110,18 @@ mod e2e_tests {
 
         // Add test messages
         save_message(&conn, session_id, "user", "Hello, test message").unwrap();
-        save_message(&conn, session_id, "assistant", "Hi there! This is a test response.").unwrap();
+        save_message(
+            &conn,
+            session_id,
+            "assistant",
+            "Hi there! This is a test response.",
+        )
+        .unwrap();
 
         // Verify session was created
-        let mut stmt = conn.prepare("SELECT COUNT(*) FROM sessions WHERE id = ?").unwrap();
+        let mut stmt = conn
+            .prepare("SELECT COUNT(*) FROM sessions WHERE id = ?")
+            .unwrap();
         let count: i64 = stmt.query_row([session_id], |row| row.get(0)).unwrap();
         assert_eq!(count, 1, "Session should be created");
 
@@ -160,9 +168,14 @@ mod e2e_tests {
         assert_eq!(history2.len(), 1, "Session 2 should have 1 message");
 
         // Test ordering by creation time
-        let mut stmt = conn.prepare("SELECT id FROM sessions ORDER BY created_at DESC").unwrap();
-        let sessions: Vec<String> = stmt.query_map([], |row| row.get(0)).unwrap()
-            .map(|r| r.unwrap()).collect();
+        let mut stmt = conn
+            .prepare("SELECT id FROM sessions ORDER BY created_at DESC")
+            .unwrap();
+        let sessions: Vec<String> = stmt
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
 
         assert_eq!(sessions.len(), 2, "Should retrieve both sessions");
         // The order might vary, but both should be present
@@ -192,25 +205,54 @@ mod e2e_tests {
 
         // Test JSON export format
         let json_export = serde_json::to_string_pretty(&history).unwrap();
-        assert!(json_export.contains("Message for export test"), "JSON should contain user message");
-        assert!(json_export.contains("Response for export test"), "JSON should contain assistant message");
-        assert!(json_export.contains("System message for export"), "JSON should contain system message");
-        assert!(json_export.contains("\"role\""), "JSON should have role fields");
-        assert!(json_export.contains("\"content\""), "JSON should have content fields");
+        assert!(
+            json_export.contains("Message for export test"),
+            "JSON should contain user message"
+        );
+        assert!(
+            json_export.contains("Response for export test"),
+            "JSON should contain assistant message"
+        );
+        assert!(
+            json_export.contains("System message for export"),
+            "JSON should contain system message"
+        );
+        assert!(
+            json_export.contains("\"role\""),
+            "JSON should have role fields"
+        );
+        assert!(
+            json_export.contains("\"content\""),
+            "JSON should have content fields"
+        );
 
         // Test text export format
-        let text_export: String = history.iter()
+        let text_export: String = history
+            .iter()
             .map(|msg| format!("{}: {}", msg.role, msg.content))
             .collect::<Vec<_>>()
             .join("\n");
 
-        assert!(text_export.contains("user: Message for export test"), "Text export should contain user message");
-        assert!(text_export.contains("assistant: Response for export test"), "Text export should contain assistant message");
-        assert!(text_export.contains("system: System message for export"), "Text export should contain system message");
+        assert!(
+            text_export.contains("user: Message for export test"),
+            "Text export should contain user message"
+        );
+        assert!(
+            text_export.contains("assistant: Response for export test"),
+            "Text export should contain assistant message"
+        );
+        assert!(
+            text_export.contains("system: System message for export"),
+            "Text export should contain system message"
+        );
 
         // Test that JSON is valid and can be parsed back
         let parsed_history: Vec<Message> = serde_json::from_str(&json_export).unwrap();
-        assert_eq!(parsed_history.len(), 3, "Parsed JSON should have same number of messages");
+        assert_eq!(
+            parsed_history.len(),
+            3,
+            "Parsed JSON should have same number of messages"
+        );
         assert_eq!(parsed_history[0].role, "user");
         assert_eq!(parsed_history[1].role, "assistant");
         assert_eq!(parsed_history[2].role, "system");
@@ -227,14 +269,23 @@ mod e2e_tests {
 
         // Test loading non-existent session
         let result = load_history(&conn, "non-existent-session");
-        assert!(result.is_ok(), "Loading non-existent session should not error");
-        assert!(result.unwrap().is_empty(), "Non-existent session should return empty history");
+        assert!(
+            result.is_ok(),
+            "Loading non-existent session should not error"
+        );
+        assert!(
+            result.unwrap().is_empty(),
+            "Non-existent session should return empty history"
+        );
 
         // Test saving message to non-existent session (should still work)
         // First create the session, then save message
         save_session(&conn, "new-session").unwrap();
         let result = save_message(&conn, "new-session", "user", "test message");
-        assert!(result.is_ok(), "Saving message should work for existing session");
+        assert!(
+            result.is_ok(),
+            "Saving message should work for existing session"
+        );
 
         // Verify the message was saved
         let history = load_history(&conn, "new-session").unwrap();
@@ -248,7 +299,9 @@ mod e2e_tests {
         assert!(result.is_ok(), "Empty messages should be allowed");
 
         // Check database directly to see if message was saved
-        let mut stmt = conn.prepare("SELECT COUNT(*) FROM messages WHERE session_id = ?").unwrap();
+        let mut stmt = conn
+            .prepare("SELECT COUNT(*) FROM messages WHERE session_id = ?")
+            .unwrap();
         let msg_count: i64 = stmt.query_row(["test-session"], |row| row.get(0)).unwrap();
         assert_eq!(msg_count, 1, "Empty message should be saved to database");
 
