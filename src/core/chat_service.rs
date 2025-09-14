@@ -18,6 +18,9 @@ use std::io::{self, Write};
 // use tower::timeout::Timeout; // Temporarily disabled
 use uuid::Uuid;
 
+/// Maximum number of messages to keep in conversation history
+const MAX_HISTORY: usize = 50;
+
 /// Service for handling chat sessions and interactions
 ///
 /// Manages the lifecycle of chat sessions, including user input processing,
@@ -150,9 +153,11 @@ Tool format:
             }
 
             self.add_user_message(history, session_id, &user_input)?;
-            let response = self.process_message(history, web_search_enabled).await?;
+            let response = self.process_message(history, web_search_enabled).await
+                .map_err(|e| HarperError::Api(format!("Failed to process message in session {}: {}", session_id, e)))?;
             self.display_response(&response);
             self.add_assistant_message(history, session_id, &response)?;
+            self.trim_history(history);
         }
         Ok(())
     }
@@ -348,5 +353,17 @@ Tool format:
             content: content.to_string(),
         });
         crate::save_message(self.conn, session_id, "assistant", content)
+    }
+
+    /// Trim conversation history to prevent memory issues and maintain context window
+    fn trim_history(&self, history: &mut Vec<Message>) {
+        if history.len() > MAX_HISTORY {
+            // Keep system message and the most recent messages
+            let system_msg = history[0].clone();
+            let start_idx = history.len() - (MAX_HISTORY - 1);
+            let recent_messages = history[start_idx..].to_vec();
+            *history = vec![system_msg];
+            history.extend(recent_messages);
+        }
     }
 }
