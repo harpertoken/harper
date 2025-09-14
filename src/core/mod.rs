@@ -39,10 +39,10 @@ pub struct ApiConfig {
     pub model_name: String,
 }
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// A message in a conversation with an AI model
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     /// The role of the message sender (user, assistant, system)
     pub role: String,
