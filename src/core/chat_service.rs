@@ -153,8 +153,15 @@ Tool format:
             }
 
             self.add_user_message(history, session_id, &user_input)?;
-            let response = self.process_message(history, web_search_enabled).await
-                .map_err(|e| HarperError::Api(format!("Failed to process message in session {}: {}", session_id, e)))?;
+            let response = self
+                .process_message(history, web_search_enabled)
+                .await
+                .map_err(|e| {
+                    HarperError::Api(format!(
+                        "Failed to process message in session {}: {}",
+                        session_id, e
+                    ))
+                })?;
             self.display_response(&response);
             self.add_assistant_message(history, session_id, &response)?;
             self.trim_history(history);
