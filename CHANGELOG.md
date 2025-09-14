@@ -14,6 +14,7 @@ Complete CodeQL & CI Build Resolution
 - Session transcript pagination (last 20 messages) for large conversations
 - JSON export format for session transcripts
 - Enhanced error messages with session context
+- End-to-end tests for full application workflow validation
 
 ### Fixed
 - CodeQL dependency conflicts (20+ → 9 minor conflicts)
