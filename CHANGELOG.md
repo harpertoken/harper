@@ -10,6 +10,10 @@ Complete CodeQL & CI Build Resolution
 - Cargo.lock synchronization
 - DevSkim security scanning improvements
 - Documentation cleanup
+- Context window management (50 message limit) for better memory efficiency
+- Session transcript pagination (last 20 messages) for large conversations
+- JSON export format for session transcripts
+- Enhanced error messages with session context
 
 ### Fixed
 - CodeQL dependency conflicts (20+ → 9 minor conflicts)
@@ -41,7 +45,7 @@ Complete CodeQL & CI Build Resolution
 - Security: Audit clean with enhanced analysis
 - Code Quality: Clippy clean, documentation updated
 
-## [1.2.0] - 2025-09-03
+## [0.1.2] - 2025-09-03
 
 ### Added
 - DevSkim security scanning workflow
@@ -58,7 +62,7 @@ Complete CodeQL & CI Build Resolution
 - Enhanced sensitive data transmission security
 - Improved security analysis workflows
 
-## [1.1.0] - 2025-09-03
+## [0.1.1] - 2025-09-03
 
 ### Added
 - Privacy policy document
@@ -92,9 +96,18 @@ Complete CodeQL & CI Build Resolution
 - Improved sensitive data handling
 - Added input validation
 
-## [0.1.1] - 2025-08-26
+
+## [0.1.0] - 2025-08-26
 
 ### Added
+- Multi-provider AI support (OpenAI, Sambanova, Gemini)
+- Shell command execution and web search
+- SQLite session management
+- Interactive CLI with colored output
+- Session export functionality
+- GitHub Actions CI/CD workflow
+- Automated release process
+- Basic project structure
 - MCP integration with configuration
 - Advanced configuration system
 - Test suite with unit and integration tests
@@ -111,15 +124,3 @@ Complete CodeQL & CI Build Resolution
 ### Changed
 - Improved documentation and formatting
 - Enhanced error messages
-
-## [0.1.0] - 2025-08-21
-
-### Added
-- Multi-provider AI support (OpenAI, Sambanova, Gemini)
-- Shell command execution and web search
-- SQLite session management
-- Interactive CLI with colored output
-- Session export functionality
-- GitHub Actions CI/CD workflow
-- Automated release process
-- Basic project structure
