@@ -58,10 +58,12 @@ impl<'a> SessionService<'a> {
             0
         };
 
-        println!("\n{} (showing last {} of {} messages)\n",
-                 "Session History:".bold().yellow(),
-                 total_messages.saturating_sub(display_start),
-                 total_messages);
+        println!(
+            "\n{} (showing last {} of {} messages)\n",
+            "Session History:".bold().yellow(),
+            total_messages.saturating_sub(display_start),
+            total_messages
+        );
 
         for msg in &history[display_start..] {
             match msg.role.as_str() {
@@ -73,7 +75,10 @@ impl<'a> SessionService<'a> {
         }
 
         if total_messages > MAX_DISPLAY {
-            println!("\n{} Use export to view the full transcript.", "Note:".bold().cyan());
+            println!(
+                "\n{} Use export to view the full transcript.",
+                "Note:".bold().cyan()
+            );
         }
 
         Ok(())
@@ -97,7 +102,10 @@ impl<'a> SessionService<'a> {
         let history = load_history(self.conn, session_id).unwrap_or_default();
 
         if history.is_empty() {
-            println!("No messages found for session '{}' to export.", session_id.bold().red());
+            println!(
+                "No messages found for session '{}' to export.",
+                session_id.bold().red()
+            );
             return Ok(());
         }
 
