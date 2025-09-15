@@ -1,7 +1,7 @@
 # Harper
 
 [![CI Status](https://github.com/harpertoken/harper/actions/workflows/ci.yml/badge.svg)](https://github.com/harpertoken/harper/actions)
-[![Security Audit](https://github.com/harpertoken/harper/actions/workflows/security.yml/badge.svg)](https://github.com/harpertoken/harper/actions)
+[![Security Audit](https://github.com/harpertoken/harper/actions/workflows/devskim.yml/badge.svg)](https://github.com/harpertoken/harper/actions)
 [![Release](https://img.shields.io/github/v/release/harpertoken/harper)](https://github.com/harpertoken/harper/releases)
 
 AI agent for multi-provider integration, command execution, and MCP protocol support with SQLite storage.
