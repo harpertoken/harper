@@ -1,7 +1,6 @@
 # Harper
 
 [![CI Status](https://github.com/harpertoken/harper/actions/workflows/ci.yml/badge.svg)](https://github.com/harpertoken/harper/actions)
-[![Security Audit](https://github.com/harpertoken/harper/actions/workflows/security.yml/badge.svg)](https://github.com/harpertoken/harper/actions)
 [![Release](https://img.shields.io/github/v/release/harpertoken/harper)](https://github.com/harpertoken/harper/releases)
 
 AI agent for multi-provider integration, command execution, and MCP protocol support with SQLite storage.
@@ -32,7 +31,7 @@ cargo run --release
 <summary>Install from Release</summary>
 
 ```bash
-cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.3
+cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.4
 ```
 </details>
 
@@ -56,23 +55,23 @@ cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.3
 
 ### Core Functions
 
-- Command execution with validation
-- Web search integration
-- SQLite session management
+- Command execution
+- Web search
+- SQLite sessions
 - Session export
-- Interactive CLI
+- CLI
 
 ### Security
 
-- CodeQL vulnerability detection
-- DevSkim security scanning
-- Dependency auditing
-- AES-GCM-256 encryption
+- CodeQL scanning
+- DevSkim analysis
+- Dependency audit
+- AES-GCM encryption
 - Input validation
 
 ### MCP Protocol
 
-MCP disabled in v0.1.3 due to dependency conflicts.
+MCP disabled in v0.1.4 due to dependency conflicts.
 
 <details>
 <summary>MCP Configuration</summary>
@@ -159,12 +158,7 @@ ttl_seconds = 300
 - Dependency auditing
 - Input validation
 
-## v0.1.3 Changes
 
-- Fixed 20+ CodeQL dependency conflicts
-- Resolved CI build failures across all platforms
-- Enhanced security analysis with DevSkim integration
-- Verified cross-platform compatibility
 
 ## Contributing
 
