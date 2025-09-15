@@ -71,7 +71,7 @@ cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.4
 
 ### MCP Protocol
 
-MCP disabled in v0.1.3 due to dependency conflicts.
+MCP disabled in v0.1.4 due to dependency conflicts.
 
 <details>
 <summary>MCP Configuration</summary>
