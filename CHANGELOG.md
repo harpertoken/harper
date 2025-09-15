@@ -1,6 +1,14 @@
 # Changelog
 
-## [0.1.3] - 2025-09-03
+## [0.1.4] - Unreleased
+
+### Added
+- TBD
+
+### Fixed
+- TBD
+
+## [0.1.3] - 2025-09-14
 
 Complete CodeQL & CI Build Resolution
 
