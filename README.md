@@ -158,12 +158,7 @@ ttl_seconds = 300
 - Dependency auditing
 - Input validation
 
-## v0.1.3 Changes
 
-- Fixed 20+ CodeQL dependency conflicts
-- Resolved CI build failures across all platforms
-- Enhanced security analysis with DevSkim integration
-- Verified cross-platform compatibility
 
 ## Contributing
 
