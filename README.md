@@ -32,7 +32,7 @@ cargo run --release
 <summary>Install from Release</summary>
 
 ```bash
-cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.3
+cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.4
 ```
 </details>
 
