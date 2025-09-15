@@ -55,18 +55,18 @@ cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.4
 
 ### Core Functions
 
-- Command execution with validation
-- Web search integration
-- SQLite session management
+- Command execution
+- Web search
+- SQLite sessions
 - Session export
-- Interactive CLI
+- CLI
 
 ### Security
 
-- CodeQL vulnerability detection
-- DevSkim security scanning
-- Dependency auditing
-- AES-GCM-256 encryption
+- CodeQL scanning
+- DevSkim analysis
+- Dependency audit
+- AES-GCM encryption
 - Input validation
 
 ### MCP Protocol
