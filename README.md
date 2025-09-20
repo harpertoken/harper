@@ -1,6 +1,6 @@
 # Harper
 
-[![CI Status](https://github.com/harpertoken/harper/actions/workflows/ci.yml/badge.svg)](https://github.com/harpertoken/harper/actions)
+[![End-to-End Tests](https://github.com/harpertoken/harper/actions/workflows/e2e.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/e2e.yml)
 [![Release](https://img.shields.io/github/v/release/harpertoken/harper)](https://github.com/harpertoken/harper/releases)
 
 AI agent for multi-provider integration, command execution, and MCP protocol support with SQLite storage.
@@ -27,11 +27,61 @@ cargo run --release
 ```
 </details>
 
+## Development
+
+### Running Tests
+
+harper includes a comprehensive test suite. To run all tests, use the provided script:
+
+```bash
+./harpertest
+```
+
+This will run:
+- Unit tests
+- Integration tests
+- Error handling tests
+- Security tests
+- Performance benchmarks
+
+Example output:
+```
+Running all tests and benchmarks...
+==================================
+
+Running unit tests...
+...
+
+Running integration tests...
+...
+
+Running error handling tests...
+...
+
+Running security tests...
+...
+
+Running performance benchmarks...
+...
+
+All tests completed successfully!
+==================================
+```
+
+### Test Coverage
+
+The test suite includes:
+- 12 unit tests
+- 10 integration tests
+- 6 error handling tests
+- 3 security tests
+- Performance benchmarks
+
 <details>
 <summary>Install from Release</summary>
 
 ```bash
-cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.4
+cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.5
 ```
 </details>
 
@@ -71,7 +121,7 @@ cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.4
 
 ### MCP Protocol
 
-MCP disabled in v0.1.4 due to dependency conflicts.
+MCP disabled in v0.1.3+ due to dependency conflicts.
 
 <details>
 <summary>MCP Configuration</summary>
