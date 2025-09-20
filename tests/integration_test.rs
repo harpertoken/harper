@@ -83,7 +83,7 @@ fn test_database_operations() {
         &"a".repeat(100), // Test with long session ID
     ];
 
-    for (_i, &session_id) in test_sessions.iter().enumerate() {
+    for &session_id in test_sessions.iter() {
         // Test session creation
         save_session(&conn, session_id).unwrap();
 
@@ -253,8 +253,8 @@ fn test_concurrent_access() {
         )
         .unwrap();
         // Enable WAL mode for better concurrency
-        conn.pragma_update(None, "journal_mode", &"WAL").unwrap();
-        conn.pragma_update(None, "synchronous", &"NORMAL").unwrap();
+        conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+        conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
         init_db(&conn).unwrap();
     }
 
@@ -285,8 +285,8 @@ fn test_concurrent_access() {
             .unwrap();
 
             // Enable WAL mode for this connection
-            conn.pragma_update(None, "journal_mode", &"WAL").unwrap();
-            conn.pragma_update(None, "synchronous", &"NORMAL").unwrap();
+            conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+            conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
 
             // Wait for all threads to be ready
             barrier.wait();
