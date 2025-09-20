@@ -184,8 +184,7 @@ fn test_database_operations() {
     for &expected_session in &test_sessions {
         assert!(
             sessions.contains(&expected_session.to_string()),
-            "Session {} not found in list",
-            expected_session
+            "Expected session not found in list"
         );
     }
 
@@ -194,8 +193,7 @@ fn test_database_operations() {
     let empty_history = load_history(&conn, session_id).unwrap();
     assert!(
         empty_history.is_empty(),
-        "Expected no messages after deletion for session {}",
-        session_id
+        "Expected no messages after deletion"
     );
 
     // Verify messages were actually deleted from the database
