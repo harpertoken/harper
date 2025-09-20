@@ -4,6 +4,9 @@
 
 use std::time::Duration;
 
+/// Application version
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Timeout durations
 pub mod timeouts {
     use super::Duration;
