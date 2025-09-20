@@ -263,7 +263,7 @@ mod e2e_tests {
         use std::process::{Command, Stdio};
 
         let temp_db = NamedTempFile::new().unwrap();
-        let db_path = temp_db.path().to_str().unwrap();
+        let db_path = temp_db.path();
 
         let mut child = Command::new("cargo")
             .args(&["run", "--quiet"])
