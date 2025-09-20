@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# Exit on any error
+set -e
+
+echo "Running all tests and benchmarks..."
+echo "=================================="
+
+# Run unit tests
+echo -e "\nRunning unit tests..."
+cargo test --lib -- --test-threads=1
+
+# Run integration tests
+echo -e "\nRunning integration tests..."
+cargo test --test integration_test
+
+# Run error handling tests
+echo -e "\nRunning error handling tests..."
+cargo test --test error_handling_test
+
+# Run security tests
+echo -e "\nRunning security tests..."
+cargo test --test security_test
+
+# Run performance benchmarks
+echo -e "\nRunning performance benchmarks..."
+cargo bench
+
+echo -e "\nAll tests completed successfully!"
+echo "=================================="
+
+# Print system information for reference
+echo -e "\nSystem Information:"
+echo "----------------"
+echo "Rust version: $(rustc --version)"
+echo "Cargo version: $(cargo --version)"
+echo "OS: $(uname -s) $(uname -r)"
+echo "Architecture: $(uname -m)"

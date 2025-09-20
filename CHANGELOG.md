@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.1.5] - 2025-09-20
+- Version flag, test suites, documentation updates
+
 ## [0.1.4] - 2025-09-15
 - Minor fixes
 
