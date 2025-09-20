@@ -1,7 +1,6 @@
 use harper::*;
 use rusqlite::Connection;
 use tempfile::NamedTempFile;
-use wait_timeout;
 
 #[test]
 fn test_database_operations() {
@@ -283,14 +282,12 @@ mod e2e_tests {
         // List contents of the temp directory
         println!("\n=== Directory Contents ===");
         if let Ok(entries) = std::fs::read_dir(temp_dir.path()) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    println!(
-                        "  - {} (dir: {})",
-                        entry.path().display(),
-                        entry.path().is_dir()
-                    );
-                }
+            for entry in entries.flatten() {
+                println!(
+                    "  - {} (dir: {})",
+                    entry.path().display(),
+                    entry.path().is_dir()
+                );
             }
         }
 
