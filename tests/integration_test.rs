@@ -259,6 +259,38 @@ mod e2e_tests {
     }
 
     #[test]
+    fn test_binary_execution_e2e() {
+        use std::process::{Command, Stdio};
+
+        let temp_db = NamedTempFile::new().unwrap();
+        let db_path = temp_db.path().to_str().unwrap();
+
+        let mut child = Command::new("cargo")
+            .args(&["run", "--quiet"])
+            .env("HARPER_DATABASE__PATH", db_path)
+            .env("HARPER_API__API_KEY", "test-key")
+            .env("HARPER_API__PROVIDER", "OpenAI")
+            .env("HARPER_API__BASE_URL", "https://api.openai.com/v1/chat/completions")
+            .env("HARPER_API__MODEL_NAME", "gpt-4")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to start binary");
+
+        // Send "5" to quit
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            stdin.write_all(b"5\n").expect("Failed to write to stdin");
+        }
+
+        let output = child.wait_with_output().expect("Failed to wait for child");
+        assert!(output.status.success(), "Binary should exit successfully");
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("Goodbye"), "Should print goodbye message");
+    }
+
+    #[test]
     fn test_error_handling_e2e() {
         // Test database error handling
         let temp_db = NamedTempFile::new().unwrap();
