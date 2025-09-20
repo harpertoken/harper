@@ -265,8 +265,7 @@ mod e2e_tests {
         let temp_db = NamedTempFile::new().unwrap();
         let db_path = temp_db.path();
 
-        let mut child = Command::new("cargo")
-            .args(&["run", "--quiet"])
+        let mut child = Command::new(env!("CARGO_BIN_EXE_harper"))
             .env("HARPER_DATABASE__PATH", db_path)
             .env("HARPER_API__API_KEY", "test-key")
             .env("HARPER_API__PROVIDER", "OpenAI")
