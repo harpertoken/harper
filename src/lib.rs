@@ -13,6 +13,9 @@ pub use providers::*;
 // Re-export storage
 pub use storage::*;
 
+// Re-export storage functions directly for easier access
+pub use storage::{delete_messages, delete_session, list_sessions};
+
 // Re-export utils
 pub use utils::*;
 
