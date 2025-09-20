@@ -69,13 +69,15 @@ async fn main() {
     let _mcp_client: Option<()> = None;
 
     loop {
-        println!("\n{}", "Main Menu".bold().yellow());
+        use crate::core::constants::messages;
+
+        println!("\n{}", messages::MAIN_MENU_TITLE.bold().yellow());
         println!("1. Start new chat session");
         println!("2. List previous sessions");
         println!("3. View a session's history");
         println!("4. Export a session's history");
         println!("5. Quit");
-        print!("Enter your choice: ");
+        print!("{}", messages::ENTER_CHOICE);
         io::stdout()
             .flush()
             .map_err(|e| {
@@ -122,7 +124,8 @@ async fn main() {
                 }
             }
             menu::QUIT => {
-                println!("{}", "Goodbye!".bold().yellow());
+                use crate::core::constants::messages;
+                println!("{}", messages::GOODBYE.bold().yellow());
                 break;
             }
             _ => println!("{}", "Invalid choice. Please try again.".red()),
