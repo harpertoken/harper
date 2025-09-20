@@ -196,6 +196,6 @@ fn test_concurrent_database_access() {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(count, 10, "Expected 10 messages for session {}", session_id);
+        assert_eq!(count, 10, "Unexpected number of messages in session");
     }
 }

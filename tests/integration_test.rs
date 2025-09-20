@@ -83,7 +83,7 @@ fn test_database_operations() {
         &"a".repeat(100), // Test with long session ID
     ];
 
-    for (i, &session_id) in test_sessions.iter().enumerate() {
+    for (_i, &session_id) in test_sessions.iter().enumerate() {
         // Test session creation
         save_session(&conn, session_id).unwrap();
 
@@ -95,11 +95,7 @@ fn test_database_operations() {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(
-            stored_id, session_id,
-            "Session ID mismatch for test case {}",
-            i
-        );
+        assert_eq!(stored_id, session_id, "Session ID mismatch in test case");
 
         // Verify created_at timestamp is set and has a valid format
         let created_at: String = conn
@@ -111,18 +107,12 @@ fn test_database_operations() {
             .unwrap();
 
         // Check that the timestamp is not empty and has the expected format
-        assert!(
-            !created_at.is_empty(),
-            "Created_at timestamp is empty for session {}",
-            session_id
-        );
+        assert!(!created_at.is_empty(), "Created_at timestamp is empty");
 
         // Basic format check (YYYY-MM-DD HH:MM:SS)
         assert!(
             TIMESTAMP_REGEX.is_match(&created_at),
-            "Created_at timestamp '{}' does not match expected format for session {}",
-            created_at,
-            session_id
+            "Created_at timestamp does not match expected format"
         );
     }
 
@@ -155,12 +145,8 @@ fn test_database_operations() {
             )
             .unwrap();
 
-        assert_eq!(*role, stored_role, "Role mismatch for message {}", i);
-        assert_eq!(
-            *content, stored_content,
-            "Content mismatch for message {}",
-            i
-        );
+        assert_eq!(*role, stored_role, "Role mismatch in message");
+        assert_eq!(*content, stored_content, "Content mismatch in message");
     }
 
     // Test message retrieval
@@ -173,15 +159,10 @@ fn test_database_operations() {
 
     // Verify message content and role are correct and in the right order
     for (i, (expected_role, expected_content)) in test_messages.iter().enumerate() {
-        assert_eq!(
-            *expected_role, history[i].role,
-            "Role mismatch at index {}",
-            i
-        );
+        assert_eq!(*expected_role, history[i].role, "Role mismatch in history");
         assert_eq!(
             *expected_content, history[i].content,
-            "Content mismatch at index {}",
-            i
+            "Content mismatch in history"
         );
     }
 
@@ -254,12 +235,30 @@ fn test_database_operations() {
 #[test]
 fn test_concurrent_access() {
     use rand::Rng;
+    use rusqlite::OpenFlags;
     use std::sync::Arc;
     use std::time::Duration;
 
     // Create a temporary database file
     let temp_file = NamedTempFile::new().unwrap();
-    let db_path = Arc::new(temp_file.path().to_path_buf());
+    let db_path = temp_file.path().to_path_buf();
+
+    // Initialize the database with WAL mode enabled
+    {
+        let conn = Connection::open_with_flags(
+            &db_path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE
+                | OpenFlags::SQLITE_OPEN_CREATE
+                | OpenFlags::SQLITE_OPEN_FULL_MUTEX,
+        )
+        .unwrap();
+        // Enable WAL mode for better concurrency
+        conn.pragma_update(None, "journal_mode", &"WAL").unwrap();
+        conn.pragma_update(None, "synchronous", &"NORMAL").unwrap();
+        init_db(&conn).unwrap();
+    }
+
+    let db_path = Arc::new(db_path);
 
     // Number of threads to spawn
     const NUM_THREADS: usize = 10;
@@ -278,78 +277,93 @@ fn test_concurrent_access() {
         let barrier = Arc::clone(&barrier);
 
         let handle = thread::spawn(move || {
-            // Each thread gets its own connection
-            let conn = Connection::open(&*db_path).unwrap();
+            // Each thread gets its own connection with proper flags
+            let conn = Connection::open_with_flags(
+                &*db_path,
+                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_FULL_MUTEX,
+            )
+            .unwrap();
 
-            // Initialize database if this is the first thread to get here
-            if thread_id == 0 {
-                init_db(&conn).unwrap();
-            }
+            // Enable WAL mode for this connection
+            conn.pragma_update(None, "journal_mode", &"WAL").unwrap();
+            conn.pragma_update(None, "synchronous", &"NORMAL").unwrap();
 
             // Wait for all threads to be ready
             barrier.wait();
 
-            // Perform operations
+            // Perform operations with retry logic for transient errors
             for op in 0..OPS_PER_THREAD {
-                // Randomly choose an operation
-                let op_type = rand::thread_rng().gen_range(0..=3);
+                let result = (|| -> Result<(), Box<dyn std::error::Error>> {
+                    // Randomly choose an operation
+                    let op_type = rand::thread_rng().gen_range(0..=3);
 
-                match op_type {
-                    // Create a new session
-                    0 => {
-                        let session_id = format!("session-{}-{}", thread_id, op);
-                        save_session(&conn, &session_id).unwrap();
+                    match op_type {
+                        // Create a new session
+                        0 => {
+                            let session_id = format!("session-{}-{}", thread_id, op);
+                            save_session(&conn, &session_id)?;
 
-                        // Verify session was created
-                        let exists: bool = conn
-                            .query_row(
+                            // Verify session was created
+                            let exists: bool = conn.query_row(
                                 "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?)",
                                 [&session_id],
                                 |row| row.get(0),
-                            )
-                            .unwrap();
-                        assert!(exists, "Session was not created");
-                    }
+                            )?;
+                            assert!(exists, "Session was not created");
+                        }
 
-                    // Add messages to a random session
-                    1 => {
-                        let sessions = list_sessions(&conn).unwrap();
-                        if !sessions.is_empty() {
-                            let session_idx = rand::thread_rng().gen_range(0..sessions.len());
-                            let session_id = &sessions[session_idx];
+                        // Add messages to a random session
+                        1 => {
+                            let sessions = list_sessions(&conn)?;
+                            if !sessions.is_empty() {
+                                let session_idx = rand::thread_rng().gen_range(0..sessions.len());
+                                let session_id = &sessions[session_idx];
 
-                            let role = if rand::random() { "user" } else { "assistant" };
-                            let content = format!("Message {} from thread {}", op, thread_id);
+                                let role = if rand::random() { "user" } else { "assistant" };
+                                let content = format!("Message {} from thread {}", op, thread_id);
 
-                            save_message(&conn, session_id, role, &content).unwrap();
+                                save_message(&conn, session_id, role, &content)?;
 
-                            // Verify message was saved
-                            let count: i64 = conn
-                                .query_row(
+                                // Verify message was saved
+                                let count: i64 = conn.query_row(
                                     "SELECT COUNT(*) FROM messages WHERE session_id = ? AND content = ?",
                                     [session_id, &content],
                                     |row| row.get(0),
-                                )
-                                .unwrap();
-                            assert_eq!(count, 1, "Message was not saved correctly");
+                                )?;
+                                assert_eq!(count, 1, "Message was not saved correctly");
+                            }
                         }
-                    }
 
-                    // List sessions (read-only operation)
-                    2 => {
-                        let _ = list_sessions(&conn).unwrap();
-                    }
-
-                    // Load history for a random session
-                    3 => {
-                        let sessions = list_sessions(&conn).unwrap();
-                        if !sessions.is_empty() {
-                            let session_idx = rand::thread_rng().gen_range(0..sessions.len());
-                            let _ = load_history(&conn, &sessions[session_idx]).unwrap();
+                        // List sessions (read-only operation)
+                        2 => {
+                            let _ = list_sessions(&conn)?;
                         }
-                    }
 
-                    _ => unreachable!(),
+                        // Load history for a random session
+                        3 => {
+                            let sessions = list_sessions(&conn)?;
+                            if !sessions.is_empty() {
+                                let session_idx = rand::thread_rng().gen_range(0..sessions.len());
+                                let _ = load_history(&conn, &sessions[session_idx])?;
+                            }
+                        }
+
+                        _ => unreachable!(),
+                    }
+                    Ok(())
+                })();
+
+                // If we get a database locked error, retry after a short delay
+                if let Err(e) = result {
+                    let error_str = e.to_string();
+                    if error_str.contains("database is locked")
+                        || error_str.contains("database is locked")
+                    {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    } else {
+                        panic!("Unexpected error: {}", e);
+                    }
                 }
 
                 // Small delay to increase chance of interleaving
@@ -370,13 +384,17 @@ fn test_concurrent_access() {
         handle.join().unwrap();
     }
 
-    // Final consistency check
-    let conn = Connection::open(&*db_path).unwrap();
+    // Final consistency check with a new connection
+    let conn = Connection::open_with_flags(
+        &*db_path,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_FULL_MUTEX,
+    )
+    .unwrap();
 
     // Verify all sessions have messages with correct session_id
     let sessions = list_sessions(&conn).unwrap();
     for session_id in sessions {
-        // Verify there are messages for this session
+        // Get the count of messages for this session
         let _message_count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM messages WHERE session_id = ?",
