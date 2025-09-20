@@ -1,6 +1,7 @@
 use harper::*;
 use rusqlite::Connection;
 use tempfile::NamedTempFile;
+use wait_timeout;
 
 #[test]
 fn test_database_operations() {
@@ -260,33 +261,139 @@ mod e2e_tests {
 
     #[test]
     fn test_binary_execution_e2e() {
+        use std::fs;
         use std::process::{Command, Stdio};
 
-        let temp_db = NamedTempFile::new().unwrap();
-        let db_path = temp_db.path();
+        // Create a temporary directory for the test
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
 
-        let mut child = Command::new(env!("CARGO_BIN_EXE_harper"))
-            .env("HARPER_DATABASE__PATH", db_path)
+        // Set up database directory and path
+        let db_dir = temp_dir.path().join("db");
+        std::fs::create_dir_all(&db_dir).expect("Failed to create database directory");
+        let db_path = db_dir.join("harper.db");
+
+        // Print debug information
+        println!("=== Test Setup ===");
+        println!("Temp directory: {}", temp_dir.path().display());
+        println!("Database path: {}", db_path.display());
+        println!("Database directory exists: {}", db_dir.exists());
+        println!("Database file exists before test: {}", db_path.exists());
+        println!("Current directory: {:?}", std::env::current_dir().unwrap());
+
+        // List contents of the temp directory
+        println!("\n=== Directory Contents ===");
+        if let Ok(entries) = std::fs::read_dir(temp_dir.path()) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    println!(
+                        "  - {} (dir: {})",
+                        entry.path().display(),
+                        entry.path().is_dir()
+                    );
+                }
+            }
+        }
+
+        // Verify the directory is writable
+        println!("\n=== Testing Directory Permissions ===");
+        let test_file = temp_dir.path().join(".test_write");
+        std::fs::write(&test_file, "test").expect("Failed to write test file to temp directory");
+        std::fs::remove_file(&test_file).expect("Failed to remove test file");
+        println!("Successfully wrote and removed test file");
+
+        // Ensure the parent directory of the database file exists
+        if let Some(parent) = db_path.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent).expect("Failed to create parent directory for database");
+            }
+            println!("Database parent directory exists: {}", parent.exists());
+        }
+
+        // Build the command
+        let mut command = Command::new(env!("CARGO_BIN_EXE_harper"));
+
+        // Set environment variables
+        command
+            .env("HARPER_DATABASE__PATH", &db_path)
             .env("HARPER_API__API_KEY", "test-key")
             .env("HARPER_API__PROVIDER", "OpenAI")
-            .env("HARPER_API__BASE_URL", "https://api.openai.com/v1/chat/completions")
+            .env(
+                "HARPER_API__BASE_URL",
+                "https://api.openai.com/v1/chat/completions",
+            )
             .env("HARPER_API__MODEL_NAME", "gpt-4")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .spawn()
-            .expect("Failed to start binary");
+            .stderr(Stdio::piped());
 
-        // Send "5" to quit
+        // Print the command for debugging
+        println!("\n=== Running Command ===");
+        println!("Command: {:?}", command);
+        println!("Database path in env: {}", db_path.display());
+
+        println!("Running command: {:?}", command);
+
+        let mut child = command.spawn().expect("Failed to start binary");
+
+        // Send quit command using the constant
+        use harper::core::constants::{menu, messages};
+
+        let quit_command = format!("{}\n", menu::QUIT);
+        println!("Sending quit command: {:?}", quit_command.trim());
+
         if let Some(mut stdin) = child.stdin.take() {
             use std::io::Write;
-            stdin.write_all(b"5\n").expect("Failed to write to stdin");
+            // Use the QUIT constant and add newline
+            stdin
+                .write_all(quit_command.as_bytes())
+                .expect("Failed to write to stdin");
+            // Explicitly flush the stdin to ensure the command is sent
+            stdin.flush().expect("Failed to flush stdin");
         }
 
-        let output = child.wait_with_output().expect("Failed to wait for child");
-        assert!(output.status.success(), "Binary should exit successfully");
+        // Give the process some time to process the input
+        std::thread::sleep(std::time::Duration::from_millis(500));
 
+        // Wait for the process to finish with a timeout
+        let output = match wait_timeout::ChildExt::wait_timeout(
+            &mut child,
+            std::time::Duration::from_secs(5),
+        ) {
+            Ok(Some(status)) => {
+                // Process has finished
+                println!("Process finished with status: {}", status);
+                child.wait_with_output().expect("Failed to wait for child")
+            }
+            Ok(None) => {
+                // Process is still running after timeout
+                println!("Process is still running after timeout, attempting to get output...");
+                let _ = child.kill();
+                child.wait_with_output().expect("Failed to wait for child")
+            }
+            Err(e) => {
+                panic!("Error waiting for child process: {}", e);
+            }
+        };
+
+        // Always print stdout and stderr for debugging
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("Goodbye"), "Should print goodbye message");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        println!("=== STDOUT ===\n{}", stdout);
+        println!("=== STDERR ===\n{}", stderr);
+
+        // Check if the process exited successfully
+        if !output.status.success() {
+            panic!("Process exited with status: {}", output.status);
+        }
+
+        // Check for the goodbye message in the output
+        assert!(
+            stdout.contains(messages::GOODBYE),
+            "Should print goodbye message. Expected '{}' in output.\nFull output:\n{}",
+            messages::GOODBYE,
+            stdout
+        );
     }
 
     #[test]
