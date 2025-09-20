@@ -31,12 +31,12 @@ impl Output for StdOutput {
         print!("{}", text);
         Ok(())
     }
-    
+
     fn println(&self, text: &str) -> io::Result<()> {
         println!("{}", text);
         Ok(())
     }
-    
+
     fn flush(&self) -> io::Result<()> {
         io::stdout().flush()
     }

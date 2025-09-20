@@ -4,6 +4,7 @@
 //! including listing, viewing, and exporting sessions.
 
 use crate::core::error::HarperResult;
+use crate::core::io_traits::{Input, Output};
 use crate::load_history;
 use chrono::Local;
 use colored::*;
@@ -11,7 +12,6 @@ use rusqlite::Connection;
 use serde_json;
 use std::fs::File;
 use std::io::Write;
-use crate::core::io_traits::{Input, Output};
 use std::sync::Arc;
 
 /// Service for managing chat sessions
@@ -56,7 +56,8 @@ impl<'a> SessionService<'a> {
         self.output.println(&"Previous Sessions:".bold().yellow())?;
         for (i, row) in rows.enumerate() {
             let (id, created_at) = row?;
-            self.output.println(&format!("{}: {} ({})", i + 1, id, created_at))?;
+            self.output
+                .println(&format!("{}: {} ({})", i + 1, id, created_at))?;
         }
         Ok(())
     }
@@ -115,7 +116,8 @@ impl<'a> SessionService<'a> {
         let history = load_history(self.conn, &session_id).unwrap_or_default();
 
         if history.is_empty() {
-            self.output.println(&format!("No history found for session {}", session_id))?;
+            self.output
+                .println(&format!("No history found for session {}", session_id))?;
             return Ok(());
         }
 
@@ -123,7 +125,8 @@ impl<'a> SessionService<'a> {
         let extension = if is_json { "json" } else { "txt" };
         let default_path = format!("{}.{}", default_filename, extension);
 
-        self.output.print(&format!("Enter output file path [{}]: ", default_path))?;
+        self.output
+            .print(&format!("Enter output file path [{}]: ", default_path))?;
         self.output.flush()?;
         let output_path = self.input.read_line()?.trim().to_string();
 
