@@ -1,6 +1,6 @@
 use harper::core::error::HarperResult;
-use harper::core::session_service::SessionService;
 use harper::core::io_traits::{Input, Output};
+use harper::core::session_service::SessionService;
 use rusqlite::Connection;
 use tempfile::NamedTempFile;
 
@@ -23,9 +23,9 @@ impl MockInput {
 impl Input for MockInput {
     fn read_line(&self) -> std::io::Result<String> {
         let mut responses = self.responses.lock().unwrap();
-        responses
-            .pop_front()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "No more test responses"))
+        responses.pop_front().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "No more test responses")
+        })
     }
 }
 
@@ -67,7 +67,7 @@ fn test_list_sessions_empty() -> HarperResult<()> {
     // Setup test database
     let temp_file = NamedTempFile::new()?;
     let conn = Connection::open(temp_file.path())?;
-    
+
     // Initialize database schema
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
@@ -76,23 +76,23 @@ fn test_list_sessions_empty() -> HarperResult<()> {
         )",
         [],
     )?;
-    
+
     // Setup mock I/O
     let input = MockInput::new(vec![]);
     let output = MockOutput::new();
     let output_clone = output.clone();
-    
+
     // Create service with mock I/O
     let service = SessionService::with_io(&conn, input, output);
-    
+
     // Test list_sessions with empty database
     let result = service.list_sessions();
     assert!(result.is_ok());
-    
+
     // Verify output
     let output_str = output_clone.get_output();
     assert!(output_str.contains("Previous Sessions:"));
-    
+
     Ok(())
 }
 
@@ -100,7 +100,7 @@ fn test_list_sessions_empty() -> HarperResult<()> {
 fn test_view_nonexistent_session() -> HarperResult<()> {
     let temp_file = NamedTempFile::new()?;
     let conn = Connection::open(temp_file.path())?;
-    
+
     // Initialize database schema
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
@@ -109,24 +109,24 @@ fn test_view_nonexistent_session() -> HarperResult<()> {
         )",
         [],
     )?;
-    
+
     // Setup mock I/O
     let input = MockInput::new(vec!["nonexistent-session-id"]);
     let output = MockOutput::new();
     let output_clone = output.clone();
-    
+
     // Create service with mock I/O
     let service = SessionService::with_io(&conn, input, output);
-    
+
     // Test viewing non-existent session
     let result = service.view_session();
     assert!(result.is_ok()); // Should not fail, just show no messages
-    
+
     // Verify output
     let output_str = output_clone.get_output();
     assert!(output_str.contains("Session History:"));
     assert!(output_str.contains("showing last 0 of 0 messages"));
-    
+
     Ok(())
 }
 
@@ -134,7 +134,7 @@ fn test_view_nonexistent_session() -> HarperResult<()> {
 fn test_export_nonexistent_session() -> HarperResult<()> {
     let temp_file = NamedTempFile::new()?;
     let conn = Connection::open(temp_file.path())?;
-    
+
     // Initialize database schema
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
@@ -143,22 +143,22 @@ fn test_export_nonexistent_session() -> HarperResult<()> {
         )",
         [],
     )?;
-    
+
     // Setup mock I/O
     let input = MockInput::new(vec!["nonexistent-session-id", "txt", ""]);
     let output = MockOutput::new();
     let output_clone = output.clone();
-    
+
     // Create service with mock I/O
     let service = SessionService::with_io(&conn, input, output);
-    
+
     // Test exporting non-existent session
     let result = service.export_session();
     assert!(result.is_ok()); // Should not fail, just show message
-    
+
     // Verify output
     let output_str = output_clone.get_output();
     assert!(output_str.contains("No history found for session"));
-    
+
     Ok(())
 }
