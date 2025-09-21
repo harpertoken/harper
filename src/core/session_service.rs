@@ -4,22 +4,44 @@
 //! including listing, viewing, and exporting sessions.
 
 use crate::core::error::HarperResult;
+use crate::core::io_traits::{Input, Output};
 use crate::load_history;
+use chrono::Local;
 use colored::*;
 use rusqlite::Connection;
 use serde_json;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::Write;
+use std::sync::Arc;
 
 /// Service for managing chat sessions
 pub struct SessionService<'a> {
     conn: &'a Connection,
+    input: Arc<dyn Input>,
+    output: Arc<dyn Output>,
 }
 
 impl<'a> SessionService<'a> {
     /// Create a new session service
     pub fn new(conn: &'a Connection) -> Self {
-        Self { conn }
+        Self::with_io(
+            conn,
+            crate::core::io_traits::StdInput,
+            crate::core::io_traits::StdOutput,
+        )
+    }
+
+    /// Create a new session service with custom I/O (for testing)
+    pub fn with_io<I, O>(conn: &'a Connection, input: I, output: O) -> Self
+    where
+        I: Input + 'static,
+        O: Output + 'static,
+    {
+        Self {
+            conn,
+            input: Arc::new(input),
+            output: Arc::new(output),
+        }
     }
 
     /// List all previous sessions
@@ -31,50 +53,50 @@ impl<'a> SessionService<'a> {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?;
 
-        println!("{}", "Previous Sessions:".bold().yellow());
+        self.output.println(&"Previous Sessions:".bold().yellow())?;
         for (i, row) in rows.enumerate() {
             let (id, created_at) = row?;
-            println!("{}: {} ({})", i + 1, id, created_at);
+            self.output
+                .println(&format!("{}: {} ({})", i + 1, id, created_at))?;
         }
         Ok(())
     }
 
     /// View a specific session's history
     pub fn view_session(&self) -> HarperResult<()> {
-        print!("Enter session ID to view: ");
-        io::stdout().flush()?;
-        let mut session_id = String::new();
-        io::stdin().read_line(&mut session_id)?;
-        let session_id = session_id.trim();
+        self.output.print("Enter session ID to view: ")?;
+        self.output.flush()?;
+        let session_id = self.input.read_line()?.trim().to_string();
 
-        let history = load_history(self.conn, session_id).unwrap_or_default();
+        let history = load_history(self.conn, &session_id).unwrap_or_default();
         let total_messages = history.len();
 
         // Show only the last 20 messages to prevent overwhelming output
         const MAX_DISPLAY: usize = 20;
         let display_start = total_messages.saturating_sub(MAX_DISPLAY);
 
-        println!(
+        self.output.println(&format!(
             "\n{} (showing last {} of {} messages)\n",
             "Session History:".bold().yellow(),
             total_messages.saturating_sub(display_start),
             total_messages
-        );
+        ))?;
 
         for msg in &history[display_start..] {
-            match msg.role.as_str() {
-                "user" => println!("{} {}", "You:".bold().blue(), msg.content.blue()),
-                "assistant" => println!("{} {}", "Assistant:".bold().green(), msg.content.green()),
-                "system" => println!("{} {}", "System:".bold().magenta(), msg.content.magenta()),
-                _ => println!("{}: {}", msg.role, msg.content),
-            }
+            let line = match msg.role.as_str() {
+                "user" => format!("{} {}", "You:".bold().blue(), msg.content.blue()),
+                "assistant" => format!("{} {}", "Assistant:".bold().green(), msg.content.green()),
+                "system" => format!("{} {}", "System:".bold().magenta(), msg.content.magenta()),
+                _ => format!("{}: {}", msg.role, msg.content),
+            };
+            self.output.println(&line)?;
         }
 
         if total_messages > MAX_DISPLAY {
-            println!(
+            self.output.println(&format!(
                 "\n{} Use export to view the full transcript.",
                 "Note:".bold().cyan()
-            );
+            ))?;
         }
 
         Ok(())
@@ -82,44 +104,60 @@ impl<'a> SessionService<'a> {
 
     /// Export a session's history to a file
     pub fn export_session(&self) -> HarperResult<()> {
-        print!("Enter session ID to export: ");
-        io::stdout().flush()?;
-        let mut session_id = String::new();
-        io::stdin().read_line(&mut session_id)?;
-        let session_id = session_id.trim();
+        self.output.print("Enter session ID to export: ")?;
+        self.output.flush()?;
+        let session_id = self.input.read_line()?.trim().to_string();
 
-        print!("Export format (txt/json) [txt]: ");
-        io::stdout().flush()?;
-        let mut format_choice = String::new();
-        io::stdin().read_line(&mut format_choice)?;
-        let format_choice = format_choice.trim().to_lowercase();
+        self.output.print("Export format (txt/json) [txt]: ")?;
+        self.output.flush()?;
+        let format_choice = self.input.read_line()?.trim().to_lowercase();
         let is_json = format_choice == "json";
 
-        let history = load_history(self.conn, session_id).unwrap_or_default();
+        let history = load_history(self.conn, &session_id).unwrap_or_default();
 
         if history.is_empty() {
-            println!(
-                "No messages found for session '{}' to export.",
-                session_id.bold().red()
-            );
+            self.output
+                .println(&format!("No history found for session {}", session_id))?;
             return Ok(());
         }
 
+        let default_filename = format!("harper_export_{}", session_id);
         let extension = if is_json { "json" } else { "txt" };
-        let filename = format!("session_{}.{}", session_id, extension);
-        let mut file = File::create(&filename)?;
+        let default_path = format!("{}.{}", default_filename, extension);
+
+        self.output
+            .print(&format!("Enter output file path [{}]: ", default_path))?;
+        self.output.flush()?;
+        let output_path = self.input.read_line()?.trim().to_string();
+
+        let output_path = if output_path.is_empty() {
+            default_path
+        } else {
+            output_path
+        };
 
         if is_json {
             let json = serde_json::to_string_pretty(&history)?;
-            file.write_all(json.as_bytes())?;
+            std::fs::write(&output_path, json)?;
         } else {
+            let mut file = File::create(&output_path)?;
             for msg in &history {
-                let line = format!("{}: {}\n", msg.role, msg.content);
-                file.write_all(line.as_bytes())?;
+                writeln!(
+                    &mut file,
+                    "[{}] {}: {}",
+                    Local::now().format("%Y-%m-%d %H:%M:%S"),
+                    msg.role,
+                    msg.content.replace('\n', "\n  ")
+                )?;
             }
         }
 
-        println!("Session exported to {}", filename.bold().yellow());
+        self.output.println(&format!(
+            "Successfully exported {} messages to {}",
+            history.len(),
+            output_path
+        ))?;
+
         Ok(())
     }
 }
