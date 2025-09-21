@@ -111,3 +111,60 @@ pub fn load_history(conn: &Connection, session_id: &str) -> HarperResult<Vec<Mes
     }
     Ok(messages)
 }
+
+/// List all session IDs in the database
+///
+/// Retrieves all session IDs from the sessions table.
+///
+/// # Arguments
+/// * `conn` - SQLite database connection
+///
+/// # Returns
+/// A vector of session IDs as strings
+///
+/// # Errors
+/// Returns `HarperError::Database` if the query fails
+#[allow(dead_code)]
+pub fn list_sessions(conn: &Connection) -> HarperResult<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT id FROM sessions ORDER BY created_at DESC")?;
+    let rows = stmt.query_map([], |row| row.get(0))?;
+
+    let mut sessions = Vec::new();
+    for session in rows {
+        sessions.push(session?);
+    }
+    Ok(sessions)
+}
+
+/// Delete all messages for a specific session
+///
+/// # Arguments
+/// * `conn` - SQLite database connection
+/// * `session_id` - ID of the session to delete messages for
+///
+/// # Errors
+/// Returns `HarperError::Database` if the delete operation fails
+#[allow(dead_code)]
+pub fn delete_messages(conn: &Connection, session_id: &str) -> HarperResult<()> {
+    conn.execute("DELETE FROM messages WHERE session_id = ?", [session_id])?;
+    Ok(())
+}
+
+/// Delete a session and all its messages
+///
+/// # Arguments
+/// * `conn` - SQLite database connection
+/// * `session_id` - ID of the session to delete
+///
+/// # Errors
+/// Returns `HarperError::Database` if the delete operation fails
+#[allow(dead_code)]
+pub fn delete_session(conn: &Connection, session_id: &str) -> HarperResult<()> {
+    // First delete all messages for this session
+    delete_messages(conn, session_id)?;
+
+    // Then delete the session itself
+    conn.execute("DELETE FROM sessions WHERE id = ?", [session_id])?;
+
+    Ok(())
+}

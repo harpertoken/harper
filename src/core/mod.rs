@@ -6,6 +6,7 @@ pub mod cache;
 pub mod chat_service;
 pub mod constants;
 pub mod error;
+pub mod io_traits;
 pub mod session_service;
 
 /// Supported AI API providers
