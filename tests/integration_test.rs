@@ -1,6 +1,12 @@
 use harper::*;
+use regex::Regex;
 use rusqlite::Connection;
+use std::thread;
 use tempfile::NamedTempFile;
+
+lazy_static::lazy_static! {
+    static ref TIMESTAMP_REGEX: Regex = Regex::new(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$").unwrap();
+}
 
 #[test]
 fn test_database_operations() {
@@ -10,21 +16,413 @@ fn test_database_operations() {
     // Test database initialization
     init_db(&conn).unwrap();
 
-    // Test session creation
-    let session_id = "test-session-123";
-    save_session(&conn, session_id).unwrap();
+    // Verify tables were created with correct schema
+    let table_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('sessions', 'messages')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        table_count, 2,
+        "Expected sessions and messages tables to be created"
+    );
 
-    // Test message saving
-    save_message(&conn, session_id, "user", "Hello, world!").unwrap();
-    save_message(&conn, session_id, "assistant", "Hi there!").unwrap();
+    // Verify table schemas
+    let sessions_columns: String = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='sessions'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(
+        sessions_columns.contains("id"),
+        "Sessions table missing id column"
+    );
+    assert!(
+        sessions_columns.contains("created_at"),
+        "Sessions table missing created_at column"
+    );
+
+    let messages_columns: String = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='messages'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(
+        messages_columns.contains("id"),
+        "Messages table missing id column"
+    );
+    assert!(
+        messages_columns.contains("session_id"),
+        "Messages table missing session_id column"
+    );
+    assert!(
+        messages_columns.contains("role"),
+        "Messages table missing role column"
+    );
+    assert!(
+        messages_columns.contains("content"),
+        "Messages table missing content column"
+    );
+    assert!(
+        messages_columns.contains("created_at"),
+        "Messages table missing created_at column"
+    );
+
+    // Test session creation with various ID formats
+    let test_sessions = [
+        "test-session-123",
+        "session-with-hyphens",
+        "session_with_underscores",
+        "session123",
+        &"a".repeat(100), // Test with long session ID
+    ];
+
+    for &session_id in test_sessions.iter() {
+        // Test session creation
+        save_session(&conn, session_id).unwrap();
+
+        // Verify session was created with correct ID
+        let stored_id: String = conn
+            .query_row(
+                "SELECT id FROM sessions WHERE id = ?",
+                [session_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored_id, session_id, "Session ID mismatch in test case");
+
+        // Verify created_at timestamp is set and has a valid format
+        let created_at: String = conn
+            .query_row(
+                "SELECT created_at FROM sessions WHERE id = ?",
+                [session_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        // Check that the timestamp is not empty and has the expected format
+        assert!(!created_at.is_empty(), "Created_at timestamp is empty");
+
+        // Basic format check (YYYY-MM-DD HH:MM:SS)
+        assert!(
+            TIMESTAMP_REGEX.is_match(&created_at),
+            "Created_at timestamp does not match expected format"
+        );
+    }
+
+    // Test message operations with various content types
+    let test_messages = [
+        ("user", "Hello, world!"),
+        ("assistant", "Hi there!"),
+        ("system", "System message"),
+        (
+            "user",
+            "Message with special chars: \"'!@#$%^&*()_+{}|:<>?~`,./;'[]\\\\-=\\n",
+        ),
+        ("user", "Message with emoji: 😊🚀🌟"),
+        ("assistant", "Message with numbers: 1234567890"),
+        ("user", &format!("A very long message {}", "x".repeat(1000))),
+    ];
+
+    let session_id = test_sessions[0];
+
+    // Save all test messages
+    for (i, (role, content)) in test_messages.iter().enumerate() {
+        save_message(&conn, session_id, role, content).unwrap();
+
+        // Verify message was saved correctly
+        let (stored_role, stored_content): (String, String) = conn
+            .query_row(
+                "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id LIMIT 1 OFFSET ?",
+                [session_id, i.to_string().as_str()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+
+        assert_eq!(*role, stored_role, "Role mismatch in message");
+        assert_eq!(*content, stored_content, "Content mismatch in message");
+    }
 
     // Test message retrieval
     let history = load_history(&conn, session_id).unwrap();
-    assert_eq!(history.len(), 2);
-    assert_eq!(history[0].role, "user");
-    assert_eq!(history[0].content, "Hello, world!");
-    assert_eq!(history[1].role, "assistant");
-    assert_eq!(history[1].content, "Hi there!");
+    assert_eq!(
+        history.len(),
+        test_messages.len(),
+        "Incorrect number of messages loaded"
+    );
+
+    // Verify message content and role are correct and in the right order
+    for (i, (expected_role, expected_content)) in test_messages.iter().enumerate() {
+        assert_eq!(*expected_role, history[i].role, "Role mismatch in history");
+        assert_eq!(
+            *expected_content, history[i].content,
+            "Content mismatch in history"
+        );
+    }
+
+    // Test loading non-existent session
+    let empty_history = load_history(&conn, "non-existent-session").unwrap();
+    assert!(
+        empty_history.is_empty(),
+        "Expected no history for non-existent session"
+    );
+
+    // Test session listing
+    let sessions = list_sessions(&conn).unwrap();
+    assert_eq!(
+        sessions.len(),
+        test_sessions.len(),
+        "Incorrect number of sessions"
+    );
+
+    for &expected_session in &test_sessions {
+        assert!(
+            sessions.contains(&expected_session.to_string()),
+            "Expected session not found in list"
+        );
+    }
+
+    // Test message deletion
+    delete_messages(&conn, session_id).unwrap();
+    let empty_history = load_history(&conn, session_id).unwrap();
+    assert!(
+        empty_history.is_empty(),
+        "Expected no messages after deletion"
+    );
+
+    // Verify messages were actually deleted from the database
+    let message_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ?",
+            [session_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(message_count, 0, "Messages not deleted from database");
+
+    // Test session deletion
+    delete_session(&conn, session_id).unwrap();
+
+    // Verify session was deleted
+    let session_exists: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?)",
+            [session_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(!session_exists, "Session was not deleted");
+
+    // Verify messages were also deleted (cascading delete)
+    let message_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ?",
+            [session_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(message_count, 0, "Messages not deleted with session");
+}
+
+#[test]
+fn test_concurrent_access() {
+    use rand::Rng;
+    use rusqlite::OpenFlags;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    // Create a temporary database file
+    let temp_file = NamedTempFile::new().unwrap();
+    let db_path = temp_file.path().to_path_buf();
+
+    // Initialize the database with WAL mode enabled
+    {
+        let conn = Connection::open_with_flags(
+            &db_path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE
+                | OpenFlags::SQLITE_OPEN_CREATE
+                | OpenFlags::SQLITE_OPEN_FULL_MUTEX,
+        )
+        .unwrap();
+        // Enable WAL mode for better concurrency
+        conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+        conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
+        init_db(&conn).unwrap();
+    }
+
+    let db_path = Arc::new(db_path);
+
+    // Number of threads to spawn
+    const NUM_THREADS: usize = 10;
+    // Number of operations per thread
+    const OPS_PER_THREAD: usize = 50;
+
+    // Create a barrier to synchronize thread startup
+    let barrier = Arc::new(std::sync::Barrier::new(NUM_THREADS + 1));
+
+    // Vector to hold thread handles
+    let mut handles = vec![];
+
+    // Spawn worker threads
+    for thread_id in 0..NUM_THREADS {
+        let db_path = Arc::clone(&db_path);
+        let barrier = Arc::clone(&barrier);
+
+        let handle = thread::spawn(move || {
+            // Each thread gets its own connection with proper flags
+            let conn = Connection::open_with_flags(
+                &*db_path,
+                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_FULL_MUTEX,
+            )
+            .unwrap();
+
+            // Enable WAL mode for this connection
+            conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+            conn.pragma_update(None, "synchronous", "NORMAL").unwrap();
+
+            // Wait for all threads to be ready
+            barrier.wait();
+
+            // Perform operations with retry logic for transient errors
+            for op in 0..OPS_PER_THREAD {
+                let result = (|| -> Result<(), Box<dyn std::error::Error>> {
+                    // Randomly choose an operation
+                    let op_type = rand::thread_rng().gen_range(0..=3);
+
+                    match op_type {
+                        // Create a new session
+                        0 => {
+                            let session_id = format!("session-{}-{}", thread_id, op);
+                            save_session(&conn, &session_id)?;
+
+                            // Verify session was created
+                            let exists: bool = conn.query_row(
+                                "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?)",
+                                [&session_id],
+                                |row| row.get(0),
+                            )?;
+                            assert!(exists, "Session was not created");
+                        }
+
+                        // Add messages to a random session
+                        1 => {
+                            let sessions = list_sessions(&conn)?;
+                            if !sessions.is_empty() {
+                                let session_idx = rand::thread_rng().gen_range(0..sessions.len());
+                                let session_id = &sessions[session_idx];
+
+                                let role = if rand::random() { "user" } else { "assistant" };
+                                let content = format!("Message {} from thread {}", op, thread_id);
+
+                                save_message(&conn, session_id, role, &content)?;
+
+                                // Verify message was saved
+                                let count: i64 = conn.query_row(
+                                    "SELECT COUNT(*) FROM messages WHERE session_id = ? AND content = ?",
+                                    [session_id, &content],
+                                    |row| row.get(0),
+                                )?;
+                                assert_eq!(count, 1, "Message was not saved correctly");
+                            }
+                        }
+
+                        // List sessions (read-only operation)
+                        2 => {
+                            let _ = list_sessions(&conn)?;
+                        }
+
+                        // Load history for a random session
+                        3 => {
+                            let sessions = list_sessions(&conn)?;
+                            if !sessions.is_empty() {
+                                let session_idx = rand::thread_rng().gen_range(0..sessions.len());
+                                let _ = load_history(&conn, &sessions[session_idx])?;
+                            }
+                        }
+
+                        _ => unreachable!(),
+                    }
+                    Ok(())
+                })();
+
+                // If we get a database locked error, retry after a short delay
+                if let Err(e) = result {
+                    let error_str = e.to_string();
+                    if error_str.contains("database is locked")
+                        || error_str.contains("database is locked")
+                    {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    } else {
+                        panic!("Unexpected error: {}", e);
+                    }
+                }
+
+                // Small delay to increase chance of interleaving
+                if op % 10 == 0 {
+                    thread::sleep(Duration::from_millis(1));
+                }
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    // Wait for all threads to be ready
+    barrier.wait();
+
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    // Final consistency check with a new connection
+    let conn = Connection::open_with_flags(
+        &*db_path,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_FULL_MUTEX,
+    )
+    .unwrap();
+
+    // Verify all sessions have messages with correct session_id
+    let sessions = list_sessions(&conn).unwrap();
+    for session_id in sessions {
+        // Get the count of messages for this session
+        let _message_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM messages WHERE session_id = ?",
+                [&session_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        // Get the count of messages that don't belong to any session (should be 0)
+        let orphaned_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM messages WHERE session_id NOT IN (SELECT id FROM sessions)",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(orphaned_count, 0, "Found messages without a valid session");
+    }
+
+    // Verify no duplicate messages
+    let duplicate_messages: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) - COUNT(DISTINCT session_id || '|' || content) FROM messages",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    assert_eq!(duplicate_messages, 0, "Found duplicate messages");
 }
 
 #[test]
@@ -256,6 +654,141 @@ mod e2e_tests {
         assert_eq!(parsed_history[0].role, "user");
         assert_eq!(parsed_history[1].role, "assistant");
         assert_eq!(parsed_history[2].role, "system");
+    }
+
+    #[test]
+    fn test_binary_execution_e2e() {
+        use std::fs;
+        use std::process::{Command, Stdio};
+
+        // Create a temporary directory for the test
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+
+        // Set up database directory and path
+        let db_dir = temp_dir.path().join("db");
+        std::fs::create_dir_all(&db_dir).expect("Failed to create database directory");
+        let db_path = db_dir.join("harper.db");
+
+        // Print debug information
+        println!("=== Test Setup ===");
+        println!("Temp directory: {}", temp_dir.path().display());
+        println!("Database path: {}", db_path.display());
+        println!("Database directory exists: {}", db_dir.exists());
+        println!("Database file exists before test: {}", db_path.exists());
+        println!("Current directory: {:?}", std::env::current_dir().unwrap());
+
+        // List contents of the temp directory
+        println!("\n=== Directory Contents ===");
+        if let Ok(entries) = std::fs::read_dir(temp_dir.path()) {
+            for entry in entries.flatten() {
+                println!(
+                    "  - {} (dir: {})",
+                    entry.path().display(),
+                    entry.path().is_dir()
+                );
+            }
+        }
+
+        // Verify the directory is writable
+        println!("\n=== Testing Directory Permissions ===");
+        let test_file = temp_dir.path().join(".test_write");
+        std::fs::write(&test_file, "test").expect("Failed to write test file to temp directory");
+        std::fs::remove_file(&test_file).expect("Failed to remove test file");
+        println!("Successfully wrote and removed test file");
+
+        // Ensure the parent directory of the database file exists
+        if let Some(parent) = db_path.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent).expect("Failed to create parent directory for database");
+            }
+            println!("Database parent directory exists: {}", parent.exists());
+        }
+
+        // Build the command
+        let mut command = Command::new(env!("CARGO_BIN_EXE_harper"));
+
+        // Set environment variables
+        command
+            .env("HARPER_DATABASE__PATH", &db_path)
+            .env("HARPER_API__API_KEY", "test-key")
+            .env("HARPER_API__PROVIDER", "OpenAI")
+            .env(
+                "HARPER_API__BASE_URL",
+                "https://api.openai.com/v1/chat/completions",
+            )
+            .env("HARPER_API__MODEL_NAME", "gpt-4")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        // Print the command for debugging
+        println!("\n=== Running Command ===");
+        println!("Command: {:?}", command);
+        println!("Database path in env: {}", db_path.display());
+
+        println!("Running command: {:?}", command);
+
+        let mut child = command.spawn().expect("Failed to start binary");
+
+        // Send quit command using the constant
+        use harper::core::constants::{menu, messages};
+
+        let quit_command = format!("{}\n", menu::QUIT);
+        println!("Sending quit command: {:?}", quit_command.trim());
+
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            // Use the QUIT constant and add newline
+            stdin
+                .write_all(quit_command.as_bytes())
+                .expect("Failed to write to stdin");
+            // Explicitly flush the stdin to ensure the command is sent
+            stdin.flush().expect("Failed to flush stdin");
+        }
+
+        // Give the process some time to process the input
+        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        // Wait for the process to finish with a timeout
+        let output = match wait_timeout::ChildExt::wait_timeout(
+            &mut child,
+            std::time::Duration::from_secs(5),
+        ) {
+            Ok(Some(status)) => {
+                // Process has finished
+                println!("Process finished with status: {}", status);
+                child.wait_with_output().expect("Failed to wait for child")
+            }
+            Ok(None) => {
+                // Process is still running after timeout
+                println!("Process is still running after timeout, attempting to get output...");
+                let _ = child.kill();
+                child.wait_with_output().expect("Failed to wait for child")
+            }
+            Err(e) => {
+                panic!("Error waiting for child process: {}", e);
+            }
+        };
+
+        // Always print stdout and stderr for debugging
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        println!("=== STDOUT ===\n{}", stdout);
+        println!("=== STDERR ===\n{}", stderr);
+
+        // Check if the process exited successfully
+        if !output.status.success() {
+            panic!("Process exited with status: {}", output.status);
+        }
+
+        // Check for the goodbye message in the output
+        assert!(
+            stdout.contains(messages::GOODBYE),
+            "Should print goodbye message. Expected '{}' in output.\nFull output:\n{}",
+            messages::GOODBYE,
+            stdout
+        );
     }
 
     #[test]

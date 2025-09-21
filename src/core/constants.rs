@@ -4,6 +4,9 @@
 
 use std::time::Duration;
 
+/// Application version
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Timeout durations
 pub mod timeouts {
     use super::Duration;
@@ -81,6 +84,21 @@ pub mod menu {
     /// Quit application
     #[allow(dead_code)]
     pub const QUIT: &str = "5";
+}
+
+/// UI messages
+pub mod messages {
+    /// Exit message when quitting the application
+    #[allow(dead_code)]
+    pub const GOODBYE: &str = "Goodbye!";
+
+    /// Menu title
+    #[allow(dead_code)]
+    pub const MAIN_MENU_TITLE: &str = "Main Menu";
+
+    /// Prompt for user input
+    #[allow(dead_code)]
+    pub const ENTER_CHOICE: &str = "Enter your choice: ";
 }
 
 /// Exit commands

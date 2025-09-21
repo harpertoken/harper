@@ -119,13 +119,17 @@ impl DatabaseConfig {
             ));
         }
 
-        // Check if the directory exists or can be created
+        // Check if the parent directory exists or can be created
         if let Some(parent) = Path::new(&self.path).parent() {
             if !parent.exists() {
-                return Err(HarperError::Config(format!(
-                    "Database directory does not exist: {}",
-                    parent.display()
-                )));
+                // Try to create the directory if it doesn't exist
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    return Err(HarperError::Config(format!(
+                        "Failed to create database directory {}: {}",
+                        parent.display(),
+                        e
+                    )));
+                }
             }
         }
 

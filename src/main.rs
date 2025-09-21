@@ -2,6 +2,7 @@ use colored::*;
 // use mcp_client::{transport::SseTransport, McpClient, McpClientTrait, McpService, Transport}; // Temporarily disabled
 use rusqlite::Connection;
 // use std::collections::HashMap; // Temporarily unused
+use std::env;
 use std::io::{self, Write};
 
 mod config;
@@ -21,8 +22,18 @@ use crate::core::session_service::SessionService;
 use providers::*;
 use storage::*;
 
+fn print_version() {
+    println!("harper v{}", crate::core::constants::VERSION);
+    std::process::exit(0);
+}
+
 #[tokio::main]
 async fn main() {
+    // Handle --version flag
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 && (args[1] == "--version" || args[1] == "-v") {
+        print_version();
+    }
     let config = match HarperConfig::new() {
         Ok(c) => c,
         Err(e) => {
@@ -69,13 +80,15 @@ async fn main() {
     let _mcp_client: Option<()> = None;
 
     loop {
-        println!("\n{}", "Main Menu".bold().yellow());
+        use crate::core::constants::messages;
+
+        println!("\n{}", messages::MAIN_MENU_TITLE.bold().yellow());
         println!("1. Start new chat session");
         println!("2. List previous sessions");
         println!("3. View a session's history");
         println!("4. Export a session's history");
         println!("5. Quit");
-        print!("Enter your choice: ");
+        print!("{}", messages::ENTER_CHOICE);
         io::stdout()
             .flush()
             .map_err(|e| {
@@ -122,7 +135,8 @@ async fn main() {
                 }
             }
             menu::QUIT => {
-                println!("{}", "Goodbye!".bold().yellow());
+                use crate::core::constants::messages;
+                println!("{}", messages::GOODBYE.bold().yellow());
                 break;
             }
             _ => println!("{}", "Invalid choice. Please try again.".red()),
