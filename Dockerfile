@@ -1,19 +1,23 @@
 # Build stage
-FROM rust:latest AS builder
+FROM rust:1.78.0 AS builder
 
 WORKDIR /app
 
-# Copy dependency files
+# Copy manifests
 COPY Cargo.toml Cargo.lock ./
 
-# Copy source code
+# Build dependencies with a dummy main file
+RUN mkdir src && echo 'fn main() {}' > src/main.rs
+RUN cargo build --release
+
+# Copy application source
 COPY src ./src
 
-# Build the application
+# Build application (will use cached dependencies)
 RUN cargo build --release
 
 # Runtime stage
-FROM debian:latest
+FROM debian:bookworm-slim
 
 # Install ca-certificates for HTTPS requests
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -29,8 +33,13 @@ COPY --from=builder /app/target/release/harper .
 # Set the binary as executable
 RUN chmod +x harper
 
+# Create and switch to a non-root user
+RUN useradd --create-home appuser
+RUN chown -R appuser:appuser /app
+USER appuser
+
 # Set environment variables (can be overridden)
-ENV DATABASE_PATH=./harper.db
+ENV DATABASE_PATH=/app/data/harper.db
 
 # Expose any ports if needed (Harper is CLI, so probably not)
 # EXPOSE 8080

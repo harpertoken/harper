@@ -86,8 +86,14 @@ Harper stores sessions in a SQLite database. With Docker Compose, data persists 
 
 To persist data with plain Docker:
 ```bash
-# Mount host directory
+# Mount host directory (Unix/Linux/macOS)
 docker run --rm -it -v $(pwd)/data:/app/data --env-file .env harper
+
+# Windows Command Prompt
+docker run --rm -it -v %cd%/data:/app/data --env-file .env harper
+
+# Windows PowerShell
+docker run --rm -it -v ${pwd}/data:/app/data --env-file .env harper
 ```
 
 ### Troubleshooting
