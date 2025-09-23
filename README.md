@@ -27,6 +27,25 @@ cargo run --release
 ```
 </details>
 
+<details>
+<summary>Docker</summary>
+
+Harper supports Docker for easy deployment.
+
+```bash
+git clone https://github.com/harpertoken/harper.git
+cd harper
+cp env.example .env
+# Edit .env with your API keys
+docker build -t harper .
+docker run --rm -it --env-file .env harper
+```
+
+For detailed instructions, see [DOCKER.md](DOCKER.md).
+
+Docker builds are validated in CI via GitHub Actions.
+</details>
+
 ## Development
 
 ### Running Tests
