@@ -38,7 +38,7 @@ cd harper
 cp env.example .env
 # Edit .env with your API keys
 docker build -t harper .
-docker run --rm -it --env-file .env harper
+docker run --rm -it --env-file .env -v harper_data:/app/data harper
 ```
 
 For detailed instructions, see [DOCKER.md](DOCKER.md).
