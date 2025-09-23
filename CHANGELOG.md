@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Comprehensive Docker support with multi-stage builds, docker-compose, and CI validation
+- Non-root user execution in Docker for improved security
+- Optimized Docker build caching for faster development builds
+- Cross-platform Docker volume mount examples in documentation
+
+### Changed
+- Updated minimum Rust version to 1.82.0+ across all configurations
+- Pinned Rust toolchain to 1.82.0 for consistent development environment
+- Fixed database path in Docker for proper data persistence
+- Pinned cargo-deny to 0.17.0 for CI compatibility
+
+### Fixed
+- Docker build failures due to outdated Rust version
+
 ## [0.1.5] - 2025-09-20
 - Version flag, test suites, documentation updates
 
