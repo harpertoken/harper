@@ -7,7 +7,7 @@ AI agent for multi-provider integration, command execution, and MCP protocol sup
 
 ## Requirements
 
-- Rust 1.70.0+
+- Rust 1.82.0+
 - Network connectivity
 - Linux, macOS, or Windows
 - SQLite3
