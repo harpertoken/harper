@@ -24,7 +24,7 @@ This guide provides detailed instructions for running Harper using Docker.
 3. Build and run:
    ```bash
    docker build -t harper .
-   docker run --rm -it --env-file .env harper
+docker run --rm -it --env-file .env -v harper_data:/app/data harper
    ```
 
 ## Detailed Setup
