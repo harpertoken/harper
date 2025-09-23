@@ -1,8 +1,8 @@
 [package]
 name = "harper"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
-rust-version = "1.70.0"
+rust-version = "1.82.0"
 authors = ["Harper Contributors"]
 license = "Apache-2.0"
 description = "An AI agent that connects to multiple providers, executes shell commands, and maintains conversation history"
