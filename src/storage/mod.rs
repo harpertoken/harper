@@ -18,7 +18,7 @@ use rusqlite::{params, Connection};
 /// Returns `HarperError::Database` if table creation fails
 pub fn init_db(conn: &Connection) -> HarperResult<()> {
     // Enable WAL mode for better concurrent access
-    conn.execute("PRAGMA journal_mode=WAL", [])?;
+    conn.execute_batch("PRAGMA journal_mode=WAL;")?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY,
