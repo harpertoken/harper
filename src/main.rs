@@ -1,9 +1,7 @@
-use colored::*;
 // use mcp_client::{transport::SseTransport, McpClient, McpClientTrait, McpService, Transport}; // Temporarily disabled
 use rusqlite::Connection;
 // use std::collections::HashMap; // Temporarily unused
 use std::env;
-use std::io::{self, Write};
 
 mod config;
 mod core;
@@ -12,13 +10,14 @@ mod storage;
 mod ui;
 mod utils;
 
+use crate::core::ApiConfig;
+use colored::Colorize;
+use std::io::Write;
+use ui::tui::run_tui;
+
 use config::HarperConfig;
 
-use crate::core::cache::new_api_cache;
-use crate::core::chat_service::ChatService;
-use crate::core::constants::menu;
 // use crate::core::constants::timeouts; // Temporarily unused
-use crate::core::session_service::SessionService;
 use providers::*;
 use storage::*;
 
@@ -79,67 +78,81 @@ async fn main() {
     // This resolves CodeQL duplicate dependency warnings and improves security analysis
     let _mcp_client: Option<()> = None;
 
-    loop {
-        use crate::core::constants::messages;
+    async fn text_menu(conn: &Connection, api_config: &ApiConfig) {
+        loop {
+            use crate::core::constants::messages;
 
-        println!("\n{}", messages::MAIN_MENU_TITLE.bold().yellow());
-        println!("1. Start new chat session");
-        println!("2. List previous sessions");
-        println!("3. View a session's history");
-        println!("4. Export a session's history");
-        println!("5. Quit");
-        print!("{}", messages::ENTER_CHOICE);
-        io::stdout()
-            .flush()
-            .map_err(|e| {
-                eprintln!("Failed to flush stdout: {}", e);
-            })
-            .unwrap();
+            println!("\n{}", messages::MAIN_MENU_TITLE.bold().yellow());
+            println!("1. Start new chat session");
+            println!("2. List previous sessions");
+            println!("3. View a session's history");
+            println!("4. Export a session's history");
+            println!("5. Quit");
+            print!("{}", messages::ENTER_CHOICE);
+            std::io::stdout()
+                .flush()
+                .map_err(|e| {
+                    eprintln!("Failed to flush stdout: {}", e);
+                })
+                .unwrap();
 
-        let mut menu_choice = String::new();
-        io::stdin()
-            .read_line(&mut menu_choice)
-            .map_err(|e| {
-                eprintln!("Failed to read input: {}", e);
-            })
-            .unwrap();
+            let mut menu_choice = String::new();
+            std::io::stdin()
+                .read_line(&mut menu_choice)
+                .map_err(|e| {
+                    eprintln!("Failed to read input: {}", e);
+                })
+                .unwrap();
 
-        let session_service = SessionService::new(&conn);
-        let mut api_cache = new_api_cache();
+            let session_service = crate::core::session_service::SessionService::new(conn);
+            let mut api_cache = crate::core::cache::new_api_cache();
 
-        match menu_choice.trim() {
-            menu::START_CHAT => {
-                let mut chat_service = ChatService::new(
-                    &conn,
-                    &api_config,
-                    // mcp_client.as_ref(), // Temporarily disabled
-                    Some(&mut api_cache),
-                );
-                if let Err(e) = chat_service.start_session().await {
-                    eprintln!("Error in chat session: {}", e);
+            match menu_choice.trim() {
+                crate::core::constants::menu::START_CHAT => {
+                    let mut chat_service = crate::core::chat_service::ChatService::new(
+                        conn,
+                        api_config,
+                        // mcp_client.as_ref(), // Temporarily disabled
+                        Some(&mut api_cache),
+                    );
+                    if let Err(e) = chat_service.start_session().await {
+                        eprintln!("Error in chat session: {}", e);
+                    }
                 }
-            }
-            menu::LIST_SESSIONS => {
-                if let Err(e) = session_service.list_sessions() {
-                    eprintln!("Error listing sessions: {}", e);
+                crate::core::constants::menu::LIST_SESSIONS => {
+                    if let Err(e) = session_service.list_sessions() {
+                        eprintln!("Error listing sessions: {}", e);
+                    }
                 }
-            }
-            menu::VIEW_SESSION => {
-                if let Err(e) = session_service.view_session() {
-                    eprintln!("Error viewing session: {}", e);
+                crate::core::constants::menu::VIEW_SESSION => {
+                    if let Err(e) = session_service.view_session() {
+                        eprintln!("Error viewing session: {}", e);
+                    }
                 }
-            }
-            menu::EXPORT_SESSION => {
-                if let Err(e) = session_service.export_session() {
-                    eprintln!("Error exporting session: {}", e);
+                crate::core::constants::menu::EXPORT_SESSION => {
+                    if let Err(e) = session_service.export_session() {
+                        eprintln!("Error exporting session: {}", e);
+                    }
                 }
+                crate::core::constants::menu::QUIT => {
+                    println!("{}", messages::GOODBYE.bold().yellow());
+                    break;
+                }
+                _ => println!("{}", "Invalid choice. Please try again.".red()),
             }
-            menu::QUIT => {
-                use crate::core::constants::messages;
-                println!("{}", messages::GOODBYE.bold().yellow());
-                break;
-            }
-            _ => println!("{}", "Invalid choice. Please try again.".red()),
         }
+    }
+
+    // Run TUI or text menu based on terminal
+    if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        if let Err(e) = run_tui(&conn, &api_config).await {
+            eprintln!("TUI error: {}", e);
+        } else {
+            use crate::core::constants::messages;
+            println!("{}", messages::GOODBYE.bold().yellow());
+        }
+    } else {
+        // Fallback to text menu for non-interactive environments
+        text_menu(&conn, &api_config).await;
     }
 }
