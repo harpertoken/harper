@@ -47,65 +47,68 @@ jobs:
              echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
            fi
 
-       - name: Check if release exists
-         id: check_release
-         run: |
-           if gh release view ${{ steps.get_tag.outputs.tag }} >/dev/null 2>&1; then
-             echo "Release exists, skipping creation"
-             echo "exists=true" >> $GITHUB_OUTPUT
-           else
-             echo "Release does not exist, will create"
-             echo "exists=false" >> $GITHUB_OUTPUT
-           fi
+      - name: Check if release exists
+        id: check_release
+        env:
+          TAG_NAME: ${{ steps.get_tag.outputs.tag }}
+        run: |
+          if gh release view $TAG_NAME >/dev/null 2>&1; then
+            echo "Release exists, skipping creation"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Release does not exist, will create"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
          env:
            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-       - name: Generate release notes (changes + GitHub @usernames)
-         id: release_notes
-         if: steps.check_release.outputs.exists == 'false'
-         env:
-           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-         run: |
-           set -euo pipefail
+      - name: Generate release notes (changes + GitHub @usernames)
+        id: release_notes
+        if: steps.check_release.outputs.exists == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURR_TAG: ${{ steps.get_tag.outputs.tag }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
 
-           CURR_TAG=${{ steps.get_tag.outputs.tag }}
-           PREV_TAG=$(git describe --tags --abbrev=0 "${CURR_TAG}^" 2>/dev/null || echo "")
-           ROOT_SHA=$(git rev-list --max-parents=0 HEAD | tail -n1)
+          PREV_TAG=$(git describe --tags --abbrev=0 "${CURR_TAG}^" 2>/dev/null || echo "")
+          ROOT_SHA=$(git rev-list --max-parents=0 HEAD | tail -n1)
 
-           if [ -n "$PREV_TAG" ]; then
-             BASE_REF="$PREV_TAG"
-             RANGE="$PREV_TAG..$CURR_TAG"
-           else
-             BASE_REF="$ROOT_SHA"
-             RANGE="$ROOT_SHA..$CURR_TAG"
-           fi
+          if [ -n "$PREV_TAG" ]; then
+            BASE_REF="$PREV_TAG"
+            RANGE="$PREV_TAG..$CURR_TAG"
+          else
+            BASE_REF="$ROOT_SHA"
+            RANGE="$ROOT_SHA..$CURR_TAG"
+          fi
 
-           {
-             echo "## Release $CURR_TAG"
-             echo
-             echo "### Changes"
-           } > RELEASE_NOTES.md
+          {
+            echo "## Release $CURR_TAG"
+            echo
+            echo "### Changes"
+          } > RELEASE_NOTES.md
 
-           git log "$RANGE" --pretty=format:"- %s" >> RELEASE_NOTES.md || true
-           if ! grep -q "^- " RELEASE_NOTES.md; then
-             echo "- None" >> RELEASE_NOTES.md
-           fi
+          git log "$RANGE" --pretty=format:"- %s" >> RELEASE_NOTES.md || true
+          if ! grep -q "^- " RELEASE_NOTES.md; then
+            echo "- None" >> RELEASE_NOTES.md
+          fi
 
-           {
-             echo
-             echo "### Contributors"
-           } >> RELEASE_NOTES.md
+          {
+            echo
+            echo "### Contributors"
+          } >> RELEASE_NOTES.md
 
-           gh api "repos/${{ github.repository }}/compare/${BASE_REF}...${CURR_TAG}" \
-             -q '.commits[].author.login' 2>/dev/null | \
-             grep -v '^$' | sort -u | sed 's/^/- @/' >> RELEASE_NOTES.md || true
+          gh api "repos/$GITHUB_REPO/compare/${BASE_REF}...${CURR_TAG}" \
+            -q '.commits[].author.login' 2>/dev/null | \
+            grep -v '^$' | sort -u | sed 's/^/- @/' >> RELEASE_NOTES.md || true
 
-           if ! tail -n +1 RELEASE_NOTES.md | awk '/^### Contributors/{p=1;next} /^### /{p=0} p' | grep -q "^- @"; then
-             echo "- None" >> RELEASE_NOTES.md
-           fi
+          if ! tail -n +1 RELEASE_NOTES.md | awk '/^### Contributors/{p=1;next} /^### /{p=0} p' | grep -q "^- @"; then
+            echo "- None" >> RELEASE_NOTES.md
+          fi
 
-           echo "----- RELEASE_NOTES.md -----"
-           cat RELEASE_NOTES.md
+          echo "----- RELEASE_NOTES.md -----"
+          cat RELEASE_NOTES.md
 
        - name: Create Release
          id: create_release
