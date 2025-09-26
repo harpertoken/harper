@@ -40,26 +40,13 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           TAG: ${{ github.event.inputs.tag }}
-        run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          else
-            TAG_NAME=$(basename "$GITHUB_REF")
-            echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
-          fi
+        run: if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo "tag=$TAG" >> "$GITHUB_OUTPUT"; else TAG_NAME=$(basename "$GITHUB_REF"); echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"; fi
 
       - name: Check if release exists
         id: check_release
         env:
           TAG_NAME: ${{ steps.get_tag.outputs.tag }}
-        run: |
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            echo "Release exists, skipping creation"
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Release does not exist, will create"
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: if gh release view "$TAG_NAME" >/dev/null 2>&1; then echo "Release exists, skipping creation"; echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "Release does not exist, will create"; echo "exists=false" >> "$GITHUB_OUTPUT"; fi
          env:
            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
