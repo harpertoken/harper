@@ -1,4 +1,5 @@
 name: Release
+# Release workflow for Harper
 
 permissions:
   contents: write
@@ -37,18 +38,35 @@ jobs:
 
       - name: Get tag name
         id: get_tag
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          TAG: ${{ github.event.inputs.tag }}
-        run: if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo "tag=$TAG" >> "$GITHUB_OUTPUT"; else TAG_NAME=$(basename "$GITHUB_REF"); echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"; fi
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let tag;
+            if (context.eventName === 'workflow_dispatch') {
+              tag = context.payload.inputs.tag;
+            } else {
+              tag = context.ref.replace('refs/tags/', '');
+            }
+            core.setOutput('tag', tag);
 
       - name: Check if release exists
         id: check_release
+        uses: actions/github-script@v7
         env:
-          TAG_NAME: ${{ steps.get_tag.outputs.tag }}
-        run: if gh release view "$TAG_NAME" >/dev/null 2>&1; then echo "Release exists, skipping creation"; echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "Release does not exist, will create"; echo "exists=false" >> "$GITHUB_OUTPUT"; fi
-         env:
-           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.get_tag.outputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+           script: |
+             try {
+               await github.rest.repos.getReleaseByTag({
+                 owner: context.repo.owner,
+                 repo: context.repo.repo,
+                 tag: process.env.TAG
+               });
+               core.setOutput('exists', 'true');
+             } catch (error) {
+               core.setOutput('exists', 'false');
+             }
 
       - name: Generate release notes (changes + GitHub @usernames)
         id: release_notes
@@ -95,20 +113,20 @@ jobs:
             echo "- None" >> RELEASE_NOTES.md
           fi
 
-          echo "----- RELEASE_NOTES.md -----"
-          cat RELEASE_NOTES.md
+           echo "----- RELEASE_NOTES.md -----"
+           cat RELEASE_NOTES.md
 
-       - name: Create Release
-         id: create_release
-         if: steps.check_release.outputs.exists == 'false'
-         uses: softprops/action-gh-release@v2
-         with:
-           tag_name: ${{ steps.get_tag.outputs.tag }}
-           name: "Harper ${{ steps.get_tag.outputs.tag }}"
-           body_path: RELEASE_NOTES.md
-           prerelease: ${{ contains(steps.get_tag.outputs.tag, '-') }}
-         env:
-           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        id: create_release
+        if: steps.check_release.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          name: "Harper ${{ steps.get_tag.outputs.tag }}"
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ contains(steps.get_tag.outputs.tag, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-release:
     name: Build Release
@@ -159,11 +177,11 @@ jobs:
           key: ${{ matrix.target }}
           cache-on-failure: true
 
-      - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }} --locked
+       - name: Build release binary
+         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Run tests on release binary
-        run: cargo test --release --target ${{ matrix.target }} --locked
+       - name: Run tests on release binary
+         run: cargo test --release --target ${{ matrix.target }}
 
       - name: Strip binary (Unix)
         if: matrix.os != 'windows-latest'
