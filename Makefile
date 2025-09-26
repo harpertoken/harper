@@ -79,3 +79,5 @@ audit:
 # Dependency check
 deny:
 	cargo deny check
+
+# Updated for v0.1.5
