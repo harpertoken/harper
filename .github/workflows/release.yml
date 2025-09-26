@@ -41,23 +41,23 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           TAG: ${{ github.event.inputs.tag }}
         run: |
-           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-             echo "tag=$TAG" >> $GITHUB_OUTPUT
-           else
-             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-           fi
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Check if release exists
         id: check_release
         env:
           TAG_NAME: ${{ steps.get_tag.outputs.tag }}
         run: |
-          if gh release view $TAG_NAME >/dev/null 2>&1; then
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             echo "Release exists, skipping creation"
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "Release does not exist, will create"
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
          env:
            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -99,7 +99,7 @@ jobs:
             echo "### Contributors"
           } >> RELEASE_NOTES.md
 
-          gh api "repos/$GITHUB_REPO/compare/${BASE_REF}...${CURR_TAG}" \
+          gh api "repos/$GITHUB_REPO/compare/$BASE_REF...$CURR_TAG" \
             -q '.commits[].author.login' 2>/dev/null | \
             grep -v '^$' | sort -u | sed 's/^/- @/' >> RELEASE_NOTES.md || true
 
