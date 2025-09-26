@@ -2,12 +2,13 @@
 
 [![End-to-End Tests](https://github.com/harpertoken/harper/actions/workflows/e2e.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/e2e.yml)
 [![Release](https://img.shields.io/github/v/release/harpertoken/harper)](https://github.com/harpertoken/harper/releases)
+[![Minimum Supported Rust Version](https://img.shields.io/badge/MSRV-1.82.0+-blue)](https://rust-lang.org)
 
 AI agent for multi-provider integration, command execution, and MCP protocol support with SQLite storage.
 
 ## Requirements
 
-- Rust 1.70.0+
+- Rust 1.82.0+
 - Network connectivity
 - Linux, macOS, or Windows
 - SQLite3
@@ -25,6 +26,25 @@ cargo build --release
 cp env.example .env
 cargo run --release
 ```
+</details>
+
+<details>
+<summary>Docker</summary>
+
+Harper supports Docker for easy deployment.
+
+```bash
+git clone https://github.com/harpertoken/harper.git
+cd harper
+cp env.example .env
+# Edit .env with your API keys
+docker build -t harper .
+docker run --rm -it --env-file .env -v harper_data:/app/data harper
+```
+
+For detailed instructions, see [DOCKER.md](DOCKER.md).
+
+Docker builds are validated in CI via GitHub Actions.
 </details>
 
 ## Development
@@ -81,7 +101,7 @@ The test suite includes:
 <summary>Install from Release</summary>
 
 ```bash
-cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.5
+cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.6
 ```
 </details>
 

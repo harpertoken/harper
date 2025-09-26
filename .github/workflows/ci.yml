@@ -27,7 +27,7 @@ jobs:
         rust: [stable, beta]
         include:
           - os: ubuntu-latest
-            rust: 1.70.0  # MSRV
+            rust: 1.82.0  # MSRV
 
     steps:
     - name: Checkout code
@@ -115,7 +115,7 @@ jobs:
       run: cargo audit --deny warnings
 
     - name: Install cargo-deny
-      run: cargo install --locked cargo-deny
+      run: cargo install --locked cargo-deny --version 0.17.0
 
     - name: Run cargo-deny
       run: cargo deny check
@@ -177,7 +177,7 @@ jobs:
     - name: Install MSRV Rust toolchain
       uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: 1.70.0
+        toolchain: 1.82.0
 
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
