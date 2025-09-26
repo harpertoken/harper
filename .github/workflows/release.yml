@@ -44,7 +44,7 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           else
-            TAG_NAME="${GITHUB_REF##*/}"
+            TAG_NAME=$(basename "$GITHUB_REF")
             echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
           fi
 
