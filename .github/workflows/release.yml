@@ -36,11 +36,11 @@ jobs:
           fetch-depth: 0
 
       - name: Get tag name
-         id: get_tag
-         env:
-           EVENT_NAME: ${{ github.event_name }}
-           TAG: ${{ github.event.inputs.tag }}
-         run: |
+        id: get_tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
            if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
              echo "tag=$TAG" >> $GITHUB_OUTPUT
            else
