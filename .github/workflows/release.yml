@@ -44,7 +44,8 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            TAG_NAME=$(echo "$GITHUB_REF" | sed 's|refs/tags/||')
+            echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check if release exists
