@@ -27,6 +27,8 @@ uuid = { version = "1.17.0", features = ["v4"] }
 ring = "0.17.14"
 hex-literal = "0.4.1"
 
+crossterm = "0.28.1"
+
 # Dependency resolution to reduce duplicate versions
 [dependencies.base64]
 version = "0.22"
