@@ -35,14 +35,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get tag name
-        id: get_tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+       - name: Get tag name
+         id: get_tag
+         env:
+           EVENT_NAME: ${{ github.event_name }}
+           TAG: ${{ github.event.inputs.tag }}
+         run: |
+           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+             echo "tag=$TAG" >> $GITHUB_OUTPUT
+           else
+             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+           fi
 
        - name: Check if release exists
          id: check_release
