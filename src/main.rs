@@ -21,6 +21,21 @@ use config::HarperConfig;
 use providers::*;
 use storage::*;
 
+fn exit_on_error<T, E: std::fmt::Display>(result: Result<T, E>, message: &str) -> T {
+    result.unwrap_or_else(|e| {
+        eprintln!("{}: {}", message, e);
+        std::process::exit(1);
+    })
+}
+
+macro_rules! handle_menu_error {
+    ($expr:expr, $msg:expr) => {
+        if let Err(e) = $expr {
+            eprintln!("{}: {}", $msg, e);
+        }
+    };
+}
+
 fn print_version() {
     println!("harper v{}", crate::core::constants::VERSION);
     std::process::exit(0);
@@ -33,13 +48,7 @@ async fn main() {
     if args.len() > 1 && (args[1] == "--version" || args[1] == "-v") {
         print_version();
     }
-    let config = match HarperConfig::new() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Failed to load configuration: {}", e);
-            return;
-        }
-    };
+    let config = exit_on_error(HarperConfig::new(), "Failed to load configuration");
 
     let api_config = crate::core::ApiConfig {
         provider: config
@@ -55,18 +64,11 @@ async fn main() {
         model_name: config.api.model_name.clone(),
     };
 
-    let conn = Connection::open(&config.database.path)
-        .map_err(|e| {
-            eprintln!("Failed to open database: {}", e);
-            e
-        })
-        .unwrap();
-    init_db(&conn)
-        .map_err(|e| {
-            eprintln!("Failed to initialize database: {}", e);
-            e
-        })
-        .unwrap();
+    let conn = exit_on_error(
+        Connection::open(&config.database.path),
+        "Failed to open database",
+    );
+    exit_on_error(init_db(&conn), "Failed to initialize database");
 
     // MCP client initialization
     // Note: MCP functionality is currently disabled due to dependency conflicts
@@ -89,20 +91,13 @@ async fn main() {
             println!("4. Export a session's history");
             println!("5. Quit");
             print!("{}", messages::ENTER_CHOICE);
-            std::io::stdout()
-                .flush()
-                .map_err(|e| {
-                    eprintln!("Failed to flush stdout: {}", e);
-                })
-                .unwrap();
+            exit_on_error(std::io::stdout().flush(), "Failed to flush stdout");
 
             let mut menu_choice = String::new();
-            std::io::stdin()
-                .read_line(&mut menu_choice)
-                .map_err(|e| {
-                    eprintln!("Failed to read input: {}", e);
-                })
-                .unwrap();
+            exit_on_error(
+                std::io::stdin().read_line(&mut menu_choice),
+                "Failed to read input",
+            );
 
             let session_service = crate::core::session_service::SessionService::new(conn);
             let mut api_cache = crate::core::cache::new_api_cache();
@@ -115,24 +110,16 @@ async fn main() {
                         // mcp_client.as_ref(), // Temporarily disabled
                         Some(&mut api_cache),
                     );
-                    if let Err(e) = chat_service.start_session().await {
-                        eprintln!("Error in chat session: {}", e);
-                    }
+                    handle_menu_error!(chat_service.start_session().await, "Error in chat session");
                 }
                 crate::core::constants::menu::LIST_SESSIONS => {
-                    if let Err(e) = session_service.list_sessions() {
-                        eprintln!("Error listing sessions: {}", e);
-                    }
+                    handle_menu_error!(session_service.list_sessions(), "Error listing sessions");
                 }
                 crate::core::constants::menu::VIEW_SESSION => {
-                    if let Err(e) = session_service.view_session() {
-                        eprintln!("Error viewing session: {}", e);
-                    }
+                    handle_menu_error!(session_service.view_session(), "Error viewing session");
                 }
                 crate::core::constants::menu::EXPORT_SESSION => {
-                    if let Err(e) = session_service.export_session() {
-                        eprintln!("Error exporting session: {}", e);
-                    }
+                    handle_menu_error!(session_service.export_session(), "Error exporting session");
                 }
                 crate::core::constants::menu::QUIT => {
                     println!("{}", messages::GOODBYE.bold().yellow());
