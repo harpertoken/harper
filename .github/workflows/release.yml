@@ -35,7 +35,7 @@ jobs:
         with:
           fetch-depth: 0
 
-       - name: Get tag name
+      - name: Get tag name
          id: get_tag
          env:
            EVENT_NAME: ${{ github.event_name }}
