@@ -14,6 +14,12 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 
+#[derive(Debug, Clone)]
+pub struct Session {
+    pub id: String,
+    pub created_at: String,
+}
+
 /// Service for managing chat sessions
 pub struct SessionService<'a> {
     conn: &'a Connection,
@@ -44,22 +50,40 @@ impl<'a> SessionService<'a> {
         }
     }
 
-    /// List all previous sessions
-    pub fn list_sessions(&self) -> HarperResult<()> {
+    /// List all previous sessions (returns data)
+    pub fn list_sessions_data(&self) -> HarperResult<Vec<Session>> {
         let mut stmt = self
             .conn
             .prepare("SELECT id, created_at FROM sessions ORDER BY created_at DESC")?;
         let rows = stmt.query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            Ok(Session {
+                id: row.get(0)?,
+                created_at: row.get(1)?,
+            })
         })?;
+        let sessions = rows.collect::<Result<Vec<_>, _>>()?;
+        Ok(sessions)
+    }
 
+    /// List all previous sessions
+    pub fn list_sessions(&self) -> HarperResult<()> {
+        let sessions = self.list_sessions_data()?;
         self.output.println(&"Previous Sessions:".bold().yellow())?;
-        for (i, row) in rows.enumerate() {
-            let (id, created_at) = row?;
-            self.output
-                .println(&format!("{}: {} ({})", i + 1, id, created_at))?;
+        for (i, session) in sessions.iter().enumerate() {
+            self.output.println(&format!(
+                "{}: {} ({})",
+                i + 1,
+                session.id,
+                session.created_at
+            ))?;
         }
         Ok(())
+    }
+
+    /// View a specific session's history (returns data)
+    pub fn view_session_data(&self, session_id: &str) -> HarperResult<Vec<crate::core::Message>> {
+        let history = load_history(self.conn, session_id).unwrap_or_default();
+        Ok(history)
     }
 
     /// View a specific session's history
@@ -68,7 +92,7 @@ impl<'a> SessionService<'a> {
         self.output.flush()?;
         let session_id = self.input.read_line()?.trim().to_string();
 
-        let history = load_history(self.conn, &session_id).unwrap_or_default();
+        let history = self.view_session_data(&session_id)?;
         let total_messages = history.len();
 
         // Show only the last 20 messages to prevent overwhelming output
