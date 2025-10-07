@@ -23,7 +23,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 git clone https://github.com/harpertoken/harper.git
 cd harper
 cargo build --release
-cp env.example .env
+cp config/env.example .env
 cargo run --release
 ```
 </details>
@@ -36,13 +36,13 @@ Harper supports Docker for easy deployment.
 ```bash
 git clone https://github.com/harpertoken/harper.git
 cd harper
-cp env.example .env
+cp config/env.example .env
 # Edit .env with your API keys
 docker build -t harper .
 docker run --rm -it --env-file .env -v harper_data:/app/data harper
 ```
 
-For detailed instructions, see [DOCKER.md](DOCKER.md).
+For detailed instructions, see [docker/DOCKER.md](docker/DOCKER.md).
 
 Docker builds are validated in CI via GitHub Actions.
 </details>
@@ -104,6 +104,19 @@ The test suite includes:
 cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.5
 ```
 </details>
+
+## CI/CD
+
+Harper uses GitHub Actions for automated testing and deployment:
+
+- **Docker CI**: Builds and tests Docker images
+- **Docker E2E**: Runs end-to-end tests in containers
+- **Commitlint**: Validates conventional commit messages
+- **PR Title Check**: Enforces conventional PR titles
+- **Release Drafter**: Generates changelogs and draft releases
+- **Security**: CodeQL, DevSkim, and dependency audits
+
+Workflows run on pushes and pull requests. See `.github/workflows/` for details.
 
 ## Usage
 
