@@ -39,7 +39,7 @@ COPY src ./src
 COPY tests ./tests
 
 # Run E2E tests in debug mode as some tests may not work in release.
-RUN cargo test --test integration_test --test session_service_test -- --test-threads=1
+RUN cargo test --test integration_test --test session_service_test
 
 # Runtime stage
 FROM debian:bookworm-slim
