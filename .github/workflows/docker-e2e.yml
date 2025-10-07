@@ -1,30 +1,30 @@
-name: Docker Build
+name: Docker E2E
 
 on:
   push:
     branches: [main, develop]
     paths:
       - 'src/**'
+      - 'tests/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'Dockerfile'
-      - 'docker-compose.yml'
+      - 'docker/Dockerfile'
   pull_request:
     branches: [main]
     paths:
       - 'src/**'
+      - 'tests/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'Dockerfile'
-      - 'docker-compose.yml'
+      - 'docker/Dockerfile'
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  docker-build:
-    name: Build Docker Image
+  docker-e2e-tests:
+    name: Run Docker E2E Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -34,16 +34,12 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build Docker image
+    - name: Build and test Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
+        file: docker/Dockerfile
+        target: tester
         push: false
-        tags: harper:test
         cache-from: type=gha
         cache-to: type=gha,mode=max
-
-    - name: Test Docker image
-      run: |
-        docker run --rm harper:test timeout 10s ./harper || true
-        # Basic test: ensure container starts without immediate crash
