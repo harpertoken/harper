@@ -1,5 +1,21 @@
 name: Release
 # Release workflow for Harper
+#
+# This workflow automates the release process for Harper when a version tag (v*) is pushed
+# or manually triggered. It creates a GitHub release with generated release notes,
+# builds binaries for multiple platforms, and uploads them as release assets.
+#
+# How it works:
+# 1. Triggered on tag push (e.g., git tag v1.0.0 && git push origin v1.0.0) or manual dispatch
+# 2. Checks if release already exists; skips if it does
+# 3. Generates release notes by comparing the current tag to the previous tag,
+#    extracting commit messages and contributor GitHub usernames
+# 4. Creates a GitHub release with the notes
+# 5. Builds release binaries for Linux, macOS (x64 and ARM64), and Windows
+# 6. Uploads the binaries and checksums as release assets
+#
+# The release notes script (scripts/generate_release_notes.sh) handles the logic for
+# determining the comparison range and formatting the output.
 
 permissions:
   contents: write
@@ -43,9 +59,9 @@ jobs:
           script: |
             let tag;
             if (context.eventName === 'workflow_dispatch') {
-              tag = context.payload.inputs.tag;
+             tag = context.payload.inputs.tag;
             } else {
-              tag = context.ref.replace('refs/tags/', '');
+             tag = context.ref.replace('refs/tags/', '');
             }
             core.setOutput('tag', tag);
 
@@ -56,18 +72,17 @@ jobs:
           TAG: ${{ steps.get_tag.outputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-           script: |
-             try {
-               await github.rest.repos.getReleaseByTag({
-                 owner: context.repo.owner,
-                 repo: context.repo.repo,
-                 tag: process.env.TAG
-               });
-               core.setOutput('exists', 'true');
-             } catch (error) {
-               core.setOutput('exists', 'false');
+          script: |
+            try {
+             await github.rest.repos.getReleaseByTag({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               tag: process.env.TAG
+             });
+             core.setOutput('exists', 'true');
+            } catch (error) {
+             core.setOutput('exists', 'false');
              }
-
       - name: Generate release notes (changes + GitHub @usernames)
         id: release_notes
         if: steps.check_release.outputs.exists == 'false'
@@ -76,45 +91,8 @@ jobs:
           CURR_TAG: ${{ steps.get_tag.outputs.tag }}
           GITHUB_REPO: ${{ github.repository }}
         run: |
-          set -euo pipefail
-
-          PREV_TAG=$(git describe --tags --abbrev=0 "${CURR_TAG}^" 2>/dev/null || echo "")
-          ROOT_SHA=$(git rev-list --max-parents=0 HEAD | tail -n1)
-
-          if [ -n "$PREV_TAG" ]; then
-            BASE_REF="$PREV_TAG"
-            RANGE="$PREV_TAG..$CURR_TAG"
-          else
-            BASE_REF="$ROOT_SHA"
-            RANGE="$ROOT_SHA..$CURR_TAG"
-          fi
-
-          {
-            echo "## Release $CURR_TAG"
-            echo
-            echo "### Changes"
-          } > RELEASE_NOTES.md
-
-          git log "$RANGE" --pretty=format:"- %s" >> RELEASE_NOTES.md || true
-          if ! grep -q "^- " RELEASE_NOTES.md; then
-            echo "- None" >> RELEASE_NOTES.md
-          fi
-
-          {
-            echo
-            echo "### Contributors"
-          } >> RELEASE_NOTES.md
-
-          gh api "repos/$GITHUB_REPO/compare/$BASE_REF...$CURR_TAG" \
-            -q '.commits[].author.login' 2>/dev/null | \
-            grep -v '^$' | sort -u | sed 's/^/- @/' >> RELEASE_NOTES.md || true
-
-          if ! tail -n +1 RELEASE_NOTES.md | awk '/^### Contributors/{p=1;next} /^### /{p=0} p' | grep -q "^- @"; then
-            echo "- None" >> RELEASE_NOTES.md
-          fi
-
-           echo "----- RELEASE_NOTES.md -----"
-           cat RELEASE_NOTES.md
+          chmod +x scripts/generate_release_notes.sh
+          bash scripts/generate_release_notes.sh
 
       - name: Create Release
         id: create_release
@@ -177,11 +155,11 @@ jobs:
           key: ${{ matrix.target }}
           cache-on-failure: true
 
-       - name: Build release binary
-         run: cargo build --release --target ${{ matrix.target }}
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
 
-       - name: Run tests on release binary
-         run: cargo test --release --target ${{ matrix.target }}
+      - name: Run tests on release binary
+        run: cargo test --release --target ${{ matrix.target }}
 
       - name: Strip binary (Unix)
         if: matrix.os != 'windows-latest'
