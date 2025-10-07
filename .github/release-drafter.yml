@@ -52,3 +52,22 @@ template: |
   ## Changes
 
   $CHANGES
+autolabeler:
+  - label: 'feature'
+    title: [ '/^feat/i' ]
+  - label: 'enhancement'
+    title: [ '/^feat/i', '/^perf/i' ]
+  - label: 'fix'
+    title: [ '/^fix/i' ]
+  - label: 'bug'
+    title: [ '/^fix/i' ]
+  - label: 'bugfix'
+    title: [ '/^fix/i' ]
+  - label: 'documentation'
+    title: [ '/^docs/i' ]
+  - label: 'docs'
+    title: [ '/^docs/i' ]
+  - label: 'maintenance'
+    title: [ '/^chore/i', '/^refactor/i', '/^style/i', '/^test/i', '/^build/i' ]
+  - label: 'ci'
+    title: [ '/^ci/i' ]

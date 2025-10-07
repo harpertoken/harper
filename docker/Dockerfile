@@ -22,14 +22,13 @@ FROM rust:1.82.0 AS tester
 WORKDIR /app
 
 # Install system dependencies first to leverage Docker layer caching.
-RUN apt-get update && apt-get install -y libsqlite3-dev pkg-config && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libsqlite3-dev pkg-config && rm -rf /var/lib/apt/lists/*
 
 # Copy manifests
 COPY Cargo.toml Cargo.lock ./
 
-# Reuse build artifacts from the builder stage to avoid re-downloading and re-compiling dependencies.
+# Reuse build artifacts from the builder stage to avoid re-downloading dependencies.
 COPY --from=builder /usr/local/cargo/registry /usr/local/cargo/registry
-COPY --from=builder /app/target ./target
 
 # Copy config files needed for tests
 COPY config ./config
