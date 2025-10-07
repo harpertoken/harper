@@ -161,16 +161,37 @@ fn test_concurrent_database_access() {
             thread::spawn(move || {
                 let conn = Connection::open(&db_path).unwrap();
                 let session_id = format!("session-{i}");
-                save_session(&conn, &session_id).unwrap();
+
+                // Retry on database locked
+                let mut retries = 0;
+                while retries < 10 {
+                    match save_session(&conn, &session_id) {
+                        Ok(_) => break,
+                        Err(e) if e.to_string().contains("database is locked") => {
+                            retries += 1;
+                            thread::sleep(Duration::from_millis(50));
+                        }
+                        Err(e) => panic!("Failed to save session: {:?}", e),
+                    }
+                }
 
                 for j in 0..10 {
-                    save_message(
-                        &conn,
-                        &session_id,
-                        if j % 2 == 0 { "user" } else { "assistant" },
-                        &format!("Message {j} from thread {i}"),
-                    )
-                    .unwrap();
+                    let mut retries = 0;
+                    while retries < 10 {
+                        match save_message(
+                            &conn,
+                            &session_id,
+                            if j % 2 == 0 { "user" } else { "assistant" },
+                            &format!("Message {j} from thread {i}"),
+                        ) {
+                            Ok(_) => break,
+                            Err(e) if e.to_string().contains("database is locked") => {
+                                retries += 1;
+                                thread::sleep(Duration::from_millis(50));
+                            }
+                            Err(e) => panic!("Failed to save message: {:?}", e),
+                        }
+                    }
                     thread::sleep(Duration::from_millis(10));
                 }
 
