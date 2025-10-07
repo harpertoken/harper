@@ -4,8 +4,7 @@
     "color": "B60205"
   },
   "CHECKS": {
-    "prefixes": ["build:", "chore:", "ci:", "docs:", "feat:", "fix:", "perf:", "refactor:", "revert:", "style:", "test:"],
-    "regexp": "^[A-Z].*$"
+    "prefixes": ["build:", "chore:", "ci:", "docs:", "feat:", "fix:", "perf:", "refactor:", "revert:", "style:", "test:"]
   },
   "MESSAGES": {
     "success": "PR title is valid",
