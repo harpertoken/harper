@@ -13,25 +13,8 @@ jobs:
   pr-title-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: amannn/action-semantic-pull-request@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: thehanimo/pr-title-checker@v1.4.0
         with:
-          types: |
-            build
-            chore
-            ci
-            docs
-            feat
-            fix
-            perf
-            refactor
-            revert
-            style
-            test
-          requireScope: false
-          subjectPattern: ^[A-Z].*$
-          subjectPatternError: |
-            The subject "{subject}" found in the pull request title "{title}" should start with an uppercase character.
-          wip: true
-          validateSingleCommit: false
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          pass_on_octokit_error: false
+          configuration_path: .github/pr-title-checker-config.json
