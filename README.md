@@ -105,7 +105,8 @@ cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.5
 ```
 </details>
 
-## CI/CD
+<details>
+<summary>CI/CD</summary>
 
 Harper uses GitHub Actions for automated testing and deployment:
 
@@ -117,6 +118,7 @@ Harper uses GitHub Actions for automated testing and deployment:
 - **Security**: CodeQL, DevSkim, and dependency audits
 
 Workflows run on pushes and pull requests. See `.github/workflows/` for details.
+</details>
 
 ## Usage
 
