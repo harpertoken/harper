@@ -1,5 +1,6 @@
 module.exports = {
   extends: ['@commitlint/config-conventional'],
+  ignores: [message => message.toLowerCase().startsWith('merge')],
   rules: {
     'type-enum': [
       2,
