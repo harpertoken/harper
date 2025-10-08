@@ -120,6 +120,43 @@ Harper uses GitHub Actions for automated testing and deployment:
 Workflows run on pushes and pull requests. See `.github/workflows/` for details.
 </details>
 
+## Conventional Commits
+
+This project uses conventional commit standards to ensure consistent and meaningful commit messages.
+
+### Setup
+
+To enable commit message validation:
+
+```bash
+cp scripts/commit-msg .git/hooks/commit-msg
+chmod +x .git/hooks/commit-msg
+```
+
+### Usage
+
+Commit messages must follow the format: `type(scope): description`
+
+- **Type**: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
+- **Scope**: Optional, e.g., (api), (ui)
+- **Description**: Lowercase, ≤60 characters
+
+Examples:
+- `feat: add user authentication`
+- `fix(ui): resolve button alignment issue`
+- `docs: update installation instructions`
+
+### History Cleanup
+
+To rewrite existing commit messages in the history:
+
+```bash
+git filter-branch --msg-filter 'bash scripts/rewrite_msg.sh' -- --all
+git push --force-with-lease
+```
+
+This will lowercase and truncate first lines to 60 characters.
+
 ## Usage
 
 ```text
