@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Conventional commit hook
+# Enforces lowercase, ≤60 char first lines starting with types like feat:, fix:, etc.
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(head -n1 "$COMMIT_MSG_FILE")
+
+# Check if first line is empty
+if [ -z "$COMMIT_MSG" ]; then
+    echo "Error: Commit message cannot be empty"
+    exit 1
+fi
+
+# Check length (≤60 chars)
+if [ ${#COMMIT_MSG} -gt 60 ]; then
+    echo "Error: Commit message first line too long (${#COMMIT_MSG} chars, max 60)"
+    exit 1
+fi
+
+# Check if starts with conventional type
+if ! echo "$COMMIT_MSG" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: '; then
+    echo "Error: Commit message must start with conventional type (feat:, fix:, docs:, style:, refactor:, test:, chore:, perf:, ci:, build:, revert:)"
+    exit 1
+fi
+
+# Check if lowercase (assuming no uppercase letters in the message)
+if echo "$COMMIT_MSG" | grep -q '[A-Z]'; then
+    echo "Error: Commit message must be lowercase"
+    exit 1
+fi
+
+exit 0
