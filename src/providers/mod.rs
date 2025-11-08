@@ -6,14 +6,12 @@
 use crate::core::constants::crypto::*;
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::{ApiConfig, ApiProvider, Message};
-// use mcp_client::{transport::sse::SseTransportHandle, McpClient, McpClientTrait, McpService}; // Temporarily disabled
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use ring::{
     aead::{self},
     rand::{SecureRandom, SystemRandom},
 };
 use serde_json::json;
-// use tower::timeout::Timeout; // Temporarily disabled
 
 /// Call the configured LLM API with conversation history
 ///
@@ -43,9 +41,6 @@ pub async fn call_llm(
                 .collect();
 
             let extra_query = String::new();
-            // MCP functionality temporarily disabled due to dependency conflicts
-            // This resolves CodeQL duplicate dependency warnings and improves security analysis
-            // MCP can be re-enabled when a compatible client version becomes available
 
             let body = json!({
                 "model": config.model_name,

@@ -207,20 +207,30 @@ Tool format:
     /// Process a message and get AI response
     async fn process_message(
         &mut self,
-        history: &[Message],
+        history: &mut Vec<Message>,
         web_search_enabled: bool,
     ) -> HarperResult<String> {
         let client = Client::builder().timeout(timeouts::API_REQUEST).build()?;
 
-        let mut response = self.call_llm(&client, history).await?;
+        let history_for_llm = history.clone();
+        let mut response = self.call_llm(&client, &history_for_llm).await?;
         let trimmed_response = response
             .trim()
             .trim_matches(|c| c == '\'' || c == '\"' || c == '`');
 
-        if let Some(tool_result) = self
-            .handle_tool_use(&client, history, trimmed_response, web_search_enabled)
-            .await?
-        {
+        let tool_option = self
+            .handle_tool_use(
+                &client,
+                &history_for_llm,
+                trimmed_response,
+                web_search_enabled,
+            )
+            .await?;
+        if let Some((tool_result, tool_content)) = tool_option {
+            history.push(Message {
+                role: "system".to_string(),
+                content: tool_content,
+            });
             response = tool_result;
         }
 
@@ -265,19 +275,15 @@ Tool format:
         history: &[Message],
         response: &str,
         web_search_enabled: bool,
-    ) -> HarperResult<Option<String>> {
+    ) -> HarperResult<Option<(String, String)>> {
         if response.to_uppercase().starts_with(tools::RUN_COMMAND) {
             let command_result = self.execute_command(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &command_result)
-                .await?;
-            Ok(Some(final_response))
+            let final_response = self.call_llm_after_tool(client, history).await?;
+            Ok(Some((final_response, command_result)))
         } else if web_search_enabled && response.to_uppercase().starts_with(tools::SEARCH) {
             let search_result = self.perform_web_search(response).await?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &search_result)
-                .await?;
-            Ok(Some(final_response))
+            let final_response = self.call_llm_after_tool(client, history).await?;
+            Ok(Some((final_response, search_result)))
         } else {
             Ok(None)
         }
@@ -293,6 +299,16 @@ Tool format:
 
         if command_str.is_empty() {
             return Err(HarperError::Command("No command provided".to_string()));
+        }
+
+        // Basic security check to prevent shell injection
+        if command_str
+            .chars()
+            .any(|c| matches!(c, ';' | '|' | '&' | '`' | '$' | '(' | ')'))
+        {
+            return Err(HarperError::Command(
+                "Command contains potentially dangerous characters".to_string(),
+            ));
         }
 
         println!(
@@ -338,7 +354,6 @@ Tool format:
         &mut self,
         client: &Client,
         history: &[Message],
-        _tool_result: &str,
     ) -> HarperResult<String> {
         self.call_llm(client, history).await
     }

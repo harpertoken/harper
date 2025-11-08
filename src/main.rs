@@ -1,6 +1,5 @@
 // use mcp_client::{transport::SseTransport, McpClient, McpClientTrait, McpService, Transport}; // Temporarily disabled
 use rusqlite::Connection;
-// use std::collections::HashMap; // Temporarily unused
 use std::env;
 
 mod config;
@@ -17,7 +16,6 @@ use ui::tui::run_tui;
 
 use config::HarperConfig;
 
-// use crate::core::constants::timeouts; // Temporarily unused
 use providers::*;
 use storage::*;
 
