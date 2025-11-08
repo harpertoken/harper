@@ -1,13 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.6] - 2025-11-08
 
 ### Added
+- Docker image publishing to release workflow for automated container distribution
+
+### Changed
 - Dev container configuration for consistent development environment
 - Pre-commit and commit-msg git hooks for code quality enforcement
 - Clippy linting in pre-commit hook
-
-### Changed
 - Updated Rust toolchain and MSRV to 1.85.0 for ICU and cargo-audit compatibility
 - Enhanced CI with updated MSRV testing
 
