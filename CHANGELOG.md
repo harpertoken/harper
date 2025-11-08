@@ -3,19 +3,18 @@
 ## [Unreleased]
 
 ### Added
-- Comprehensive Docker support with multi-stage builds, docker-compose, and CI validation
-- Non-root user execution in Docker for improved security
-- Optimized Docker build caching for faster development builds
-- Cross-platform Docker volume mount examples in documentation
+- Dev container configuration for consistent development environment
+- Pre-commit and commit-msg git hooks for code quality enforcement
+- Clippy linting in pre-commit hook
 
 ### Changed
-- Updated minimum Rust version to 1.82.0+ across all configurations
-- Pinned Rust toolchain to 1.82.0 for consistent development environment
-- Fixed database path in Docker for proper data persistence
-- Pinned cargo-deny to 0.17.0 for CI compatibility
+- Updated Rust toolchain and MSRV to 1.85.0 for ICU and cargo-audit compatibility
+- Enhanced CI with updated MSRV testing
 
 ### Fixed
-- Docker build failures due to outdated Rust version
+- Compilation error in chat_service.rs due to incorrect slice mutation
+- Clippy warning for manual div_ceil implementation in performance tests
+- Removed unused imports and comments from source files
 
 ## [0.1.5] - 2025-09-20
 - Version flag, test suites, documentation updates
