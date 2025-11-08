@@ -11,4 +11,4 @@ path = "chat_sessions.db"
 enabled = false
 server_url = "http://localhost:5000"
 
-# Updated for v0.1.5
+# Updated for v0.1.6

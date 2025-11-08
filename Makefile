@@ -80,4 +80,4 @@ audit:
 deny:
 	cargo deny check
 
-# Updated for v0.1.5
+# Updated for v0.1.6
