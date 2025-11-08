@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Pre-commit hook to run basic checks
+
+echo "Running pre-commit checks..."
+
+# Run cargo check
+if ! cargo check; then
+    echo "cargo check failed. Please fix the errors before committing."
+    exit 1
+fi
+
+# Run clippy linting
+if ! cargo clippy --all-targets --all-features --workspace -- -D warnings; then
+    echo "cargo clippy failed. Please fix the warnings before committing."
+    exit 1
+fi
+
+echo "Pre-commit checks passed."
+exit 0
