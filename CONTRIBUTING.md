@@ -8,6 +8,10 @@ cd harper
 cargo build
 cp env.example .env
 cargo test
+
+# Optional: Set up git hooks for commit validation
+cp scripts/commit-msg .git/hooks/commit-msg && chmod +x .git/hooks/commit-msg
+cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 ```
 
 ---
