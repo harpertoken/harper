@@ -78,7 +78,7 @@ fn load_history_benchmark(c: &mut Criterion) {
             b.iter(|| {
                 // Simulate loading in pages of 100
                 let page_size = 100;
-                let pages = (size + page_size - 1) / page_size;
+                let pages = size.div_ceil(page_size);
 
                 for page in 0..pages {
                     let offset = page * page_size;
