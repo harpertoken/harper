@@ -1,18 +1,11 @@
 # Code of Conduct
 
-## Standards
+We are committed to providing a harassment-free experience for everyone. We do not tolerate harassment of participants in any form.
 
-### Acceptable
-- Respectful communication
-- Constructive feedback
-- Professional conduct
+Harassment includes offensive verbal comments, deliberate intimidation, stalking, disruptive photography or recording, inappropriate physical contact, and unwelcome sexual attention.
 
-### Unacceptable
-- Harassment or discrimination
-- Personal attacks
-- Inappropriate content
-- Privacy violations
+Participants asked to stop any harassing behavior are expected to comply immediately.
 
-## Enforcement
+If you are being harassed, notice that someone else is being harassed, or have any other concerns, please contact us at harpertoken@icloud.com.
 
-Report violations to harpertoken@icloud.com. Issues will be reviewed and addressed promptly.
+We will investigate and take appropriate action.
