@@ -1,0 +1,30 @@
+{
+  "name": "Harper Development",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-1.85-bullseye",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "ms-vscode.vscode-json",
+        "GitHub.copilot"
+      ],
+      "settings": {
+        "rust-analyzer.checkOnSave.command": "clippy",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll": "explicit",
+          "source.organizeImports": "explicit"
+        }
+      }
+    }
+  },
+  "forwardPorts": [],
+  "portsAttributes": {},
+  "remoteUser": "vscode"
+}
