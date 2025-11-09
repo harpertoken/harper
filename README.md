@@ -137,7 +137,8 @@ cargo test test_name
 <summary>Install from Release</summary>
 
 ```bash
-cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.8-beta.1
+# Check latest release at https://github.com/harpertoken/harper/releases
+cargo install --git https://github.com/harpertoken/harper.git --tag <latest-tag>
 ```
 </details>
 
