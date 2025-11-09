@@ -1,0 +1,53 @@
+name: 'Run E2E Tests'
+description: 'Run end-to-end tests on specified OS'
+inputs:
+  os:
+    description: 'Operating system (ubuntu-latest, windows-latest, macos-latest)'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+
+    - name: Install system dependencies (Ubuntu)
+      if: inputs.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential pkg-config libsqlite3-dev
+      shell: bash
+
+    - name: Install system dependencies (macOS)
+      if: inputs.os == 'macos-latest'
+      run: |
+        brew install sqlite3 pkg-config
+      shell: bash
+
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: e2e-${{ inputs.os }}
+        cache-on-failure: true
+
+    - name: Run E2E tests
+      run: |
+        cargo test --test integration_test -- --test-threads=1
+        cargo test --test session_service_test
+      shell: bash
+      env:
+        RUST_BACKTRACE: 1
+        RUST_LOG: debug
+
+    - name: Upload test logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs-${{ inputs.os }}
+        path: |
+          **/test_*.log
+          **/test-*.log
+          **/test/*.log
+        if-no-files-found: ignore
