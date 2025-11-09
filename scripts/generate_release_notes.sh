@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-PREV_TAG=$(git describe --tags --abbrev=0 "${CURR_TAG}^" 2>/dev/null || echo "")
+PREV_TAG=$(git tag --sort=-version:refname | awk "/^$CURR_TAG$/{getline; print; exit}" || echo "")
 ROOT_SHA=$(git rev-list --max-parents=0 HEAD | tail -n1)
 
 if [ -n "$PREV_TAG" ]; then
@@ -29,7 +29,12 @@ fi
   echo "### Contributors"
 } >> RELEASE_NOTES.md
 
-gh api repos/$GITHUB_REPO/compare/$BASE_REF...$CURR_TAG -q .commits[].author.login 2>/dev/null | grep -v '^$' | sort -u | sed 's/^/- @/' >> RELEASE_NOTES.md || true
+output=$(gh api repos/$GITHUB_REPO/compare/$BASE_REF...$CURR_TAG -q .commits[].author.login 2>/dev/null) || output=""
+if [[ $output == \{* ]]; then
+  echo '- None' >> RELEASE_NOTES.md
+else
+  echo "$output" | grep -v '^$' | sort -u | sed 's/^/- @/' >> RELEASE_NOTES.md || echo '- None' >> RELEASE_NOTES.md
+fi
 
 if ! tail -n +1 RELEASE_NOTES.md | awk 'BEGIN {p=0} { if (p == 0 && /^### Contributors/) p=1; if (p == 1 && /^### /) p=0; if (p == 1) print }' | grep -q "^- @"; then
   echo '- None' >> RELEASE_NOTES.md
