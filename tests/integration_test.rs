@@ -669,10 +669,44 @@ mod e2e_tests {
         std::fs::create_dir_all(&db_dir).expect("Failed to create database directory");
         let db_path = db_dir.join("harper.db");
 
+        // Create a temporary config directory and files
+        let config_dir = temp_dir.path().join("config");
+        std::fs::create_dir_all(&config_dir).expect("Failed to create config directory");
+
+        // Copy default config
+        let default_config_src = std::path::Path::new("config/default.toml");
+        let default_config_dst = config_dir.join("default.toml");
+        if default_config_src.exists() {
+            std::fs::copy(default_config_src, &default_config_dst)
+                .expect("Failed to copy default config");
+        }
+
+        // Create local config
+        let config_content = format!(
+            r#"[api]
+provider = "OpenAI"
+api_key = "test-key"
+base_url = "https://api.openai.com/v1/chat/completions"
+model_name = "gpt-4"
+
+[database]
+path = "{}"
+
+[mcp]
+enabled = false
+server_url = "http://localhost:5000"
+"#,
+            db_path.display()
+        );
+        let config_path = config_dir.join("local.toml");
+        std::fs::write(&config_path, config_content).expect("Failed to write config file");
+
         // Print debug information
         println!("=== Test Setup ===");
         println!("Temp directory: {}", temp_dir.path().display());
         println!("Database path: {}", db_path.display());
+        println!("Config directory: {}", config_dir.display());
+        println!("Config path: {}", config_path.display());
         println!("Database directory exists: {}", db_dir.exists());
         println!("Database file exists before test: {}", db_path.exists());
         println!("Current directory: {:?}", std::env::current_dir().unwrap());
@@ -680,6 +714,18 @@ mod e2e_tests {
         // List contents of the temp directory
         println!("\n=== Directory Contents ===");
         if let Ok(entries) = std::fs::read_dir(temp_dir.path()) {
+            for entry in entries.flatten() {
+                println!(
+                    "  - {} (dir: {})",
+                    entry.path().display(),
+                    entry.path().is_dir()
+                );
+            }
+        }
+
+        // List contents of the config directory
+        println!("\n=== Config Directory Contents ===");
+        if let Ok(entries) = std::fs::read_dir(&config_dir) {
             for entry in entries.flatten() {
                 println!(
                     "  - {} (dir: {})",
@@ -707,16 +753,9 @@ mod e2e_tests {
         // Build the command
         let mut command = Command::new(env!("CARGO_BIN_EXE_harper"));
 
-        // Set environment variables
+        // Set the working directory to the temp directory so it finds the config file
         command
-            .env("HARPER_DATABASE__PATH", &db_path)
-            .env("HARPER_API__API_KEY", "test-key")
-            .env("HARPER_API__PROVIDER", "OpenAI")
-            .env(
-                "HARPER_API__BASE_URL",
-                "https://api.openai.com/v1/chat/completions",
-            )
-            .env("HARPER_API__MODEL_NAME", "gpt-4")
+            .current_dir(temp_dir.path())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -724,7 +763,9 @@ mod e2e_tests {
         // Print the command for debugging
         println!("\n=== Running Command ===");
         println!("Command: {:?}", command);
-        println!("Database path in env: {}", db_path.display());
+        println!("Working directory: {}", temp_dir.path().display());
+        println!("Config file: {}", config_path.display());
+        println!("Database path in config: {}", db_path.display());
 
         println!("Running command: {:?}", command);
 
