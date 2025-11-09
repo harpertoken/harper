@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.82.0 AS builder
+FROM rust:1.85.0 AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY src ./src
 RUN cargo build --release
 
 # Test stage
-FROM rust:1.82.0 AS tester
+FROM rust:1.85.0 AS tester
 
 WORKDIR /app
 
