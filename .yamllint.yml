@@ -1,0 +1,30 @@
+extends: default
+
+rules:
+  # Allow longer lines for GitHub Actions workflows
+  line-length:
+    max: 140
+    level: warning
+
+  # Allow empty values in mappings (common in GitHub Actions)
+  empty-values:
+    forbid-in-block-mappings: false
+    forbid-in-flow-mappings: false
+
+  # Allow truthy values
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off', 'yes', 'no']
+    check-keys: false
+
+  # Allow comments to start anywhere
+  comments-indentation: disable
+
+  # Disable indentation check for GitHub Actions workflows
+  indentation: disable
+
+  # GitHub Actions specific allowances
+  document-start: disable  # GitHub Actions doesn't require ---
+  new-line-at-end-of-file: enable
+  brackets: disable  # Allow spaces in brackets for readability
+  comments:
+    min-spaces-from-content: 1

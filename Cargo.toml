@@ -16,6 +16,7 @@ categories = ["command-line-utilities", "development-tools"]
 chrono = "0.4.41"
 colored = "3.0.0"
 config = "0.14.0"
+dotenvy = "0.15"
 # mcp-client = "0.1.0"  # Temporarily disabled due to dependency conflicts
 reqwest = { version = "0.12.20", features = ["json", "native-tls"] }
 rusqlite = { version = "0.37.0", features = ["bundled"] }

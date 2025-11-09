@@ -2,6 +2,7 @@ use crate::core::error::{HarperError, HarperResult};
 use crate::core::ApiProvider;
 use config::{ConfigBuilder, File};
 use serde::Deserialize;
+use std::env;
 use std::path::Path;
 
 #[derive(Debug, Deserialize)]
@@ -33,10 +34,12 @@ pub struct McpConfig {
 impl HarperConfig {
     /// Load and validate configuration
     pub fn new() -> HarperResult<Self> {
-        let builder = ConfigBuilder::<config::builder::DefaultState>::default()
+        let mut builder = ConfigBuilder::<config::builder::DefaultState>::default()
             .add_source(File::with_name("config/default"))
             .add_source(File::with_name("config/local").required(false))
             .add_source(config::Environment::with_prefix("HARPER"));
+
+        Self::apply_env_overrides(&mut builder)?;
 
         let config = builder.build()?;
         let harper_config: Self = config.try_deserialize()?;
@@ -45,6 +48,59 @@ impl HarperConfig {
         harper_config.validate()?;
 
         Ok(harper_config)
+    }
+
+    /// Apply environment variable overrides to the config builder
+    fn apply_env_overrides(
+        builder: &mut ConfigBuilder<config::builder::DefaultState>,
+    ) -> HarperResult<()> {
+        let mut temp_builder = std::mem::take(builder);
+
+        // Map OPENAI_API_KEY to api settings
+        if let Ok(key) = env::var("OPENAI_API_KEY") {
+            if !key.trim().is_empty() {
+                temp_builder = temp_builder.set_override("api.api_key", key)?;
+                temp_builder = temp_builder.set_override("api.provider", "OpenAI")?;
+                temp_builder = temp_builder
+                    .set_override("api.base_url", "https://api.openai.com/v1/chat/completions")?;
+                temp_builder = temp_builder.set_override("api.model_name", "gpt-4-turbo")?;
+            }
+        }
+
+        // Map SAMBASTUDIO_API_KEY
+        if let Ok(key) = env::var("SAMBASTUDIO_API_KEY") {
+            if !key.trim().is_empty() {
+                temp_builder = temp_builder.set_override("api.api_key", key)?;
+                temp_builder = temp_builder.set_override("api.provider", "Sambanova")?;
+                temp_builder = temp_builder.set_override(
+                    "api.base_url",
+                    "https://api.sambanova.ai/v1/chat/completions",
+                )?;
+                temp_builder = temp_builder
+                    .set_override("api.model_name", "Llama-4-Maverick-17B-128E-Instruct")?;
+            }
+        }
+
+        // Map GEMINI_API_KEY
+        if let Ok(key) = env::var("GEMINI_API_KEY") {
+            if !key.trim().is_empty() {
+                temp_builder = temp_builder.set_override("api.api_key", key)?;
+                temp_builder = temp_builder.set_override("api.provider", "Gemini")?;
+                temp_builder = temp_builder.set_override("api.base_url", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent")?;
+                temp_builder =
+                    temp_builder.set_override("api.model_name", "gemini-2.0-flash-exp")?;
+            }
+        }
+
+        // Map DATABASE_PATH
+        if let Ok(path) = env::var("DATABASE_PATH") {
+            if !path.trim().is_empty() {
+                temp_builder = temp_builder.set_override("database.path", path)?;
+            }
+        }
+
+        *builder = temp_builder;
+        Ok(())
     }
 
     /// Validate configuration values
