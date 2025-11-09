@@ -1,3 +1,14 @@
+# Dependency Security and License Configuration for Harper
+#
+# This file configures cargo-deny to check for security advisories,
+# license compliance, and banned dependencies in the Harper project.
+#
+# Configuration includes:
+# - Security advisory checking with RustSec database
+# - License allowlist for permissive open-source licenses
+# - Dependency bans for vulnerable or unwanted crates
+# - Source restrictions to approved registries
+#
 # Target platforms to check dependencies for
 [graph]
 targets = [
