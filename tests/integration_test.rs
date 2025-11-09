@@ -690,7 +690,7 @@ base_url = "https://api.openai.com/v1/chat/completions"
 model_name = "gpt-4"
 
 [database]
-path = "{}"
+path = '{}'
 
 [mcp]
 enabled = false
