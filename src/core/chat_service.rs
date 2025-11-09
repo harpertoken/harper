@@ -87,7 +87,13 @@ impl<'a> ChatService<'a> {
         Ok((history, session_id))
     }
 
-    pub async fn send_message(&mut self, user_msg: &str, history: &mut Vec<Message>, web_search_enabled: bool, session_id: &str) -> HarperResult<()> {
+    pub async fn send_message(
+        &mut self,
+        user_msg: &str,
+        history: &mut Vec<Message>,
+        web_search_enabled: bool,
+        session_id: &str,
+    ) -> HarperResult<()> {
         self.add_user_message(history, session_id, user_msg)?;
         let response = self.process_message(history, web_search_enabled).await?;
         self.add_assistant_message(history, session_id, &response)?;
@@ -108,8 +114,6 @@ impl<'a> ChatService<'a> {
     fn save_session(&self, session_id: &str) -> HarperResult<()> {
         crate::save_session(self.conn, session_id)
     }
-
-
 
     /// Build the system prompt based on configuration
     pub fn build_system_prompt(&self, web_search_enabled: bool) -> String {

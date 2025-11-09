@@ -123,7 +123,10 @@ async fn main() {
                         // mcp_client.as_ref(), // Temporarily disabled
                         Some(&mut api_cache),
                     );
-                    handle_menu_error!(chat_service.start_session(web_search).await, "Error in chat session");
+                    handle_menu_error!(
+                        chat_service.start_session(web_search).await,
+                        "Error in chat session"
+                    );
                 }
                 crate::core::constants::menu::LIST_SESSIONS => {
                     handle_menu_error!(session_service.list_sessions(), "Error listing sessions");
