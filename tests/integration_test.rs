@@ -769,6 +769,9 @@ server_url = "http://localhost:5000"
 
         println!("Running command: {:?}", command);
 
+        // Ensure DATABASE_PATH is not set to avoid overriding config
+        std::env::remove_var("DATABASE_PATH");
+
         let mut child = command.spawn().expect("Failed to start binary");
 
         // Send quit command using the constant
