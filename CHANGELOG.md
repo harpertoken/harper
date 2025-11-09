@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [0.1.8-beta.1](#018-beta1---2025-11-09)
 - [0.1.8-beta](#018-beta---2025-11-09)
 - [0.1.7](#017---2025-11-09)
 - [0.1.6](#016---2025-11-08)
@@ -31,6 +32,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-language support
 - Advanced session analytics
 - Cloud deployment options
+
+---
+
+## [0.1.8-beta.1] - 2025-11-09
+
+### Fixed
+- **Release Workflow**: Enhanced release process with GitHub CLI integration for deleting existing releases
+- **Release Workflow**: Added comprehensive logging and validation to release automation
+- **Release Workflow**: Removed invalid overwrite configuration from release creation
+- **Release Workflow**: Improved handling of immutable releases by deleting and recreating them
+- **API Integration**: Fixed error handling in release notes script
+- **Testing**: Corrected database path quoting in test configurations
+- **Testing**: Fixed environment variable handling in binary execution tests
+- **Documentation**: Enhanced documentation and fixed git hooks
+
+### Changed
+- **Dependencies**: Updated Cargo.lock with latest dependency versions
 
 ---
 
