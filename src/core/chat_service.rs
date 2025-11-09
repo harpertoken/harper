@@ -73,17 +73,30 @@ impl<'a> ChatService<'a> {
     /// - AI API calls
     /// - Tool execution (commands, web search)
     /// - Conversation persistence
-    pub async fn start_session(&mut self) -> HarperResult<()> {
+    pub fn create_session(&self, web_search_enabled: bool) -> HarperResult<(Vec<Message>, String)> {
         let session_id = Uuid::new_v4().to_string();
         self.save_session(&session_id)?;
 
-        let web_search_enabled = self.prompt_web_search()?;
         let system_prompt = self.build_system_prompt(web_search_enabled);
 
-        let mut history = vec![Message {
+        let history = vec![Message {
             role: "system".to_string(),
             content: system_prompt,
         }];
+
+        Ok((history, session_id))
+    }
+
+    pub async fn send_message(&mut self, user_msg: &str, history: &mut Vec<Message>, web_search_enabled: bool, session_id: &str) -> HarperResult<()> {
+        self.add_user_message(history, session_id, user_msg)?;
+        let response = self.process_message(history, web_search_enabled).await?;
+        self.add_assistant_message(history, session_id, &response)?;
+        self.trim_history(history);
+        Ok(())
+    }
+
+    pub async fn start_session(&mut self, web_search_enabled: bool) -> HarperResult<()> {
+        let (mut history, session_id) = self.create_session(web_search_enabled)?;
 
         self.display_session_start();
 
@@ -96,14 +109,7 @@ impl<'a> ChatService<'a> {
         crate::save_session(self.conn, session_id)
     }
 
-    /// Prompt user to enable web search
-    fn prompt_web_search(&self) -> HarperResult<bool> {
-        print!("Enable web search for this session? (y/n): ");
-        io::stdout().flush()?;
-        let mut choice = String::new();
-        io::stdin().read_line(&mut choice)?;
-        Ok(choice.trim().eq_ignore_ascii_case("y"))
-    }
+
 
     /// Build the system prompt based on configuration
     pub fn build_system_prompt(&self, web_search_enabled: bool) -> String {
@@ -111,9 +117,11 @@ impl<'a> ChatService<'a> {
             let current_year = chrono::Local::now().year();
             format!(
                 "You are a helpful AI assistant powered by the {} model.
-You have the ability to run any Linux shell command.
-Your response MUST be ONLY the tool command. Do not add any explanation.
-Do NOT use interactive commands (like 'nano', 'vim'). Use non-interactive commands like `cat` to read files.
+You have the ability to run any Linux shell command and search the web.
+
+IMPORTANT: If you need to run a command, respond ONLY with the command in this format: [RUN_COMMAND <command>]
+If you need to search the web, respond ONLY with the search in this format: [SEARCH: your query]
+Do NOT add any explanation, text, or other content. Your response must be ONLY the tool command.
 
 Tool format:
 - Run a shell command: `[RUN_COMMAND <command to run>]`
