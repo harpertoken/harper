@@ -29,7 +29,6 @@ runs:
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
       with:
-        key: e2e-${{ inputs.os }}
         cache-on-failure: true
 
     - name: Run E2E tests
