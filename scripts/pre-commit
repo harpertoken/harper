@@ -16,5 +16,17 @@ if ! cargo clippy --all-targets --all-features --workspace -- -D warnings; then
     exit 1
 fi
 
+# Run YAML linting if yamllint is available
+if command -v yamllint >/dev/null 2>&1; then
+    echo "Running yamllint..."
+    if ! yamllint .github/workflows/*.yml docker/docker-compose.yml; then
+        echo "yamllint failed. Please fix the YAML issues before committing."
+        echo "Install yamllint with: pip install yamllint"
+        exit 1
+    fi
+else
+    echo "yamllint not found. Install with: pip install yamllint"
+fi
+
 echo "Pre-commit checks passed."
 exit 0

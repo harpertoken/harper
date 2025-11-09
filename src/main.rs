@@ -41,6 +41,9 @@ fn print_version() {
 
 #[tokio::main]
 async fn main() {
+    // Load .env file if it exists
+    let _ = dotenvy::dotenv();
+
     // Handle --version flag
     let args: Vec<String> = env::args().collect();
     if args.len() > 1 && (args[1] == "--version" || args[1] == "-v") {
@@ -61,6 +64,14 @@ async fn main() {
         base_url: config.api.base_url.clone(),
         model_name: config.api.model_name.clone(),
     };
+
+    // Display selected model information
+    println!(
+        "🤖 Using {} - {}",
+        api_config.provider, api_config.model_name
+    );
+    println!("📍 API: {}", api_config.base_url);
+    println!("💾 Database: {}", config.database.path);
 
     let conn = exit_on_error(
         Connection::open(&config.database.path),
