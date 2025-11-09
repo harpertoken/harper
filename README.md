@@ -133,39 +133,6 @@ cargo test -- --nocapture
 cargo test test_name
 ```
 
-Example output:
-```
-Running all tests and benchmarks...
-==================================
-
-Running unit tests...
-...
-
-Running integration tests...
-...
-
-Running error handling tests...
-...
-
-Running security tests...
-...
-
-Running performance benchmarks...
-...
-
-All tests completed successfully!
-==================================
-```
-
-### Test Coverage
-
-The test suite includes:
-- 12 unit tests
-- 10 integration tests
-- 6 error handling tests
-- 3 security tests
-- Performance benchmarks
-
 <details>
 <summary>Install from Release</summary>
 
@@ -432,24 +399,6 @@ server_url = "http://localhost:5000"
 2. `config/local.toml` (overrides defaults)
 3. `config/default.toml` (fallback defaults)
 
-### Using .env Files
-
-For local development, create a `.env` file:
-
-```bash
-cp config/env.example .env
-# Edit .env with your API keys
-```
-
-Then run with environment file support:
-
-```bash
-# Using dotenv (if your system supports it)
-cargo run --release
-
-# Or manually source the file
-source .env && cargo run --release
-```
 
 
 
@@ -484,8 +433,6 @@ Harper implements multiple layers of security to protect your data and ensure sa
 - **Open Source**: Full transparency and community review
 
 For security issues, please see our [Security Policy](SECURITY.md).
-
-
 
 ## Contributing
 
