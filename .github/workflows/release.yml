@@ -185,7 +185,11 @@ jobs:
 
       - name: Prepare binary
         run: |
-          cp target/${{ matrix.target }}/release/harper* "${{ matrix.name }}"
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp "target/${{ matrix.target }}/release/harper.exe" "${{ matrix.name }}"
+          else
+            cp "target/${{ matrix.target }}/release/harper" "${{ matrix.name }}"
+          fi
           chmod +x "${{ matrix.name }}"
         shell: bash
 
