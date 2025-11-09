@@ -1,37 +1,49 @@
-# Harper Docker Cookbook
+# Harper Docker Guide
 
-This guide provides detailed instructions for running Harper using Docker.
+[![Docker CI](https://github.com/harpertoken/harper/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/docker-ci.yml)
+[![Docker E2E](https://github.com/harpertoken/harper/actions/workflows/docker-e2e.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/docker-e2e.yml)
 
-## Prerequisites
+This guide provides detailed instructions for running Harper using Docker, including setup, configuration, and troubleshooting.
 
-- Docker installed and running
-- Git (for cloning the repository)
+## Requirements
 
-## Quick Start
+- **Docker**: Latest stable version ([install Docker](https://docs.docker.com/get-docker/))
+- **Docker Compose**: For advanced setups (included with Docker Desktop)
+- **Git**: For cloning the repository
+- **Operating System**: Linux, macOS, or Windows with Docker support
 
-1. Clone the repository:
+## Installation
+
+### Quick Start
+
+Harper provides pre-built Docker images for easy deployment.
+
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/harpertoken/harper.git
    cd harper
    ```
 
-2. Set up environment variables:
+2. **Configure environment**:
    ```bash
-   cp env.example .env
-   # Edit .env with your API keys (OpenAI, Sambanova, Gemini)
+   cp config/env.example .env
+   # Edit .env with your API keys (see Configuration section below)
    ```
 
-3. Build and run:
+3. **Build and run**:
    ```bash
    docker build -t harper .
-docker run --rm -it --env-file .env -v harper_data:/app/data harper
+   docker run --rm -it --env-file .env -v harper_data:/app/data harper
    ```
 
-## Detailed Setup
+### Detailed Setup
 
-### Building the Image
+#### Building the Image
 
 ```bash
+# Standard build
+docker build -t harper .
+
 # Build with custom tag
 docker build -t my-harper:latest .
 
@@ -39,9 +51,9 @@ docker build -t my-harper:latest .
 docker build --no-cache -t harper .
 ```
 
-### Running the Container
+#### Running the Container
 
-#### Interactive Mode (Recommended)
+##### Interactive Mode (Recommended)
 ```bash
 # With environment variables
 docker run --rm -it --env-file .env harper
@@ -50,7 +62,7 @@ docker run --rm -it --env-file .env harper
 docker run --rm -it harper
 ```
 
-#### Background Mode
+##### Background Mode
 ```bash
 # Run in background
 docker run -d --name harper-container --env-file .env harper
@@ -62,7 +74,7 @@ docker logs harper-container
 docker stop harper-container
 ```
 
-### Using Docker Compose
+#### Using Docker Compose
 
 Docker Compose provides persistent data storage and easier management.
 
@@ -80,7 +92,7 @@ docker-compose logs
 docker-compose down
 ```
 
-### Data Persistence
+#### Data Persistence
 
 Harper stores sessions in a SQLite database. With Docker Compose, data persists in a named volume.
 
@@ -96,9 +108,34 @@ docker run --rm -it -v %cd%/data:/app/data --env-file .env harper
 docker run --rm -it -v ${pwd}/data:/app/data --env-file .env harper
 ```
 
-### Troubleshooting
+## Configuration
 
-#### Common Issues
+### Environment Variables
+
+Harper uses environment variables for configuration. Set one of the following API keys in your `.env` file:
+
+```bash
+# Choose your AI provider
+export OPENAI_API_KEY="your-openai-key"
+# OR
+export SAMBASTUDIO_API_KEY="your-sambanova-key"
+# OR
+export GEMINI_API_KEY="your-gemini-key"
+
+# Optional: Custom database location
+export DATABASE_PATH="./harper.db"
+```
+
+### Custom Configuration
+
+Mount custom config files:
+```bash
+docker run --rm -it -v $(pwd)/my-config:/app/config --env-file .env harper
+```
+
+## Troubleshooting
+
+### Common Issues
 
 1. **GLIBC errors**: Ensure you're using a compatible base image (fixed in current Dockerfile).
 
@@ -108,7 +145,7 @@ docker run --rm -it -v ${pwd}/data:/app/data --env-file .env harper
 
 4. **API key errors**: Verify your .env file has correct keys.
 
-#### Debugging
+### Debugging
 
 ```bash
 # Check container logs
@@ -121,38 +158,31 @@ docker run --rm -it --env-file .env -e RUST_LOG=debug harper
 docker exec -it <container-id> /bin/bash
 ```
 
-### Advanced Usage
+## Advanced Usage
 
-#### Custom Configuration
-
-Mount custom config:
-```bash
-docker run --rm -it -v $(pwd)/my-config:/app/config --env-file .env harper
-```
-
-#### Multi-Stage Builds
+### Multi-Stage Builds
 
 The Dockerfile uses multi-stage builds for optimized image size.
 
-#### CI/CD
+### CI/CD
 
 Docker builds are automatically tested in GitHub Actions on pushes to main/develop branches.
 
-### Examples
+## Examples
 
-#### Basic Chat Session
+### Basic Chat Session
 ```bash
 docker run --rm -it --env-file .env harper
 # Select option 1 for new chat session
 ```
 
-#### List Sessions
+### List Sessions
 ```bash
 docker run --rm -it --env-file .env harper
 # Select option 2 to list sessions
 ```
 
-#### Export History
+### Export History
 ```bash
 docker run --rm -it --env-file .env harper
 # Select option 4 to export session history
@@ -165,3 +195,5 @@ For issues with Docker setup, check:
 - Environment variables in .env
 - Network connectivity for API calls
 - Sufficient disk space for builds
+
+For additional help, see our [Contributing Guide](../CONTRIBUTING.md) or [GitHub Issues](https://github.com/harpertoken/harper/issues).
