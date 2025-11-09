@@ -120,7 +120,6 @@ jobs:
           name: "Harper ${{ steps.get_tag.outputs.tag }}"
           body_path: RELEASE_NOTES.md
           prerelease: ${{ contains(steps.get_tag.outputs.tag, '-') }}
-          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
