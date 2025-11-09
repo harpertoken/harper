@@ -1,7 +1,6 @@
 # Harper Docker Guide
 
-[![Docker CI](https://github.com/harpertoken/harper/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/docker-ci.yml)
-[![Docker E2E](https://github.com/harpertoken/harper/actions/workflows/docker-e2e.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/docker-e2e.yml)
+
 
 This guide provides detailed instructions for running Harper using Docker, including setup, configuration, and troubleshooting.
 
@@ -166,7 +165,7 @@ The Dockerfile uses multi-stage builds for optimized image size.
 
 ### CI/CD
 
-Docker builds are automatically tested in GitHub Actions on pushes to main/develop branches.
+Docker builds are automatically tested and published in GitHub Actions on pushes to main/develop branches.
 
 ## Examples
 

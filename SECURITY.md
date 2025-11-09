@@ -1,7 +1,6 @@
 # Security Policy
 
 [![Security: Responsible Disclosure](https://img.shields.io/badge/security-responsible%20disclosure-blue)](https://github.com/harpertoken/harper/security/policy)
-[![Security: CodeQL](https://github.com/harpertoken/harper/actions/workflows/codeql.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/codeql.yml)
 
 Harper takes security seriously. We appreciate your help in keeping Harper and its users safe by following this security policy.
 
@@ -77,9 +76,8 @@ We follow responsible disclosure principles:
 
 Harper uses multiple automated security tools:
 
-- **CodeQL**: Static analysis for common vulnerabilities
-- **DevSkim**: Security-focused code review
 - **Cargo Audit**: Rust dependency vulnerability scanning
+- **Cargo Deny**: License and dependency policy checking
 - **Clippy**: Linting with security-focused rules
 
 ### Security Headers and Practices
