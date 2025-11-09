@@ -1,6 +1,5 @@
 # Harper
 
-[![End-to-End Tests](https://github.com/harpertoken/harper/actions/workflows/e2e.yml/badge.svg)](https://github.com/harpertoken/harper/actions/workflows/e2e.yml)
 [![Release](https://img.shields.io/github/v/release/harpertoken/harper)](https://github.com/harpertoken/harper/releases)
 [![Minimum Supported Rust Version](https://img.shields.io/badge/MSRV-1.82.0+-blue)](https://rust-lang.org)
 
