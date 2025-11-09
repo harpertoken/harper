@@ -3,7 +3,7 @@ use crossterm::event::{self, Event, KeyCode};
 use crossterm::execute;
 use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen,
+    disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, size,
 };
 use rusqlite;
 use std::io::{self, Write};
@@ -27,8 +27,10 @@ pub enum MenuItem {
 #[derive(Clone)]
 pub enum AppState {
     Menu(usize),
-    ListSessions(Vec<Session>, usize),
-    ViewSession(String, Vec<Message>, usize),
+    PromptWebSearch,
+    Chat(Vec<Message>, usize, String, bool, String),
+    ListSessions(Vec<Session>, usize, usize),
+    ViewSession(String, Vec<Message>, usize, usize),
 }
 
 impl MenuItem {
@@ -84,40 +86,65 @@ impl TuiApp {
     fn get_current_len(&self) -> usize {
         match &self.state {
             AppState::Menu(_) => self.menu_items.len(),
-            AppState::ListSessions(sessions, _) => sessions.len(),
-            AppState::ViewSession(_, history, _) => history.len(),
+            AppState::PromptWebSearch => 0,
+            AppState::Chat(history, _, _, _, _) => history.len(),
+            AppState::ListSessions(sessions, _, _) => sessions.len(),
+            AppState::ViewSession(_, history, _, _) => history.len(),
         }
     }
 
     fn get_current_selected(&self) -> usize {
         match &self.state {
             AppState::Menu(sel) => *sel,
-            AppState::ListSessions(_, sel) => *sel,
-            AppState::ViewSession(_, _, sel) => *sel,
+            AppState::PromptWebSearch => 0,
+            AppState::Chat(_, _, _, _, _) => 0,
+            AppState::ListSessions(_, sel, _) => *sel,
+            AppState::ViewSession(_, _, sel, _) => *sel,
         }
     }
 
     fn set_current_selected(&mut self, sel: usize) {
         match &mut self.state {
             AppState::Menu(s) => *s = sel,
-            AppState::ListSessions(_, s) => *s = sel,
-            AppState::ViewSession(_, _, s) => *s = sel,
+            AppState::PromptWebSearch => {},
+            AppState::Chat(_, _, _, _, _) => {},
+            AppState::ListSessions(_, s, _) => *s = sel,
+            AppState::ViewSession(_, _, s, _) => *s = sel,
         }
     }
 
     pub fn next(&mut self) {
-        let len = self.get_current_len();
-        if len > 0 {
-            let current = self.get_current_selected();
-            self.set_current_selected((current + 1) % len);
+        match &mut self.state {
+            AppState::Menu(_) | AppState::ListSessions(_, _, _) | AppState::ViewSession(_, _, _, _) => {
+                let len = self.get_current_len();
+                if len > 0 {
+                    let current = self.get_current_selected();
+                    self.set_current_selected((current + 1) % len);
+                    self.adjust_offset();
+                }
+            }
+            AppState::Chat(history, offset, _, _, _) => {
+                let visible = { let (_, height) = crossterm::terminal::size().unwrap_or((80, 24)); let start_y = 3; let bottom_y = height.saturating_sub(1); (bottom_y - start_y) as usize };
+                *offset = (*offset + 1).min(history.len().saturating_sub(visible));
+            }
+            _ => {}
         }
     }
 
     pub fn previous(&mut self) {
-        let len = self.get_current_len();
-        if len > 0 {
-            let current = self.get_current_selected();
-            self.set_current_selected(if current > 0 { current - 1 } else { len - 1 });
+        match &mut self.state {
+            AppState::Menu(_) | AppState::ListSessions(_, _, _) | AppState::ViewSession(_, _, _, _) => {
+                let len = self.get_current_len();
+                if len > 0 {
+                    let current = self.get_current_selected();
+                    self.set_current_selected(if current > 0 { current - 1 } else { len - 1 });
+                    self.adjust_offset();
+                }
+            }
+            AppState::Chat(_, offset, _, _, _) => {
+                *offset = offset.saturating_sub(1);
+            }
+            _ => {}
         }
     }
 
@@ -125,6 +152,46 @@ impl TuiApp {
         match &self.state {
             AppState::Menu(sel) => self.menu_items.get(*sel).cloned(),
             _ => None,
+        }
+    }
+
+    fn get_offset(&self) -> usize {
+        match &self.state {
+            AppState::Menu(_) => 0,
+            AppState::PromptWebSearch => 0,
+            AppState::Chat(_, o, _, _, _) => *o,
+            AppState::ListSessions(_, _, o) => *o,
+            AppState::ViewSession(_, _, _, o) => *o,
+        }
+    }
+
+    fn set_offset(&mut self, o: usize) {
+        match &mut self.state {
+            AppState::Menu(_) => {},
+            AppState::PromptWebSearch => {},
+            AppState::Chat(_, off, _, _, _) => *off = o,
+            AppState::ListSessions(_, _, off) => *off = o,
+            AppState::ViewSession(_, _, _, off) => *off = o,
+        }
+    }
+
+    fn get_visible_items(&self) -> usize {
+        let (_, height) = crossterm::terminal::size().unwrap_or((80, 24));
+        let start_y = 3;
+        let bottom_y = height.saturating_sub(1);
+        (bottom_y - start_y) as usize
+    }
+
+    fn adjust_offset(&mut self) {
+        let visible_items = self.get_visible_items();
+        let len = self.get_current_len();
+        if len == 0 { return; }
+        let sel = self.get_current_selected();
+        let offset = self.get_offset();
+        if sel < offset {
+            self.set_offset(sel);
+        } else if sel >= offset + visible_items {
+            self.set_offset(sel.saturating_sub(visible_items).saturating_add(1));
         }
     }
 }
@@ -154,18 +221,36 @@ pub async fn run_tui(
                     app.message = None;
                 }
                 match key.code {
-                    KeyCode::Char('q') | KeyCode::Char('5') => app.should_quit = true,
+                     KeyCode::Char('q') | KeyCode::Char('5') => {
+
+                         if let AppState::Chat(_, _, _, _, _) = &app.state {
+
+                             app.state = AppState::Menu(0);
+
+                         } else {
+
+                             app.should_quit = true;
+
+                         }
+
+                     }
                     KeyCode::Esc => {
                         match &app.state {
                             AppState::Menu(_) => app.should_quit = true,
-                            AppState::ListSessions(_, _) => {
+                            AppState::ListSessions(_, _, _) => {
                                 app.state = AppState::Menu(0);
                             }
-                            AppState::ViewSession(_, _, _) => {
+                            AppState::PromptWebSearch => {
+                                app.state = AppState::Menu(0);
+                            }
+                            AppState::Chat(_, _, _, _, _) => {
+                                app.state = AppState::Menu(0);
+                            }
+                            AppState::ViewSession(_, _, _, _) => {
                                 // Go back to list
                                 match session_service.list_sessions_data() {
                                     Ok(sessions) => {
-                                        app.state = AppState::ListSessions(sessions, 0);
+                                        app.state = AppState::ListSessions(sessions, 0, 0);
                                     }
                                     Err(e) => {
                                         app.message = Some(format!("Error: {}", e));
@@ -183,27 +268,13 @@ pub async fn run_tui(
                                 if let Some(selected) = app.select() {
                                     match selected {
                                         MenuItem::StartChat => {
-                                            // Temporarily disable raw mode for chat
-                                            disable_raw_mode().ok();
-                                            execute!(stdout, LeaveAlternateScreen, Show).ok();
-                                            let mut chat_service = ChatService::new(
-                                                conn,
-                                                api_config,
-                                                Some(&mut api_cache),
-                                            );
-                                            if let Err(e) = chat_service.start_session().await {
-                                                app.message =
-                                                    Some(format!("Error in chat session: {}", e));
-                                            }
-                                            // Re-enable for TUI
-                                            enable_raw_mode().ok();
-                                            execute!(stdout, EnterAlternateScreen, Hide).ok();
-                                        }
-                                        MenuItem::ListSessions => {
-                                            match session_service.list_sessions_data() {
-                                                Ok(sessions) => {
-                                                    app.state = AppState::ListSessions(sessions, 0);
-                                                }
+                                             app.state = AppState::PromptWebSearch;
+                                         }
+                                         MenuItem::ListSessions => {
+                                             match session_service.list_sessions_data() {
+                                                 Ok(sessions) => {
+                                                     app.state = AppState::ListSessions(sessions, 0, 0);
+                                                 }
                                                 Err(e) => {
                                                     app.message = Some(format!(
                                                         "Error listing sessions: {}",
@@ -213,10 +284,10 @@ pub async fn run_tui(
                                             }
                                         }
                                         MenuItem::ViewSession => {
-                                            match session_service.list_sessions_data() {
-                                                Ok(sessions) => {
-                                                    app.state = AppState::ListSessions(sessions, 0);
-                                                }
+                                             match session_service.list_sessions_data() {
+                                                 Ok(sessions) => {
+                                                     app.state = AppState::ListSessions(sessions, 0, 0);
+                                                 }
                                                 Err(e) => {
                                                     app.message = Some(format!(
                                                         "Error listing sessions: {}",
@@ -239,16 +310,17 @@ pub async fn run_tui(
                                     }
                                 }
                             }
-                            AppState::ListSessions(sessions, sel) => {
+                            AppState::ListSessions(sessions, sel, _) => {
                                 if let Some(session) = sessions.get(*sel) {
                                     match session_service.view_session_data(&session.id) {
-                                        Ok(history) => {
-                                            app.state = AppState::ViewSession(
-                                                session.id.clone(),
-                                                history,
-                                                0,
-                                            );
-                                        }
+                                         Ok(history) => {
+                                             app.state = AppState::ViewSession(
+                                                 session.id.clone(),
+                                                 history,
+                                                 0,
+                                                 0,
+                                             );
+                                         }
                                         Err(e) => {
                                             app.message =
                                                 Some(format!("Error viewing session: {}", e));
@@ -256,13 +328,70 @@ pub async fn run_tui(
                                     }
                                 }
                             }
-                            AppState::ViewSession(_, _, _) => {
-                                // Maybe scroll or something, but for now, do nothing
-                            }
-                        }
-                    }
-                    _ => {}
-                }
+                             AppState::PromptWebSearch => {}
+                             AppState::Chat(_, _, _, _, _) => {}
+                             AppState::ViewSession(_, _, _, _) => {
+                                 // Maybe scroll or something, but for now, do nothing
+                             }
+                          }
+                     }
+
+                      _ => {}
+                  }
+                  if let AppState::PromptWebSearch = &app.state {
+                      match key.code {
+                          KeyCode::Char('y') | KeyCode::Char('Y') => {
+                              let chat_service = ChatService::new(
+                                  conn,
+                                  api_config,
+                                  Some(&mut api_cache),
+                              );
+                              match chat_service.create_session(true) {
+                                  Ok((history, session_id)) => {
+                                      app.state = AppState::Chat(history, 0, String::new(), true, session_id);
+                                  }
+                                  Err(e) => {
+                                      app.message = Some(format!("Error creating chat session: {}", e));
+                                      app.state = AppState::Menu(0);
+                                  }
+                              }
+                          }
+                          KeyCode::Char('n') | KeyCode::Char('N') => {
+                              let chat_service = ChatService::new(
+                                  conn,
+                                  api_config,
+                                  Some(&mut api_cache),
+                              );
+                              match chat_service.create_session(false) {
+                                  Ok((history, session_id)) => {
+                                      app.state = AppState::Chat(history, 0, String::new(), false, session_id);
+                                  }
+                                  Err(e) => {
+                                      app.message = Some(format!("Error creating chat session: {}", e));
+                                      app.state = AppState::Menu(0);
+                                  }
+                              }
+                          }
+                          _ => {}
+                      }
+                  }
+                  if let AppState::Chat(history, _, input, web_search, session_id) = &mut app.state {
+                      match key.code {
+                          KeyCode::Char(c) => input.push(c),
+                          KeyCode::Backspace => { input.pop(); }
+                          KeyCode::Enter => {
+                              if !input.is_empty() {
+                                  let input_clone = input.clone();
+                                  *input = String::new();
+                                  let mut chat_service = ChatService::new(conn, api_config, Some(&mut api_cache));
+                                  if let Err(e) = chat_service.send_message(&input_clone, history, *web_search, session_id).await {
+                                      app.message = Some(format!("Error: {}", e));
+                                  }
+                              }
+                          }
+                          _ => {}
+                      }
+                  }
             }
         }
 
@@ -291,6 +420,9 @@ fn draw(stdout: &mut impl Write, app: &TuiApp) -> Result<(), HarperError> {
     )?;
 
     let start_y = 3;
+    let (_width, height) = size().unwrap_or((80, 24));
+    let bottom_y = height.saturating_sub(1);
+    let visible_items = (bottom_y - start_y) as usize;
 
     match &app.state {
         AppState::Menu(sel) => {
@@ -309,9 +441,10 @@ fn draw(stdout: &mut impl Write, app: &TuiApp) -> Result<(), HarperError> {
                 execute!(stdout, MoveTo(0, start_y + i as u16 + 1))?;
             }
         }
-        AppState::ListSessions(sessions, sel) => {
+        AppState::ListSessions(sessions, sel, offset) => {
             execute!(stdout, MoveTo(0, 2), Print("Sessions:"), MoveTo(0, start_y))?;
-            for (i, session) in sessions.iter().enumerate() {
+            for (i, session) in sessions.iter().enumerate().skip(*offset).take(visible_items) {
+                let display_i = (i - *offset) as u16;
                 let text = format!("{} ({})", session.id, session.created_at);
                 if i == *sel {
                     execute!(
@@ -323,17 +456,18 @@ fn draw(stdout: &mut impl Write, app: &TuiApp) -> Result<(), HarperError> {
                 } else {
                     execute!(stdout, Print(format!("   {}", text)))?;
                 }
-                execute!(stdout, MoveTo(0, start_y + i as u16 + 1))?;
+                execute!(stdout, MoveTo(0, start_y + display_i + 1))?;
             }
         }
-        AppState::ViewSession(session_id, history, sel) => {
+        AppState::ViewSession(session_id, history, sel, offset) => {
             execute!(
                 stdout,
                 MoveTo(0, 2),
                 Print(format!("Session: {}", session_id)),
                 MoveTo(0, start_y)
             )?;
-            for (i, msg) in history.iter().enumerate() {
+            for (i, msg) in history.iter().enumerate().skip(*offset).take(visible_items) {
+                let display_i = (i - *offset) as u16;
                 let color = match msg.role.as_str() {
                     "user" => Color::Blue,
                     "assistant" => Color::Green,
@@ -356,13 +490,39 @@ fn draw(stdout: &mut impl Write, app: &TuiApp) -> Result<(), HarperError> {
                         ResetColor
                     )?;
                 }
-                execute!(stdout, MoveTo(0, start_y + i as u16 + 1))?;
+                execute!(stdout, MoveTo(0, start_y + display_i + 1))?;
             }
+        }
+        AppState::PromptWebSearch => {
+            execute!(stdout, MoveTo(0, 2), Print("Enable web search for this session? (y/n)"))?;
+        }
+        AppState::Chat(history, offset, input, _, _) => {
+            execute!(stdout, MoveTo(0, 2), Print("Chat:"), MoveTo(0, start_y))?;
+            let mut display_i: u16 = 0;
+            for msg in history.iter().skip(*offset) {
+                if msg.role == "system" { continue; }
+                if display_i as usize >= visible_items { break; }
+                let color = match msg.role.as_str() {
+                    "user" => Color::Blue,
+                    "assistant" => Color::Green,
+                    _ => Color::White,
+                };
+                let text = format!("{}: {}", msg.role, msg.content);
+                execute!(
+                    stdout,
+                    SetForegroundColor(color),
+                    Print(text),
+                    ResetColor
+                )?;
+                execute!(stdout, MoveTo(0, start_y + display_i + 1))?;
+                display_i += 1;
+            }
+            let input_y = bottom_y - 1;
+            execute!(stdout, MoveTo(0, input_y), Print(format!("You: {}", input)))?;
         }
     }
 
     // Help or message
-    let bottom_y = 20; // Assume some height
     execute!(stdout, MoveTo(0, bottom_y))?;
     if let Some(ref message) = app.message {
         execute!(
@@ -374,10 +534,12 @@ fn draw(stdout: &mut impl Write, app: &TuiApp) -> Result<(), HarperError> {
     } else {
         let help = match &app.state {
             AppState::Menu(_) => "Use ↑/↓ or j/k to navigate, Enter to select, q/5 to quit",
-            AppState::ListSessions(_, _) => {
+            AppState::PromptWebSearch => "Press y or n to enable/disable web search",
+            AppState::Chat(_, _, _, _, _) => "Type message, Enter to send, ↑/↓ to scroll, q to quit",
+            AppState::ListSessions(_, _, _) => {
                 "Use ↑/↓ or j/k to navigate, Enter to view, Esc to back"
             }
-            AppState::ViewSession(_, _, _) => "Use ↑/↓ or j/k to scroll, Esc to back",
+            AppState::ViewSession(_, _, _, _) => "Use ↑/↓ or j/k to scroll, Esc to back",
         };
         execute!(
             stdout,

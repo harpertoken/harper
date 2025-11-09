@@ -113,13 +113,17 @@ async fn main() {
 
             match menu_choice.trim() {
                 crate::core::constants::menu::START_CHAT => {
+                    println!("Enable web search for this session? (y/n): ");
+                    let mut choice = String::new();
+                    let _ = std::io::stdin().read_line(&mut choice);
+                    let web_search = choice.trim().eq_ignore_ascii_case("y");
                     let mut chat_service = crate::core::chat_service::ChatService::new(
                         conn,
                         api_config,
                         // mcp_client.as_ref(), // Temporarily disabled
                         Some(&mut api_cache),
                     );
-                    handle_menu_error!(chat_service.start_session().await, "Error in chat session");
+                    handle_menu_error!(chat_service.start_session(web_search).await, "Error in chat session");
                 }
                 crate::core::constants::menu::LIST_SESSIONS => {
                     handle_menu_error!(session_service.list_sessions(), "Error listing sessions");
