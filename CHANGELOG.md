@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [0.1.8-beta](#018-beta---2025-11-09)
 - [0.1.7](#017---2025-11-09)
 - [0.1.6](#016---2025-11-08)
 - [0.1.5](#015---2025-09-20)
@@ -30,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-language support
 - Advanced session analytics
 - Cloud deployment options
+
+---
+
+## [0.1.8-beta] - 2025-11-09
+
+### Fixed
+- **Release Workflow**: Handle immutable releases by deleting and recreating them to allow asset overwrites
 
 ---
 

@@ -171,7 +171,7 @@ The test suite includes:
 <summary>Install from Release</summary>
 
 ```bash
-cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.6
+cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.8-beta
 ```
 </details>
 
