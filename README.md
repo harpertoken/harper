@@ -179,12 +179,11 @@ cargo install --git https://github.com/harpertoken/harper.git --tag v0.1.8-beta.
 
 Harper uses GitHub Actions for automated testing and deployment:
 
-- **Docker CI**: Builds and tests Docker images
-- **Docker E2E**: Runs end-to-end tests in containers
-- **Commitlint**: Validates conventional commit messages
-- **PR Title Check**: Enforces conventional PR titles
+- **CI**: Comprehensive testing, linting, and security audits
+- **Docker**: Builds, tests, and publishes Docker images
+- **Title Checks**: Validates commit messages and PR titles
 - **Release Drafter**: Generates changelogs and draft releases
-- **Security**: CodeQL, DevSkim, and dependency audits
+- **Release**: Automated cross-platform binary builds and publishing
 
 Workflows run on pushes and pull requests. See `.github/workflows/` for details.
 </details>
