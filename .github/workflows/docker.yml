@@ -1,4 +1,4 @@
-name: Docker CI
+name: Docker
 
 on:
   push:
@@ -23,7 +23,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  docker-build:
+  build:
     name: Build Docker Image
     runs-on: ubuntu-latest
 
@@ -49,11 +49,32 @@ jobs:
         docker run --rm harper:test timeout 10s ./harper || true
         # Basic test: ensure container starts without immediate crash
 
-  docker-publish:
+  e2e:
+    name: Run Docker E2E Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and test Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: docker/Dockerfile
+        target: tester
+        push: false
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  publish:
     name: Publish Docker Image
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: docker-build
+    needs: [build, e2e]
 
     steps:
     - name: Checkout code
