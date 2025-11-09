@@ -57,6 +57,9 @@ jobs:
             } else {
               tag = context.ref.replace('refs/tags/', '');
             }
+            if (!tag.startsWith('v')) {
+              core.setFailed(`Invalid tag: ${tag}. This workflow only runs on version tags.`);
+            }
             core.setOutput('tag', tag);
 
       - name: Check if release exists
@@ -86,20 +89,19 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.get_tag.outputs.tag }}
+          RELEASE_ID: ${{ steps.check_release.outputs.release_id }}
         with:
           script: |
-            const tag = '${{ steps.get_tag.outputs.tag }}';
-            const release_id = '${{ steps.check_release.outputs.release_id }}';
             try {
-              // Try deleting if release is immutable (non-draft)
               await github.rest.repos.deleteRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                release_id: release_id
+                release_id: process.env.RELEASE_ID
               });
-              core.info(`✅ Deleted existing release for tag ${tag}`);
+              core.info(`✅ Deleted existing release for tag ${process.env.TAG}`);
             } catch (err) {
-              core.warning(`⚠️ Could not delete existing release for ${tag}: ${err.message}`);
+              core.warning(`⚠️ Could not delete existing release for ${process.env.TAG}: ${err.message}`);
             }
 
       - name: Generate release notes (changes + contributors)
