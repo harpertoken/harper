@@ -46,7 +46,7 @@ jobs:
       env:
         RUST_LOG: debug
     - name: Run integration tests
-      run: cargo test --test '*' --all-features --workspace --verbose --test-threads=1
+      run: cargo test --all-features --workspace --verbose -- --test-threads=1
       env:
         RUST_LOG: debug
     - name: Build in release mode
