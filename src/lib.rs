@@ -1,29 +1,33 @@
+pub mod agent;
 pub mod core;
-pub mod providers;
-pub mod storage;
-pub mod ui;
-pub mod utils;
+pub mod interfaces;
+pub mod memory;
+pub mod runtime;
+pub mod tools;
 
-// Re-export everything from core
+// Re-export core types
 pub use core::*;
 
-// Re-export providers
-pub use providers::*;
+// Re-export agent types
+pub use agent::chat::*;
 
-// Re-export storage
-pub use storage::*;
+// Re-export tools
+pub use tools::*;
 
-// Re-export storage functions directly for easier access
-pub use storage::{delete_messages, delete_session, list_sessions};
+// Re-export memory functions
+pub use memory::storage::*;
 
-// Re-export utils
-pub use utils::*;
+// Re-export runtime
+pub use runtime::*;
+
+// Re-export interfaces
+pub use interfaces::*;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     // Use full paths in tests to avoid conflicts
-    use crate::core::chat_service::ChatService;
+    use crate::agent::chat::ChatService;
     use crate::core::error::HarperError;
 
     #[test]
@@ -119,7 +123,7 @@ mod tests {
         // Test without web search
         let prompt = chat_service.build_system_prompt(false);
         assert!(prompt.contains("gpt-4"));
-        assert!(!prompt.contains("RUN_COMMAND"));
+        assert!(prompt.contains("RUN_COMMAND")); // Tools are always available now
         assert!(!prompt.contains("SEARCH:"));
 
         // Test with web search

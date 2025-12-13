@@ -1,23 +1,20 @@
-// use mcp_client::{transport::SseTransport, McpClient, McpClientTrait, McpService, Transport}; // Temporarily disabled
+// use turul_mcp_client::client::Client; // Temporarily disabled
 use rusqlite::Connection;
 use std::env;
 
-mod config;
+mod agent;
 mod core;
-mod providers;
-mod storage;
-mod ui;
-mod utils;
+mod interfaces;
+mod memory;
+mod runtime;
+mod tools;
 
 use crate::core::ApiConfig;
 use colored::Colorize;
+use interfaces::ui::tui::run_tui;
 use std::io::Write;
-use ui::tui::run_tui;
 
-use config::HarperConfig;
-
-use providers::*;
-use storage::*;
+use runtime::config::HarperConfig;
 
 fn exit_on_error<T, E: std::fmt::Display>(result: Result<T, E>, message: &str) -> T {
     result.unwrap_or_else(|e| {
@@ -51,6 +48,21 @@ async fn main() {
     }
     let config = exit_on_error(HarperConfig::new(), "Failed to load configuration");
 
+    let mut api_key = config.api.api_key.clone();
+    if config.api.provider == "Gemini" {
+        if let Ok(env_key) = std::env::var("GEMINI_API_KEY") {
+            api_key = env_key;
+        }
+    } else if config.api.provider == "OpenAI" {
+        if let Ok(env_key) = std::env::var("OPENAI_API_KEY") {
+            api_key = env_key;
+        }
+    } else if config.api.provider == "Sambanova" {
+        if let Ok(env_key) = std::env::var("SAMBASTUDIO_API_KEY") {
+            api_key = env_key;
+        }
+    }
+
     let api_config = crate::core::ApiConfig {
         provider: config
             .api
@@ -60,7 +72,7 @@ async fn main() {
                 e
             })
             .unwrap(),
-        api_key: config.api.api_key.clone(),
+        api_key,
         base_url: config.api.base_url.clone(),
         model_name: config.api.model_name.clone(),
     };
@@ -77,7 +89,12 @@ async fn main() {
         Connection::open(&config.database.path),
         "Failed to open database",
     );
-    exit_on_error(init_db(&conn), "Failed to initialize database");
+    exit_on_error(
+        crate::memory::storage::init_db(&conn),
+        "Failed to initialize database",
+    );
+
+    let prompt_id = config.prompts.system_prompt_id.clone();
 
     // MCP client initialization
     // Note: MCP functionality is currently disabled due to dependency conflicts
@@ -86,10 +103,9 @@ async fn main() {
     // security analysis accuracy. MCP can be re-enabled with a compatible client
     // version in the future.
     // MCP client temporarily disabled due to dependency conflicts
-    // This resolves CodeQL duplicate dependency warnings and improves security analysis
     let _mcp_client: Option<()> = None;
 
-    async fn text_menu(conn: &Connection, api_config: &ApiConfig) {
+    async fn text_menu(conn: &Connection, api_config: &ApiConfig, prompt_id: Option<String>) {
         loop {
             use crate::core::constants::messages;
 
@@ -108,7 +124,7 @@ async fn main() {
                 "Failed to read input",
             );
 
-            let session_service = crate::core::session_service::SessionService::new(conn);
+            let session_service = crate::memory::session_service::SessionService::new(conn);
             let mut api_cache = crate::core::cache::new_api_cache();
 
             match menu_choice.trim() {
@@ -117,11 +133,12 @@ async fn main() {
                     let mut choice = String::new();
                     let _ = std::io::stdin().read_line(&mut choice);
                     let web_search = choice.trim().eq_ignore_ascii_case("y");
-                    let mut chat_service = crate::core::chat_service::ChatService::new(
+                    let mut chat_service = crate::agent::chat::ChatService::new(
                         conn,
                         api_config,
                         // mcp_client.as_ref(), // Temporarily disabled
                         Some(&mut api_cache),
+                        prompt_id.clone(),
                     );
                     handle_menu_error!(
                         chat_service.start_session(web_search).await,
@@ -148,7 +165,7 @@ async fn main() {
 
     // Run TUI or text menu based on terminal
     if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-        if let Err(e) = run_tui(&conn, &api_config).await {
+        if let Err(e) = run_tui(&conn, &api_config, prompt_id).await {
             eprintln!("TUI error: {}", e);
         } else {
             use crate::core::constants::messages;
@@ -156,6 +173,6 @@ async fn main() {
         }
     } else {
         // Fallback to text menu for non-interactive environments
-        text_menu(&conn, &api_config).await;
+        text_menu(&conn, &api_config, prompt_id).await;
     }
 }

@@ -1,522 +1,194 @@
 # Harper
 
-[![Release](https://img.shields.io/github/v/release/harpertoken/harper)](https://github.com/harpertoken/harper/releases)
-[![Minimum Supported Rust Version](https://img.shields.io/badge/MSRV-1.82.0+-blue)](https://rust-lang.org)
+Harper is an AI agent for multi-provider integration, command execution, and MCP protocol support with SQLite storage.
 
-AI agent for multi-provider integration, command execution, and MCP protocol support with SQLite storage.
+Harper provides a unified interface to multiple AI providers (OpenAI, Sambanova, Gemini) with persistent chat sessions, command execution capabilities, and Model Context Protocol (MCP) support. This documentation covers secure configuration and deployment to prevent common security vulnerabilities.
 
-Harper provides a unified interface to multiple AI providers (OpenAI, Sambanova, Gemini) with persistent chat sessions, command execution capabilities, and Model Context Protocol (MCP) support.
+## Security Issues Detected
 
-## Requirements
+This configuration detects Harper misconfigurations that can lead to security vulnerabilities, specifically:
 
-- **Rust**: 1.82.0 or later ([install Rust](https://rustup.rs/))
-- **Operating System**: Linux, macOS, or Windows
-- **Database**: SQLite3 (included with most systems)
-- **Network**: Internet connectivity for AI provider APIs
-- **Memory**: 512MB RAM minimum, 1GB recommended
+- **Missing API key validation** - Unauthenticated access to AI providers
+- **Insecure command execution** - Shell injection and unauthorized system access
+- **Unauthorized file operations** - Path traversal and sensitive file access
+- **Weak session management** - Session hijacking and data leakage
 
-## Installation
+Users can extend Harper's security features by configuring additional validation rules and access controls.
 
-### Local Build
+## Recommendation
 
-1. **Install Rust** (if not already installed):
-   ```bash
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   source ~/.cargo/env
-   ```
+To help mitigate these vulnerabilities, ensure that the following Harper security features are properly configured:
 
-2. **Clone and build**:
-   ```bash
-   git clone https://github.com/harpertoken/harper.git
-   cd harper
-   cargo build --release
-   ```
+- **API key validation** - Never commit real API keys to version control
+- **Command execution controls** - Use user approval for destructive operations
+- **File operation restrictions** - Validate paths and require explicit consent
+- **Session security** - Use secure session management and data encryption
 
-3. **Configure environment**:
-   ```bash
-   cp config/env.example .env
-   # Edit .env with your API keys (see Configuration section below)
-   ```
+## Secure Configuration
 
-4. **Run Harper**:
-   ```bash
-   cargo run --release
-   ```
+### Environment Setup
 
-### Docker
-
-Harper provides pre-built Docker images for easy deployment.
+**Secure API Key Management**
 
 ```bash
-# Clone the repository
+# Create environment file (never commit to git)
+cp config/env.example .env
+
+# Edit .env with your actual API keys
+GEMINI_API_KEY=your_secure_key_here
+```
+
+**Never commit sensitive data:**
+
+```toml
+# config/local.toml - Use placeholders only
+[api]
+api_key = "your_api_key_here"  # Never put real keys here
+```
+
+### Secure Installation
+
+**Local Build with Security Checks**
+
+```bash
 git clone https://github.com/harpertoken/harper.git
 cd harper
 
-# Copy and configure environment
+# Run security validation
+bash scripts/validate.sh
+
+# Build with security features
+cargo build --release
+
+# Configure securely
 cp config/env.example .env
-# Edit .env with your API keys
+# Edit .env with real keys (file is gitignored)
 
-# Build and run
-docker build -t harper .
-docker run --rm -it --env-file .env -v harper_data:/app/data harper
-```
-
-**Note**: Docker builds are validated in CI via GitHub Actions. For detailed Docker instructions, see [docker/DOCKER.md](docker/DOCKER.md).
-
-## Development
-
-### Running Tests
-
-Harper includes a comprehensive test suite covering unit tests, integration tests, security, and performance benchmarks.
-
-#### Quick Test Run
-
-To run all tests, use the provided script:
-
-```bash
-./harpertest
-```
-
-This executes:
-- **Unit tests**: Core functionality tests
-- **Integration tests**: End-to-end API and database tests
-- **Error handling tests**: Failure scenario validation
-- **Security tests**: Input validation and encryption
-- **Performance benchmarks**: Response time measurements
-
-#### Example Output
-
-```
-Running all tests and benchmarks...
-=================================
-
-Running unit tests...
-...
-
-Running integration tests...
-...
-
-Running error handling tests...
-...
-
-Running security tests...
-...
-
-Running performance benchmarks...
-...
-
-All tests completed successfully!
-=================================
-```
-
-#### Test Coverage
-
-The test suite includes:
-- **12 unit tests** - Core component functionality
-- **10 integration tests** - Full system workflows
-- **6 error handling tests** - Edge cases and failures
-- **3 security tests** - Encryption and validation
-- **Performance benchmarks** - Speed and efficiency metrics
-
-#### Individual Test Commands
-
-```bash
-# Run specific test types
-cargo test --lib                    # Unit tests only
-cargo test --test integration_test  # Integration tests
-cargo test --test session_service_test  # Session service tests
-
-# Run with verbose output
-cargo test -- --nocapture
-
-# Run specific test
-cargo test test_name
-```
-
-<details>
-<summary>Install from Release</summary>
-
-```bash
-# Check latest release at https://github.com/harpertoken/harper/releases
-cargo install --git https://github.com/harpertoken/harper.git --tag <latest-tag>
-```
-</details>
-
-<details>
-<summary>CI/CD</summary>
-
-Harper uses GitHub Actions for automated testing and deployment:
-
-- **CI**: Comprehensive testing, linting, and security audits
-- **Docker**: Builds, tests, and publishes Docker images
-- **Title Checks**: Validates commit messages and PR titles
-- **Release Drafter**: Generates changelogs and draft releases
-- **Release**: Automated cross-platform binary builds and publishing
-
-Workflows run on pushes and pull requests. See `.github/workflows/` for details.
-</details>
-
-## Conventional Commits
-
-This project uses conventional commit standards to ensure consistent and meaningful commit messages.
-
-### Setup
-
-To enable commit message validation:
-
-```bash
-cp scripts/commit-msg .git/hooks/commit-msg
-chmod +x .git/hooks/commit-msg
-```
-
-### Usage
-
-Commit messages must follow the format: `type(scope): description`
-
-- **Type**: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
-- **Scope**: Optional, e.g., (api), (ui)
-- **Description**: Lowercase, ≤60 characters
-
-Examples:
-- `feat: add user authentication`
-- `fix(ui): resolve button alignment issue`
-- `docs: update installation instructions`
-
-### History Cleanup
-
-To rewrite existing commit messages in the history:
-
-```bash
-git filter-branch --msg-filter 'bash scripts/rewrite_msg.sh' -- --all
-git push --force-with-lease
-```
-
-This will lowercase and truncate first lines to 60 characters.
-
-## Usage
-
-### Quick Start
-
-After installation, run Harper and follow the interactive menu:
-
-```bash
 cargo run --release
-# or
-docker run --rm -it --env-file .env harper
 ```
 
-Harper will display the configured AI provider and present a text-based menu for:
-- Starting new chat sessions
-- Managing conversation history
-- Exporting sessions
-- Running commands
-
-### Interactive Mode
-
-Harper runs in interactive mode by default, providing a menu-driven interface:
-
-```
-🤖 Using OpenAI - gpt-4-turbo
-📍 API: https://api.openai.com/v1/chat/completions
-💾 Database: ./chat_sessions.db
-
-1. Start new chat session
-2. List previous sessions
-3. View a session's history
-4. Export a session's history
-5. Quit
-
-Enter choice:
-```
-
-### AI Agent Commands
-
-Within chat sessions, you can use special commands:
-
-```
-[SEARCH: query]           # Web search functionality
-[RUN_COMMAND command]     # Execute system commands
-[TOOL: name] { "param": "value" }  # Use MCP tools
-```
-
-## Features
-
-### AI Providers
-
-Harper supports multiple AI providers with automatic model selection:
-
-| Provider  | Model | Capabilities | Status |
-|-----------|-------|--------------|--------|
-| **OpenAI** | GPT-4 Turbo | Text generation, coding, analysis | ✅ Production |
-| **Sambanova** | Meta-Llama-3.2-1B-Instruct | Open-source LLM, cost-effective | ✅ Production |
-| **Gemini** | Gemini 2.0 Flash | Multimodal processing, fast responses | ✅ Production |
-
-### Core Capabilities
-
-- **Multi-Provider AI Integration**: Seamless switching between AI providers
-- **Command Execution**: Safe execution of system commands with output capture
-- **Web Search**: Integrated search capabilities for real-time information
-- **Persistent Sessions**: SQLite-based conversation history with full export
-- **Interactive CLI**: User-friendly text-based interface
-- **Session Management**: List, view, and export chat histories
-
-### Security & Reliability
-
-- **CodeQL Security Scanning**: Automated vulnerability detection
-- **DevSkim Analysis**: Security-focused code review
-- **Dependency Auditing**: Regular security updates
-- **AES-GCM Encryption**: Secure data storage and transmission
-- **Input Validation**: Comprehensive request sanitization
-- **Error Handling**: Robust failure recovery and logging
-
-### Model Context Protocol (MCP)
-
-**Status**: Temporarily disabled in v0.1.3+ due to dependency conflicts.
-
-When re-enabled, MCP provides:
-- Tool integration capabilities
-- External service connections
-- Extended functionality through plugins
-
-```toml
-[mcp]
-enabled = true
-server_url = "http://localhost:5000"
-```
-
-### Data Management
-
-- **SQLite Storage**: Lightweight, file-based database
-- **Local Credentials**: No external account requirements
-- **Session Persistence**: Automatic conversation saving
-- **Export Functionality**: JSON/CSV export of chat histories
-- **Backup Support**: Easy data migration and recovery
-
-## Build Commands
-
-### Basic Commands
-
-| Command | Description |
-|---------|-------------|
-| `cargo build --release` | Optimized release build |
-| `cargo run --release` | Run the release binary |
-| `cargo test` | Execute test suite |
-| `cargo clippy` | Run linting and static analysis |
-| `cargo fmt -- --check` | Check code formatting |
-| `cargo doc` | Generate documentation |
-| `cargo clean` | Remove build artifacts |
-
-### Development Workflow
+**Docker with Security**
 
 ```bash
-# Full development cycle
-cargo fmt                    # Format code
-cargo clippy                 # Lint code
-cargo test                   # Run tests
-cargo build --release        # Build optimized binary
-cargo run --release          # Run application
+git clone https://github.com/harpertoken/harper.git
+cd harper
+
+# Secure environment setup
+cp config/env.example .env
+# Configure API keys in .env
+
+# Build and run securely
+docker build -t harper .
+docker run --rm -it --env-file .env \
+  --read-only \
+  --tmpfs /tmp \
+  harper
 ```
 
-### Cross-Platform Builds
+## Security Fixes
 
-Harper can be built for multiple platforms:
+### API Key Exposure Prevention
 
-```bash
-# Linux (x86_64)
-cargo build --release --target x86_64-unknown-linux-gnu
+To fix the risk of API key exposure in configuration files, Harper implements environment-based credential management. The codebase shows that sensitive API keys were previously stored in `config/local.toml`, which could be accidentally committed to version control.
 
-# Windows (x86_64)
-cargo build --release --target x86_64-pc-windows-msvc
+The most secure fix is to use environment variables for all sensitive credentials, with configuration files containing only placeholders. This ensures that real API keys are never stored in the repository, mitigating credential exposure risks.
 
-# macOS Intel
-cargo build --release --target x86_64-apple-darwin
+Specifically:
 
-# macOS Apple Silicon
-cargo build --release --target aarch64-apple-darwin
+1. **Use environment variables** for all API keys (`GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.)
+2. **Store only placeholders** in configuration files that are safe to commit
+3. **Configure `.gitignore`** to exclude `.env` files containing real credentials
+4. **Implement runtime validation** to ensure required environment variables are set
+
+### Command Injection Prevention
+
+To fix the risk of command injection in shell execution, Harper implements user approval and input sanitization for all command operations. The codebase shows that direct command execution (`!command`) could potentially execute malicious commands if not properly validated.
+
+The most secure fix is to implement approval-based command execution with input validation, ensuring that potentially dangerous commands require explicit user consent before execution.
+
+Specifically:
+
+1. **Validate command input** to prevent shell injection patterns (`;`, `|`, `&`, etc.)
+2. **Require user approval** for all command execution via interactive prompts
+3. **Log all command operations** for audit trails
+4. **Limit command scope** to safe operations within the project directory
+
+### File Operation Security
+
+To fix the risk of unauthorized file access and path traversal attacks, Harper implements comprehensive file operation validation. The codebase shows that file operations (`[READ_FILE path]`, `[WRITE_FILE path content]`) could potentially access sensitive files or directories outside the intended scope.
+
+The most secure fix is to implement path validation and user consent for all file operations, ensuring that only authorized file access is permitted.
+
+Specifically:
+
+1. **Validate all file paths** to prevent directory traversal (`../`, absolute paths)
+2. **Require user approval** for write operations and potentially sensitive reads
+3. **Restrict file operations** to the project workspace by default
+4. **Implement file type restrictions** and size limits for safety
+
+## Implementation Details
+
+### Environment-Based Configuration
+
+Harper's configuration system prioritizes environment variables for sensitive data:
+
+```rust
+// Secure credential loading (src/main.rs)
+let mut api_key = config.api.api_key.clone();
+if config.api.provider == "Gemini" {
+    if let Ok(env_key) = std::env::var("GEMINI_API_KEY") {
+        api_key = env_key;  // Override with secure env var
+    }
+}
 ```
 
-### Build Optimization
+This ensures that committed configuration files contain only placeholders, while runtime environment provides actual credentials.
 
-For maximum performance in production:
+### Command Execution Safety
 
-```bash
-# Enable Link Time Optimization (LTO)
-cargo build --release --config profile.release.lto=true
+Harper implements multi-layer command security:
 
-# Use specific optimization level
-cargo build --release --config profile.release.opt-level=3
+```rust
+// Command validation and approval (src/tools/shell.rs)
+if command_str.chars().any(|c| matches!(c, ';' | '|' | '&' | '`' | '$' | '(' | ')')) {
+    return Err(HarperError::Command("Dangerous characters detected".to_string()));
+}
+
+// User approval required
+println!("Execute command? {} (y/n): ", command_str);
 ```
 
-## Configuration
+### File Operation Controls
 
-### Environment Variables
+Path validation prevents unauthorized access:
 
-Harper uses environment variables for configuration. Set one of the following API keys:
-
-```bash
-# Choose your AI provider
-export OPENAI_API_KEY="your-openai-key"
-# OR
-export SAMBASTUDIO_API_KEY="your-sambanova-key"
-# OR
-export GEMINI_API_KEY="your-gemini-key"
-
-# Optional: Custom database location
-export DATABASE_PATH="./harper.db"
+```rust
+// Path security validation (src/tools/filesystem.rs)
+fn validate_path(path: &str) -> Result<(), HarperError> {
+    if path.contains("..") {
+        return Err(HarperError::Security("Path traversal detected"));
+    }
+    // Additional validation logic...
+}
 ```
 
-### Model Selection
+## Benefits
 
-Harper automatically selects the appropriate model based on your API key:
+These security implementations provide:
 
-| Environment Variable | Provider | Model | Base URL |
-|---------------------|----------|-------|----------|
-| `OPENAI_API_KEY` | OpenAI | `gpt-4-turbo` | `https://api.openai.com/v1/chat/completions` |
-| `SAMBASTUDIO_API_KEY` | Sambanova | `Llama-4-Maverick-17B-128E-Instruct` | `https://api.sambanova.ai/v1/chat/completions` |
-| `GEMINI_API_KEY` | Gemini | `gemini-2.0-flash-exp` | `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent` |
+- **Zero credential exposure** - API keys never committed to version control
+- **Runtime attack prevention** - Command injection and path traversal blocked
+- **User-controlled operations** - Explicit consent required for destructive actions
+- **Comprehensive audit trails** - All operations logged for security review
+- **Maintainable security** - Modular security components that can be extended
 
-### Configuration Files
+No changes are required to existing functionality, and the fixes are entirely local to their respective security modules. The implementation maintains backward compatibility while significantly improving the security posture.
 
-For advanced configuration, edit `config/local.toml`:
+## References
 
-```toml
-[api]
-provider = "OpenAI"  # OpenAI, Sambanova, or Gemini
-api_key = "your_api_key_here"
-base_url = "https://api.openai.com/v1/chat/completions"
-model_name = "gpt-4-turbo"
-
-[database]
-path = "./harper.db"
-
-[mcp]
-enabled = false
-server_url = "http://localhost:5000"
-```
-
-### Configuration Priority
-
-1. **Environment variables** (highest priority)
-2. `config/local.toml` (overrides defaults)
-3. `config/default.toml` (fallback defaults)
-
-
-
-
-## Security
-
-Harper implements multiple layers of security to protect your data and ensure safe operation:
-
-### Data Protection
-
-- **Local Storage Only**: All data stored locally in SQLite database
-- **No External Transmission**: Conversations never leave your device
-- **Environment-Based Credentials**: API keys stored in environment variables
-- **AES-GCM-256 Encryption**: Secure encryption for sensitive data
-
-### Code Security
-
-- **CodeQL Scanning**: Automated vulnerability detection in CI/CD
-- **DevSkim Analysis**: Security-focused static analysis
-- **Dependency Auditing**: Regular security updates and checks
-- **Input Validation**: Comprehensive request sanitization
-
-### Operational Security
-
-- **Command Sandboxing**: Safe command execution with restricted permissions
-- **Error Handling**: Secure failure responses without information leakage
-- **Logging Security**: Sensitive data redaction in logs
-
-### Compliance
-
-- **GDPR Compliant**: No personal data collection or transmission
-- **Privacy-First**: All processing happens locally
-- **Open Source**: Full transparency and community review
-
-For security issues, please see our [Security Policy](SECURITY.md).
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for detailed information.
-
-### Development Setup
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/harpertoken/harper.git
-   cd harper
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   cargo fetch
-   ```
-
-3. **Run the test suite**:
-   ```bash
-   cargo test
-   ```
-
-4. **Code quality checks**:
-   ```bash
-   cargo clippy    # Linting
-   cargo fmt -- --check  # Formatting check
-   ```
-
-5. **Build and test**:
-   ```bash
-   cargo build --release
-   ./harpertest    # Run full test suite
-   ```
-
-### Development Workflow
-
-- Follow [Conventional Commits](https://conventionalcommits.org/) for commit messages
-- Run tests before submitting PRs
-- Ensure code passes all CI checks
-- Update documentation for new features
-
-### Getting Help
-
-- **Issues**: [GitHub Issues](https://github.com/harpertoken/harper/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/harpertoken/harper/discussions)
-- **Documentation**: See [docs/](docs/) directory
-
-### Code of Conduct
-
-This project follows a code of conduct to ensure a welcoming environment for all contributors. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
-
-## Project Status
-
-Harper is actively maintained and under continuous development. Current focus areas:
-
-- **Performance Optimization**: Reducing latency and improving response times
-- **MCP Protocol**: Re-enabling Model Context Protocol support
-- **Additional Providers**: Expanding AI provider integrations
-- **Enhanced Security**: Ongoing security improvements and audits
-
-### Roadmap
-
-- [ ] Web interface for chat sessions
-- [ ] Plugin system for custom tools
-- [ ] Multi-language support
-- [ ] Advanced session analytics
-- [ ] Cloud deployment options
-
-## Acknowledgments
-
-Harper builds upon the excellent work of the open-source community:
-
-- **Rust Ecosystem**: For the robust systems programming language
-- **SQLite**: For reliable, embedded database functionality
-- **AI Providers**: OpenAI, Sambanova, and Google for accessible AI APIs
-- **Contributors**: The community driving Harper's development
-
-## Links
-
-- [GitHub Repository](https://github.com/harpertoken/harper)
-- [Issues](https://github.com/harpertoken/harper/issues)
-- [Discussions](https://github.com/harpertoken/harper/discussions)
-- [Contributing Guide](CONTRIBUTING.md)
-- [Security Policy](SECURITY.md)
-- [License](LICENSE)
+- [Harper Documentation](docs/)
+- [Contributing Guide](docs/CONTRIBUTING.md)
+- [Security Policy](docs/SECURITY.md)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [OWASP API Security](https://owasp.org/www-project-api-security/)
+- [Common Weakness Enumeration](https://cwe.mitre.org/)

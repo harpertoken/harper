@@ -87,9 +87,9 @@ pub async fn call_llm(
             let body = json!({
                 "contents": gemini_contents
             });
+            let url = format!("{}?key={}", config.base_url, config.api_key);
             client
-                .post(&config.base_url)
-                .header(AUTHORIZATION, format!("Bearer {}", config.api_key))
+                .post(&url)
                 .header(CONTENT_TYPE, "application/json")
                 .json(&body)
                 .send()

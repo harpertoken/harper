@@ -1,32 +1,46 @@
 #!/bin/bash
 
-# Pre-commit hook to run basic checks
+# Comprehensive pre-commit hook for Harper
+# Runs the full validation suite before allowing commits
 
-echo "Running pre-commit checks..."
+echo "Running comprehensive Harper pre-commit validation..."
 
-# Run cargo check
-if ! cargo check; then
-    echo "cargo check failed. Please fix the errors before committing."
+# Check if we're in the right directory
+if [ ! -f "Cargo.toml" ]; then
+    echo "Error: Not in Harper project root (Cargo.toml not found)"
     exit 1
 fi
 
-# Run clippy linting
-if ! cargo clippy --all-targets --all-features --workspace -- -D warnings; then
-    echo "cargo clippy failed. Please fix the warnings before committing."
-    exit 1
-fi
-
-# Run YAML linting if yamllint is available
-if command -v yamllint >/dev/null 2>&1; then
-    echo "Running yamllint..."
-    if ! yamllint .github/workflows/*.yml docker/docker-compose.yml; then
-        echo "yamllint failed. Please fix the YAML issues before committing."
-        echo "Install yamllint with: pip install yamllint"
+# Run the comprehensive validation script
+if [ -f "scripts/validate.sh" ]; then
+    if ! bash scripts/validate.sh; then
+        echo ""
+        echo "Pre-commit validation failed!"
+        echo "Fix the issues above before committing"
+        echo "Or run 'bash scripts/validate.sh' for detailed output"
         exit 1
     fi
 else
-    echo "yamllint not found. Install with: pip install yamllint"
+    echo "Warning: Validation script not found, running basic checks..."
+
+    # Fallback to basic checks
+    if ! cargo check --quiet; then
+        echo "cargo check failed"
+        exit 1
+    fi
+
+    if ! cargo clippy --quiet -- -D warnings; then
+        echo "cargo clippy failed"
+        exit 1
+    fi
+
+    if ! cargo test --quiet; then
+        echo "cargo test failed"
+        exit 1
+    fi
 fi
 
-echo "Pre-commit checks passed."
+echo ""
+echo "All pre-commit checks passed!"
+echo "Your code is ready for commit"
 exit 0
