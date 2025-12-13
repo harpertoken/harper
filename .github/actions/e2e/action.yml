@@ -33,7 +33,7 @@ runs:
 
     - name: Run E2E tests
       run: |
-        cargo test --test integration -- --test-threads=1
+        cargo test --test integration_test -- --test-threads=1
         cargo test --test session_service_test
       shell: bash
       env:
