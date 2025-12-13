@@ -4,7 +4,7 @@ runs:
   using: 'composite'
   steps:
     - name: Install cargo-audit
-      run: cargo install --locked cargo-audit --version 0.18.0
+      run: cargo install --locked cargo-audit --version 0.20.1
       shell: bash
 
     - name: Run security audit
@@ -12,7 +12,7 @@ runs:
       shell: bash
 
     - name: Install cargo-deny
-      run: cargo install --locked cargo-deny --version 0.17.0
+      run: cargo install --locked cargo-deny --version 0.18.1
       shell: bash
 
     - name: Run cargo-deny
