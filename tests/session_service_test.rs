@@ -1,6 +1,6 @@
 use harper::core::error::HarperResult;
 use harper::core::io_traits::{Input, Output};
-use harper::core::session_service::SessionService;
+use harper::memory::session_service::SessionService;
 use rusqlite::Connection;
 use tempfile::NamedTempFile;
 

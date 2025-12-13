@@ -3,11 +3,10 @@
 //! This module contains the fundamental types and services used throughout the application.
 
 pub mod cache;
-pub mod chat_service;
 pub mod constants;
 pub mod error;
 pub mod io_traits;
-pub mod session_service;
+pub mod llm_client;
 
 /// Supported AI API providers
 #[derive(Debug, Clone, Copy)]

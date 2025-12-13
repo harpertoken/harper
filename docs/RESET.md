@@ -76,7 +76,7 @@ git clean -fdx
 **What it does:**
 - Removes untracked files AND ignored files
 - More aggressive cleanup
-- ⚠️ **Caution**: May remove important files like IDE settings
+-  **Caution**: May remove important files like IDE settings
 
 **Use when:** You need a completely clean workspace, including ignored files.
 </details>
@@ -182,7 +182,7 @@ git stash pop  # Restore work
 
 ## Safety Precautions
 
-### ⚠️ Important Warnings
+###  Important Warnings
 
 - **Data Loss**: These commands permanently delete uncommitted changes
 - **Backup First**: Always commit or stash important work before resetting

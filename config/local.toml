@@ -1,8 +1,8 @@
 [api]
-provider = "Sambanova"
-api_key = "your_api_key_here"
-base_url = "https://api.sambanova.ai/v1/chat/completions"
-model_name = "Llama-4-Maverick-17B-128E-Instruct"
+provider = "Gemini"
+api_key = "your_gemini_api_key_here"
+base_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+model_name = "gemini-2.5-flash"
 
 [database]
 path = "test_chat_sessions.db"

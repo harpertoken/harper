@@ -12,6 +12,7 @@ pub mod timeouts {
     use super::Duration;
 
     /// Default API request timeout (90 seconds)
+    #[allow(dead_code)]
     pub const API_REQUEST: Duration = Duration::from_secs(90);
 
     /// Web search request timeout (15 seconds)
@@ -121,6 +122,22 @@ pub mod tools {
     /// Web search prefix
     #[allow(dead_code)]
     pub const SEARCH: &str = "[SEARCH:";
+
+    /// Read file prefix
+    #[allow(dead_code)]
+    pub const READ_FILE: &str = "[READ_FILE";
+
+    /// Write file prefix
+    #[allow(dead_code)]
+    pub const WRITE_FILE: &str = "[WRITE_FILE";
+
+    /// Search and replace prefix
+    #[allow(dead_code)]
+    pub const SEARCH_REPLACE: &str = "[SEARCH_REPLACE";
+
+    /// Todo management prefix
+    #[allow(dead_code)]
+    pub const TODO: &str = "[TODO";
 
     /// Command suffix
     #[allow(dead_code)]

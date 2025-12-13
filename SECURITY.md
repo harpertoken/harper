@@ -19,15 +19,15 @@ We actively maintain security updates for the following versions:
 
 | Version | Supported | Security Updates | Bug Fixes |
 |---------|-----------|------------------|------------|
-| **0.1.6** | ✅ Active | ✅ Yes | ✅ Yes |
-| 0.1.5 | ⚠️ Limited | ⚠️ Critical only | ✅ Yes |
-| 0.1.4 | ⚠️ Limited | ⚠️ Critical only | ✅ Yes |
-| < 0.1.4 | ❌ End of Life | ❌ No | ❌ No |
+| **0.1.6** |  Active |  Yes |  Yes |
+| 0.1.5 |  Limited |  Critical only |  Yes |
+| 0.1.4 |  Limited |  Critical only |  Yes |
+| < 0.1.4 |  End of Life |  No |  No |
 
 **Legend:**
-- ✅ **Active**: Full security support and updates
-- ⚠️ **Limited**: Critical security fixes only
-- ❌ **End of Life**: No security updates provided
+-  **Active**: Full security support and updates
+-  **Limited**: Critical security fixes only
+-  **End of Life**: No security updates provided
 
 ## Reporting Security Vulnerabilities
 
@@ -144,4 +144,4 @@ We appreciate the security research community for helping keep Harper secure. Se
 ---
 
 **Last Updated**: November 2025
-**Version**: 1.0 
+**Version**: 1.0

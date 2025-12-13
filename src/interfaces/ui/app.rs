@@ -5,7 +5,7 @@ pub enum AppState {
     Menu(usize),
     PromptWebSearch,
     Chat(Vec<crate::core::Message>, usize, String, bool, String),
-    ListSessions(Vec<crate::core::session_service::Session>, usize, usize),
+    ListSessions(Vec<crate::memory::session_service::Session>, usize, usize),
     ViewSession(String, Vec<crate::core::Message>, usize, usize),
 }
 
@@ -15,6 +15,8 @@ pub struct TuiApp {
     pub menu_items: Vec<MenuItem>,
     pub should_quit: bool,
     pub message: Option<String>,
+    pub history: Vec<String>,
+    pub history_index: usize,
 }
 
 #[derive(Clone)]
@@ -55,6 +57,8 @@ impl Default for TuiApp {
             menu_items: MenuItem::all(),
             should_quit: false,
             message: None,
+            history: Vec::new(),
+            history_index: 0,
         }
     }
 }
@@ -66,6 +70,8 @@ impl TuiApp {
             menu_items: MenuItem::all(),
             should_quit: false,
             message: None,
+            history: Vec::new(),
+            history_index: 0,
         }
     }
 

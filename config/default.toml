@@ -11,4 +11,7 @@ path = "chat_sessions.db"
 enabled = false
 server_url = "http://localhost:5000"
 
+[prompts]
+system_prompt_id = "default"
+
 # Updated for v0.1.6
