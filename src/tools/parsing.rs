@@ -54,6 +54,7 @@ pub fn parse_quoted_args(input: &str) -> Result<Vec<String>, HarperError> {
 }
 
 /// Extract multiple arguments from tool command with proper quote handling
+#[allow(dead_code)]
 pub fn extract_tool_args(
     response: &str,
     prefix: &str,
@@ -74,6 +75,7 @@ pub fn extract_tool_args(
 }
 
 /// Extract a single tool argument from response
+#[allow(dead_code)]
 pub fn extract_tool_arg(response: &str, prefix: &str) -> Result<String, HarperError> {
     let arg_str = response
         .strip_prefix(prefix)
