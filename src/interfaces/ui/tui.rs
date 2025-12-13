@@ -1,7 +1,7 @@
 use super::app::{AppState, MenuItem, TuiApp};
 use super::draw::draw;
 use crossterm::cursor::{Hide, Show};
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -10,14 +10,15 @@ use rusqlite;
 use std::io;
 use std::time::Duration;
 
-use crate::core::chat_service::ChatService;
+use crate::agent::chat::ChatService;
 use crate::core::error::HarperError;
-use crate::core::session_service::SessionService;
 use crate::core::ApiConfig;
+use crate::memory::session_service::SessionService;
 
 pub async fn run_tui(
     conn: &rusqlite::Connection,
     api_config: &ApiConfig,
+    prompt_id: Option<String>,
 ) -> Result<(), HarperError> {
     // Setup terminal
     enable_raw_mode()?;
@@ -156,8 +157,12 @@ pub async fn run_tui(
                 if let AppState::PromptWebSearch = &app.state {
                     match key.code {
                         KeyCode::Char('y') | KeyCode::Char('Y') => {
-                            let chat_service =
-                                ChatService::new(conn, api_config, Some(&mut api_cache));
+                            let chat_service = ChatService::new(
+                                conn,
+                                api_config,
+                                Some(&mut api_cache),
+                                prompt_id.clone(),
+                            );
                             match chat_service.create_session(true) {
                                 Ok((history, session_id)) => {
                                     app.state =
@@ -171,8 +176,12 @@ pub async fn run_tui(
                             }
                         }
                         KeyCode::Char('n') | KeyCode::Char('N') => {
-                            let chat_service =
-                                ChatService::new(conn, api_config, Some(&mut api_cache));
+                            let chat_service = ChatService::new(
+                                conn,
+                                api_config,
+                                Some(&mut api_cache),
+                                prompt_id.clone(),
+                            );
                             match chat_service.create_session(false) {
                                 Ok((history, session_id)) => {
                                     app.state = AppState::Chat(
@@ -195,16 +204,61 @@ pub async fn run_tui(
                 }
                 if let AppState::Chat(history, _, input, web_search, session_id) = &mut app.state {
                     match key.code {
-                        KeyCode::Char(c) => input.push(c),
+                        KeyCode::Char(c) => {
+                            if key.modifiers.contains(KeyModifiers::CONTROL) && c == 'j' {
+                                input.push('\n');
+                            } else {
+                                input.push(c);
+                            }
+                            app.history_index = app.history.len(); // Reset history index on typing
+                        }
                         KeyCode::Backspace => {
                             input.pop();
+                            app.history_index = app.history.len();
+                        }
+                        KeyCode::Up => {
+                            if app.history_index > 0 {
+                                app.history_index -= 1;
+                                *input = app.history[app.history_index].clone();
+                            }
+                        }
+                        KeyCode::Down => {
+                            if app.history_index < app.history.len() {
+                                app.history_index += 1;
+                                if app.history_index == app.history.len() {
+                                    *input = String::new();
+                                } else {
+                                    *input = app.history[app.history_index].clone();
+                                }
+                            }
+                        }
+                        KeyCode::Tab => {
+                            if input.ends_with('@') {
+                                // Simple file completion
+                                if let Ok(entries) = std::fs::read_dir(".") {
+                                    let files: Vec<String> = entries
+                                        .filter_map(|e| e.ok())
+                                        .filter_map(|e| e.file_name().into_string().ok())
+                                        .filter(|name| !name.starts_with('.'))
+                                        .collect();
+                                    if !files.is_empty() {
+                                        input.push_str(&files[0]);
+                                    }
+                                }
+                            }
                         }
                         KeyCode::Enter => {
                             if !input.is_empty() {
                                 let input_clone = input.clone();
+                                app.history.push(input_clone.clone());
+                                app.history_index = app.history.len();
                                 *input = String::new();
-                                let mut chat_service =
-                                    ChatService::new(conn, api_config, Some(&mut api_cache));
+                                let mut chat_service = ChatService::new(
+                                    conn,
+                                    api_config,
+                                    Some(&mut api_cache),
+                                    prompt_id.clone(),
+                                );
                                 if let Err(e) = chat_service
                                     .send_message(&input_clone, history, *web_search, session_id)
                                     .await

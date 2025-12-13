@@ -5,7 +5,7 @@
 
 use crate::core::error::HarperResult;
 use crate::core::io_traits::{Input, Output};
-use crate::load_history;
+use crate::memory::storage::load_history;
 use chrono::Local;
 use colored::*;
 use rusqlite::Connection;

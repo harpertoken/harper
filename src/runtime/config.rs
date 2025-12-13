@@ -10,6 +10,7 @@ pub struct HarperConfig {
     pub api: ApiConfig,
     pub database: DatabaseConfig,
     pub mcp: McpConfig,
+    pub prompts: PromptConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -29,6 +30,11 @@ pub struct DatabaseConfig {
 pub struct McpConfig {
     pub enabled: bool,
     pub server_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PromptConfig {
+    pub system_prompt_id: Option<String>,
 }
 
 impl HarperConfig {
