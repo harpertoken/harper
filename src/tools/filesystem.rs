@@ -105,17 +105,14 @@ fn extract_tool_arg(response: &str, prefix: &str) -> crate::core::error::HarperR
     Ok(arg_str.to_string())
 }
 
-/// Extract multiple arguments from tool command
+/// Extract multiple arguments from tool command with proper quote handling
 fn extract_tool_args(
     response: &str,
     prefix: &str,
     num_args: usize,
 ) -> crate::core::error::HarperResult<Vec<String>> {
     let arg_str = extract_tool_arg(response, prefix)?;
-    let args: Vec<String> = arg_str
-        .splitn(num_args, ' ')
-        .map(|s| s.to_string())
-        .collect();
+    let args = parse_quoted_args(&arg_str)?;
 
     if args.len() != num_args {
         return Err(HarperError::Command(format!(
@@ -123,6 +120,56 @@ fn extract_tool_args(
             num_args,
             args.len()
         )));
+    }
+
+    Ok(args)
+}
+
+/// Parse space-separated arguments with quote support
+fn parse_quoted_args(input: &str) -> crate::core::error::HarperResult<Vec<String>> {
+    let mut args = Vec::new();
+    let mut current_arg = String::new();
+    let mut in_quotes = false;
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => {
+                if in_quotes {
+                    // End of quoted string
+                    in_quotes = false;
+                } else {
+                    // Start of quoted string
+                    in_quotes = true;
+                }
+            }
+            ' ' => {
+                if in_quotes {
+                    // Space inside quotes is part of the argument
+                    current_arg.push(ch);
+                } else if !current_arg.is_empty() {
+                    // End of unquoted argument
+                    args.push(current_arg);
+                    current_arg = String::new();
+                }
+                // Skip multiple spaces
+            }
+            _ => {
+                current_arg.push(ch);
+            }
+        }
+    }
+
+    // Add the last argument if any
+    if !current_arg.is_empty() {
+        args.push(current_arg);
+    }
+
+    // Check for unclosed quotes
+    if in_quotes {
+        return Err(HarperError::Command(
+            "Unclosed quote in arguments".to_string(),
+        ));
     }
 
     Ok(args)
