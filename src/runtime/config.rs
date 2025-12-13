@@ -1,4 +1,5 @@
 use crate::core::error::{HarperError, HarperResult};
+use crate::core::models::ProviderModels;
 use crate::core::ApiProvider;
 use config::{ConfigBuilder, File};
 use serde::Deserialize;
@@ -67,9 +68,10 @@ impl HarperConfig {
             if !key.trim().is_empty() {
                 temp_builder = temp_builder.set_override("api.api_key", key)?;
                 temp_builder = temp_builder.set_override("api.provider", "OpenAI")?;
+                temp_builder =
+                    temp_builder.set_override("api.base_url", ProviderModels::OPENAI.base_url)?;
                 temp_builder = temp_builder
-                    .set_override("api.base_url", "https://api.openai.com/v1/chat/completions")?;
-                temp_builder = temp_builder.set_override("api.model_name", "gpt-4-turbo")?;
+                    .set_override("api.model_name", ProviderModels::OPENAI.default_model)?;
             }
         }
 
@@ -78,12 +80,10 @@ impl HarperConfig {
             if !key.trim().is_empty() {
                 temp_builder = temp_builder.set_override("api.api_key", key)?;
                 temp_builder = temp_builder.set_override("api.provider", "Sambanova")?;
-                temp_builder = temp_builder.set_override(
-                    "api.base_url",
-                    "https://api.sambanova.ai/v1/chat/completions",
-                )?;
                 temp_builder = temp_builder
-                    .set_override("api.model_name", "Llama-4-Maverick-17B-128E-Instruct")?;
+                    .set_override("api.base_url", ProviderModels::SAMBANOVA.base_url)?;
+                temp_builder = temp_builder
+                    .set_override("api.model_name", ProviderModels::SAMBANOVA.default_model)?;
             }
         }
 
@@ -92,8 +92,10 @@ impl HarperConfig {
             if !key.trim().is_empty() {
                 temp_builder = temp_builder.set_override("api.api_key", key)?;
                 temp_builder = temp_builder.set_override("api.provider", "Gemini")?;
-                temp_builder = temp_builder.set_override("api.base_url", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent")?;
-                temp_builder = temp_builder.set_override("api.model_name", "gemini-2.5-flash")?;
+                temp_builder =
+                    temp_builder.set_override("api.base_url", ProviderModels::GEMINI.base_url)?;
+                temp_builder = temp_builder
+                    .set_override("api.model_name", ProviderModels::GEMINI.default_model)?;
             }
         }
 
