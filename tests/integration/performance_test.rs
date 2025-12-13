@@ -1,6 +1,7 @@
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use harper::*;
 use rusqlite::Connection;
+use std::hint::black_box;
 use std::thread;
 use std::time::Duration;
 use tempfile::NamedTempFile;

@@ -293,7 +293,7 @@ fn test_concurrent_access() {
             for op in 0..OPS_PER_THREAD {
                 let result = (|| -> Result<(), Box<dyn std::error::Error>> {
                     // Randomly choose an operation
-                    let op_type = rand::thread_rng().gen_range(0..=3);
+                    let op_type = rand::rng().random_range(0..=3);
 
                     match op_type {
                         // Create a new session
@@ -314,7 +314,7 @@ fn test_concurrent_access() {
                         1 => {
                             let sessions = list_sessions(&conn)?;
                             if !sessions.is_empty() {
-                                let session_idx = rand::thread_rng().gen_range(0..sessions.len());
+                                let session_idx = rand::rng().random_range(0..sessions.len());
                                 let session_id = &sessions[session_idx];
 
                                 let role = if rand::random() { "user" } else { "assistant" };
@@ -341,7 +341,7 @@ fn test_concurrent_access() {
                         3 => {
                             let sessions = list_sessions(&conn)?;
                             if !sessions.is_empty() {
-                                let session_idx = rand::thread_rng().gen_range(0..sessions.len());
+                                let session_idx = rand::rng().random_range(0..sessions.len());
                                 let _ = load_history(&conn, &sessions[session_idx])?;
                             }
                         }
