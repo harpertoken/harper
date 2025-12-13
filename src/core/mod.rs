@@ -7,6 +7,7 @@ pub mod constants;
 pub mod error;
 pub mod io_traits;
 pub mod llm_client;
+pub mod models;
 
 /// Supported AI API providers
 #[derive(Debug, Clone, Copy)]
