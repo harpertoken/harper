@@ -25,20 +25,32 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    - name: Install Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Setup Rust
+      uses: ./.github/actions/setup-rust
       with:
         components: rustfmt, clippy
-    - name: Cache Rust dependencies
-      uses: Swatinem/rust-cache@v2
-    - name: Install cargo-audit
-      run: cargo install --locked cargo-audit
-    - name: Run security audit
-      run: cargo audit --deny warnings
-    - name: Install cargo-deny
-      run: cargo install --locked cargo-deny --version 0.17.0
-    - name: Run cargo-deny
-      run: cargo deny check
+    - name: Run comprehensive validation
+      run: bash scripts/validate.sh
+    - name: Run Clippy lints
+      uses: ./.github/actions/lint
+    - name: Check documentation
+      run: cargo doc --no-deps --document-private-items --all-features --workspace
+    - name: Run unit tests
+      run: cargo test --all-features --workspace --verbose
+      env:
+        RUST_LOG: debug
+    - name: Run integration tests
+      run: cargo test --test '*' --all-features --workspace --verbose
+      env:
+        RUST_LOG: debug
+    - name: Build in release mode
+      run: cargo build --release --all-features --workspace --verbose
+    - name: Test release build
+      run: cargo test --release --all-features --workspace --verbose
+    - name: Run E2E tests
+      uses: ./.github/actions/e2e
+      with:
+        os: ubuntu-latest
   security:
     name: Security Audit
     runs-on: ubuntu-latest
@@ -48,39 +60,26 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    - name: Install Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Cache Rust dependencies
-      uses: Swatinem/rust-cache@v2
-    - name: Install cargo-audit
-      run: cargo install --locked cargo-audit
+    - name: Setup Rust
+      uses: ./.github/actions/setup-rust
     - name: Run security audit
-      run: cargo audit --deny warnings
-    - name: Install cargo-deny
-      run: cargo install --locked cargo-deny --version 0.17.0
-    - name: Run cargo-deny
-      run: cargo deny check
+      uses: ./.github/actions/security-audit
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust: [stable]
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    - name: Install Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Setup Rust
+      uses: ./.github/actions/setup-rust
       with:
         components: llvm-tools-preview
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y libsqlite3-dev pkg-config
-    - name: Cache Rust dependencies
-      uses: Swatinem/rust-cache@v2
     - name: Install cargo-llvm-cov
       run: cargo install --locked cargo-llvm-cov
     - name: Generate test coverage

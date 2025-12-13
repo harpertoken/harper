@@ -1,0 +1,20 @@
+name: 'Security Audit'
+description: 'Run security audit tools (cargo-audit and cargo-deny)'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install cargo-audit
+      run: cargo install --locked cargo-audit
+      shell: bash
+
+    - name: Run security audit
+      run: cargo audit --deny warnings
+      shell: bash
+
+    - name: Install cargo-deny
+      run: cargo install --locked cargo-deny --version 0.17.0
+      shell: bash
+
+    - name: Run cargo-deny
+      run: cargo deny check
+      shell: bash
