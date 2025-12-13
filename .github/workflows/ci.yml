@@ -26,7 +26,30 @@ jobs:
       with:
         fetch-depth: 0
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@master
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        components: rustfmt, clippy
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+    - name: Install cargo-audit
+      run: cargo install --locked cargo-audit
+    - name: Run security audit
+      run: cargo audit --deny warnings
+    - name: Install cargo-deny
+      run: cargo install --locked cargo-deny --version 0.17.0
+    - name: Run cargo-deny
+      run: cargo deny check
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Install Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
     - name: Install cargo-audit
@@ -49,7 +72,7 @@ jobs:
       with:
         fetch-depth: 0
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@master
+      uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         components: llvm-tools-preview
     - name: Install system dependencies
