@@ -92,9 +92,8 @@ impl HarperConfig {
             if !key.trim().is_empty() {
                 temp_builder = temp_builder.set_override("api.api_key", key)?;
                 temp_builder = temp_builder.set_override("api.provider", "Gemini")?;
-                temp_builder = temp_builder.set_override("api.base_url", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent")?;
-                temp_builder =
-                    temp_builder.set_override("api.model_name", "gemini-2.0-flash-exp")?;
+                temp_builder = temp_builder.set_override("api.base_url", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent")?;
+                temp_builder = temp_builder.set_override("api.model_name", "gemini-2.5-flash")?;
             }
         }
 
