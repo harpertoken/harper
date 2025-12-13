@@ -4,6 +4,7 @@
 //! with safety checks and user approval.
 
 use crate::core::error::HarperError;
+use crate::tools::parsing;
 use colored::*;
 use std::io;
 
@@ -152,9 +153,5 @@ fn extract_files(response: &str) -> crate::core::error::HarperResult<Vec<String>
         return Ok(vec![".".to_string()]); // Add all if no files specified
     }
 
-    let files: Vec<String> = files_str
-        .split_whitespace()
-        .map(|s| s.to_string())
-        .collect();
-    Ok(files)
+    parsing::parse_quoted_args(files_str)
 }
