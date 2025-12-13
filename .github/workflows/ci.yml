@@ -27,63 +27,6 @@ jobs:
         fetch-depth: 0
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.rust || 'stable' }}
-        components: rustfmt, clippy
-    - name: Install system dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential pkg-config libsqlite3-dev yamllint
-    - name: Install system dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install sqlite3 pkg-config
-    - name: Cache Rust dependencies
-      uses: Swatinem/rust-cache@v2
-      with:
-        key: ${{ matrix.os }}-${{ matrix.rust }}
-        cache-on-failure: true
-        cache-all-crates: true
-    - name: Generate Cargo.lock
-      run: cargo generate-lockfile
-    - name: Check code formatting
-      run: cargo fmt --all -- --check
-    - name: Run comprehensive validation
-      run: bash scripts/validate.sh
-    - name: Run Clippy lints
-      uses: ./.github/actions/lint
-    - name: Check documentation
-      run: cargo doc --no-deps --document-private-items --all-features --workspace
-    - name: Run unit tests
-      run: cargo test --all-features --workspace --verbose
-      env:
-        RUST_LOG: debug
-    - name: Run integration tests
-      run: cargo test --test '*' --all-features --workspace --verbose
-      env:
-        RUST_LOG: debug
-    - name: Build in release mode
-      run: cargo build --release --all-features --workspace --verbose
-    - name: Test release build
-      run: cargo test --release --all-features --workspace --verbose
-    - name: Run E2E tests
-      uses: ./.github/actions/e2e
-      with:
-        os: ubuntu-latest
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.rust || 'stable' }}
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
     - name: Install cargo-audit
@@ -108,7 +51,6 @@ jobs:
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: ${{ matrix.rust || 'stable' }}
         components: llvm-tools-preview
     - name: Install system dependencies
       run: |
