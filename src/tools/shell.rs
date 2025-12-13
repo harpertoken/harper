@@ -22,14 +22,48 @@ pub fn execute_command(
         return Err(HarperError::Command("No command provided".to_string()));
     }
 
-    // Basic security check to prevent shell injection
-    if command_str
-        .chars()
-        .any(|c| matches!(c, ';' | '|' | '&' | '`' | '$' | '(' | ')'))
-    {
+    // Security check to prevent shell injection and dangerous commands
+    // Note: This is a defense-in-depth measure. The primary security comes from user approval.
+    let dangerous_chars = [';', '|', '&', '`', '$', '(', ')', '<', '>', '*', '?', '[', ']', '{', '}', '!', '~'];
+    if command_str.chars().any(|c| dangerous_chars.contains(&c)) {
         return Err(HarperError::Command(
-            "Command contains potentially dangerous characters".to_string(),
+            "Command contains potentially dangerous shell metacharacters. \
+             Only basic commands without shell features are allowed.".to_string(),
         ));
+    }
+
+    // Additional check for common dangerous patterns
+    let dangerous_patterns = [
+        "rm -rf",
+        "rmdir",
+        "del ",
+        "format",
+        "fdisk",
+        "mkfs",
+        "dd if=",
+        "shutdown",
+        "reboot",
+        "halt",
+        "poweroff",
+        "sudo",
+        "su ",
+        "chmod 777",
+        "chown root",
+        "passwd",
+        "/etc/",
+        "/bin/",
+        "/sbin/",
+        "/usr/bin/",
+        "/usr/sbin/",
+    ];
+
+    for pattern in &dangerous_patterns {
+        if command_str.contains(pattern) {
+            return Err(HarperError::Command(
+                format!("Command contains potentially dangerous pattern: '{}'. \
+                        This command is not allowed for security reasons.", pattern),
+            ));
+        }
     }
 
     // Ask for approval
