@@ -77,6 +77,18 @@ rand = "0.8.5"
 regex = "1.0"
 lazy_static = "1.4.0"
 
+[[test]]
+name = "integration"
+path = "tests/integration/integration_test.rs"
+
+[[test]]
+name = "performance"
+path = "tests/integration/performance_test.rs"
+
+[[test]]
+name = "security"
+path = "tests/integration/security_test.rs"
+
 [features]
 default = []
 integration = []
