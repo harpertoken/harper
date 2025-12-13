@@ -9,6 +9,9 @@ pub mod shell;
 pub mod todo;
 pub mod web;
 
+/// Common parsing utilities for tool arguments
+pub mod parsing;
+
 use crate::core::constants::tools;
 use crate::core::error::HarperError;
 use crate::core::{ApiConfig, Message};
