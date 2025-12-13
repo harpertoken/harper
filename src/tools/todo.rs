@@ -5,8 +5,8 @@
 
 use crate::core::error::HarperError;
 use crate::tools::parsing;
-use std::sync::Mutex;
 use once_cell::sync::Lazy;
+use std::sync::Mutex;
 
 // Simple in-memory todo storage
 // TODO: Replace with persistent storage (database/file)
@@ -26,19 +26,21 @@ pub fn manage_todo(response: &str) -> crate::core::error::HarperResult<String> {
     match command.as_str() {
         "add" => {
             if args.len() < 2 {
-                return Err(HarperError::Command("Todo add requires a description".to_string()));
+                return Err(HarperError::Command(
+                    "Todo add requires a description".to_string(),
+                ));
             }
             let description = args[1..].join(" ");
-            let mut todos = TODOS.lock().map_err(|_| {
-                HarperError::Command("Failed to access todo storage".to_string())
-            })?;
+            let mut todos = TODOS
+                .lock()
+                .map_err(|_| HarperError::Command("Failed to access todo storage".to_string()))?;
             todos.push(description.clone());
             Ok(format!("Added todo: {}", description))
         }
         "list" => {
-            let todos = TODOS.lock().map_err(|_| {
-                HarperError::Command("Failed to access todo storage".to_string())
-            })?;
+            let todos = TODOS
+                .lock()
+                .map_err(|_| HarperError::Command("Failed to access todo storage".to_string()))?;
             if todos.is_empty() {
                 Ok("No todos found".to_string())
             } else {
@@ -51,33 +53,36 @@ pub fn manage_todo(response: &str) -> crate::core::error::HarperResult<String> {
         }
         "remove" => {
             if args.len() < 2 {
-                return Err(HarperError::Command("Todo remove requires an index".to_string()));
+                return Err(HarperError::Command(
+                    "Todo remove requires an index".to_string(),
+                ));
             }
-            let index: usize = args[1].parse().map_err(|_| {
-                HarperError::Command("Invalid todo index".to_string())
-            })?;
-            let mut todos = TODOS.lock().map_err(|_| {
-                HarperError::Command("Failed to access todo storage".to_string())
-            })?;
+            let index: usize = args[1]
+                .parse()
+                .map_err(|_| HarperError::Command("Invalid todo index".to_string()))?;
+            let mut todos = TODOS
+                .lock()
+                .map_err(|_| HarperError::Command("Failed to access todo storage".to_string()))?;
             if index == 0 || index > todos.len() {
-                return Err(HarperError::Command(format!("Invalid todo index: {}", index)));
+                return Err(HarperError::Command(format!(
+                    "Invalid todo index: {}",
+                    index
+                )));
             }
             let removed = todos.remove(index - 1);
             Ok(format!("Removed todo: {}", removed))
         }
         "clear" => {
-            let mut todos = TODOS.lock().map_err(|_| {
-                HarperError::Command("Failed to access todo storage".to_string())
-            })?;
+            let mut todos = TODOS
+                .lock()
+                .map_err(|_| HarperError::Command("Failed to access todo storage".to_string()))?;
             let count = todos.len();
             todos.clear();
             Ok(format!("Cleared {} todos", count))
         }
-        _ => {
-            Err(HarperError::Command(format!(
-                "Unknown todo command: {}. Supported: add, list, remove, clear",
-                command
-            )))
-        }
+        _ => Err(HarperError::Command(format!(
+            "Unknown todo command: {}. Supported: add, list, remove, clear",
+            command
+        ))),
     }
 }
