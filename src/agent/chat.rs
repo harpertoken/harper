@@ -396,11 +396,12 @@ Tool formats:
                     && file_name != "target"
                     && file_name != "node_modules"
                 {
-                    let metadata = entry.metadata().unwrap();
-                    if metadata.is_dir() {
-                        files.push(format!("{}/", file_name));
-                    } else {
-                        files.push(file_name);
+                    if let Ok(metadata) = entry.metadata() {
+                        if metadata.is_dir() {
+                            files.push(format!("{}/", file_name));
+                        } else {
+                            files.push(file_name);
+                        }
                     }
                 }
             }
