@@ -53,6 +53,8 @@ jobs:
       run: cargo build --release --all-features --workspace --verbose
     - name: Test release build
       run: cargo test --release --all-features --workspace --verbose
+    - name: Run security audit
+      uses: ./.github/actions/security-audit
     - name: Run E2E tests
       uses: ./.github/actions/e2e
       with:
