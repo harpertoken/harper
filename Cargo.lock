@@ -721,6 +721,7 @@ dependencies = [
  "hyper",
  "lazy_static",
  "num_cpus",
+ "once_cell",
  "rand 0.8.5",
  "regex",
  "reqwest",
