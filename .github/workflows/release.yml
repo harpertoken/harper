@@ -48,7 +48,7 @@ jobs:
 
       - name: Get tag name
         id: get_tag
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             let tag;
@@ -64,7 +64,7 @@ jobs:
 
       - name: Check if release exists
         id: check_release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           TAG: ${{ steps.get_tag.outputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
