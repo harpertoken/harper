@@ -29,7 +29,7 @@ fn draw_menu(frame: &mut Frame, selected: usize) {
     let menu_items = [
         "Start Chat",
         "List Sessions",
-        "View Session",
+        "Resume Session",
         "Tools",
         "Export Session",
         "Quit",
