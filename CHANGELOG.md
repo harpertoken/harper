@@ -1,9 +1,6 @@
 # Harper Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Hey there! This is where we keep track of all the changes and improvements to Harper. Think of it as our development diary - what we built, what we fixed, and what we're planning next.
 
 ## Table of Contents
 
@@ -34,50 +31,73 @@ Still working on some cool stuff:
 
 ## [0.2.1] - 2025-12-15
 
-### Added
-- Full Terminal UI: Replaced the basic text-driven interface with a structured, Ratatui-based terminal UI
-- Real Chat Experience: Live, streaming conversations with Gemini that feel natural and continuous
-- Session Management: Browse, load, and resume previous conversations with proper persistence
-- Tool Integration in UI: Tool execution (shell, git, file operations) is now visible and controllable from the interface
-- Web Search Toggle: Added an interactive toggle to enable or disable web search during conversations
-- UI-Oriented Architecture: Introduced clearer separation between rendering, events, and application state
-- Keyboard-driven navigation and menus
-- Live chat with streaming responses
-- Session browser and history management
-- Status indicators and shortcuts for power users
+This release builds on the architectural foundation laid in 0.2.0 and focuses on user-facing experience and interaction. Harper now feels like a complete application rather than a collection of CLI flows.
 
-### Changed
-- Connected the refactored backend (tools, models, storage) to a real interactive frontend
-- Added version tracking via a VERSION file
-- Cleaned up warnings and UI-related rendering issues introduced during integration
+### What We Built
+
+* **Full Terminal UI**: Replaced the basic text-driven interface with a structured, Ratatui-based terminal UI.
+* **Real Chat Experience**: Live, streaming conversations with Gemini that feel natural and continuous.
+* **Session Management**: Browse, load, and resume previous conversations with proper persistence.
+* **Tool Integration in UI**: Tool execution (shell, git, file operations) is now visible and controllable from the interface.
+* **Web Search Toggle**: Added an interactive toggle to enable or disable web search during conversations.
+* **UI-Oriented Architecture**: Introduced clearer separation between rendering, events, and application state.
+
+### What Changed
+
+* Connected the refactored backend (tools, models, storage) to a real interactive frontend.
+* Added version tracking via a VERSION file.
+* Cleaned up warnings and UI-related rendering issues introduced during integration.
+
+### What Works Now
+
+* Keyboard-driven navigation and menus
+* Live chat with streaming responses
+* Session browser and history management
+* Status indicators and shortcuts for power users
+
+In short, **0.2.1 turns the refactored core into a usable product**.
 
 ---
 
 ## [0.2.0] - 2025-12-14
 
-### Added
-- Modular, MCP-style architecture support
-- Structured tool-use workflow
-- Robust argument parsing with shared parsing utilities
-- Basic in-memory todo management for agent state
-- Dedicated model configuration files
-- Composite GitHub Actions for CI reuse and clarity
+This release focused on restructuring Harper's internals, stabilizing CI, and introducing MCP-aligned tool-use workflows. Most changes are architectural and infrastructural, laying the groundwork for future user-facing improvements.
 
-### Changed
-- Refactored and restructured the codebase
-- Standardized Rust toolchain handling across CI, Docker, and local builds
-- Updated Gemini to the `2.5-flash` model
-- Switched to direct Rust setup where appropriate
-- Updated CodeQL action to v4
+### Architecture & Core
 
-### Fixed
-- CI failures related to cargo test targets and e2e configuration
-- Dockerfile test target names and Rust versions
-- Compatibility issues by downgrading `turul-mcp-client` to `0.1.1`
-- Updated dependencies affected by yanked crates (`futures`, `crossbeam`)
-- Improved shell command security validation
-- Metadata error handling
-- Clippy warnings, dead code warnings, and formatting issues
+* Refactored and restructured the codebase to support a modular, MCP-style architecture.
+* Implemented a structured tool-use workflow.
+* Added robust argument parsing with shared parsing utilities.
+* Introduced basic in-memory todo management for agent state.
+* Moved model configuration into dedicated files.
+* Updated Gemini to the `2.5-flash` model.
+
+### CI & Infrastructure
+
+* Added composite GitHub Actions for CI reuse and clarity.
+* Standardized Rust toolchain handling across CI, Docker, and local builds.
+* Switched to direct Rust setup where appropriate.
+* Added missing system dependencies to CI jobs.
+* Restored and debugged validation scripts.
+* Updated CodeQL action to v4.
+
+### Fixes & Stability
+
+* Fixed CI failures related to cargo test targets and e2e configuration.
+* Corrected Dockerfile test target names and Rust versions.
+* Downgraded `turul-mcp-client` to `0.1.1` to restore compatibility.
+* Updated dependencies affected by yanked crates (`futures`, `crossbeam`).
+* Improved shell command security validation.
+* Handled metadata errors more gracefully.
+* Addressed clippy warnings, dead code warnings, and formatting issues.
+
+### Maintenance
+
+* Updated `Cargo.lock`.
+* Addressed review feedback and cleanup items.
+* Improved consistency across actions, workflows, and configs.
+
+In short, **0.2.0 is the foundation release** that made 0.2.1 possible.
 
 ---
 
@@ -153,7 +173,7 @@ It was a working AI assistant with cross-platform support, but the interface was
 
 ## How We Write These Updates
 
-We adhere to the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format for structured, scannable entries. Each version includes Added, Changed, Fixed, and Removed sections as applicable.
+We try to keep this changelog honest and helpful. Each entry explains what we actually did, why we did it, and how it affects users. No corporate jargon - just real talk about the development process.
 
 When we make changes that users should know about, we add them to the "Unreleased" section above. The changelog gets automatically updated when we create a new release.
 
