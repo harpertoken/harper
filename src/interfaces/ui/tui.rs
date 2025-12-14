@@ -45,7 +45,10 @@ pub async fn run_tui(
             match result {
                 EventResult::Quit => break,
                 EventResult::SendMessage(message) => {
-                    if let AppState::Chat(_, messages, _, _, web_search_enabled) = &mut app.state {
+                    if let AppState::Chat(session_id, messages, _, _, web_search_enabled) =
+                        &mut app.state
+                    {
+                        let session_id = session_id.as_deref().unwrap();
                         // Add user message
                         messages.push(crate::core::Message {
                             role: "user".to_string(),
@@ -54,7 +57,7 @@ pub async fn run_tui(
 
                         // Send to AI
                         match chat_service
-                            .send_message(&message, messages, *web_search_enabled, "default")
+                            .send_message(&message, messages, *web_search_enabled, session_id)
                             .await
                         {
                             Ok(_) => {
