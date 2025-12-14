@@ -11,7 +11,7 @@ mod tools;
 
 use crate::core::ApiConfig;
 use colored::Colorize;
-use interfaces::ui::tui::run_tui;
+
 use std::io::Write;
 
 use runtime::config::HarperConfig;
@@ -77,13 +77,23 @@ async fn main() {
         model_name: config.api.model_name.clone(),
     };
 
-    // Display selected model information
-    println!(
-        "🤖 Using {} - {}",
-        api_config.provider, api_config.model_name
-    );
-    println!("📍 API: {}", api_config.base_url);
-    println!("💾 Database: {}", config.database.path);
+    // Display selected model information (only for non-TUI)
+    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        println!(
+            "🤖 Using {} - {}",
+            api_config.provider, api_config.model_name
+        );
+        println!("📍 API: {}", api_config.base_url);
+        println!("💾 Database: {}", config.database.path);
+    }
+
+    // Ensure database directory exists
+    if let Some(parent) = std::path::Path::new(&config.database.path).parent() {
+        exit_on_error(
+            std::fs::create_dir_all(parent),
+            "Failed to create database directory",
+        );
+    }
 
     let conn = exit_on_error(
         Connection::open(&config.database.path),
@@ -94,7 +104,7 @@ async fn main() {
         "Failed to initialize database",
     );
 
-    let prompt_id = config.prompts.system_prompt_id.clone();
+    let _prompt_id = config.prompts.system_prompt_id.clone();
 
     // MCP client initialization
     // Note: MCP functionality is currently disabled due to dependency conflicts
@@ -105,6 +115,7 @@ async fn main() {
     // MCP client temporarily disabled due to dependency conflicts
     let _mcp_client: Option<()> = None;
 
+    #[allow(dead_code)]
     async fn text_menu(conn: &Connection, api_config: &ApiConfig, prompt_id: Option<String>) {
         loop {
             use crate::core::constants::messages;
@@ -163,16 +174,10 @@ async fn main() {
         }
     }
 
-    // Run TUI or text menu based on terminal
-    if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-        if let Err(e) = run_tui(&conn, &api_config, prompt_id).await {
-            eprintln!("TUI error: {}", e);
-        } else {
-            use crate::core::constants::messages;
-            println!("{}", messages::GOODBYE.bold().yellow());
-        }
-    } else {
-        // Fallback to text menu for non-interactive environments
-        text_menu(&conn, &api_config, prompt_id).await;
+    let session_service = crate::memory::session_service::SessionService::new(&conn);
+
+    // Run TUI
+    if let Err(e) = crate::interfaces::ui::run_tui(&conn, &api_config, &session_service).await {
+        eprintln!("TUI error: {}", e);
     }
 }

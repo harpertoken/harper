@@ -13,6 +13,7 @@
 *.sqlite
 *.sqlite3
 chat_sessions.db
+.harper/
 
 # IDE and editor files
 .vscode/
@@ -48,3 +49,6 @@ coverage/
 *.temp
 tarpaulin-report.html
 *.db-*
+
+# Reference codebases
+mistral-vibe/
