@@ -53,7 +53,7 @@ clarify = []
 # Dependency banning rules
 [bans]
 # Allow multiple versions of the same crate (not a license violation)
-multiple-versions = "allow"
+multiple-versions = "warn"
 # Allow wildcard version requirements
 wildcards = "allow"
 # Highlight all versions of duplicate packages
