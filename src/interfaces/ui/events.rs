@@ -10,6 +10,25 @@ pub enum EventResult {
     Quit,
 }
 
+fn load_sessions_into_state(app: &mut TuiApp, session_service: &SessionService) {
+    match session_service.list_sessions_data() {
+        Ok(sessions) => {
+            let session_infos: Vec<SessionInfo> = sessions
+                .into_iter()
+                .map(|s| SessionInfo {
+                    id: s.id.clone(),
+                    name: s.id, // Use ID as name for now
+                    created_at: s.created_at,
+                })
+                .collect();
+            app.state = AppState::Sessions(session_infos, 0);
+        }
+        Err(e) => {
+            app.message = Some(format!("Error loading sessions: {}", e));
+        }
+    }
+}
+
 pub fn handle_event(
     event: Event,
     app: &mut TuiApp,
@@ -76,29 +95,8 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         false,
                     )
                 } // Start Chat
-                1 => {
-                    // Load real sessions
-                    match session_service.list_sessions_data() {
-                        Ok(sessions) => {
-                            let session_infos: Vec<SessionInfo> = sessions
-                                .into_iter()
-                                .map(|s| SessionInfo {
-                                    id: s.id.clone(),
-                                    name: s.id, // Use ID as name for now
-                                    created_at: s.created_at,
-                                })
-                                .collect();
-                            app.state = AppState::Sessions(session_infos, 0);
-                        }
-                        Err(e) => {
-                            app.message = Some(format!("Error loading sessions: {}", e));
-                        }
-                    }
-                }
-                2 => {
-                    app.state =
-                        AppState::ViewSession("Select a session first".to_string(), vec![], 0)
-                } // Resume Session
+                1 => load_sessions_into_state(app, session_service),
+                2 => load_sessions_into_state(app, session_service),
                 3 => app.state = AppState::Tools(0), // Tools
                 4 => app.message = Some("Export not implemented yet".to_string()), // Export
                 5 => return EventResult::Quit,       // Quit
