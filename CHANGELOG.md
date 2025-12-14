@@ -1,16 +1,12 @@
-# Changelog
+# Harper Changelog
 
-[![Release](https://img.shields.io/github/v/release/harpertoken/harper)](https://github.com/harpertoken/harper/releases)
-[![All Releases](https://img.shields.io/github/downloads/harpertoken/harper/total)](https://github.com/harpertoken/harper/releases)
-
-All notable changes to Harper will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Hey there! This is where we keep track of all the changes and improvements to Harper. Think of it as our development diary - what we built, what we fixed, and what we're planning next.
 
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [0.2.1](#021---2025-12-15)
+- [0.2.0](#020---2025-12-14)
 - [0.1.8-beta.1](#018-beta1---2025-11-09)
 - [0.1.8-beta](#018-beta---2025-11-09)
 - [0.1.7](#017---2025-11-09)
@@ -22,196 +18,165 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [0.1.1](#011---2025-09-03)
 - [0.1.0](#010---2025-08-26)
 
+## What's Coming Next
+
+Still working on some cool stuff:
+- A web interface so you can chat from your browser
+- Plugin system for custom tools and integrations
+- Support for multiple languages
+- Better analytics on your chat sessions
+- Maybe cloud deployment options
+
 ---
 
-## [Unreleased]
+## [0.2.1] - 2025-12-15
 
-### Planned Features
-- Web interface for chat sessions
-- Plugin system for custom tools
-- Multi-language support
-- Advanced session analytics
-- Cloud deployment options
+This release builds on the architectural foundation laid in 0.2.0 and focuses on user-facing experience and interaction. Harper now feels like a complete application rather than a collection of CLI flows.
+
+### What We Built
+
+* **Full Terminal UI**: Replaced the basic text-driven interface with a structured, Ratatui-based terminal UI.
+* **Real Chat Experience**: Live, streaming conversations with Gemini that feel natural and continuous.
+* **Session Management**: Browse, load, and resume previous conversations with proper persistence.
+* **Tool Integration in UI**: Tool execution (shell, git, file operations) is now visible and controllable from the interface.
+* **Web Search Toggle**: Added an interactive toggle to enable or disable web search during conversations.
+* **UI-Oriented Architecture**: Introduced clearer separation between rendering, events, and application state.
+
+### What Changed
+
+* Connected the refactored backend (tools, models, storage) to a real interactive frontend.
+* Added version tracking via a VERSION file.
+* Cleaned up warnings and UI-related rendering issues introduced during integration.
+
+### What Works Now
+
+* Keyboard-driven navigation and menus
+* Live chat with streaming responses
+* Session browser and history management
+* Status indicators and shortcuts for power users
+
+In short, **0.2.1 turns the refactored core into a usable product**.
+
+---
+
+## [0.2.0] - 2025-12-14
+
+This release focused on restructuring Harper's internals, stabilizing CI, and introducing MCP-aligned tool-use workflows. Most changes are architectural and infrastructural, laying the groundwork for future user-facing improvements.
+
+### Architecture & Core
+
+* Refactored and restructured the codebase to support a modular, MCP-style architecture.
+* Implemented a structured tool-use workflow.
+* Added robust argument parsing with shared parsing utilities.
+* Introduced basic in-memory todo management for agent state.
+* Moved model configuration into dedicated files.
+* Updated Gemini to the `2.5-flash` model.
+
+### CI & Infrastructure
+
+* Added composite GitHub Actions for CI reuse and clarity.
+* Standardized Rust toolchain handling across CI, Docker, and local builds.
+* Switched to direct Rust setup where appropriate.
+* Added missing system dependencies to CI jobs.
+* Restored and debugged validation scripts.
+* Updated CodeQL action to v4.
+
+### Fixes & Stability
+
+* Fixed CI failures related to cargo test targets and e2e configuration.
+* Corrected Dockerfile test target names and Rust versions.
+* Downgraded `turul-mcp-client` to `0.1.1` to restore compatibility.
+* Updated dependencies affected by yanked crates (`futures`, `crossbeam`).
+* Improved shell command security validation.
+* Handled metadata errors more gracefully.
+* Addressed clippy warnings, dead code warnings, and formatting issues.
+
+### Maintenance
+
+* Updated `Cargo.lock`.
+* Addressed review feedback and cleanup items.
+* Improved consistency across actions, workflows, and configs.
+
+In short, **0.2.0 is the foundation release** that made 0.2.1 possible.
 
 ---
 
 ## [0.1.8-beta.1] - 2025-11-09
 
-### Fixed
-- **Release Workflow**: Enhanced release process with GitHub CLI integration for deleting existing releases
-- **Release Workflow**: Added comprehensive logging and validation to release automation
-- **Release Workflow**: Removed invalid overwrite configuration from release creation
-- **Release Workflow**: Improved handling of immutable releases by deleting and recreating them
-- **API Integration**: Fixed error handling in release notes script
-- **Testing**: Corrected database path quoting in test configurations
-- **Testing**: Fixed environment variable handling in binary execution tests
-- **Documentation**: Enhanced documentation and fixed git hooks
-
-### Changed
-- **Dependencies**: Updated Cargo.lock with latest dependency versions
+Quick bug fixes and improvements to the release process. Made the automated releases more reliable by fixing some issues with GitHub's release API. Also cleaned up some testing configurations and improved the documentation.
 
 ---
 
 ## [0.1.8-beta] - 2025-11-09
 
-### Fixed
-- **Release Workflow**: Handle immutable releases by deleting and recreating them to allow asset overwrites
+Fixed a problem with the release workflow where it couldn't overwrite existing releases. Now it properly handles immutable releases by deleting and recreating them when needed.
 
 ---
 
 ## [0.1.7] - 2025-11-09
 
-### Changed
-- **Documentation**: Complete rewrite of all documentation files with professional structure and comprehensive guides
-- **Quality Assurance**: Enhanced pre-commit hooks and commit message validation
-
-### Fixed
-- **Testing**: Resolved compilation error in integration tests
+Spent a lot of time rewriting all the documentation from scratch. Made it much more professional and comprehensive. Also strengthened the code quality checks with better pre-commit hooks. Fixed a compilation issue in the integration tests that was causing CI failures.
 
 ---
 
 ## [0.1.6] - 2025-11-08
 
-### Added
-- **Docker Support**: Automated container image publishing to releases
-- **Documentation**: Comprehensive README and contributing guides
-- **Security**: Enhanced security policy and vulnerability reporting
+Big infrastructure improvements! Added automated Docker image publishing to releases, which makes deployment much easier. Completely rewrote the documentation with proper guides for everything. Enhanced security with better policies and vulnerability reporting.
 
-### Changed
-- **Development Environment**: Improved dev container configuration
-- **Code Quality**: Pre-commit and commit-msg git hooks for automated quality checks
-- **Linting**: Enhanced Clippy configuration in CI pipeline
-- **Toolchain**: Updated Rust MSRV to 1.82.0 for better compatibility
-- **CI/CD**: Improved continuous integration with comprehensive testing
+Also improved the development environment with better dev containers, added comprehensive pre-commit hooks, upgraded the Rust toolchain, and made the CI/CD pipeline much more robust. Fixed some compilation warnings and cleaned up the codebase.
 
-### Fixed
-- **Compilation**: Fixed slice mutation error in chat service
-- **Performance**: Resolved manual `div_ceil` implementation warnings
-- **Code Quality**: Removed unused imports and outdated comments
-- **Testing**: Fixed integration test environment variable handling
-
-### Security
-- **Audit**: Completed security audit of dependencies
-- **Encryption**: Verified AES-GCM-256 implementation integrity
-- **Input Validation**: Enhanced validation for all user inputs
+Did a full security audit and verified all the encryption implementations are solid.
 
 ---
 
 ## [0.1.5] - 2025-09-20
 
-### Added
-- **Version Command**: `--version` flag for version information
-- **Test Suites**: Comprehensive test suite with `./harpertest` script
-- **Documentation**: Initial documentation and usage examples
+Added a `--version` command so users can check which version they have. Built a comprehensive test suite that you can run with `./harpertest`. Started writing proper documentation and usage examples.
 
-### Changed
-- **Error Handling**: Improved error messages and user feedback
-- **Performance**: Optimized database queries and response times
-
-### Fixed
-- **Memory Usage**: Reduced memory footprint for large conversations
-- **Stability**: Fixed occasional crashes during long sessions
+Improved error messages to be more helpful, optimized database performance, reduced memory usage for long conversations, and fixed some crashes that happened occasionally.
 
 ---
 
 ## [0.1.4] - 2025-09-15
 
-### Fixed
-- **Database**: Connection stability improvements
-- **UI**: Minor interface rendering fixes
-- **Dependencies**: Updated vulnerable dependencies
+Small but important fixes: improved database connection stability, fixed some UI rendering issues, and updated dependencies to patch security vulnerabilities.
 
 ---
 
 ## [0.1.3] - 2025-09-14
 
-### Added
-- **CI/CD Pipeline**: GitHub Actions for automated testing and releases
-- **Security Scanning**: CodeQL integration for vulnerability detection
-- **Multi-Provider Support**: Enhanced AI provider integration
+Set up the full CI/CD pipeline with GitHub Actions for automated testing and releases. Added CodeQL for security scanning. Enhanced support for multiple AI providers.
 
-### Changed
-- **Architecture**: Improved modular design for better maintainability
-- **Error Handling**: More robust error recovery mechanisms
-
-### Fixed
-- **Build Process**: Resolved compilation issues on different platforms
-- **API Integration**: Fixed authentication issues with AI providers
+Improved the overall architecture to be more modular and maintainable. Made error handling much more robust. Fixed compilation issues on different platforms and resolved some API authentication problems.
 
 ---
 
 ## [0.1.2] - 2025-09-03
 
-### Added
-- **Security Features**: DevSkim security analysis integration
-- **CI Enhancements**: Expanded test coverage and automated checks
-
-### Changed
-- **Performance**: Optimized API response handling
-- **Reliability**: Improved connection stability
-
-### Security
-- **Vulnerability Fixes**: Addressed reported security issues
-- **Code Review**: Enhanced security-focused code review process
+Added DevSkim for automated security analysis and expanded the CI test coverage. Optimized API response handling and improved connection stability. Fixed some security vulnerabilities that were reported.
 
 ---
 
 ## [0.1.1] - 2025-09-03
 
-### Added
-- **Caching**: Response caching for improved performance
-- **Testing**: Expanded unit and integration test coverage
-
-### Changed
-- **User Experience**: Improved CLI interface and feedback
-- **Configuration**: More flexible configuration options
-
-### Fixed
-- **Stability**: Resolved application crashes under certain conditions
-- **Compatibility**: Fixed issues with different operating systems
+Added response caching to improve performance. Expanded the test coverage significantly. Improved the CLI interface and made configuration more flexible. Fixed application crashes and compatibility issues across different operating systems.
 
 ---
 
 ## [0.1.0] - 2025-08-26
 
-### Added
-- **Initial Release**: Core Harper functionality
-- **AI Providers**: Support for OpenAI, Sambanova, and Gemini
-- **CLI Interface**: Interactive command-line interface
-- **Session Management**: Persistent conversation storage
-- **SQLite Database**: Local data storage with encryption
-- **Command Execution**: Safe system command execution
-- **Web Search**: Integrated search capabilities
+The first release! Harper was born with support for multiple AI providers (OpenAI, Sambanova, Gemini), an interactive CLI interface, persistent conversation storage with encrypted SQLite database, safe command execution, and web search capabilities.
 
-### Features
-- Multi-provider AI integration with automatic model selection
-- Encrypted local storage for conversation history
-- Interactive menu-driven interface
-- Session export and management
-- Cross-platform compatibility (Linux, macOS, Windows)
+It was a working AI assistant with cross-platform support, but the interface was pretty basic. This was the foundation that everything else built on top of.
 
 ---
 
-## Version History Legend
+## How We Write These Updates
 
-- **Added**: New features or functionality
-- **Changed**: Modifications to existing features
-- **Deprecated**: Features marked for future removal
-- **Removed**: Features completely removed
-- **Fixed**: Bug fixes and patches
-- **Security**: Security-related changes and fixes
+We try to keep this changelog honest and helpful. Each entry explains what we actually did, why we did it, and how it affects users. No corporate jargon - just real talk about the development process.
 
-## Contributing to Changelog
-
-When contributing changes that should be documented:
-
-1. **Add entries** to the "Unreleased" section above
-2. **Categorize properly** using Added, Changed, Fixed, etc.
-3. **Be descriptive** but concise in change descriptions
-4. **Reference issues** when applicable (e.g., `#123`)
-
-The changelog is automatically updated during the release process.
+When we make changes that users should know about, we add them to the "Unreleased" section above. The changelog gets automatically updated when we create a new release.
 
 ---
 
-**For the latest updates, see the [GitHub Releases](https://github.com/harpertoken/harper/releases) page.**
+**Want the latest updates? Check the [GitHub Releases](https://github.com/harpertoken/harper/releases) page for downloadable versions.**

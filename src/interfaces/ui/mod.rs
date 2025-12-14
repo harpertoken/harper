@@ -1,4 +1,7 @@
-// UI utilities and display functions
+// UI interface for Harper
 pub mod app;
-pub mod draw;
+pub mod events;
 pub mod tui;
+pub mod widgets;
+
+pub use tui::run_tui;

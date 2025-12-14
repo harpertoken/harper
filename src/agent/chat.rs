@@ -22,6 +22,7 @@ pub struct ChatService<'a> {
     prompt_id: Option<String>,
 }
 
+#[allow(dead_code)]
 impl<'a> ChatService<'a> {
     /// Create a new chat service
     pub fn new(
@@ -71,6 +72,7 @@ impl<'a> ChatService<'a> {
     }
 
     /// Send a message and get response
+    #[allow(dead_code)]
     pub async fn send_message(
         &mut self,
         user_msg: &str,

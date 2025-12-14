@@ -187,8 +187,8 @@ No changes are required to existing functionality, and the fixes are entirely lo
 ## References
 
 - [Harper Documentation](docs/)
-- [Contributing Guide](docs/CONTRIBUTING.md)
-- [Security Policy](docs/SECURITY.md)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 - [OWASP API Security](https://owasp.org/www-project-api-security/)
 - [Common Weakness Enumeration](https://cwe.mitre.org/)

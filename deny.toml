@@ -27,7 +27,9 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 # Warn about yanked versions of crates
 yanked = "warn"
 # List of advisory IDs to ignore (e.g., { id = "RUSTSEC-YYYY-XXXX" })
-ignore = []
+ignore = [
+    "RUSTSEC-2024-0436",  # paste crate - used by ratatui, no security impact
+]
 
 # License configuration
 [licenses]
@@ -50,8 +52,8 @@ clarify = []
 
 # Dependency banning rules
 [bans]
-# Warn about multiple versions of the same crate
-multiple-versions = "warn"
+# Allow multiple versions of the same crate (not a license violation)
+multiple-versions = "allow"
 # Allow wildcard version requirements
 wildcards = "allow"
 # Highlight all versions of duplicate packages
