@@ -25,7 +25,7 @@ pub fn handle_event(
                 return EventResult::Quit;
             }
             KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let AppState::Chat(_, _, _, web_search_enabled) = &mut app.state {
+                if let AppState::Chat(_, _, _, _, web_search_enabled) = &mut app.state {
                     *web_search_enabled = !*web_search_enabled;
                     app.message = Some(format!(
                         "Web search {}",
@@ -38,7 +38,7 @@ pub fn handle_event(
                 }
             }
             KeyCode::Char('q') => {
-                if matches!(app.state, AppState::Chat(_, _, _, _)) {
+                if matches!(app.state, AppState::Chat(_, _, _, _, _)) {
                     app.state = AppState::Menu(0);
                 } else {
                     return EventResult::Quit;
@@ -47,7 +47,7 @@ pub fn handle_event(
             KeyCode::Esc => match &app.state {
                 AppState::Menu(_) => return EventResult::Quit,
                 AppState::Sessions(_, _) => app.state = AppState::Menu(0),
-                AppState::Chat(_, _, _, _) => app.state = AppState::Menu(0),
+                AppState::Chat(_, _, _, _, _) => app.state = AppState::Menu(0),
                 AppState::Tools(_) => app.state = AppState::Menu(0),
                 AppState::ViewSession(_, _, _) => app.state = AppState::Menu(0),
             },
@@ -66,7 +66,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
     match &mut app.state {
         AppState::Menu(selected) => {
             match *selected {
-                0 => app.state = AppState::Chat(vec![], String::new(), false, false), // Start Chat
+                0 => app.state = AppState::Chat(None, vec![], String::new(), false, false), // Start Chat
                 1 => {
                     // Load real sessions
                     match session_service.list_sessions_data() {
@@ -96,7 +96,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 _ => {}
             }
         }
-        AppState::Chat(_messages, input, _, _) => {
+        AppState::Chat(_, _messages, input, _, _) => {
             if !input.is_empty() {
                 let message = input.clone();
                 // Clear input
@@ -142,13 +142,13 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
 }
 
 fn handle_char_input(app: &mut TuiApp, c: char) {
-    if let AppState::Chat(_, input, _, _) = &mut app.state {
+    if let AppState::Chat(_, _, input, _, _) = &mut app.state {
         input.push(c);
     }
 }
 
 fn handle_backspace(app: &mut TuiApp) {
-    if let AppState::Chat(_, input, _, _) = &mut app.state {
+    if let AppState::Chat(_, _, input, _, _) = &mut app.state {
         input.pop();
     }
 }
