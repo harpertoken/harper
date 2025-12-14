@@ -45,7 +45,7 @@ impl TuiApp {
     pub fn next(&mut self) {
         match &mut self.state {
             AppState::Menu(sel) => *sel = (*sel + 1) % 6,
-            AppState::Chat(_, _, _, _) => {} // TODO: scroll messages
+            AppState::Chat(_, _, _, _, _) => {} // TODO: scroll messages
             AppState::Sessions(_, sel) => *sel = (*sel + 1) % 10, // TODO: proper length
             AppState::Tools(sel) => *sel = (*sel + 1) % 5,
             AppState::ViewSession(_, _, sel) => *sel = (*sel + 1) % 10,
@@ -55,7 +55,7 @@ impl TuiApp {
     pub fn previous(&mut self) {
         match &mut self.state {
             AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
-            AppState::Chat(_, _, _, _) => {} // TODO: scroll messages
+            AppState::Chat(_, _, _, _, _) => {} // TODO: scroll messages
             AppState::Sessions(_, sel) => *sel = if *sel == 0 { 9 } else { *sel - 1 },
             AppState::Tools(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
             AppState::ViewSession(_, _, sel) => *sel = if *sel == 0 { 9 } else { *sel - 1 },
