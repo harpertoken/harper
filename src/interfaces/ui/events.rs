@@ -1,4 +1,5 @@
 use crossterm::event::{Event, KeyCode, KeyModifiers};
+use uuid::Uuid;
 
 use super::app::{AppState, SessionInfo, TuiApp};
 use crate::memory::session_service::SessionService;
@@ -66,7 +67,15 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
     match &mut app.state {
         AppState::Menu(selected) => {
             match *selected {
-                0 => app.state = AppState::Chat(None, vec![], String::new(), false, false), // Start Chat
+                0 => {
+                    app.state = AppState::Chat(
+                        Some(Uuid::new_v4().to_string()),
+                        vec![],
+                        String::new(),
+                        false,
+                        false,
+                    )
+                } // Start Chat
                 1 => {
                     // Load real sessions
                     match session_service.list_sessions_data() {
@@ -89,7 +98,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 2 => {
                     app.state =
                         AppState::ViewSession("Select a session first".to_string(), vec![], 0)
-                } // View Session
+                } // Resume Session
                 3 => app.state = AppState::Tools(0), // Tools
                 4 => app.message = Some("Export not implemented yet".to_string()), // Export
                 5 => return EventResult::Quit,       // Quit
@@ -109,7 +118,13 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 let session = &sessions[*selected];
                 match session_service.view_session_data(&session.id) {
                     Ok(messages) => {
-                        app.state = AppState::ViewSession(session.name.clone(), messages, 0);
+                        app.state = AppState::Chat(
+                            Some(session.id.clone()),
+                            messages,
+                            String::new(),
+                            false,
+                            false,
+                        );
                     }
                     Err(e) => {
                         app.message = Some(format!("Error loading session: {}", e));

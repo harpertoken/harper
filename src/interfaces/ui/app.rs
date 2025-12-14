@@ -46,9 +46,17 @@ impl TuiApp {
         match &mut self.state {
             AppState::Menu(sel) => *sel = (*sel + 1) % 6,
             AppState::Chat(_, _, _, _, _) => {} // TODO: scroll messages
-            AppState::Sessions(_, sel) => *sel = (*sel + 1) % 10, // TODO: proper length
+            AppState::Sessions(sessions, sel) => {
+                if !sessions.is_empty() {
+                    *sel = (*sel + 1) % sessions.len();
+                }
+            }
             AppState::Tools(sel) => *sel = (*sel + 1) % 5,
-            AppState::ViewSession(_, _, sel) => *sel = (*sel + 1) % 10,
+            AppState::ViewSession(_, messages, sel) => {
+                if !messages.is_empty() {
+                    *sel = (*sel + 1) % messages.len();
+                }
+            }
         }
     }
 
@@ -56,9 +64,25 @@ impl TuiApp {
         match &mut self.state {
             AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
             AppState::Chat(_, _, _, _, _) => {} // TODO: scroll messages
-            AppState::Sessions(_, sel) => *sel = if *sel == 0 { 9 } else { *sel - 1 },
+            AppState::Sessions(sessions, sel) => {
+                if !sessions.is_empty() {
+                    *sel = if *sel == 0 {
+                        sessions.len() - 1
+                    } else {
+                        *sel - 1
+                    };
+                }
+            }
             AppState::Tools(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
-            AppState::ViewSession(_, _, sel) => *sel = if *sel == 0 { 9 } else { *sel - 1 },
+            AppState::ViewSession(_, messages, sel) => {
+                if !messages.is_empty() {
+                    *sel = if *sel == 0 {
+                        messages.len() - 1
+                    } else {
+                        *sel - 1
+                    };
+                }
+            }
         }
     }
 }
