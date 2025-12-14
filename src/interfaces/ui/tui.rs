@@ -49,12 +49,6 @@ pub async fn run_tui(
                         &mut app.state
                     {
                         let session_id = session_id.as_deref().unwrap();
-                        // Add user message
-                        messages.push(crate::core::Message {
-                            role: "user".to_string(),
-                            content: message.clone(),
-                        });
-
                         // Send to AI
                         match chat_service
                             .send_message(&message, messages, *web_search_enabled, session_id)
