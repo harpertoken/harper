@@ -1,6 +1,2 @@
-//! Interfaces module
-//!
-//! This module contains different interfaces for interacting with the agent,
-//! including CLI, TUI, and API interfaces.
-
+// Interface modules
 pub mod ui;

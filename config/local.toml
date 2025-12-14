@@ -5,7 +5,7 @@ base_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-f
 model_name = "gemini-2.5-flash"
 
 [database]
-path = "test_chat_sessions.db"
+path = ".harper/sessions.db"
 
 [mcp]
 enabled = true
