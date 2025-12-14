@@ -45,7 +45,7 @@ pub async fn run_tui(
             match result {
                 EventResult::Quit => break,
                 EventResult::SendMessage(message) => {
-                    if let AppState::Chat(messages, _, _, web_search_enabled) = &mut app.state {
+                    if let AppState::Chat(_, messages, _, _, web_search_enabled) = &mut app.state {
                         // Add user message
                         messages.push(crate::core::Message {
                             role: "user".to_string(),
