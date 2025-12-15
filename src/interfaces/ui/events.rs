@@ -1,5 +1,6 @@
 use crossterm::event::{Event, KeyCode, KeyModifiers};
 use std::fs;
+use std::path::Path;
 use uuid::Uuid;
 
 use super::app::{AppState, SessionInfo, TuiApp};
@@ -181,26 +182,31 @@ fn handle_tab(app: &mut TuiApp) {
         if input.starts_with('@') {
             // File completion
             if candidates.is_empty() {
-                let prefix = &input[1..]; // after @
-                let parts: Vec<&str> = prefix.split('/').collect();
-                let dir_path = if parts.len() > 1 {
-                    let mut p = parts.clone();
-                    p.pop();
-                    p.join("/")
+                let prefix = &input[1..];
+                let path = Path::new(prefix);
+
+                let dir_to_read = if prefix.is_empty() || prefix.ends_with('/') {
+                    path
                 } else {
-                    ".".to_string()
+                    path.parent().unwrap_or_else(|| Path::new("."))
                 };
-                let file_prefix = parts.last().unwrap_or(&"");
-                if let Ok(entries) = fs::read_dir(&dir_path) {
+
+                let file_prefix = if !prefix.is_empty() && !prefix.ends_with('/') {
+                    path.file_name().unwrap_or_default().to_str().unwrap_or("")
+                } else {
+                    ""
+                };
+
+                if let Ok(entries) = fs::read_dir(dir_to_read) {
                     for entry in entries.flatten() {
                         if let Some(name) = entry.file_name().to_str() {
                             if name.starts_with(file_prefix) {
-                                let full = if dir_path == "." {
-                                    name.to_string()
-                                } else {
-                                    format!("{}/{}", dir_path, name)
-                                };
-                                candidates.push(format!("@{}", full));
+                                let full_path = dir_to_read.join(name);
+                                if let Some(full_path_str) = full_path.to_str() {
+                                    // Normalize path separators for consistency
+                                    candidates
+                                        .push(format!("@{}", full_path_str.replace('\\', "/")));
+                                }
                             }
                         }
                     }
