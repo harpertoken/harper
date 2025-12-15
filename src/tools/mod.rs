@@ -45,13 +45,7 @@ impl<'a> ToolService<'a> {
         web_search_enabled: bool,
     ) -> Result<Option<(String, String)>, HarperError> {
         // Try to parse as JSON tool call first
-        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(response) {
-            if let Some(tool_name) = json_value.get("tool").and_then(|v| v.as_str()) {
-                return self
-                    .handle_json_tool(client, history, tool_name, &json_value)
-                    .await;
-            }
-        }
+        // JSON parsing commented out for debugging
 
         // Fallback to old bracket format
         if response.to_uppercase().starts_with(tools::RUN_COMMAND) {
@@ -119,106 +113,301 @@ impl<'a> ToolService<'a> {
         }
     }
 
-    /// Handle JSON tool calls
-    async fn handle_json_tool(
-        &mut self,
-        client: &Client,
-        history: &[Message],
-        tool_name: &str,
-        json_value: &serde_json::Value,
-    ) -> Result<Option<(String, String)>, HarperError> {
-        match tool_name {
-            "run_command" => {
-                if let Some(command) = json_value.get("command").and_then(|v| v.as_str()) {
-                    let bracket_command = format!("[RUN_COMMAND {}]", command);
-                    let command_result = shell::execute_command(&bracket_command, self.config)?;
-                    let final_response = self
-                        .call_llm_after_tool(client, history, &command_result)
-                        .await?;
-                    Ok(Some((final_response, command_result)))
-                } else {
-                    Ok(None)
+    /*
+        async fn handle_json_tool(
+            &mut self,
+            client: &Client,
+            history: &[Message],
+            tool_name: &str,
+            json_value: &serde_json::Value,
+        ) -> Result<Option<(String, String)>, HarperError> {
+            // Get parameters from "args" (Gemini format) or directly from json_value
+            let args = json_value.get("args");
+
+            match tool_name {
+                "run_command" => {
+                    let command = if let Some(args) = args {
+                        args.get("command")
+                    }
+    else {
+                        json_value.get("command")
+                    }.and_then(|v| v.as_str());
+                    if let Some(command) = command {
+                        let bracket_command = format!("[RUN_COMMAND {}]", command);
+                        let command_result = shell::execute_command(&bracket_command, self.config)?;
+                        let final_response = self
+                            .call_llm_after_tool(client, history, &command_result)
+                            .await?;
+                        Ok(Some((final_response, command_result)))
+                    }
+    else {
+                        Ok(None)
+                    }
                 }
-            }
-            "read_file" => {
-                if let Some(path) = json_value.get("path").and_then(|v| v.as_str()) {
-                    let bracket_command = format!("[READ_FILE {}]", path);
-                    let file_content = filesystem::read_file(&bracket_command)?;
-                    let final_response = self
-                        .call_llm_after_tool(client, history, &file_content)
-                        .await?;
-                    Ok(Some((final_response, file_content)))
-                } else {
-                    Ok(None)
+                "read_file" => {
+                    let path = if let Some(args) = args {
+                        args.get("path")
+                    }
+    else {
+                        json_value.get("path")
+                    }.and_then(|v| v.as_str());
+                    if let Some(path) = path {
+                        let bracket_command = format!("[READ_FILE {}]", path);
+                        let file_content = filesystem::read_file(&bracket_command)?;
+                        let final_response = self
+                            .call_llm_after_tool(client, history, &file_content)
+                            .await?;
+                        Ok(Some((final_response, file_content)))
+                    }
+    else {
+                        Ok(None)
+                    }
                 }
-            }
-            "write_file" => {
-                if let (Some(path), Some(content)) = (
-                    json_value.get("path").and_then(|v| v.as_str()),
-                    json_value.get("content").and_then(|v| v.as_str()),
-                ) {
-                    let bracket_command = format!("[WRITE_FILE {} {}]", path, content);
-                    let write_result = filesystem::write_file(&bracket_command)?;
-                    let final_response = self
-                        .call_llm_after_tool(client, history, &write_result)
-                        .await?;
-                    Ok(Some((final_response, write_result)))
-                } else {
-                    Ok(None)
+                "write_file" => {
+                    let path = if let Some(args) = args {
+                        args.get("path")
+                    }
+    else {
+                        json_value.get("path")
+                    }.and_then(|v| v.as_str());
+                    let content = if let Some(args) = args {
+                        args.get("content")
+                    }
+    else {
+                        json_value.get("content")
+                    }.and_then(|v| v.as_str());
+                    if let (Some(path), Some(content)) = (path, content) {
+                        let bracket_command = format!("[WRITE_FILE {} {}]", path, content);
+                        let write_result = filesystem::write_file(&bracket_command)?;
+                        let final_response = self
+                            .call_llm_after_tool(client, history, &write_result)
+                            .await?;
+                        Ok(Some((final_response, write_result)))
+                    }
+    else {
+                        Ok(None)
+                    }
                 }
-            }
-            "search_replace" => {
-                if let (Some(path), Some(old_string), Some(new_string)) = (
-                    json_value.get("path").and_then(|v| v.as_str()),
-                    json_value.get("old_string").and_then(|v| v.as_str()),
-                    json_value.get("new_string").and_then(|v| v.as_str()),
-                ) {
-                    let bracket_command =
-                        format!("[SEARCH_REPLACE {} {} {}]", path, old_string, new_string);
-                    let replace_result = filesystem::search_replace(&bracket_command)?;
-                    let final_response = self
-                        .call_llm_after_tool(client, history, &replace_result)
-                        .await?;
-                    Ok(Some((final_response, replace_result)))
-                } else {
-                    Ok(None)
+                "search_replace" => {
+                    let path = if let Some(args) = args {
+                        args.get("path")
+                    }
+    else {
+                        json_value.get("path")
+                    }.and_then(|v| v.as_str());
+                    let old_string = if let Some(args) = args {
+                        args.get("old_string")
+                    }
+    else {
+                        json_value.get("old_string")
+                    }.and_then(|v| v.as_str());
+                    let new_string = if let Some(args) = args {
+                        args.get("new_string")
+                    }
+    else {
+                        json_value.get("new_string")
+                    }.and_then(|v| v.as_str());
+                    if let (Some(path), Some(old_string), Some(new_string)) = (path, old_string, new_string) {
+                        let bracket_command = format!("[SEARCH_REPLACE {} {} {}]", path, old_string, new_string);
+                        let replace_result = filesystem::search_replace(&bracket_command)?;
+                        let final_response = self
+                            .call_llm_after_tool(client, history, &replace_result)
+                            .await?;
+                        Ok(Some((final_response, replace_result)))
+                    }
+    else {
+                        Ok(None)
+                    }
                 }
-            }
-            "todo" => {
-                if let Some(action) = json_value.get("action").and_then(|v| v.as_str()) {
-                    let bracket_command = match action {
-                        "add" => {
-                            if let Some(description) =
-                                json_value.get("description").and_then(|v| v.as_str())
-                            {
-                                format!("[TODO add {}]", description)
-                            } else {
-                                return Ok(None);
+                "todo" => {
+                    let action = if let Some(args) = args {
+                        args.get("action")
+                    }
+    else {
+                        json_value.get("action")
+                    }.and_then(|v| v.as_str());
+                    if let Some(action) = action {
+                        let bracket_command = match action {
+                            "add" => {
+                                let description = if let Some(args) = args {
+                                    args.get("description")
+                                }
+    else {
+                                    json_value.get("description")
+                                }.and_then(|v| v.as_str());
+                                if let Some(description) = description {
+                                    format!("[TODO add {}]", description)
+                                }
+    else {
+                                    "".to_string()
+                                }
                             }
-                        }
-                        "list" => "[TODO list]".to_string(),
-                        "remove" => {
-                            if let Some(index) = json_value.get("index").and_then(|v| v.as_i64()) {
-                                format!("[TODO remove {}]", index)
-                            } else {
-                                return Ok(None);
+                            "list" => "[TODO list]".to_string(),
+                            "remove" => {
+                                let index = if let Some(args) = args {
+                                    args.get("index")
+                                }
+    else {
+                                    json_value.get("index")
+                                }.and_then(|v| v.as_i64());
+                                if let Some(index) = index {
+                                    format!("[TODO remove {}]", index)
+                                }
+    else {
+                                    "".to_string()
+                                }
                             }
+                            "clear" => "[TODO clear]".to_string(),
+                            _ => "".to_string(),
+                        };
+                        if bracket_command.is_empty() {
+                            return Ok(None);
                         }
-                        "clear" => "[TODO clear]".to_string(),
-                        _ => return Ok(None),
-                    };
-                    let todo_result = todo::manage_todo(&bracket_command)?;
-                    let final_response = self
-                        .call_llm_after_tool(client, history, &todo_result)
-                        .await?;
-                    Ok(Some((final_response, todo_result)))
-                } else {
-                    Ok(None)
+                        let todo_result = todo::manage_todo(&bracket_command)?;
+                        let final_response = self
+                            .call_llm_after_tool(client, history, &todo_result)
+                            .await?;
+                        Ok(Some((final_response, todo_result)))
+                    }
+    else {
+                        Ok(None)
+                    }
                 }
+                _ => Ok(None),
             }
-            _ => Ok(None),
         }
-    }
+                "read_file" => {
+                    let path = if let Some(args) = args {
+                        args.get("path")
+                    }
+    else {
+                        json_value.get("path")
+                    }.and_then(|v| v.as_str());
+                    if let Some(path) = path {
+                        let bracket_command = format!("[READ_FILE {}]", path);
+                        let file_content = filesystem::read_file(&bracket_command)?;
+                        let final_response = self
+                            .call_llm_after_tool(client, history, &file_content)
+                            .await?;
+                        Ok(Some((final_response, file_content)))
+                    }
+    else {
+                        Ok(None)
+                    }
+                }
+                "write_file" => {
+                    let path = if let Some(args) = args {
+                        args.get("path")
+                    }
+    else {
+                        json_value.get("path")
+                    }.and_then(|v| v.as_str());
+                    let content = if let Some(args) = args {
+                        args.get("content")
+                    }
+    else {
+                        json_value.get("content")
+                    }.and_then(|v| v.as_str());
+                    if let (Some(path), Some(content)) = (path, content) {
+                        let bracket_command = format!("[WRITE_FILE {} {}]", path, content);
+                        let write_result = filesystem::write_file(&bracket_command)?;
+                        let final_response = self
+                            .call_llm_after_tool(client, history, &write_result)
+                            .await?;
+                        Ok(Some((final_response, write_result)))
+                    }
+    else {
+                        Ok(None)
+                    }
+                }
+                "search_replace" => {
+                    let path = if let Some(args) = args {
+                        args.get("path")
+                    }
+    else {
+                        json_value.get("path")
+                    }.and_then(|v| v.as_str());
+                    let old_string = if let Some(args) = args {
+                        args.get("old_string")
+                    }
+    else {
+                        json_value.get("old_string")
+                    }.and_then(|v| v.as_str());
+                    let new_string = if let Some(args) = args {
+                        args.get("new_string")
+                    }
+    else {
+                        json_value.get("new_string")
+                    }.and_then(|v| v.as_str());
+                    if let (Some(path), Some(old_string), Some(new_string)) = (path, old_string, new_string) {
+                        let bracket_command = format!("[SEARCH_REPLACE {} {} {}]", path, old_string, new_string);
+                        let replace_result = filesystem::search_replace(&bracket_command)?;
+                        let final_response = self
+                            .call_llm_after_tool(client, history, &replace_result)
+                            .await?;
+                        Ok(Some((final_response, replace_result)))
+                    }
+    else {
+                        Ok(None)
+                    }
+                }
+                "todo" => {
+                    let action = if let Some(args) = args {
+                        args.get("action")
+                    }
+    else {
+                        json_value.get("action")
+                    }.and_then(|v| v.as_str());
+                    if let Some(action) = action {
+                        let bracket_command = match action {
+                            "add" => {
+                                let description = if let Some(args) = args {
+                                    args.get("description")
+                                }
+    else {
+                                    json_value.get("description")
+                                }.and_then(|v| v.as_str());
+                                if let Some(description) = description {
+                                    format!("[TODO add {}]", description)
+                                }
+    else {
+                                    "".to_string()
+                                }
+                            }
+                            "list" => "[TODO list]".to_string(),
+                            "remove" => {
+                                let index = if let Some(args) = args {
+                                    args.get("index")
+                                }
+    else {
+                                    json_value.get("index")
+                                }.and_then(|v| v.as_i64());
+                                if let Some(index) = index {
+                                    format!("[TODO remove {}]", index)
+                                }
+    else {
+                                    "".to_string()
+                                }
+                            }
+                            "clear" => "[TODO clear]".to_string(),
+                            _ => "".to_string(),
+                        };
+                        if bracket_command.is_empty() {
+                            return Ok(None);
+                        }
+                        let todo_result = todo::manage_todo(&bracket_command)?;
+                        let final_response = self
+                            .call_llm_after_tool(client, history, &todo_result)
+                            .await?;
+                        Ok(Some((final_response, todo_result)))
+                    }
+    else {
+                        Ok(None)
+                    }
+                }
+                _ => Ok(None),
+         }
+     */
 
     /// Call LLM after tool usage
     async fn call_llm_after_tool(
