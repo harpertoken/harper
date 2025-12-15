@@ -4,15 +4,7 @@ use crate::core::Message;
 pub enum AppState {
     Menu(usize),
     #[allow(dead_code)]
-    Chat(
-        Option<String>,
-        Vec<Message>,
-        String,
-        bool,
-        bool,
-        Vec<String>,
-        usize,
-    ), // session_id, messages, input, web_search, web_search_enabled, completion_candidates, completion_index
+    Chat(String, Vec<Message>, String, bool, bool, Vec<String>, usize), // session_id, messages, input, web_search, web_search_enabled, completion_candidates, completion_index
     Sessions(Vec<SessionInfo>, usize), // sessions, selected
     Tools(usize),                      // selected tool
     #[allow(dead_code)]
