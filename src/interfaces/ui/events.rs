@@ -221,7 +221,7 @@ fn handle_tab(app: &mut TuiApp) {
         } else if input.starts_with('/') {
             // Command completion
             if candidates.is_empty() {
-                let commands = vec!["/help", "/quit", "/clear", "/history"];
+                let commands = vec!["/help", "/quit", "/clear", "/exit"];
                 for cmd in commands {
                     if cmd.starts_with(&*input) {
                         candidates.push(cmd.to_string());
