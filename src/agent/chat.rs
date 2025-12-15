@@ -120,7 +120,7 @@ You have the ability to read and write files, search and replace text in files, 
             prompt.push_str(&format!("\n\nProject Context:\n{}", context));
         }
 
-        prompt.push_str("\n\nYou can use tools to interact with the filesystem and run commands. Always try your hardest to use the tools to answer the user's request. If you can't use the tools, explain why.
+        prompt.push_str("\n\nYou have tools to interact with the system. To use a tool, respond with ONLY the tool command. Do not add any other text. If you cannot use a tool for the user's request, explain why.
 
 Available tools:
 - read_file(path): Read the contents of a file
