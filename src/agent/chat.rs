@@ -329,6 +329,8 @@ Tool formats:
         session_id: &str,
         content: &str,
     ) -> Result<(), HarperError> {
+        // Ensure session exists
+        self.save_session(session_id)?;
         history.push(Message {
             role: "user".to_string(),
             content: content.to_string(),
