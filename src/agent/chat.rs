@@ -127,7 +127,7 @@ Available tools:
 - write_file(path, content): Write content to a file
 - search_replace(path, old_string, new_string): Search and replace text in a file
 - run_command(command): Run a shell command
-- todo(action, description?, id?): Manage todo list (actions: add, list, complete)
+- todo(action, description?, index?): Manage todo list (actions: add, list, remove, clear)
 
 To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"path\": \"example.txt\", \"content\": \"Hello world\"}");
 

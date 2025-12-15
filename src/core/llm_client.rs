@@ -149,22 +149,22 @@ pub async fn call_llm(
                     },
                     {
                         "name": "todo",
-                        "description": "Manage todo list",
+                        "description": "Manage todo list. Supported actions: add, list, remove, clear",
                         "parameters": {
                             "type": "object",
                             "properties": {
                                 "action": {
                                     "type": "string",
-                                    "enum": ["add", "list", "complete"],
+                                    "enum": ["add", "list", "remove", "clear"],
                                     "description": "The action to perform"
                                 },
                                 "description": {
                                     "type": "string",
-                                    "description": "Description for add action"
+                                    "description": "Description for 'add' action"
                                 },
-                                "id": {
-                                    "type": "string",
-                                    "description": "ID for complete action"
+                                "index": {
+                                    "type": "integer",
+                                    "description": "1-based index for 'remove' action"
                                 }
                             },
                             "required": ["action"]
