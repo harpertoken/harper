@@ -123,13 +123,13 @@ mod tests {
         // Test without web search
         let prompt = chat_service.build_system_prompt(false);
         assert!(prompt.contains("gpt-4"));
-        assert!(prompt.contains("RUN_COMMAND")); // Tools are always available now
+        assert!(prompt.contains("run_command")); // Tools are always available now
         assert!(!prompt.contains("SEARCH:"));
 
         // Test with web search
         let prompt = chat_service.build_system_prompt(true);
         assert!(prompt.contains("gpt-4"));
-        assert!(prompt.contains("RUN_COMMAND"));
+        assert!(prompt.contains("run_command"));
         assert!(prompt.contains("SEARCH:"));
     }
 
