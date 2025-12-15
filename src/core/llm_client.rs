@@ -77,8 +77,105 @@ pub async fn call_llm(
                 }
             }
 
+            let tools = json!({
+                "function_declarations": [
+                    {
+                        "name": "read_file",
+                        "description": "Read the contents of a file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "path": {
+                                    "type": "string",
+                                    "description": "The path to the file to read"
+                                }
+                            },
+                            "required": ["path"]
+                        }
+                    },
+                    {
+                        "name": "write_file",
+                        "description": "Write content to a file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "path": {
+                                    "type": "string",
+                                    "description": "The path to the file to write"
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "The content to write to the file"
+                                }
+                            },
+                            "required": ["path", "content"]
+                        }
+                    },
+                    {
+                        "name": "search_replace",
+                        "description": "Search and replace text in a file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "path": {
+                                    "type": "string",
+                                    "description": "The path to the file"
+                                },
+                                "old_string": {
+                                    "type": "string",
+                                    "description": "The text to replace"
+                                },
+                                "new_string": {
+                                    "type": "string",
+                                    "description": "The replacement text"
+                                }
+                            },
+                            "required": ["path", "old_string", "new_string"]
+                        }
+                    },
+                    {
+                        "name": "run_command",
+                        "description": "Run a shell command",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "command": {
+                                    "type": "string",
+                                    "description": "The command to run"
+                                }
+                            },
+                            "required": ["command"]
+                        }
+                    },
+                    {
+                        "name": "todo",
+                        "description": "Manage todo list",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "action": {
+                                    "type": "string",
+                                    "enum": ["add", "list", "complete"],
+                                    "description": "The action to perform"
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "description": "Description for add action"
+                                },
+                                "id": {
+                                    "type": "string",
+                                    "description": "ID for complete action"
+                                }
+                            },
+                            "required": ["action"]
+                        }
+                    }
+                ]
+            });
+
             let mut body = json!({
-                "contents": gemini_contents
+                "contents": gemini_contents,
+                "tools": [tools]
             });
 
             if !system_instructions.is_empty() {

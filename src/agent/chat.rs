@@ -122,13 +122,14 @@ You have the ability to read and write files, search and replace text in files, 
 
         prompt.push_str("\n\nYou can use tools to interact with the filesystem and run commands. Always try your hardest to use the tools to answer the user's request. If you can't use the tools, explain why.
 
-Tool formats:
-- Read a file: `[READ_FILE <path>]`
-- Write to a file: `[WRITE_FILE <path> <content>]`
-- Search and replace in a file: `[SEARCH_REPLACE <path> <old_string> <new_string>]`
-- Manage todo list: `[TODO <action> <description>]` (actions: add, list, complete <id>)
-- Run a shell command: `[RUN_COMMAND <command to run>]`
-- Git operations: `[GIT_STATUS]`, `[GIT_DIFF]`, `[GIT_COMMIT <message>]`, `[GIT_ADD <files>]`");
+Available tools:
+- read_file(path): Read the contents of a file
+- write_file(path, content): Write content to a file
+- search_replace(path, old_string, new_string): Search and replace text in a file
+- run_command(command): Run a shell command
+- todo(action, description?, id?): Manage todo list (actions: add, list, complete)
+
+To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"path\": \"example.txt\", \"content\": \"Hello world\"}");
 
         if web_search_enabled {
             let current_year = chrono::Local::now().year();
