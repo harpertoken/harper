@@ -169,6 +169,52 @@ pub async fn call_llm(
                             },
                             "required": ["action"]
                         }
+                    },
+                    {
+                        "name": "git_status",
+                        "description": "Get the current git status",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {},
+                            "required": []
+                        }
+                    },
+                    {
+                        "name": "git_diff",
+                        "description": "Get the git diff",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {},
+                            "required": []
+                        }
+                    },
+                    {
+                        "name": "git_commit",
+                        "description": "Commit changes with a message",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "description": "The commit message"
+                                }
+                            },
+                            "required": ["message"]
+                        }
+                    },
+                    {
+                        "name": "git_add",
+                        "description": "Add files to git staging",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "files": {
+                                    "type": "string",
+                                    "description": "Files to add (space-separated)"
+                                }
+                            },
+                            "required": ["files"]
+                        }
                     }
                 ]
             });
