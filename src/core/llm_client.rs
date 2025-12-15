@@ -58,35 +58,34 @@ pub async fn call_llm(
                 .await?
         }
         ApiProvider::Gemini => {
+            let mut system_instruction = None;
             let mut gemini_contents = Vec::new();
-            if let Some(first_message) = history.first() {
-                if first_message.role == "system" {
-                    gemini_contents.push(json!({
-                        "role": "user",
-                        "parts": [{"text": first_message.content}]
+
+            for msg in history {
+                if msg.role == "system" {
+                    system_instruction = Some(json!({
+                        "parts": [{"text": msg.content}]
                     }));
+                } else {
+                    let role = if msg.role == "assistant" {
+                        "model"
+                    } else {
+                        "user"
+                    };
                     gemini_contents.push(json!({
-                        "role": "model",
-                        "parts": [{"text": "Understood."}]
+                        "role": role,
+                        "parts": [{"text": msg.content}]
                     }));
                 }
             }
 
-            for msg in history.iter().skip(1) {
-                let role = if msg.role == "assistant" {
-                    "model"
-                } else {
-                    "user"
-                };
-                gemini_contents.push(json!({
-                    "role": role,
-                    "parts": [{"text": msg.content}]
-                }));
-            }
-
-            let body = json!({
+            let mut body = json!({
                 "contents": gemini_contents
             });
+
+            if let Some(sys_inst) = system_instruction {
+                body["systemInstruction"] = sys_inst;
+            }
             let url = format!("{}?key={}", config.base_url, config.api_key);
             client
                 .post(&url)

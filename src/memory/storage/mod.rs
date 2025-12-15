@@ -19,6 +19,8 @@ use rusqlite::{params, Connection};
 pub fn init_db(conn: &Connection) -> HarperResult<()> {
     // Enable WAL mode for better concurrent access
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+    // Enable foreign key constraints
+    conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY,
