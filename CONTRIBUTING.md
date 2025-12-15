@@ -181,69 +181,9 @@ cargo fmt -- --check
 - **Performance**: Consider performance implications of changes
 - **Security**: Follow secure coding practices
 
-### Preferring Structs and Enums over Classes
+### Rust Coding Guidelines
 
-Rust does not have classes, but we use structs and enums for data modeling. While traits provide polymorphism, we prefer composition and associated functions over complex inheritance hierarchies.
-
-- Seamless Integration: Structs and enums work naturally with Rust's ownership and borrowing system.
-- Reduced Boilerplate: Derive macros (`#[derive(Debug, Clone)]`) provide common functionality without verbose implementations.
-- Enhanced Readability and Predictability: Explicit field access and pattern matching make data structures clear and safe.
-- Simplified Immutability: Rust's default immutability encourages functional programming patterns.
-
-### Embracing Iterator Methods
-
-To enhance code cleanliness and promote safe functional programming practices, leverage Rust's rich set of iterator methods as much as possible. Methods like `.map()`, `.filter()`, `.fold()`, `.collect()`, and others are incredibly powerful for transforming and manipulating data collections in an immutable and declarative way.
-
-Using these operators:
-
-- Promotes Immutability: Most iterator methods return new collections, leaving the original untouched.
-- Improves Readability: Chaining iterator methods often leads to more concise and expressive code.
-- Facilitates Functional Programming: These methods are cornerstones of functional programming, encouraging pure functions.
-- Enhances Performance: Iterators can be lazy and composed efficiently.
-
-### Avoiding `unwrap()` and `expect()`; Preferring Proper Error Handling
-
-Rust's power lies in its compile-time guarantees and explicit error handling. To fully leverage this, it's crucial to avoid `unwrap()` and `expect()` in production code.
-
-- **The Dangers of `unwrap()`**: `unwrap()` panics on `None`/`Err`, crashing the program. While convenient for prototyping, it introduces runtime failures that could be handled gracefully.
-- **Loss of Robustness**: Code with `unwrap()` is brittle and can fail unexpectedly in production.
-- **Reduced Maintainability**: Debugging panics from `unwrap()` is harder than handling errors explicitly.
-
-- **Preferring `?` and `match`**: Use the `?` operator for propagating errors in functions that return `Result`. Use `match` or `if let` for explicit handling.
-
-  ```rust
-  fn process_data(data: Option<Data>) -> Result<Processed, Error> {
-      let data = data.ok_or(Error::MissingData)?;
-      // Process data...
-      Ok(processed)
-  }
-  ```
-
-- **Type Assertions - Use with Caution**: Type casting with `as` can be unsafe. Prefer safe conversions or pattern matching.
-
-### Result and Option Patterns
-
-Use `Result` and `Option` extensively for error handling and optional values. This makes code more robust and forces callers to handle potential failures.
-
-- **Early Returns**: Use `?` for early returns on errors.
-- **Pattern Matching**: Prefer `match` over `unwrap()` for handling variants.
-- **Builder Pattern**: For complex construction, use the builder pattern with `Result`.
-
-### Avoiding Global State; Preferring Dependency Injection
-
-Avoid global variables and static mutables. Instead, pass dependencies explicitly through function parameters or struct fields.
-
-- **Testability**: Explicit dependencies make unit testing easier.
-- **Concurrency**: Shared state is harder to reason about in concurrent code.
-- **Modularity**: Clear interfaces between components.
-
-### Embracing Cargo Features for Conditional Compilation
-
-Use Cargo features to conditionally compile code based on requirements.
-
-- **Optional Dependencies**: Enable features only when needed.
-- **Platform-Specific Code**: Use `#[cfg()]` attributes for platform-specific implementations.
-- **Modular Design**: Features allow users to customize builds.
+For detailed Rust coding guidelines that the AI agent follows, see [AGENTS.md](../AGENTS.md#rust-coding-guidelines). These include best practices for structs/enums, iterators, error handling, testing, and more.
 
 ### Documentation Guidelines
 
