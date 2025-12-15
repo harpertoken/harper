@@ -186,17 +186,26 @@ impl<'a> ToolService<'a> {
             }
             "todo" => {
                 if let Some(action) = json_value.get("action").and_then(|v| v.as_str()) {
-                    let description = json_value
-                        .get("description")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    let id = json_value.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                    let bracket_command = if !id.is_empty() {
-                        format!("[TODO {} {} {}]", action, description, id)
-                    } else if !description.is_empty() {
-                        format!("[TODO {} {}]", action, description)
-                    } else {
-                        format!("[TODO {}]", action)
+                    let bracket_command = match action {
+                        "add" => {
+                            if let Some(description) =
+                                json_value.get("description").and_then(|v| v.as_str())
+                            {
+                                format!("[TODO add {}]", description)
+                            } else {
+                                return Ok(None);
+                            }
+                        }
+                        "list" => "[TODO list]".to_string(),
+                        "remove" => {
+                            if let Some(index) = json_value.get("index").and_then(|v| v.as_i64()) {
+                                format!("[TODO remove {}]", index)
+                            } else {
+                                return Ok(None);
+                            }
+                        }
+                        "clear" => "[TODO clear]".to_string(),
+                        _ => return Ok(None),
                     };
                     let todo_result = todo::manage_todo(&bracket_command)?;
                     let final_response = self
