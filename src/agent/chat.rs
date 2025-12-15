@@ -132,8 +132,9 @@ Available tools:
 To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"path\": \"example.txt\", \"content\": \"Hello world\"}");
 
         // Load and append agent guidelines
-        if let Ok(guidelines) = std::fs::read_to_string("AGENTS.md") {
-            prompt.push_str(&format!("\n\nAgent Guidelines:\n{}", guidelines));
+        match std::fs::read_to_string("AGENTS.md") {
+            Ok(guidelines) => prompt.push_str(&format!("\n\nAgent Guidelines:\n{}", guidelines)),
+            Err(e) => eprintln!("Warning: Could not load AGENTS.md: {}. Agent will proceed without guidelines.", e),
         }
 
         if web_search_enabled {
