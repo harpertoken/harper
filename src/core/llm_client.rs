@@ -58,14 +58,12 @@ pub async fn call_llm(
                 .await?
         }
         ApiProvider::Gemini => {
-            let mut system_instruction = None;
+            let mut system_instructions = Vec::new();
             let mut gemini_contents = Vec::new();
 
             for msg in history {
                 if msg.role == "system" {
-                    system_instruction = Some(json!({
-                        "parts": [{"text": msg.content}]
-                    }));
+                    system_instructions.push(msg.content.as_str());
                 } else {
                     let role = if msg.role == "assistant" {
                         "model"
@@ -83,8 +81,10 @@ pub async fn call_llm(
                 "contents": gemini_contents
             });
 
-            if let Some(sys_inst) = system_instruction {
-                body["systemInstruction"] = sys_inst;
+            if !system_instructions.is_empty() {
+                body["systemInstruction"] = json!({
+                    "parts": [{"text": system_instructions.join("\n\n")}]
+                });
             }
             let url = format!("{}?key={}", config.base_url, config.api_key);
             client
