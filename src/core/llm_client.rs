@@ -216,10 +216,17 @@ pub async fn call_llm(
             .as_str()
             .unwrap_or("[No response]")
             .to_string(),
-        ApiProvider::Gemini => resp_json["candidates"][0]["content"]["parts"][0]["text"]
-            .as_str()
-            .unwrap_or("[No response]")
-            .to_string(),
+        ApiProvider::Gemini => {
+            let part = &resp_json["candidates"][0]["content"]["parts"][0];
+            if let Some(function_call) = part.get("functionCall") {
+                serde_json::to_string(function_call).unwrap_or_else(|_| "[No response]".to_string())
+            } else {
+                part.get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("[No response]")
+                    .to_string()
+            }
+        }
     };
 
     Ok(assistant_reply)
