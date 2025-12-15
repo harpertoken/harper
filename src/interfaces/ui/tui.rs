@@ -45,7 +45,7 @@ pub async fn run_tui(
             match result {
                 EventResult::Quit => break,
                 EventResult::SendMessage(message) => {
-                    if let AppState::Chat(session_id, messages, _, _, web_search_enabled) =
+                    if let AppState::Chat(session_id, messages, _, _, web_search_enabled, ..) =
                         &mut app.state
                     {
                         let session_id = session_id.as_deref().unwrap();

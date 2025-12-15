@@ -131,6 +131,11 @@ Available tools:
 
 To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"path\": \"example.txt\", \"content\": \"Hello world\"}");
 
+        // Load and append agent guidelines
+        if let Ok(guidelines) = std::fs::read_to_string("AGENTS.md") {
+            prompt.push_str(&format!("\n\nAgent Guidelines:\n{}", guidelines));
+        }
+
         if web_search_enabled {
             let current_year = chrono::Local::now().year();
             prompt.push_str(&format!(

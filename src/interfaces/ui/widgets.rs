@@ -6,7 +6,7 @@ use super::app::{AppState, SessionInfo, TuiApp};
 pub fn draw(frame: &mut Frame, app: &TuiApp) {
     match &app.state {
         AppState::Menu(selected) => draw_menu(frame, *selected),
-        AppState::Chat(_, messages, input, _, web_search_enabled) => {
+        AppState::Chat(_, messages, input, _, web_search_enabled, _, _) => {
             draw_chat(frame, messages, input, *web_search_enabled)
         }
         AppState::Sessions(sessions, selected) => draw_sessions(frame, sessions, *selected),
@@ -194,7 +194,7 @@ fn draw_view_session(
 fn draw_status_bar(frame: &mut Frame, app: &TuiApp) {
     let mode = match &app.state {
         AppState::Menu(_) => "MENU",
-        AppState::Chat(_, _, _, _, _) => "CHAT",
+        AppState::Chat(..) => "CHAT",
         AppState::Sessions(_, _) => "SESSIONS",
         AppState::Tools(_) => "TOOLS",
         AppState::ViewSession(_, _, _) => "VIEW",

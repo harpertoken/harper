@@ -1,4 +1,5 @@
 use crossterm::event::{Event, KeyCode, KeyModifiers};
+use std::fs;
 use uuid::Uuid;
 
 use super::app::{AppState, SessionInfo, TuiApp};
@@ -45,7 +46,7 @@ pub fn handle_event(
                 return EventResult::Quit;
             }
             KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let AppState::Chat(_, _, _, _, web_search_enabled) = &mut app.state {
+                if let AppState::Chat(_, _, _, _, web_search_enabled, ..) = &mut app.state {
                     *web_search_enabled = !*web_search_enabled;
                     app.message = Some(format!(
                         "Web search {}",
@@ -58,7 +59,7 @@ pub fn handle_event(
                 }
             }
             KeyCode::Char('q') => {
-                if matches!(app.state, AppState::Chat(_, _, _, _, _)) {
+                if matches!(app.state, AppState::Chat(..)) {
                     app.state = AppState::Menu(0);
                 } else {
                     return EventResult::Quit;
@@ -67,13 +68,14 @@ pub fn handle_event(
             KeyCode::Esc => match &app.state {
                 AppState::Menu(_) => return EventResult::Quit,
                 AppState::Sessions(_, _) => app.state = AppState::Menu(0),
-                AppState::Chat(_, _, _, _, _) => app.state = AppState::Menu(0),
+                AppState::Chat(..) => app.state = AppState::Menu(0),
                 AppState::Tools(_) => app.state = AppState::Menu(0),
                 AppState::ViewSession(_, _, _) => app.state = AppState::Menu(0),
             },
             KeyCode::Down | KeyCode::Char('j') => app.next(),
             KeyCode::Up | KeyCode::Char('k') => app.previous(),
             KeyCode::Enter => return handle_enter(app, session_service),
+            KeyCode::Tab => handle_tab(app),
             KeyCode::Char(c) => handle_char_input(app, c),
             KeyCode::Backspace => handle_backspace(app),
             _ => {}
@@ -93,6 +95,8 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         String::new(),
                         false,
                         false,
+                        vec![],
+                        0,
                     )
                 } // Start Chat
                 1 => load_sessions_into_state(app, session_service),
@@ -103,7 +107,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 _ => {}
             }
         }
-        AppState::Chat(_, _messages, input, _, _) => {
+        AppState::Chat(_, _messages, input, ..) => {
             if !input.is_empty() {
                 let message = input.clone();
                 // Clear input
@@ -122,6 +126,8 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                             String::new(),
                             false,
                             false,
+                            vec![],
+                            0,
                         );
                     }
                     Err(e) => {
@@ -155,13 +161,76 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
 }
 
 fn handle_char_input(app: &mut TuiApp, c: char) {
-    if let AppState::Chat(_, _, input, _, _) = &mut app.state {
+    if let AppState::Chat(_, _, input, _, _, candidates, index) = &mut app.state {
         input.push(c);
+        candidates.clear();
+        *index = 0;
     }
 }
 
 fn handle_backspace(app: &mut TuiApp) {
-    if let AppState::Chat(_, _, input, _, _) = &mut app.state {
+    if let AppState::Chat(_, _, input, _, _, candidates, index) = &mut app.state {
         input.pop();
+        candidates.clear();
+        *index = 0;
+    }
+}
+
+fn handle_tab(app: &mut TuiApp) {
+    if let AppState::Chat(_, _, input, _, _, candidates, index) = &mut app.state {
+        if input.starts_with('@') {
+            // File completion
+            if candidates.is_empty() {
+                let prefix = &input[1..]; // after @
+                let parts: Vec<&str> = prefix.split('/').collect();
+                let dir_path = if parts.len() > 1 {
+                    let mut p = parts.clone();
+                    p.pop();
+                    p.join("/")
+                } else {
+                    ".".to_string()
+                };
+                let file_prefix = parts.last().unwrap_or(&"");
+                if let Ok(entries) = fs::read_dir(&dir_path) {
+                    for entry in entries.flatten() {
+                        if let Some(name) = entry.file_name().to_str() {
+                            if name.starts_with(file_prefix) {
+                                let full = if dir_path == "." {
+                                    name.to_string()
+                                } else {
+                                    format!("{}/{}", dir_path, name)
+                                };
+                                candidates.push(format!("@{}", full));
+                            }
+                        }
+                    }
+                }
+                candidates.sort();
+                *index = 0;
+            }
+            if !candidates.is_empty() {
+                *input = candidates[*index].clone();
+                *index = (*index + 1) % candidates.len();
+            }
+        } else if input.starts_with('/') {
+            // Command completion
+            if candidates.is_empty() {
+                let commands = vec!["/help", "/quit", "/clear", "/history"];
+                for cmd in commands {
+                    if cmd.starts_with(&*input) {
+                        candidates.push(cmd.to_string());
+                    }
+                }
+                candidates.sort();
+                *index = 0;
+            }
+            if !candidates.is_empty() {
+                *input = candidates[*index].clone();
+                *index = (*index + 1) % candidates.len();
+            }
+        } else {
+            candidates.clear();
+            *index = 0;
+        }
     }
 }
