@@ -29,6 +29,34 @@ Still working on some cool stuff:
 
 ---
 
+## [0.3.0] - 2025-12-15
+
+This release enhances Harper's user experience and agent capabilities by integrating advanced features from Mistral Vibe and improving code quality.
+
+### What We Built
+
+* **Advanced Autocompletion**: Added intelligent file path completion using `@` and slash command completion using `/` in the TUI, with Tab cycling through suggestions.
+* **Agent Guidelines Integration**: AGENTS.md is now loaded into the system prompt, providing comprehensive Rust coding standards that the AI follows for better code generation.
+* **Enhanced Documentation**: Expanded CONTRIBUTING.md with detailed Rust-specific guidelines for contributors, and established AGENTS.md as the single source of truth for coding standards.
+* **Improved Code Quality**: Refactored autocompletion logic using `std::path::Path` for robust path handling, eliminated unsafe unwrap calls, and improved type safety throughout.
+
+### What Changed
+
+* Moved AGENTS.md to project root for better accessibility and consistency.
+* Strengthened type safety by making session_id non-optional in Chat state.
+* Deduplicated documentation to avoid maintenance issues while keeping clear separation of concerns.
+* Enhanced pre-commit hooks and validation scripts for better code quality assurance.
+
+### Technical Improvements
+
+* **Path Completion**: Replaced manual string splitting with idiomatic `std::path::Path` operations for better edge case handling.
+* **Type Safety**: Eliminated potential panics by enforcing compile-time guarantees for required fields.
+* **Documentation Architecture**: Established clear roles - CONTRIBUTING.md for contributors, AGENTS.md for agent behavior.
+
+In short, **0.3.0 makes Harper smarter, safer, and easier to contribute to**.
+
+---
+
 ## [0.2.1] - 2025-12-15
 
 This release builds on the architectural foundation laid in 0.2.0 and focuses on user-facing experience and interaction. Harper now feels like a complete application rather than a collection of CLI flows.
