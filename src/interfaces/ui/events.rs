@@ -90,7 +90,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             match *selected {
                 0 => {
                     app.state = AppState::Chat(
-                        Some(Uuid::new_v4().to_string()),
+                        Uuid::new_v4().to_string(),
                         vec![],
                         String::new(),
                         false,
@@ -121,7 +121,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 match session_service.view_session_data(&session.id) {
                     Ok(messages) => {
                         app.state = AppState::Chat(
-                            Some(session.id.clone()),
+                            session.id.clone(),
                             messages,
                             String::new(),
                             false,
