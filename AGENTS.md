@@ -331,4 +331,87 @@ fn test_file_operation_workflow() {
 
 ---
 
+## Rust Coding Guidelines
+
+When contributing to Harper's Rust codebase, follow these guidelines to ensure efficient, safe, and maintainable code.
+
+### Preferring Structs and Enums over Complex Inheritance
+
+Use structs and enums for data modeling. Leverage traits for polymorphism rather than inheritance hierarchies.
+
+- **Seamless Ownership**: Structs and enums work naturally with Rust's ownership and borrowing system.
+- **Reduced Boilerplate**: Derive macros (`#[derive(Debug, Clone)]`) provide common functionality.
+- **Enhanced Readability**: Explicit fields and pattern matching make data structures clear and safe.
+- **Immutability by Default**: Rust's immutability encourages functional patterns.
+
+### Embracing Iterator Methods
+
+Leverage Rust's iterator methods like `.map()`, `.filter()`, `.fold()`, `.collect()` for transforming data immutably and declaratively.
+
+- **Promotes Immutability**: Most methods return new collections.
+- **Improves Readability**: Chaining leads to concise, expressive code.
+- **Facilitates Functional Programming**: Pure functions that transform data.
+- **Performance**: Lazy evaluation and efficient composition.
+
+### Avoiding `unwrap()` and `expect()`; Preferring Proper Error Handling
+
+Avoid `unwrap()` and `expect()` in production code. Use `?` operator, `match`, or `if let` for explicit error handling.
+
+- **Prevents Panics**: Graceful error propagation instead of crashes.
+- **Robustness**: Forces handling of potential failures.
+- **Maintainability**: Clear error paths make debugging easier.
+
+```rust
+// Preferred
+fn process_data(data: Option<Data>) -> Result<Processed, Error> {
+    let data = data.ok_or(Error::MissingData)?;
+    Ok(process(data))
+}
+
+// Avoid
+fn process_data(data: Option<Data>) -> Processed {
+    data.unwrap() // Panics on None
+}
+```
+
+### Result and Option Patterns
+
+Use `Result` and `Option` extensively. Prefer early returns with `?` and pattern matching.
+
+- **Early Returns**: `?` for propagating errors.
+- **Pattern Matching**: `match` or `if let` over `unwrap()`.
+- **Builder Pattern**: For complex construction with error handling.
+
+### Avoiding Global State; Preferring Dependency Injection
+
+Avoid global variables and static mutables. Pass dependencies explicitly.
+
+- **Testability**: Easier unit testing with explicit deps.
+- **Concurrency**: Safer in multi-threaded code.
+- **Modularity**: Clear component interfaces.
+
+### Embracing Cargo Features for Conditional Compilation
+
+Use Cargo features for optional functionality and platform-specific code.
+
+- **Optional Dependencies**: Enable only when needed.
+- **Platform-Specific**: `#[cfg()]` for targeted implementations.
+- **Modular Builds**: Customize for different use cases.
+
+### Testing Guidelines
+
+Follow these patterns for comprehensive testing:
+
+- **Framework**: Use `#[test]` and `#[tokio::test]` for async.
+- **Mocking**: Use libraries like `mockito` for HTTP, `tempfile` for FS.
+- **Async Testing**: `#[tokio::test]`, fake timers with `tokio::time`.
+- **Error Testing**: Assert `Result::Err` variants explicitly.
+- **General**: Examine existing tests for conventions, prefer table-driven tests.
+
+### Documentation and Comments
+
+- **High-Value Comments**: Only add comments that explain why, not what.
+- **API Docs**: Document public functions with examples.
+- **Technical Accuracy**: Base all docs on actual code behavior.
+
 **Remember**: AI agents should enhance human productivity while maintaining strict safety boundaries. When in doubt, require explicit user approval for any file operation.

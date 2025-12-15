@@ -72,6 +72,21 @@ cp config/env.example .env
 
 ### Building and Running
 
+Before submitting any changes, it is crucial to validate them by running the
+full preflight check. This command will build the repository, run all tests,
+check for type errors, and lint the code.
+
+To run the full suite of checks, execute the following command:
+
+```bash
+make all
+```
+
+This single command ensures that your changes meet all the quality gates of the
+project. While you can run the individual steps (`make build`, `make test`, `make lint`,
+`make fmt`) separately, it is highly recommended to use `make all` to
+ensure a comprehensive validation.
+
 ```bash
 # Debug build
 cargo build
@@ -84,6 +99,9 @@ cargo run --release
 
 # Run with specific features
 cargo run --features additional_features
+
+# Development mode with auto-reload (requires cargo-watch)
+make dev
 ```
 
 ### Development Tools
@@ -101,6 +119,10 @@ cargo doc --open
 # Check for security issues
 cargo audit
 ```
+
+## Git Repo
+
+The main branch for this project is called "main".
 
 ## Development Workflow
 
@@ -159,6 +181,29 @@ cargo fmt -- --check
 - **Performance**: Consider performance implications of changes
 - **Security**: Follow secure coding practices
 
+### Rust Coding Guidelines
+
+For detailed Rust coding guidelines that the AI agent follows, see [AGENTS.md](../AGENTS.md#rust-coding-guidelines). These include best practices for structs/enums, iterators, error handling, testing, and more.
+
+### Documentation Guidelines
+
+When contributing to the codebase, follow these documentation guidelines:
+
+- **Role:** You are an expert technical writer for contributors to Harper. Produce professional, accurate, and consistent documentation.
+- **Technical Accuracy:** Do not invent facts, commands, code, API names, or output. All technical information must be based on code in the repository.
+- **Style Authority:** Follow Rust documentation conventions and the project's established style.
+- **Proactive User Consideration:** The user experience should be primary. Fill knowledge gaps while keeping documentation concise and accessible.
+
+### Comments Policy
+
+Only write high-value comments. Avoid excessive commenting; let the code be self-documenting where possible.
+
+## General Requirements
+
+- If there is something you do not understand or is ambiguous, seek confirmation or clarification before making changes.
+- Use hyphens instead of underscores in command-line flags (e.g., `--my-flag` instead of `--my_flag`).
+- Always refer to Harper as `Harper`, never `the Harper`.
+
 ### Commit Messages
 
 Use conventional commit format:
@@ -180,6 +225,22 @@ test: add integration tests for chat service
 - **Breaking Changes**: Clearly mark and document breaking changes
 
 ## Testing
+
+Harper uses Rust's built-in testing framework. When writing tests, aim to follow existing patterns. Key conventions include:
+
+### Test Structure and Framework
+
+- **Framework**: All tests are written using Rust's `#[test]` attribute and standard testing utilities.
+- **File Location**: Test modules are co-located with the source files they test, using `#[cfg(test)]` modules.
+- **Configuration**: Test behavior is configured via Cargo.toml and `#[test]` attributes.
+- **Setup/Teardown**: Use `#[test]` functions for isolated tests. For shared setup, consider helper functions or test fixtures.
+
+### Commonly Mocked Dependencies
+
+- **External APIs**: Mock HTTP clients and API responses using libraries like `mockito` or `wiremock`.
+- **File System**: Use `tempfile` for temporary files and directories.
+- **Database**: Use in-memory SQLite or test-specific database instances.
+- **Time**: Use `std::time::Instant` or libraries like `tokio::time` for async timing.
 
 ### Running Tests
 
@@ -227,8 +288,29 @@ mod tests {
         // Assert
         assert_eq!(result, expected_output);
     }
+
+    #[tokio::test]
+    async fn test_async_functionality() {
+        // For async tests
+        let result = async_function().await;
+        assert!(result.is_ok());
+    }
 }
 ```
+
+### Asynchronous Testing
+
+- Use `#[tokio::test]` for async tests when using Tokio.
+- For timers, use `tokio::time::pause()` and `tokio::time::advance()` in tests.
+- Test promise rejections with `assert!(result.is_err())` or pattern matching on `Result`.
+
+### General Guidance
+
+- When adding tests, first examine existing tests to understand and conform to established conventions.
+- Pay close attention to the test setup at the top of existing test files; they reveal critical dependencies and how they are managed in a test environment.
+- Use descriptive test names that explain what is being tested and the expected outcome.
+- Prefer table-driven tests for testing multiple inputs/outputs.
+- Mock external dependencies to ensure tests are fast and reliable.
 
 ## Submitting Changes
 
@@ -314,6 +396,16 @@ To add support for a new AI provider:
 2. Ensure backwards compatibility
 3. Update any affected queries
 4. Test with existing data
+
+### Comments Policy
+
+Only write high-value comments if at all. Avoid talking to the user through comments.
+
+### General Requirements
+
+- If there is something you do not understand or is ambiguous, seek confirmation or clarification from the user before making changes based on assumptions.
+- Use hyphens instead of underscores in flag names (e.g., `--my-flag` instead of `--my_flag`).
+- Always refer to Harper as `Harper`, never `the Harper`.
 
 ## Community
 

@@ -4,7 +4,7 @@ use crate::core::Message;
 pub enum AppState {
     Menu(usize),
     #[allow(dead_code)]
-    Chat(Option<String>, Vec<Message>, String, bool, bool), // session_id, messages, input, web_search, web_search_enabled
+    Chat(String, Vec<Message>, String, bool, bool, Vec<String>, usize), // session_id, messages, input, web_search, web_search_enabled, completion_candidates, completion_index
     Sessions(Vec<SessionInfo>, usize), // sessions, selected
     Tools(usize),                      // selected tool
     #[allow(dead_code)]
@@ -45,7 +45,7 @@ impl TuiApp {
     pub fn next(&mut self) {
         match &mut self.state {
             AppState::Menu(sel) => *sel = (*sel + 1) % 6,
-            AppState::Chat(_, _, _, _, _) => {} // TODO: scroll messages
+            AppState::Chat(_, _, _, _, _, _, _) => {} // TODO: scroll messages
             AppState::Sessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = (*sel + 1) % sessions.len();
@@ -63,7 +63,7 @@ impl TuiApp {
     pub fn previous(&mut self) {
         match &mut self.state {
             AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
-            AppState::Chat(_, _, _, _, _) => {} // TODO: scroll messages
+            AppState::Chat(_, _, _, _, _, _, _) => {} // TODO: scroll messages
             AppState::Sessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = if *sel == 0 {
