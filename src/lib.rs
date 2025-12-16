@@ -16,6 +16,7 @@ pub mod agent;
 pub mod core;
 pub mod interfaces;
 pub mod memory;
+pub mod plugins;
 pub mod runtime;
 pub mod tools;
 

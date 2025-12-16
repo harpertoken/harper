@@ -43,6 +43,7 @@ yanked = "warn"
 # List of advisory IDs to ignore (e.g., { id = "RUSTSEC-YYYY-XXXX" })
 ignore = [
     "RUSTSEC-2024-0436",  # paste crate - used by ratatui, no security impact
+    "RUSTSEC-2024-0320",  # yaml-rust - unmaintained, used by syntect, low risk
 ]
 
 # License configuration
