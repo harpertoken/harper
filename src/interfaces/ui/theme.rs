@@ -27,6 +27,7 @@ pub struct Theme {
     pub error: Color,
     #[allow(dead_code)]
     pub success: Color,
+    pub syntax_theme: String,
 }
 
 impl Default for Theme {
@@ -41,13 +42,14 @@ impl Default for Theme {
             output: Color::Green,
             error: Color::Red,
             success: Color::Green,
+            syntax_theme: "base16-ocean.dark".to_string(),
         }
     }
 }
 
 impl Theme {
     pub fn dark() -> Self {
-        Self::default()
+        Self { ..Self::default() }
     }
 
     pub fn light() -> Self {
@@ -61,6 +63,7 @@ impl Theme {
             output: Color::Green,
             error: Color::Red,
             success: Color::Green,
+            syntax_theme: "base16-ocean.light".to_string(),
         }
     }
 
