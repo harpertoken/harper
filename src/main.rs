@@ -1,3 +1,17 @@
+// Copyright 2025 harpertoken
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // use turul_mcp_client::client::Client; // Temporarily disabled
 use rusqlite::Connection;
 use std::env;
@@ -14,7 +28,8 @@ use colored::Colorize;
 
 use std::io::Write;
 
-use runtime::config::HarperConfig;
+#[allow(unused_imports)]
+use runtime::config::{ExecPolicyConfig, HarperConfig};
 
 fn exit_on_error<T, E: std::fmt::Display>(result: Result<T, E>, message: &str) -> T {
     result.unwrap_or_else(|e| {
@@ -105,6 +120,16 @@ async fn main() {
     );
 
     let _prompt_id = config.prompts.system_prompt_id.clone();
+    let mut custom_commands = config.custom_commands.commands.clone().unwrap_or_default();
+    // Add default custom commands if none configured
+    if custom_commands.is_empty() {
+        custom_commands.insert(
+            "hello".to_string(),
+            "Please greet me warmly and introduce yourself as Harper AI assistant".to_string(),
+        );
+        custom_commands.insert("status".to_string(), "Please provide a summary of the current system status, available features, and any recent updates".to_string());
+    }
+    let exec_policy = config.exec_policy.clone();
 
     // MCP client initialization
     // Note: MCP functionality is currently disabled due to dependency conflicts
@@ -115,12 +140,22 @@ async fn main() {
     // MCP client temporarily disabled due to dependency conflicts
     let _mcp_client: Option<()> = None;
 
-    #[allow(dead_code)]
-    async fn text_menu(conn: &Connection, api_config: &ApiConfig, prompt_id: Option<String>) {
+    #[allow(dead_code, unused_variables)]
+    async fn text_menu(
+        conn: &Connection,
+        api_config: &ApiConfig,
+        prompt_id: Option<String>,
+        custom_commands: std::collections::HashMap<String, String>,
+        exec_policy: ExecPolicyConfig,
+    ) {
         loop {
             use crate::core::constants::messages;
 
-            println!("\n{}", messages::MAIN_MENU_TITLE.bold().yellow());
+            println!(
+                "
+{}",
+                messages::MAIN_MENU_TITLE.bold().yellow()
+            );
             println!("1. Start new chat session");
             println!("2. List previous sessions");
             println!("3. View a session's history");
@@ -150,6 +185,8 @@ async fn main() {
                         // mcp_client.as_ref(), // Temporarily disabled
                         Some(&mut api_cache),
                         prompt_id.clone(),
+                        custom_commands.clone(),
+                        exec_policy.clone(),
                     );
                     handle_menu_error!(
                         chat_service.start_session(web_search).await,
@@ -176,8 +213,36 @@ async fn main() {
 
     let session_service = crate::memory::session_service::SessionService::new(&conn);
 
-    // Run TUI
-    if let Err(e) = crate::interfaces::ui::run_tui(&conn, &api_config, &session_service).await {
-        eprintln!("TUI error: {}", e);
+    // Create theme
+    let theme = config
+        .ui
+        .theme
+        .as_ref()
+        .map(|t| crate::interfaces::ui::Theme::from_name(t))
+        .unwrap_or_default();
+
+    // Try TUI first, fall back to text menu if TUI fails
+    let custom_commands = config.custom_commands.commands.clone().unwrap_or_default();
+    if let Err(e) = crate::interfaces::ui::run_tui(
+        &conn,
+        &api_config,
+        &session_service,
+        &theme,
+        custom_commands.clone(),
+        &exec_policy,
+    )
+    .await
+    {
+        eprintln!("TUI not available ({}), falling back to text menu...", e);
+
+        // Fall back to text menu
+        text_menu(
+            &conn,
+            &api_config,
+            _prompt_id,
+            custom_commands,
+            exec_policy.clone(),
+        )
+        .await;
     }
 }

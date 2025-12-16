@@ -49,6 +49,3 @@ coverage/
 *.temp
 tarpaulin-report.html
 *.db-*
-
-# Reference codebases
-mistral-vibe/

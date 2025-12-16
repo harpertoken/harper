@@ -1,3 +1,17 @@
+// Copyright 2025 harpertoken
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Tool execution module
 //!
 //! This module provides a unified interface to various tools
@@ -15,6 +29,7 @@ pub mod parsing;
 use crate::core::constants::tools;
 use crate::core::error::HarperError;
 use crate::core::{ApiConfig, Message};
+use crate::runtime::config::ExecPolicyConfig;
 use reqwest::Client;
 
 // Git command constants
@@ -28,12 +43,16 @@ mod git_tools {
 /// Tool execution service
 pub struct ToolService<'a> {
     config: &'a ApiConfig,
+    exec_policy: &'a ExecPolicyConfig,
 }
 
 impl<'a> ToolService<'a> {
     /// Create a new tool service
-    pub fn new(config: &'a ApiConfig) -> Self {
-        Self { config }
+    pub fn new(config: &'a ApiConfig, exec_policy: &'a ExecPolicyConfig) -> Self {
+        Self {
+            config,
+            exec_policy,
+        }
     }
 
     /// Handle tool usage (commands, web search, file operations)
@@ -49,7 +68,7 @@ impl<'a> ToolService<'a> {
 
         // Fallback to old bracket format
         if response.to_uppercase().starts_with(tools::RUN_COMMAND) {
-            let command_result = shell::execute_command(response, self.config)?;
+            let command_result = shell::execute_command(response, self.config, self.exec_policy)?;
             let final_response = self
                 .call_llm_after_tool(client, history, &command_result)
                 .await?;
@@ -133,7 +152,8 @@ impl<'a> ToolService<'a> {
                 .and_then(|v| v.as_str());
                 if let Some(command) = command {
                     let bracket_command = format!("[RUN_COMMAND {}]", command);
-                    let command_result = shell::execute_command(&bracket_command, self.config)?;
+                    let command_result =
+                        shell::execute_command(&bracket_command, self.config, self.exec_policy)?;
                     let final_response = self
                         .call_llm_after_tool(client, history, &command_result)
                         .await?;
