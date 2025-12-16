@@ -1,8 +1,24 @@
+<!--
+Copyright 2025 harpertoken
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
 # Harper
 
 Harper is an AI agent for multi-provider integration, command execution, and MCP protocol support with SQLite storage.
 
-Harper provides a unified interface to multiple AI providers (OpenAI, Sambanova, Gemini) with persistent chat sessions, command execution capabilities, and Model Context Protocol (MCP) support. This documentation covers secure configuration and deployment to prevent common security vulnerabilities.
+Harper provides a unified interface to multiple AI providers (OpenAI, Sambanova, Gemini) with persistent chat sessions, command execution capabilities, Model Context Protocol (MCP) support, and customizable TUI themes. This documentation covers secure configuration and deployment to prevent common security vulnerabilities.
 
 ## Security Issues Detected
 
@@ -23,6 +39,25 @@ To help mitigate these vulnerabilities, ensure that the following Harper securit
 - **Command execution controls** - Use user approval for destructive operations
 - **File operation restrictions** - Validate paths and require explicit consent
 - **Session security** - Use secure session management and data encryption
+
+## UI Configuration
+
+Harper supports customizable themes for the Terminal User Interface (TUI).
+
+### Themes
+
+Configure the TUI theme in `config/local.toml`:
+
+```toml
+[ui]
+theme = "dark"  # Options: default, dark, light
+```
+
+Themes control colors for:
+- Background and foreground
+- Message roles (user input, assistant output)
+- Borders and titles
+- Status bars and highlights
 
 ## Secure Configuration
 
