@@ -16,20 +16,13 @@
 use rusqlite::Connection;
 use std::env;
 
-mod agent;
-mod core;
-mod interfaces;
-mod memory;
-mod runtime;
-mod tools;
-
-use crate::core::ApiConfig;
 use colored::Colorize;
+use harper::core::ApiConfig;
 
 use std::io::Write;
 
 #[allow(unused_imports)]
-use runtime::config::{ExecPolicyConfig, HarperConfig};
+use harper::runtime::config::{ExecPolicyConfig, HarperConfig};
 
 fn exit_on_error<T, E: std::fmt::Display>(result: Result<T, E>, message: &str) -> T {
     result.unwrap_or_else(|e| {
@@ -47,7 +40,7 @@ macro_rules! handle_menu_error {
 }
 
 fn print_version() {
-    println!("harper v{}", crate::core::constants::VERSION);
+    println!("harper v{}", harper::core::constants::VERSION);
     std::process::exit(0);
 }
 
@@ -78,7 +71,7 @@ async fn main() {
         }
     }
 
-    let api_config = crate::core::ApiConfig {
+    let api_config = harper::core::ApiConfig {
         provider: config
             .api
             .get_provider()
@@ -115,7 +108,7 @@ async fn main() {
         "Failed to open database",
     );
     exit_on_error(
-        crate::memory::storage::init_db(&conn),
+        harper::memory::storage::init_db(&conn),
         "Failed to initialize database",
     );
 
@@ -149,7 +142,7 @@ async fn main() {
         exec_policy: ExecPolicyConfig,
     ) {
         loop {
-            use crate::core::constants::messages;
+            use harper::core::constants::messages;
 
             println!(
                 "
@@ -170,16 +163,16 @@ async fn main() {
                 "Failed to read input",
             );
 
-            let session_service = crate::memory::session_service::SessionService::new(conn);
-            let mut api_cache = crate::core::cache::new_api_cache();
+            let session_service = harper::memory::session_service::SessionService::new(conn);
+            let mut api_cache = harper::core::cache::new_api_cache();
 
             match menu_choice.trim() {
-                crate::core::constants::menu::START_CHAT => {
+                harper::core::constants::menu::START_CHAT => {
                     println!("Enable web search for this session? (y/n): ");
                     let mut choice = String::new();
                     let _ = std::io::stdin().read_line(&mut choice);
                     let web_search = choice.trim().eq_ignore_ascii_case("y");
-                    let mut chat_service = crate::agent::chat::ChatService::new(
+                    let mut chat_service = harper::agent::chat::ChatService::new(
                         conn,
                         api_config,
                         // mcp_client.as_ref(), // Temporarily disabled
@@ -193,16 +186,16 @@ async fn main() {
                         "Error in chat session"
                     );
                 }
-                crate::core::constants::menu::LIST_SESSIONS => {
+                harper::core::constants::menu::LIST_SESSIONS => {
                     handle_menu_error!(session_service.list_sessions(), "Error listing sessions");
                 }
-                crate::core::constants::menu::VIEW_SESSION => {
+                harper::core::constants::menu::VIEW_SESSION => {
                     handle_menu_error!(session_service.view_session(), "Error viewing session");
                 }
-                crate::core::constants::menu::EXPORT_SESSION => {
+                harper::core::constants::menu::EXPORT_SESSION => {
                     handle_menu_error!(session_service.export_session(), "Error exporting session");
                 }
-                crate::core::constants::menu::QUIT => {
+                harper::core::constants::menu::QUIT => {
                     println!("{}", messages::GOODBYE.bold().yellow());
                     break;
                 }
@@ -211,19 +204,19 @@ async fn main() {
         }
     }
 
-    let session_service = crate::memory::session_service::SessionService::new(&conn);
+    let session_service = harper::memory::session_service::SessionService::new(&conn);
 
     // Create theme
     let theme = config
         .ui
         .theme
         .as_ref()
-        .map(|t| crate::interfaces::ui::Theme::from_name(t))
+        .map(|t| harper::interfaces::ui::Theme::from_name(t))
         .unwrap_or_default();
 
     // Try TUI first, fall back to text menu if TUI fails
     let custom_commands = config.custom_commands.commands.clone().unwrap_or_default();
-    if let Err(e) = crate::interfaces::ui::run_tui(
+    if let Err(e) = harper::interfaces::ui::run_tui(
         &conn,
         &api_config,
         &session_service,
