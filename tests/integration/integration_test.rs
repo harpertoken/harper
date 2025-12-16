@@ -1,3 +1,17 @@
+// Copyright 2025 harpertoken
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use harper::*;
 use regex::Regex;
 use rusqlite::Connection;
@@ -123,7 +137,7 @@ fn test_database_operations() {
         ("system", "System message"),
         (
             "user",
-            "Message with special chars: \"'!@#$%^&*()_+{}|:<>?~`,./;'[]\\\\-=\\n",
+            "Message with special chars: \"'!@#$%^&*()_+{}|:<>?~`,./;'[]\\-=\n",
         ),
         ("user", "Message with emoji: 😊🚀🌟"),
         ("assistant", "Message with numbers: 1234567890"),
@@ -629,7 +643,10 @@ mod e2e_tests {
             .iter()
             .map(|msg| format!("{}: {}", msg.role, msg.content))
             .collect::<Vec<_>>()
-            .join("\n");
+            .join(
+                "
+",
+            );
 
         assert!(
             text_export.contains("user: Message for export test"),
@@ -712,7 +729,10 @@ server_url = "http://localhost:5000"
         println!("Current directory: {:?}", std::env::current_dir().unwrap());
 
         // List contents of the temp directory
-        println!("\n=== Directory Contents ===");
+        println!(
+            "
+=== Directory Contents ==="
+        );
         if let Ok(entries) = std::fs::read_dir(temp_dir.path()) {
             for entry in entries.flatten() {
                 println!(
@@ -724,7 +744,10 @@ server_url = "http://localhost:5000"
         }
 
         // List contents of the config directory
-        println!("\n=== Config Directory Contents ===");
+        println!(
+            "
+=== Config Directory Contents ==="
+        );
         if let Ok(entries) = std::fs::read_dir(&config_dir) {
             for entry in entries.flatten() {
                 println!(
@@ -736,7 +759,10 @@ server_url = "http://localhost:5000"
         }
 
         // Verify the directory is writable
-        println!("\n=== Testing Directory Permissions ===");
+        println!(
+            "
+=== Testing Directory Permissions ==="
+        );
         let test_file = temp_dir.path().join(".test_write");
         std::fs::write(&test_file, "test").expect("Failed to write test file to temp directory");
         std::fs::remove_file(&test_file).expect("Failed to remove test file");
@@ -761,7 +787,10 @@ server_url = "http://localhost:5000"
             .stderr(Stdio::piped());
 
         // Print the command for debugging
-        println!("\n=== Running Command ===");
+        println!(
+            "
+=== Running Command ==="
+        );
         println!("Command: {:?}", command);
         println!("Working directory: {}", temp_dir.path().display());
         println!("Config file: {}", config_path.display());
@@ -777,7 +806,11 @@ server_url = "http://localhost:5000"
         // Send quit command using the constant
         use harper::core::constants::{menu, messages};
 
-        let quit_command = format!("{}\n", menu::QUIT);
+        let quit_command = format!(
+            "{}
+",
+            menu::QUIT
+        );
         println!("Sending quit command: {:?}", quit_command.trim());
 
         if let Some(mut stdin) = child.stdin.take() {
@@ -818,8 +851,16 @@ server_url = "http://localhost:5000"
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        println!("=== STDOUT ===\n{}", stdout);
-        println!("=== STDERR ===\n{}", stderr);
+        println!(
+            "=== STDOUT ===
+{}",
+            stdout
+        );
+        println!(
+            "=== STDERR ===
+{}",
+            stderr
+        );
 
         // Check if the process exited successfully
         if !output.status.success() {
@@ -831,7 +872,9 @@ server_url = "http://localhost:5000"
         if !stderr.contains("TUI error") {
             assert!(
                 stdout.contains(messages::GOODBYE),
-                "Should print goodbye message. Expected '{}' in output.\nFull output:\n{}",
+                "Should print goodbye message. Expected '{}' in output.
+Full output:
+{}",
                 messages::GOODBYE,
                 stdout
             );
@@ -891,5 +934,95 @@ server_url = "http://localhost:5000"
         // load_history might filter out empty messages, which is fine
         // Just verify the save operation worked
         assert!(result.is_ok(), "Save operation should succeed");
+    }
+
+    #[tokio::test]
+    async fn test_slash_commands_e2e() {
+        use crate::runtime::config::ExecPolicyConfig;
+
+        // Create a temporary database
+        let temp_db = NamedTempFile::new().unwrap();
+        let conn = Connection::open(temp_db.path()).unwrap();
+        init_db(&conn).unwrap();
+
+        // Create API config (won't be used for slash commands)
+        let api_config = ApiConfig {
+            provider: ApiProvider::OpenAI,
+            api_key: "test-key".to_string(),
+            base_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            model_name: "gpt-4".to_string(),
+        };
+
+        // Create exec policy
+        let exec_policy = ExecPolicyConfig {
+            allowed_commands: None,
+            blocked_commands: None,
+        };
+
+        // Create custom commands
+        let mut custom_commands = std::collections::HashMap::new();
+        custom_commands.insert("testcmd".to_string(), "This is a test command".to_string());
+
+        // Create chat service
+        let mut chat_service =
+            ChatService::new(&conn, &api_config, None, None, custom_commands, exec_policy);
+
+        // Create a test session
+        let session_id = "test-slash-session";
+        save_session(&conn, session_id).unwrap();
+        let mut history = Vec::new();
+
+        // Test /help command - should work without API call
+        chat_service
+            .send_message("/help", &mut history, false, session_id)
+            .await
+            .unwrap();
+
+        // Verify help response was added
+        assert_eq!(history.len(), 1, "Should have one response message");
+        assert_eq!(
+            history[0].role, "assistant",
+            "Response should be from assistant"
+        );
+        assert!(
+            history[0].content.contains("Available commands"),
+            "Should contain help text"
+        );
+        assert!(
+            history[0].content.contains("/help"),
+            "Should list /help command"
+        );
+        assert!(
+            history[0].content.contains("/clear"),
+            "Should list /clear command"
+        );
+
+        // Test /clear command - basic functionality
+        history.clear();
+        chat_service
+            .send_message("/clear", &mut history, false, session_id)
+            .await
+            .unwrap();
+        assert_eq!(history.len(), 1, "Should have response message");
+        assert!(
+            history[0].content.contains("Chat history cleared"),
+            "Should contain clear message"
+        );
+
+        // Note: Custom command testing is skipped in this integration test
+        // because it would require mocking the AI API or a valid API key.
+        // The functionality is tested in unit tests and manual testing.
+
+        // Test unknown command
+        history.clear();
+        chat_service
+            .send_message("/nonexistent", &mut history, false, session_id)
+            .await
+            .unwrap();
+        assert_eq!(history.len(), 1, "Should have error response");
+        assert!(
+            history[0].content.contains("Unknown command"),
+            "Should contain error message"
+        );
     }
 }

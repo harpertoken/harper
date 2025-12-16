@@ -1,3 +1,17 @@
+// Copyright 2025 harpertoken
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::models::ProviderModels;
 use crate::core::ApiProvider;
@@ -12,6 +26,10 @@ pub struct HarperConfig {
     pub database: DatabaseConfig,
     pub mcp: McpConfig,
     pub prompts: PromptConfig,
+    pub ui: UiConfig,
+    pub tools: ToolsConfig,
+    pub exec_policy: ExecPolicyConfig,
+    pub custom_commands: CustomCommandsConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -36,6 +54,32 @@ pub struct McpConfig {
 #[derive(Debug, Deserialize)]
 pub struct PromptConfig {
     pub system_prompt_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UiConfig {
+    pub theme: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ToolsConfig {
+    #[allow(dead_code)]
+    pub enabled_tools: Option<Vec<String>>,
+    #[allow(dead_code)]
+    pub disabled_tools: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExecPolicyConfig {
+    #[allow(dead_code)]
+    pub allowed_commands: Option<Vec<String>>,
+    #[allow(dead_code)]
+    pub blocked_commands: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CustomCommandsConfig {
+    pub commands: Option<std::collections::HashMap<String, String>>,
 }
 
 impl HarperConfig {
@@ -115,6 +159,10 @@ impl HarperConfig {
         self.api.validate()?;
         self.database.validate()?;
         self.mcp.validate()?;
+        self.ui.validate()?;
+        self.tools.validate()?;
+        self.exec_policy.validate()?;
+        self.custom_commands.validate()?;
         Ok(())
     }
 }
@@ -217,6 +265,48 @@ impl McpConfig {
             }
         }
 
+        Ok(())
+    }
+}
+
+impl UiConfig {
+    /// Validate UI configuration
+    fn validate(&self) -> HarperResult<()> {
+        if let Some(ref theme) = self.theme {
+            match theme.as_str() {
+                "default" | "dark" | "light" => {}
+                _ => {
+                    return Err(HarperError::Config(format!(
+                        "Invalid theme: {}. Supported themes: default, dark, light",
+                        theme
+                    )))
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl ToolsConfig {
+    /// Validate tools configuration
+    fn validate(&self) -> HarperResult<()> {
+        // Basic validation - could add more specific tool name checks
+        Ok(())
+    }
+}
+
+impl ExecPolicyConfig {
+    /// Validate exec policy configuration
+    fn validate(&self) -> HarperResult<()> {
+        // Basic validation
+        Ok(())
+    }
+}
+
+impl CustomCommandsConfig {
+    /// Validate custom commands configuration
+    fn validate(&self) -> HarperResult<()> {
+        // Basic validation
         Ok(())
     }
 }

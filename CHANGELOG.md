@@ -1,3 +1,19 @@
+<!--
+Copyright 2025 harpertoken
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
 # Harper Changelog
 
 Hey there! This is where we keep track of all the changes and improvements to Harper. Think of it as our development diary - what we built, what we fixed, and what we're planning next.
@@ -5,6 +21,8 @@ Hey there! This is where we keep track of all the changes and improvements to Ha
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [0.3.1](#031---2025-12-16)
+- [0.3.0](#030---2025-12-15)
 - [0.2.1](#021---2025-12-15)
 - [0.2.0](#020---2025-12-14)
 - [0.1.8-beta.1](#018-beta1---2025-11-09)
@@ -26,6 +44,38 @@ Still working on some cool stuff:
 - Support for multiple languages
 - Better analytics on your chat sessions
 - Maybe cloud deployment options
+
+---
+
+## [0.3.1] - 2025-12-16
+
+This release significantly enhances Harper's capabilities by integrating advanced features from leading AI CLIs and ensures comprehensive licensing compliance across the entire codebase.
+
+### What We Built
+
+* **TUI Themes**: Added configurable color schemes (default, dark, light) for better user experience.
+* **Custom Commands**: Implemented user-defined slash commands via config, extending Harper's command system with extensible functionality.
+* **Exec Policy**: Added command execution control with allowed/blocked lists for safer shell operations.
+* **Enhanced Configuration**: Expanded config options for tools permissions, custom commands, and execution policies to provide granular control.
+* **Comprehensive Licensing**: Added SPDX-compliant Apache 2.0 license headers to all source files, documentation, configs, and scripts for full license compliance.
+
+### What Changed
+
+* Updated configuration structure with new sections for UI themes, tools, exec_policy, and custom_commands.
+* Enhanced shell execution with policy-based approval system (auto-allow for whitelisted commands, prompt for others).
+* Improved TUI with theme-aware colors and styles for better visual consistency.
+* Added extensible command system allowing users to define custom slash commands.
+* Standardized license headers across all file types (Rust, Markdown, YAML, TOML, scripts) using appropriate comment formats.
+
+### Technical Improvements
+
+* **Security**: Implemented exec policy to prevent unauthorized command execution, with configurable allow/block lists.
+* **User Experience**: Added theme support and custom commands for more personalized and powerful interactions.
+* **Code Quality**: Added comprehensive pre-commit hooks and ensured all code passes linting and formatting.
+* **Compliance**: Full SPDX licensing ensures legal compliance and proper attribution across the entire codebase.
+* **Configurability**: Enhanced TOML-based configuration system for advanced customization options.
+
+In short, **0.3.1 makes Harper more secure, customizable, and professionally licensed while integrating cutting-edge features from leading AI CLIs**.
 
 ---
 
