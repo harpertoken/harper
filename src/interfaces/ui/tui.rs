@@ -1,3 +1,17 @@
+// Copyright 2025 harpertoken
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::time::Duration;
 
 use crossterm::event;
@@ -6,15 +20,21 @@ use rusqlite::Connection;
 
 use super::app::{AppState, TuiApp};
 use super::events::{handle_event, EventResult};
+use super::theme::Theme;
 use super::widgets::draw;
 use crate::agent::chat::ChatService;
 use crate::core::ApiConfig;
 use crate::memory::session_service::SessionService;
+use crate::runtime::config::ExecPolicyConfig;
+use std::collections::HashMap;
 
 pub async fn run_tui(
     conn: &Connection,
     api_config: &ApiConfig,
     session_service: &SessionService<'_>,
+    theme: &Theme,
+    custom_commands: HashMap<String, String>,
+    exec_policy: &ExecPolicyConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Setup terminal
     crossterm::terminal::enable_raw_mode()?;
@@ -29,14 +49,21 @@ pub async fn run_tui(
     let mut terminal = Terminal::new(backend)?;
 
     // Create chat service
-    let mut chat_service = ChatService::new(conn, api_config, None, None);
+    let mut chat_service = ChatService::new(
+        conn,
+        api_config,
+        None,
+        None,
+        custom_commands,
+        exec_policy.clone(),
+    );
 
     // Create app
     let mut app = TuiApp::new();
 
     loop {
         // Draw the UI
-        terminal.draw(|frame| draw(frame, &app))?;
+        terminal.draw(|frame| draw(frame, &app, theme))?;
 
         // Handle events
         if event::poll(Duration::from_millis(100))? {

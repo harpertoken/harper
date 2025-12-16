@@ -1,3 +1,17 @@
+// Copyright 2025 harpertoken
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Chat interaction module
 //!
 //! This module handles user input, chat loops, and message processing.
@@ -5,11 +19,13 @@
 use crate::core::cache::{ApiCacheKey, ApiResponseCache};
 use crate::core::error::HarperError;
 use crate::core::{ApiConfig, Message};
+use crate::runtime::config::ExecPolicyConfig;
 use crate::tools::ToolService;
 use chrono::Datelike;
 use colored::*;
 use reqwest::Client;
 use rusqlite::Connection;
+use std::collections::HashMap;
 use std::io::{self, Write};
 
 /// Chat service for handling conversations
@@ -20,6 +36,8 @@ pub struct ChatService<'a> {
     #[allow(dead_code)]
     todos: Vec<String>,
     prompt_id: Option<String>,
+    custom_commands: HashMap<String, String>,
+    exec_policy: ExecPolicyConfig,
 }
 
 #[allow(dead_code)]
@@ -30,6 +48,8 @@ impl<'a> ChatService<'a> {
         config: &'a ApiConfig,
         api_cache: Option<&'a mut ApiResponseCache>,
         prompt_id: Option<String>,
+        custom_commands: HashMap<String, String>,
+        exec_policy: ExecPolicyConfig,
     ) -> Self {
         Self {
             conn,
@@ -37,6 +57,8 @@ impl<'a> ChatService<'a> {
             api_cache,
             todos: Vec::new(),
             prompt_id,
+            custom_commands,
+            exec_policy,
         }
     }
 
@@ -50,6 +72,11 @@ impl<'a> ChatService<'a> {
             api_cache: None,
             todos: Vec::new(),
             prompt_id: None,
+            custom_commands: HashMap::new(),
+            exec_policy: ExecPolicyConfig {
+                allowed_commands: None,
+                blocked_commands: None,
+            },
         }
     }
 
@@ -72,7 +99,6 @@ impl<'a> ChatService<'a> {
     }
 
     /// Send a message and get response
-    #[allow(dead_code)]
     pub async fn send_message(
         &mut self,
         user_msg: &str,
@@ -80,6 +106,48 @@ impl<'a> ChatService<'a> {
         web_search_enabled: bool,
         session_id: &str,
     ) -> Result<(), HarperError> {
+        // Handle slash commands locally
+        if let Some(command) = user_msg.strip_prefix('/') {
+            let response = match command {
+                "help" => {
+                    let mut help_text = "Available commands:\n".to_string();
+                    help_text.push_str("  /help - Show this help\n");
+                    help_text.push_str("  /exit - Exit the session\n");
+                    help_text.push_str("  /clear - Clear chat history\n");
+                    help_text.push_str("  !command - Execute shell command directly\n");
+                    help_text.push_str("  @file - Reference files (with Tab completion)\n");
+                    for (cmd, desc) in &self.custom_commands {
+                        help_text.push_str(&format!("  /{} - {}\n", cmd, desc));
+                    }
+                    help_text
+                }
+                "exit" => "Session ended. Type /help for commands.".to_string(),
+                "clear" => {
+                    history.clear();
+                    "Chat history cleared.".to_string()
+                }
+                cmd => {
+                    if let Some(desc) = self.custom_commands.get(cmd) {
+                        // For custom commands, send as user message
+                        self.add_user_message(history, session_id, desc)?;
+                        let response = self.process_message(history, web_search_enabled).await?;
+                        self.add_assistant_message(history, session_id, &response)?;
+                        self.trim_history(history);
+                        return Ok(());
+                    } else {
+                        format!(
+                            "Unknown command '{}'. Type /help for available commands.",
+                            cmd
+                        )
+                    }
+                }
+            };
+            // Add as assistant message
+            self.add_assistant_message(history, session_id, &response)?;
+            return Ok(());
+        }
+
+        // Normal message processing
         self.add_user_message(history, session_id, user_msg)?;
         let response = self.process_message(history, web_search_enabled).await?;
         self.add_assistant_message(history, session_id, &response)?;
@@ -117,10 +185,12 @@ You have the ability to read and write files, search and replace text in files, 
 
         // Add project context
         if let Ok(context) = self.get_project_context() {
-            prompt.push_str(&format!("\n\nProject Context:\n{}", context));
+            prompt.push_str(&format!("\n\nProject Context:\n{}\n", context));
         }
 
-        prompt.push_str("\n\nYou have tools to interact with the system. To use a tool, respond with ONLY the tool command. Do not add any other text. If you cannot use a tool for the user's request, explain why.
+        prompt.push_str("
+
+You have tools to interact with the system. To use a tool, respond with ONLY the tool command. Do not add any other text. If you cannot use a tool for the user's request, explain why.
 
 Available tools:
 - read_file(path): Read the contents of a file
@@ -133,7 +203,7 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
 
         // Load and append agent guidelines
         match std::fs::read_to_string("AGENTS.md") {
-            Ok(guidelines) => prompt.push_str(&format!("\n\nAgent Guidelines:\n{}", guidelines)),
+            Ok(guidelines) => prompt.push_str(&format!("\n\nAgent Guidelines:\n{}\n", guidelines)),
             Err(e) => eprintln!(
                 "Warning: Could not load AGENTS.md: {}. Agent will proceed without guidelines.",
                 e
@@ -143,7 +213,7 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
         if web_search_enabled {
             let current_year = chrono::Local::now().year();
             prompt.push_str(&format!(
-                "\n- Search the web: `[SEARCH: your query]`. Current year: {}",
+                "\n- Search the web: `[SEARCH: your query]`. Current year: {}\n",
                 current_year
             ));
         }
@@ -154,12 +224,16 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
     /// Display session start
     fn display_session_start(&self) {
         println!(
-            "{}\n",
+            "{}
+",
             "🤖 Harper AI Assistant - Type /help for commands"
                 .bold()
                 .yellow()
         );
-        println!("💡 Quick commands: /help, /exit, /clear, !shell, @file\n");
+        println!(
+            "💡 Quick commands: /help, /exit, /clear, !shell, @file
+"
+        );
     }
 
     /// Run the chat loop
@@ -181,6 +255,7 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
                 match crate::tools::shell::execute_command(
                     &format!("[RUN_COMMAND {}]", command),
                     self.config,
+                    &self.exec_policy,
                 ) {
                     Ok(result) => println!("{} {}", "Shell:".bold().cyan(), result.cyan()),
                     Err(e) => println!("{} {}", "Error:".bold().red(), e),
@@ -189,32 +264,54 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
             }
 
             // Handle slash commands
-            if user_input.starts_with('/') {
-                match user_input.as_str() {
-                    "/help" => {
+            if let Some(command) = user_input.strip_prefix('/') {
+                match command {
+                    "help" => {
                         println!("{}", "Available commands:".bold().yellow());
                         println!("  /help - Show this help");
                         println!("  /exit - Exit the session");
                         println!("  /clear - Clear chat history");
                         println!("  !command - Execute shell command directly");
                         println!("  @file - Reference files (with Tab completion)");
+                        for (cmd, desc) in &self.custom_commands {
+                            println!("  /{} - {}", cmd, desc);
+                        }
                         continue;
                     }
-                    "/exit" => {
+                    "exit" => {
                         self.display_session_end();
                         break;
                     }
-                    "/clear" => {
+                    "clear" => {
                         history.clear();
                         println!("{}", "Chat history cleared.".bold().green());
                         continue;
                     }
-                    _ => {
-                        println!(
-                            "{} Unknown command. Type /help for available commands.",
-                            "Error:".bold().red()
-                        );
-                        continue;
+                    cmd => {
+                        if let Some(desc) = self.custom_commands.get(cmd) {
+                            println!("Custom command: {}", desc);
+                            // Send the description as a user message to the AI and process it immediately
+                            self.add_user_message(history, session_id, desc)?;
+                            let response = self
+                                .process_message(history, web_search_enabled)
+                                .await
+                                .map_err(|e| {
+                                    HarperError::Api(format!(
+                                        "Failed to process message in session {}: {}",
+                                        session_id, e
+                                    ))
+                                })?;
+                            self.display_response(&response);
+                            self.add_assistant_message(history, session_id, &response)?;
+                            self.trim_history(history);
+                            continue;
+                        } else {
+                            println!(
+                                "{} Unknown command. Type /help for available commands.",
+                                "Error:".bold().red()
+                            );
+                            continue;
+                        }
                     }
                 }
             }
@@ -270,7 +367,7 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
             .trim()
             .trim_matches(|c| c == '\'' || c == '\"' || c == '`');
 
-        let mut tool_service = ToolService::new(self.config);
+        let mut tool_service = ToolService::new(self.config, &self.exec_policy);
         let tool_option = tool_service
             .handle_tool_use(
                 &client,
@@ -328,7 +425,12 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
 
     /// Display response
     fn display_response(&self, response: &str) {
-        println!("{} {}\n", "Assistant:".bold().green(), response.green());
+        println!(
+            "{} {}
+",
+            "Assistant:".bold().green(),
+            response.green()
+        );
     }
 
     /// Add user message
@@ -421,8 +523,16 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
         }
         files.sort();
 
-        context.push_str(&format!("Current directory: {}\n", current_dir.display()));
-        context.push_str(&format!("Files in project root: {}\n", files.join(", ")));
+        context.push_str(&format!(
+            "Current directory: {}
+",
+            current_dir.display()
+        ));
+        context.push_str(&format!(
+            "Files in project root: {}
+",
+            files.join(", ")
+        ));
 
         // Git status
         if let Ok(git_status) = std::process::Command::new("git")
@@ -432,9 +542,16 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
             if git_status.status.success() {
                 let status = String::from_utf8_lossy(&git_status.stdout);
                 if !status.trim().is_empty() {
-                    context.push_str(&format!("Git status:\n{}", status));
+                    context.push_str(&format!(
+                        "Git status:
+{}",
+                        status
+                    ));
                 } else {
-                    context.push_str("Git status: clean\n");
+                    context.push_str(
+                        "Git status: clean
+",
+                    );
                 }
             }
         }

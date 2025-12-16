@@ -1,9 +1,24 @@
+// Copyright 2025 harpertoken
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Shell command execution tool
 //!
 //! This module provides functionality for executing shell commands
 //! with safety checks and user approval.
 
 use crate::core::{error::HarperError, ApiConfig};
+use crate::runtime::config::ExecPolicyConfig;
 use colored::*;
 use std::io;
 
@@ -11,6 +26,7 @@ use std::io;
 pub fn execute_command(
     response: &str,
     _config: &ApiConfig,
+    exec_policy: &ExecPolicyConfig,
 ) -> crate::core::error::HarperResult<String> {
     let command_str = if let Some(pos) = response.find(' ') {
         response[pos..].trim_start().trim_end_matches(']')
@@ -70,16 +86,45 @@ pub fn execute_command(
         }
     }
 
-    // Ask for approval
-    println!(
-        "{} Execute command? {} (y/n): ",
-        "System:".bold().magenta(),
-        command_str.magenta()
-    );
-    let mut approval = String::new();
-    io::stdin().read_line(&mut approval)?;
-    if !approval.trim().eq_ignore_ascii_case("y") {
-        return Ok("Command execution cancelled by user".to_string());
+    // Check exec policy
+    let mut requires_approval = true;
+
+    if let Some(blocked) = &exec_policy.blocked_commands {
+        if blocked.iter().any(|cmd| command_str.starts_with(cmd)) {
+            return Err(HarperError::Command(format!(
+                "Command '{}' is blocked by exec policy.",
+                command_str
+            )));
+        }
+    }
+
+    if let Some(allowed) = &exec_policy.allowed_commands {
+        if allowed.iter().any(|cmd| command_str.starts_with(cmd)) {
+            requires_approval = false;
+        } else {
+            // If allowed list is set, only allowed commands are permitted without approval
+            requires_approval = true;
+        }
+    }
+
+    // Ask for approval if required
+    if requires_approval {
+        println!(
+            "{} Execute command? {} (y/n): ",
+            "System:".bold().magenta(),
+            command_str.magenta()
+        );
+        let mut approval = String::new();
+        io::stdin().read_line(&mut approval)?;
+        if !approval.trim().eq_ignore_ascii_case("y") {
+            return Ok("Command execution cancelled by user".to_string());
+        }
+    } else {
+        println!(
+            "{} Executing allowed command: {}",
+            "System:".bold().magenta(),
+            command_str.magenta()
+        );
     }
 
     println!(

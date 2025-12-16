@@ -1,3 +1,19 @@
+<!--
+Copyright 2025 harpertoken
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
 # Workspace Reset Guide
 
 [![Git: Version Control](https://img.shields.io/badge/git-workspace%20reset-blue)](https://github.com/harpertoken/harper)
@@ -254,7 +270,7 @@ cd harper
 
 ### Getting Help
 
-- **Documentation**: See [Contributing Guide](CONTRIBUTING.md)
+- **Documentation**: See [Contributing Guide](../CONTRIBUTING.md)
 - **Issues**: [Report problems](https://github.com/harpertoken/harper/issues)
 - **Discussions**: [Ask questions](https://github.com/harpertoken/harper/discussions)
 
@@ -262,4 +278,4 @@ cd harper
 
 **Remember**: When in doubt, commit your work first! It's always safer to have changes in git history than to lose them permanently.
 
-For more information about Harper development, see the main [README](README.md) and [Contributing Guide](CONTRIBUTING.md).
+For more information about Harper development, see the main [README](../README.md) and [Contributing Guide](../CONTRIBUTING.md).
