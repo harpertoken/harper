@@ -17,6 +17,57 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
 use super::app::{AppState, SessionInfo, TuiApp};
 use super::theme::Theme;
+use crate::plugins::syntax::highlight_code;
+
+pub fn parse_content_with_code<'a>(
+    content: &'a str,
+    default_color: Color,
+    syntax_theme: &str,
+) -> Vec<Span<'a>> {
+    let mut spans = Vec::new();
+    let mut remaining = content;
+
+    while let Some(start) = remaining.find("```") {
+        // Text before code block
+        if start > 0 {
+            spans.push(Span::styled(
+                &remaining[..start],
+                Style::default().fg(default_color),
+            ));
+        }
+
+        // Find end of code block
+        let after_start = &remaining[start + 3..];
+        if let Some(end) = after_start.find("```") {
+            let code_block = &after_start[..end];
+            // Parse language and code
+            if let Some(newline_pos) = code_block.find('\n') {
+                let language = &code_block[..newline_pos].trim();
+                let code = &code_block[newline_pos + 1..];
+                spans.extend(highlight_code(language, code, syntax_theme));
+            } else {
+                // No language, treat as plain
+                spans.push(Span::styled(code_block, Style::default().fg(default_color)));
+            }
+            remaining = &after_start[end + 3..];
+        } else {
+            // No closing ```, treat rest as text
+            spans.push(Span::styled(
+                &remaining[start..],
+                Style::default().fg(default_color),
+            ));
+            remaining = "";
+            break;
+        }
+    }
+
+    // Remaining text
+    if !remaining.is_empty() {
+        spans.push(Span::styled(remaining, Style::default().fg(default_color)));
+    }
+
+    spans
+}
 
 pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     match &app.state {
@@ -83,6 +134,7 @@ fn draw_chat(
     web_search_enabled: bool,
     theme: &Theme,
 ) {
+    let syntax_theme = &theme.syntax_theme;
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(1), Constraint::Length(3)])
@@ -98,10 +150,11 @@ fn draw_chat(
                 _ => theme.foreground,
             };
             let prefix = format!("[{}] ", msg.role.to_uppercase());
-            vec![Line::from(Span::styled(
-                format!("{}{}", prefix, msg.content),
-                Style::default().fg(color),
-            ))]
+            let prefix_span = Span::styled(prefix, Style::default().fg(color));
+            let mut content_spans = parse_content_with_code(&msg.content, color, syntax_theme);
+            let mut all_spans = vec![prefix_span];
+            all_spans.append(&mut content_spans);
+            vec![Line::from(all_spans)]
         })
         .collect();
 
@@ -279,4 +332,46 @@ fn draw_message_overlay(frame: &mut Frame, message: &str, theme: &Theme) {
 
     frame.render_widget(Clear, overlay_area);
     frame.render_widget(overlay, overlay_area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::style::Color;
+
+    #[test]
+    fn test_parse_content_with_code_no_code() {
+        let content = "Hello world";
+        let spans = parse_content_with_code(content, Color::White, "base16-ocean.dark");
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].content, "Hello world");
+    }
+
+    #[test]
+    fn test_parse_content_with_code_with_code_block() {
+        let content = "Before ```rust\nfn main() {}\n``` After";
+        let spans = parse_content_with_code(content, Color::White, "base16-ocean.dark");
+        // Should have spans for "Before ", highlighted code, " After"
+        assert!(spans.len() > 1);
+        // First span plain
+        assert_eq!(spans[0].content, "Before ");
+        // Then highlighted spans
+    }
+
+    #[test]
+    fn test_parse_content_with_code_unclosed_code_block() {
+        let content = "Text ```code";
+        let spans = parse_content_with_code(content, Color::White, "base16-ocean.dark");
+        // Should treat as plain text before and the unclosed block as plain
+        assert_eq!(spans.len(), 2, "Should have two spans for unclosed block");
+        assert_eq!(spans[0].content, "Text ");
+        assert_eq!(spans[1].content, "```code");
+    }
+
+    #[test]
+    fn test_parse_content_with_code_multiple_blocks() {
+        let content = "```js\nconsole.log()\n``` and ```python\nprint()\n```";
+        let spans = parse_content_with_code(content, Color::White, "base16-ocean.dark");
+        assert!(spans.len() > 2);
+    }
 }

@@ -21,6 +21,7 @@ Hey there! This is where we keep track of all the changes and improvements to Ha
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [0.3.2](#032---2025-12-16)
 - [0.3.1](#031---2025-12-16)
 - [0.3.0](#030---2025-12-15)
 - [0.2.1](#021---2025-12-15)
@@ -40,10 +41,36 @@ Hey there! This is where we keep track of all the changes and improvements to Ha
 
 Still working on some cool stuff:
 - A web interface so you can chat from your browser
-- Plugin system for custom tools and integrations
+- Enhanced plugin ecosystem with more tools and integrations
 - Support for multiple languages
 - Better analytics on your chat sessions
 - Maybe cloud deployment options
+
+---
+
+## [0.3.2] - 2025-12-16
+
+This release introduces syntax highlighting for code blocks in chat messages and establishes a plugin architecture for future extensibility.
+
+### What We Built
+
+* **Syntax Highlighting Plugin**: Added support for syntax highlighting code blocks in chat using `syntect`, with automatic language detection for Rust, Python, JavaScript, and more.
+* **Plugin Architecture**: Refactored codebase to support plugins in `src/plugins/`, making it easier to add new features like code formatting or linting tools.
+* **Enhanced UI Parsing**: Improved message parsing in TUI to handle code blocks with proper highlighting and fallback for unclosed blocks.
+
+### What Changed
+
+* Moved syntax highlighting logic to `src/plugins/syntax/` for better organization.
+* Updated UI widgets to integrate with the plugin system.
+* Added comprehensive unit and integration tests for syntax highlighting functionality.
+
+### Technical Improvements
+
+* **Modularity**: Established plugin structure for cleaner feature separation and easier maintenance.
+* **Code Quality**: Added tests covering parsing, highlighting, and edge cases; all pre-commit checks pass.
+* **User Experience**: Chat messages with code blocks (```language\ncode\n```) now display with proper syntax coloring in the TUI.
+
+In short, **0.3.2 makes code discussions in Harper more readable and sets up the foundation for a rich plugin ecosystem**.
 
 ---
 

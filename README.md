@@ -18,7 +18,7 @@ limitations under the License.
 
 Harper is an AI agent for multi-provider integration, command execution, and MCP protocol support with SQLite storage.
 
-Harper provides a unified interface to multiple AI providers (OpenAI, Sambanova, Gemini) with persistent chat sessions, command execution capabilities, Model Context Protocol (MCP) support, and customizable TUI themes. This documentation covers secure configuration and deployment to prevent common security vulnerabilities.
+Harper provides a unified interface to multiple AI providers (OpenAI, Sambanova, Gemini) with persistent chat sessions, command execution capabilities, Model Context Protocol (MCP) support, customizable TUI themes, and syntax highlighting for code blocks in chat. This documentation covers secure configuration and deployment to prevent common security vulnerabilities.
 
 ## Security Issues Detected
 

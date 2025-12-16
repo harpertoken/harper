@@ -1025,4 +1025,43 @@ Full output:
             "Should contain error message"
         );
     }
+
+    #[test]
+    fn test_syntax_highlighting_parsing() {
+        use harper::interfaces::ui::widgets::parse_content_with_code;
+        use ratatui::style::Color;
+
+        // Test parsing content with code blocks
+        let content = "Here is some Rust code:\n```rust\nfn main() {\n    println!(\"Hello!\");\n}\n```\nAnd that's it.";
+        let spans = parse_content_with_code(content, Color::White, "base16-ocean.dark");
+
+        // Should have spans: plain text, highlighted code, plain text
+        assert!(spans.len() >= 3, "Should have multiple spans");
+
+        // Check that some spans have different styles (indicating highlighting)
+        let has_highlighted = spans.iter().any(|span| span.style.fg != Some(Color::White));
+        assert!(has_highlighted, "Should have highlighted spans");
+
+        // Test with multiple code blocks
+        let content_multi =
+            "```python\nprint('hello')\n```\nAnd\n```javascript\nconsole.log('world');\n```";
+        let spans_multi = parse_content_with_code(content_multi, Color::White, "base16-ocean.dark");
+        // The number of spans varies based on syntax highlighting complexity
+        assert!(
+            spans_multi.len() >= 3,
+            "Should have at least 3 spans for multiple code blocks"
+        );
+        // Note: reconstructed content excludes markdown markers (```) as they are not rendered
+        // Check that some spans are highlighted (not white) and some are plain (white)
+        let has_highlighted = spans_multi.iter().any(|s| s.style.fg != Some(Color::White));
+        let has_plain = spans_multi.iter().any(|s| s.style.fg == Some(Color::White));
+        assert!(has_highlighted, "Should have at least one highlighted span");
+        assert!(has_plain, "Should have at least one plain text span");
+
+        // Test with no code blocks
+        let content_plain = "Just plain text.";
+        let spans_plain = parse_content_with_code(content_plain, Color::White, "base16-ocean.dark");
+        assert_eq!(spans_plain.len(), 1, "Plain text should have one span");
+        assert_eq!(spans_plain[0].content, content_plain);
+    }
 }
