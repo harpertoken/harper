@@ -59,7 +59,11 @@ impl TuiApp {
     pub fn next(&mut self) {
         match &mut self.state {
             AppState::Menu(sel) => *sel = (*sel + 1) % 6,
-            AppState::Chat(_, _, _, _, _, _, _) => {} // TODO: scroll messages
+            AppState::Chat(_, messages, _, _, _, _, scroll) => {
+                if !messages.is_empty() {
+                    *scroll = (*scroll + 1).min(messages.len().saturating_sub(1));
+                }
+            }
             AppState::Sessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = (*sel + 1) % sessions.len();
@@ -77,7 +81,9 @@ impl TuiApp {
     pub fn previous(&mut self) {
         match &mut self.state {
             AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
-            AppState::Chat(_, _, _, _, _, _, _) => {} // TODO: scroll messages
+            AppState::Chat(_, _, _, _, _, _, scroll) => {
+                *scroll = scroll.saturating_sub(1);
+            }
             AppState::Sessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = if *sel == 0 {

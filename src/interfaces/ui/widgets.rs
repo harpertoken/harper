@@ -72,9 +72,14 @@ pub fn parse_content_with_code<'a>(
 pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     match &app.state {
         AppState::Menu(selected) => draw_menu(frame, *selected, theme),
-        AppState::Chat(_, messages, input, _, web_search_enabled, _, _) => {
-            draw_chat(frame, messages, input, *web_search_enabled, theme)
-        }
+        AppState::Chat(_, messages, input, _, web_search_enabled, _, scroll_offset) => draw_chat(
+            frame,
+            messages,
+            input,
+            *web_search_enabled,
+            *scroll_offset,
+            theme,
+        ),
         AppState::Sessions(sessions, selected) => draw_sessions(frame, sessions, *selected, theme),
         AppState::Tools(selected) => draw_tools(frame, *selected, theme),
         AppState::ViewSession(name, messages, selected) => {
@@ -132,6 +137,7 @@ fn draw_chat(
     messages: &[crate::core::Message],
     input: &str,
     web_search_enabled: bool,
+    scroll_offset: usize,
     theme: &Theme,
 ) {
     let syntax_theme = &theme.syntax_theme;
@@ -141,7 +147,8 @@ fn draw_chat(
         .split(frame.area());
 
     // Messages area
-    let message_lines: Vec<Line> = messages
+    let displayed_messages = &messages[scroll_offset.min(messages.len().saturating_sub(1))..];
+    let message_lines: Vec<Line> = displayed_messages
         .iter()
         .flat_map(|msg| {
             let color = match msg.role.as_str() {
