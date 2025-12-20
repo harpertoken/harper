@@ -291,10 +291,10 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
                 match command {
                     "help" => {
                         let help_text = self.generate_help_text();
-                        let help_lines: Vec<&str> = help_text.lines().collect();
-                        println!("{}", help_lines[0].bold().yellow());
-                        for line in &help_lines[1..] {
-                            println!("{}", line);
+                        let mut lines = help_text.lines();
+                        if let Some(first_line) = lines.next() {
+                            println!("{}", first_line.bold().yellow());
+                            lines.for_each(|line| println!("{}", line));
                         }
                         continue;
                     }
