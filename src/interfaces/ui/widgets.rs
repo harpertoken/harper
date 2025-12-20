@@ -147,7 +147,7 @@ fn draw_chat(
         .split(frame.area());
 
     // Messages area
-    let displayed_messages = &messages[scroll_offset.min(messages.len().saturating_sub(1))..];
+    let displayed_messages = &messages[scroll_offset..];
     let message_lines: Vec<Line> = displayed_messages
         .iter()
         .flat_map(|msg| {
