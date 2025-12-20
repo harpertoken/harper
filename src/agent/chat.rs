@@ -28,6 +28,14 @@ use rusqlite::Connection;
 use std::collections::HashMap;
 use std::io::{self, Write};
 
+#[derive(Debug)]
+enum CommandAction {
+    Clear,
+    Exit,
+    Custom(String),
+    Unknown(String),
+}
+
 /// Chat service for handling conversations
 pub struct ChatService<'a> {
     conn: &'a Connection,
@@ -109,38 +117,22 @@ impl<'a> ChatService<'a> {
         // Handle slash commands locally
         if let Some(command) = user_msg.strip_prefix('/') {
             let response = match command {
-                "help" => {
-                    let mut help_text = "Available commands:\n".to_string();
-                    help_text.push_str("  /help - Show this help\n");
-                    help_text.push_str("  /exit - Exit the session\n");
-                    help_text.push_str("  /clear - Clear chat history\n");
-                    help_text.push_str("  !command - Execute shell command directly\n");
-                    help_text.push_str("  @file - Reference files (with Tab completion)\n");
-                    for (cmd, desc) in &self.custom_commands {
-                        help_text.push_str(&format!("  /{} - {}\n", cmd, desc));
+                "help" => self.generate_help_text(),
+                _ => match self.handle_command(command) {
+                    CommandAction::Exit => "Session ended. Type /help for commands.".to_string(),
+                    CommandAction::Clear => {
+                        history.clear();
+                        "Chat history cleared.".to_string()
                     }
-                    help_text
-                }
-                "exit" => "Session ended. Type /help for commands.".to_string(),
-                "clear" => {
-                    history.clear();
-                    "Chat history cleared.".to_string()
-                }
-                cmd => {
-                    if let Some(desc) = self.custom_commands.get(cmd) {
-                        // For custom commands, send as user message
-                        self.add_user_message(history, session_id, desc)?;
+                    CommandAction::Custom(desc) => {
+                        self.add_user_message(history, session_id, &desc)?;
                         let response = self.process_message(history, web_search_enabled).await?;
                         self.add_assistant_message(history, session_id, &response)?;
                         self.trim_history(history);
                         return Ok(());
-                    } else {
-                        format!(
-                            "Unknown command '{}'. Type /help for available commands.",
-                            cmd
-                        )
                     }
-                }
+                    CommandAction::Unknown(s) => s,
+                },
             };
             // Add as assistant message
             self.add_assistant_message(history, session_id, &response)?;
@@ -153,6 +145,37 @@ impl<'a> ChatService<'a> {
         self.add_assistant_message(history, session_id, &response)?;
         self.trim_history(history);
         Ok(())
+    }
+
+    /// Generate help text for commands
+    fn generate_help_text(&self) -> String {
+        let mut help_text = "Available commands:\n".to_string();
+        help_text.push_str("  /help - Show this help\n");
+        help_text.push_str("  /exit - Exit the session\n");
+        help_text.push_str("  /clear - Clear chat history\n");
+        help_text.push_str("  !command - Execute shell command directly\n");
+        help_text.push_str("  @file - Reference files (with Tab completion)\n");
+        for (cmd, desc) in &self.custom_commands {
+            help_text.push_str(&format!("  /{} - {}\n", cmd, desc));
+        }
+        help_text
+    }
+
+    fn handle_command(&self, command: &str) -> CommandAction {
+        match command {
+            "exit" => CommandAction::Exit,
+            "clear" => CommandAction::Clear,
+            cmd => {
+                if let Some(desc) = self.custom_commands.get(cmd) {
+                    CommandAction::Custom(desc.clone())
+                } else {
+                    CommandAction::Unknown(format!(
+                        "Unknown command '{}'. Type /help for available commands.",
+                        cmd
+                    ))
+                }
+            }
+        }
     }
 
     /// Start the chat session
@@ -267,31 +290,27 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
             if let Some(command) = user_input.strip_prefix('/') {
                 match command {
                     "help" => {
-                        println!("{}", "Available commands:".bold().yellow());
-                        println!("  /help - Show this help");
-                        println!("  /exit - Exit the session");
-                        println!("  /clear - Clear chat history");
-                        println!("  !command - Execute shell command directly");
-                        println!("  @file - Reference files (with Tab completion)");
-                        for (cmd, desc) in &self.custom_commands {
-                            println!("  /{} - {}", cmd, desc);
+                        let help_text = self.generate_help_text();
+                        let help_lines: Vec<&str> = help_text.lines().collect();
+                        println!("{}", help_lines[0].bold().yellow());
+                        for line in &help_lines[1..] {
+                            println!("{}", line);
                         }
                         continue;
                     }
-                    "exit" => {
-                        self.display_session_end();
-                        break;
-                    }
-                    "clear" => {
-                        history.clear();
-                        println!("{}", "Chat history cleared.".bold().green());
-                        continue;
-                    }
-                    cmd => {
-                        if let Some(desc) = self.custom_commands.get(cmd) {
+                    _ => match self.handle_command(command) {
+                        CommandAction::Exit => {
+                            self.display_session_end();
+                            break;
+                        }
+                        CommandAction::Clear => {
+                            history.clear();
+                            println!("{}", "Chat history cleared.".bold().green());
+                            continue;
+                        }
+                        CommandAction::Custom(desc) => {
                             println!("Custom command: {}", desc);
-                            // Send the description as a user message to the AI and process it immediately
-                            self.add_user_message(history, session_id, desc)?;
+                            self.add_user_message(history, session_id, &desc)?;
                             let response = self
                                 .process_message(history, web_search_enabled)
                                 .await
@@ -305,14 +324,12 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
                             self.add_assistant_message(history, session_id, &response)?;
                             self.trim_history(history);
                             continue;
-                        } else {
-                            println!(
-                                "{} Unknown command. Type /help for available commands.",
-                                "Error:".bold().red()
-                            );
+                        }
+                        CommandAction::Unknown(s) => {
+                            println!("{} {}", "Error:".bold().red(), s);
                             continue;
                         }
-                    }
+                    },
                 }
             }
 
