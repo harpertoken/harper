@@ -44,18 +44,7 @@ fn print_version() {
     std::process::exit(0);
 }
 
-#[tokio::main]
-async fn main() {
-    // Load .env file if it exists
-    let _ = dotenvy::dotenv();
-
-    // Handle --version flag
-    let args: Vec<String> = env::args().collect();
-    if args.len() > 1 && (args[1] == "--version" || args[1] == "-v") {
-        print_version();
-    }
-    let config = exit_on_error(HarperConfig::new(), "Failed to load configuration");
-
+fn get_api_key(config: &HarperConfig) -> String {
     let mut api_key = config.api.api_key.clone();
     if config.api.provider == "Gemini" {
         if let Ok(env_key) = std::env::var("GEMINI_API_KEY") {
@@ -70,6 +59,22 @@ async fn main() {
             api_key = env_key;
         }
     }
+    api_key
+}
+
+#[tokio::main]
+async fn main() {
+    // Load .env file if it exists
+    let _ = dotenvy::dotenv();
+
+    // Handle --version flag
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 && (args[1] == "--version" || args[1] == "-v") {
+        print_version();
+    }
+    let config = exit_on_error(HarperConfig::new(), "Failed to load configuration");
+
+    let api_key = get_api_key(&config);
 
     let api_config = harper::core::ApiConfig {
         provider: config
