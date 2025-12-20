@@ -60,9 +60,7 @@ impl TuiApp {
         match &mut self.state {
             AppState::Menu(sel) => *sel = (*sel + 1) % 6,
             AppState::Chat(_, messages, _, _, _, _, scroll) => {
-                if !messages.is_empty() {
-                    *scroll = (*scroll + 1).min(messages.len().saturating_sub(1));
-                }
+                *scroll = (*scroll + 1).min(messages.len().saturating_sub(1));
             }
             AppState::Sessions(sessions, sel) => {
                 if !sessions.is_empty() {
