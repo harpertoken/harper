@@ -304,17 +304,6 @@ pub async fn call_llm(
 ///
 /// # Errors
 /// Returns `HarperError` if any cryptographic operation fails
-///
-/// Encrypts data using AES-GCM with a randomly generated key
-///
-/// # Arguments
-/// * `data` - The data to encrypt
-///
-/// # Returns
-/// A tuple containing (encrypted_data, key) on success
-///
-/// # Errors
-/// Returns `HarperError` if any cryptographic operation fails
 #[allow(dead_code)]
 pub fn encrypt_data(data: &[u8]) -> HarperResult<(Vec<u8>, Vec<u8>)> {
     if data.is_empty() {
