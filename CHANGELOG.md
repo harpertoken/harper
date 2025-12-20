@@ -21,6 +21,7 @@ Hey there! This is where we keep track of all the changes and improvements to Ha
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [0.3.3](#033---2025-12-20)
 - [0.3.2](#032---2025-12-16)
 - [0.3.1](#031---2025-12-16)
 - [0.3.0](#030---2025-12-15)
@@ -71,6 +72,32 @@ This release introduces syntax highlighting for code blocks in chat messages and
 * **User Experience**: Chat messages with code blocks (```language\ncode\n```) now display with proper syntax coloring in the TUI.
 
 In short, **0.3.2 makes code discussions in Harper more readable and sets up the foundation for a rich plugin ecosystem**.
+
+---
+
+## [0.3.3] - 2025-12-20
+
+This release improves the chat user experience and fixes CI issues related to security auditing.
+
+### What We Built
+
+* **Chat Message Scrolling**: Implemented scroll functionality in the TUI to navigate through chat history using next/previous controls, replacing TODO placeholders with working scroll offset logic.
+
+### What Changed
+
+* Simplified scroll offset handling in `TuiApp` by removing redundant empty message checks, as the bounds calculation handles it correctly.
+* Updated `draw_chat` to display messages starting from the current scroll offset.
+* Temporarily disabled cargo-audit and cargo-deny in CI due to CVSS 4.0 parsing issues in the advisory database.
+* Updated cargo-audit version to 0.21.0 for better compatibility.
+* Made validate.sh executable.
+
+### Technical Improvements
+
+* **User Experience**: Chat interface now supports scrolling through message history for better navigation in long conversations.
+* **Code Quality**: Simplified logic reduces complexity and potential bugs in scroll handling.
+* **CI Stability**: Disabled problematic security audit steps to prevent pipeline failures until tools support CVSS 4.0.
+
+In short, **0.3.3 enhances chat usability and ensures reliable CI operation**.
 
 ---
 
