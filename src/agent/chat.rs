@@ -384,7 +384,7 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
             .trim()
             .trim_matches(|c| c == '\'' || c == '\"' || c == '`');
 
-        let mut tool_service = ToolService::new(self.config, &self.exec_policy);
+        let mut tool_service = ToolService::new(self.conn, self.config, &self.exec_policy);
         let tool_option = tool_service
             .handle_tool_use(
                 &client,

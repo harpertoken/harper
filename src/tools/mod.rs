@@ -36,6 +36,7 @@ use crate::core::error::{HarperError, HarperResult};
 use crate::core::{ApiConfig, Message};
 use crate::runtime::config::ExecPolicyConfig;
 use reqwest::Client;
+use rusqlite::Connection;
 
 // Git command constants
 mod git_tools {
@@ -47,14 +48,20 @@ mod git_tools {
 
 /// Tool execution service
 pub struct ToolService<'a> {
+    conn: &'a Connection,
     config: &'a ApiConfig,
     exec_policy: &'a ExecPolicyConfig,
 }
 
 impl<'a> ToolService<'a> {
     /// Create a new tool service
-    pub fn new(config: &'a ApiConfig, exec_policy: &'a ExecPolicyConfig) -> Self {
+    pub fn new(
+        conn: &'a Connection,
+        config: &'a ApiConfig,
+        exec_policy: &'a ExecPolicyConfig,
+    ) -> Self {
         Self {
+            conn,
             config,
             exec_policy,
         }
@@ -88,7 +95,7 @@ impl<'a> ToolService<'a> {
             self.execute_sync_tool(client, history, response, filesystem::search_replace)
                 .await
         } else if response.to_uppercase().starts_with(tools::TODO) {
-            self.execute_sync_tool(client, history, response, todo::manage_todo)
+            self.execute_sync_tool_with_conn(client, history, response, todo::manage_todo)
                 .await
         } else if web_search_enabled && response.to_uppercase().starts_with(tools::SEARCH) {
             let search_result = web::perform_web_search(response).await?;
@@ -267,7 +274,7 @@ impl<'a> ToolService<'a> {
                     if bracket_command.is_empty() {
                         return Ok(None);
                     }
-                    let todo_result = todo::manage_todo(&bracket_command)?;
+                    let todo_result = todo::manage_todo(self.conn, &bracket_command)?;
                     let final_response = self
                         .call_llm_after_tool(client, history, &todo_result)
                         .await?;
@@ -292,6 +299,23 @@ impl<'a> ToolService<'a> {
         F: FnOnce(&str) -> HarperResult<String>,
     {
         let tool_result = tool_fn(response)?;
+        let final_response = self
+            .call_llm_after_tool(client, history, &tool_result)
+            .await?;
+        Ok(Some((final_response, tool_result)))
+    }
+
+    async fn execute_sync_tool_with_conn<F>(
+        &mut self,
+        client: &Client,
+        history: &[Message],
+        response: &str,
+        tool_fn: F,
+    ) -> Result<Option<(String, String)>, HarperError>
+    where
+        F: FnOnce(&Connection, &str) -> HarperResult<String>,
+    {
+        let tool_result = tool_fn(self.conn, response)?;
         let final_response = self
             .call_llm_after_tool(client, history, &tool_result)
             .await?;
