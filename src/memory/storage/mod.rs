@@ -44,13 +44,21 @@ pub fn init_db(conn: &Connection) -> HarperResult<()> {
     )?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT,
-            role TEXT,
-            content TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(session_id) REFERENCES sessions(id)
-        )",
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             session_id TEXT,
+             role TEXT,
+             content TEXT,
+             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+             FOREIGN KEY(session_id) REFERENCES sessions(id)
+         )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS todos (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             description TEXT NOT NULL,
+             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+         )",
         [],
     )?;
     Ok(())
@@ -184,5 +192,67 @@ pub fn delete_session(conn: &Connection, session_id: &str) -> HarperResult<()> {
     // Then delete the session itself
     conn.execute("DELETE FROM sessions WHERE id = ?", [session_id])?;
 
+    Ok(())
+}
+
+/// Save a todo to the database
+///
+/// # Arguments
+/// * `conn` - SQLite database connection
+/// * `description` - The todo description
+///
+/// # Errors
+/// Returns `HarperError::Database` if the insert operation fails
+pub fn save_todo(conn: &Connection, description: &str) -> HarperResult<()> {
+    conn.execute(
+        "INSERT INTO todos (description) VALUES (?1)",
+        params![description],
+    )?;
+    Ok(())
+}
+
+/// Load all todos from the database
+///
+/// # Arguments
+/// * `conn` - SQLite database connection
+///
+/// # Returns
+/// A vector of (id, description) tuples
+///
+/// # Errors
+/// Returns `HarperError::Database` if the query fails
+pub fn load_todos(conn: &Connection) -> HarperResult<Vec<(i64, String)>> {
+    let mut stmt = conn.prepare("SELECT id, description FROM todos ORDER BY id ASC")?;
+    let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+
+    let mut todos = Vec::new();
+    for todo in rows {
+        todos.push(todo?);
+    }
+    Ok(todos)
+}
+
+/// Delete a todo by ID
+///
+/// # Arguments
+/// * `conn` - SQLite database connection
+/// * `id` - The todo ID to delete
+///
+/// # Errors
+/// Returns `HarperError::Database` if the delete operation fails
+pub fn delete_todo(conn: &Connection, id: i64) -> HarperResult<()> {
+    conn.execute("DELETE FROM todos WHERE id = ?", [id])?;
+    Ok(())
+}
+
+/// Clear all todos
+///
+/// # Arguments
+/// * `conn` - SQLite database connection
+///
+/// # Errors
+/// Returns `HarperError::Database` if the delete operation fails
+pub fn clear_todos(conn: &Connection) -> HarperResult<()> {
+    conn.execute("DELETE FROM todos", [])?;
     Ok(())
 }
