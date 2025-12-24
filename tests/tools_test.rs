@@ -29,3 +29,31 @@ fn test_extract_tool_args() {
     let args = parsing::extract_tool_args(response, "[SEARCH_REPLACE", 3).unwrap();
     assert_eq!(args, vec!["file.rs", "old", "new"]);
 }
+
+#[test]
+fn test_parse_quoted_args_with_spaces() {
+    let input = "\"arg one\" arg2";
+    let result = parsing::parse_quoted_args(input).unwrap();
+    assert_eq!(result, vec!["arg one", "arg2"]);
+}
+
+#[test]
+fn test_parse_quoted_args_unclosed_quote() {
+    let input = "\"hello world";
+    let result = parsing::parse_quoted_args(input);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_extract_tool_args_incorrect_count() {
+    let response = "[CMD arg1]";
+    let result = parsing::extract_tool_args(response, "[CMD", 2);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_extract_tool_args_empty_args() {
+    let response = "[CMD \"\" arg2]";
+    let args = parsing::extract_tool_args(response, "[CMD", 2).unwrap();
+    assert_eq!(args, vec!["", "arg2"]);
+}
