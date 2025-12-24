@@ -67,12 +67,11 @@ pub async fn test_api(response: &str) -> crate::core::error::HarperResult<String
 
     // Add headers if provided
     if !headers.is_empty() {
-        if let Ok(header_map) =
-            serde_json::from_str::<std::collections::HashMap<String, String>>(headers)
-        {
-            for (key, value) in header_map {
-                request = request.header(&key, &value);
-            }
+        let header_map: std::collections::HashMap<String, String> =
+            serde_json::from_str(headers)
+                .map_err(|e| HarperError::Command(format!("Invalid headers JSON: {}", e)))?;
+        for (key, value) in header_map {
+            request = request.header(&key, &value);
         }
     }
 

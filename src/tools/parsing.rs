@@ -30,6 +30,9 @@ pub fn parse_quoted_args(input: &str) -> Result<Vec<String>, HarperError> {
                 if in_quotes {
                     // End of quoted string
                     in_quotes = false;
+                    if current_arg.is_empty() {
+                        args.push("".to_string());
+                    }
                 } else {
                     // Start of quoted string
                     in_quotes = true;

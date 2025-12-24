@@ -32,7 +32,7 @@ pub mod web;
 pub mod parsing;
 
 use crate::core::constants::tools;
-use crate::core::error::HarperError;
+use crate::core::error::{HarperError, HarperResult};
 use crate::core::{ApiConfig, Message};
 use crate::runtime::config::ExecPolicyConfig;
 use reqwest::Client;
@@ -79,29 +79,17 @@ impl<'a> ToolService<'a> {
                 .await?;
             Ok(Some((final_response, command_result)))
         } else if response.to_uppercase().starts_with(tools::READ_FILE) {
-            let file_content = filesystem::read_file(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &file_content)
-                .await?;
-            Ok(Some((final_response, file_content)))
+            self.execute_sync_tool(client, history, response, filesystem::read_file)
+                .await
         } else if response.to_uppercase().starts_with(tools::WRITE_FILE) {
-            let write_result = filesystem::write_file(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &write_result)
-                .await?;
-            Ok(Some((final_response, write_result)))
+            self.execute_sync_tool(client, history, response, filesystem::write_file)
+                .await
         } else if response.to_uppercase().starts_with(tools::SEARCH_REPLACE) {
-            let replace_result = filesystem::search_replace(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &replace_result)
-                .await?;
-            Ok(Some((final_response, replace_result)))
+            self.execute_sync_tool(client, history, response, filesystem::search_replace)
+                .await
         } else if response.to_uppercase().starts_with(tools::TODO) {
-            let todo_result = todo::manage_todo(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &todo_result)
-                .await?;
-            Ok(Some((final_response, todo_result)))
+            self.execute_sync_tool(client, history, response, todo::manage_todo)
+                .await
         } else if web_search_enabled && response.to_uppercase().starts_with(tools::SEARCH) {
             let search_result = web::perform_web_search(response).await?;
             let final_response = self
@@ -109,41 +97,23 @@ impl<'a> ToolService<'a> {
                 .await?;
             Ok(Some((final_response, search_result)))
         } else if response.to_uppercase().starts_with(git_tools::GIT_STATUS) {
-            let status_result = git::git_status()?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &status_result)
-                .await?;
-            Ok(Some((final_response, status_result)))
+            self.execute_sync_tool(client, history, response, |_| git::git_status())
+                .await
         } else if response.to_uppercase().starts_with(git_tools::GIT_DIFF) {
-            let diff_result = git::git_diff()?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &diff_result)
-                .await?;
-            Ok(Some((final_response, diff_result)))
+            self.execute_sync_tool(client, history, response, |_| git::git_diff())
+                .await
         } else if response.to_uppercase().starts_with(git_tools::GIT_COMMIT) {
-            let commit_result = git::git_commit(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &commit_result)
-                .await?;
-            Ok(Some((final_response, commit_result)))
+            self.execute_sync_tool(client, history, response, git::git_commit)
+                .await
         } else if response.to_uppercase().starts_with(git_tools::GIT_ADD) {
-            let add_result = git::git_add(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &add_result)
-                .await?;
-            Ok(Some((final_response, add_result)))
+            self.execute_sync_tool(client, history, response, git::git_add)
+                .await
         } else if response.to_uppercase().starts_with(tools::GITHUB_ISSUE) {
-            let issue_result = github::create_issue(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &issue_result)
-                .await?;
-            Ok(Some((final_response, issue_result)))
+            self.execute_sync_tool(client, history, response, github::create_issue)
+                .await
         } else if response.to_uppercase().starts_with(tools::GITHUB_PR) {
-            let pr_result = github::create_pr(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &pr_result)
-                .await?;
-            Ok(Some((final_response, pr_result)))
+            self.execute_sync_tool(client, history, response, github::create_pr)
+                .await
         } else if response.to_uppercase().starts_with(tools::API_TEST) {
             let api_result = api::test_api(response).await?;
             let final_response = self
@@ -151,29 +121,17 @@ impl<'a> ToolService<'a> {
                 .await?;
             Ok(Some((final_response, api_result)))
         } else if response.to_uppercase().starts_with(tools::CODE_ANALYZE) {
-            let analysis_result = code_analysis::analyze_code(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &analysis_result)
-                .await?;
-            Ok(Some((final_response, analysis_result)))
+            self.execute_sync_tool(client, history, response, code_analysis::analyze_code)
+                .await
         } else if response.to_uppercase().starts_with(tools::DB_QUERY) {
-            let db_result = db::run_query(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &db_result)
-                .await?;
-            Ok(Some((final_response, db_result)))
+            self.execute_sync_tool(client, history, response, db::run_query)
+                .await
         } else if response.to_uppercase().starts_with(tools::IMAGE_INFO) {
-            let info_result = image::get_image_info(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &info_result)
-                .await?;
-            Ok(Some((final_response, info_result)))
+            self.execute_sync_tool(client, history, response, image::get_image_info)
+                .await
         } else if response.to_uppercase().starts_with(tools::IMAGE_RESIZE) {
-            let resize_result = image::resize_image(response)?;
-            let final_response = self
-                .call_llm_after_tool(client, history, &resize_result)
-                .await?;
-            Ok(Some((final_response, resize_result)))
+            self.execute_sync_tool(client, history, response, image::resize_image)
+                .await
         } else {
             Ok(None)
         }
@@ -320,6 +278,24 @@ impl<'a> ToolService<'a> {
             }
             _ => Ok(None),
         }
+    }
+
+    /// Execute a synchronous tool
+    async fn execute_sync_tool<F>(
+        &mut self,
+        client: &Client,
+        history: &[Message],
+        response: &str,
+        tool_fn: F,
+    ) -> Result<Option<(String, String)>, HarperError>
+    where
+        F: FnOnce(&str) -> HarperResult<String>,
+    {
+        let tool_result = tool_fn(response)?;
+        let final_response = self
+            .call_llm_after_tool(client, history, &tool_result)
+            .await?;
+        Ok(Some((final_response, tool_result)))
     }
 
     /// Call LLM after tool usage
