@@ -14,7 +14,7 @@
 
 [package]
 name = "harper"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 rust-version = "1.82.0"
 authors = ["Harper Contributors"]
@@ -47,6 +47,7 @@ once_cell = "1.19"
 crossterm = "0.28.1"
 ratatui = "0.28"
 syntect = { version = "5.3", features = ["default-fancy"] }
+image = "0.25.6"
 
 # Dependency resolution to reduce duplicate versions
 [dependencies.base64]
