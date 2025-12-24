@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: 'Setup Rust'
+name: rust
 description: 'Setup Rust toolchain and cache'
 inputs:
   components:

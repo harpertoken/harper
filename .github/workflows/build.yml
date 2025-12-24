@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Docker
+name: build
 
 on:
   push:
@@ -38,7 +38,7 @@ env:
 
 jobs:
   build:
-    name: Build Docker Image
+    name: build
     runs-on: ubuntu-latest
 
     steps:
@@ -64,7 +64,7 @@ jobs:
         # Basic test: ensure container starts without immediate crash
 
   e2e:
-    name: Run Docker E2E Tests
+    name: e2e
     runs-on: ubuntu-latest
 
     steps:
@@ -85,7 +85,7 @@ jobs:
         cache-to: type=gha,mode=max
 
   publish:
-    name: Publish Docker Image
+    name: publish
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [build, e2e]

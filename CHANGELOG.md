@@ -21,6 +21,7 @@ Hey there! This is where we keep track of all the changes and improvements to Ha
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [0.3.4](#034---2025-12-24)
 - [0.3.3](#033---2025-12-20)
 - [0.3.2](#032---2025-12-16)
 - [0.3.1](#031---2025-12-16)
@@ -46,6 +47,39 @@ Still working on some cool stuff:
 - Support for multiple languages
 - Better analytics on your chat sessions
 - Maybe cloud deployment options
+
+---
+
+## [0.3.4] - 2025-12-24
+
+This release expands Harper's tool ecosystem with advanced integrations for software development workflows, including GitHub operations, code analysis, database queries, API testing, and image processing.
+
+### What We Built
+
+* **GitHub Integration Tools**: Added `create_issue` and `create_pr` functions for direct GitHub repository management via bracket commands `[GITHUB_ISSUE title body]` and `[GITHUB_PR title body branch]`.
+* **Code Analysis Tool**: Implemented `analyze_code` for basic complexity metrics including line counts, function/struct/enum counts, and estimated complexity scores via `[CODE_ANALYZE path]`.
+* **Database Query Tool**: Added `run_query` for safe, read-only SELECT operations on SQLite databases using `[DB_QUERY db_path query]`.
+* **API Testing Tool**: Introduced `test_api` for HTTP request testing with configurable methods, headers, and bodies via `[API_TEST method url headers body]`.
+* **Image Processing Tools**: Added `get_image_info` for image metadata and `resize_image` for dimension changes using the image crate.
+
+### What Changed
+
+* Extended tool system in `src/tools/` with new modules: `github.rs`, `code_analysis.rs`, `db.rs`, `api.rs`, `image.rs`.
+* Added new bracket command prefixes and constants in `src/core/constants.rs`.
+* Integrated async API testing with reqwest and image processing with the image crate.
+* Enhanced user approval workflows for all new tools with descriptive prompts.
+* Updated ToolService to handle async and sync tool executions appropriately.
+
+### Technical Improvements
+
+* **Extensibility**: Modular tool architecture allows easy addition of new capabilities.
+* **Security**: All tools include user consent checks and safe execution patterns.
+* **Performance**: Efficient implementations with minimal dependencies.
+* **User Experience**: Consistent command syntax and clear feedback for all operations.
+* **CI/CD Cleanup**: Renamed GitHub workflows and actions to lowercase minimal names (ci, build, draft, pr, release) and made job names concise (build, e2e, publish, audit, coverage).
+* **Testing**: Added unit tests for tool parsing functions to ensure reliability of new agent capabilities.
+
+In short, **0.3.4 transforms Harper into a comprehensive development assistant with integrated tools for the full software engineering lifecycle**.
 
 ---
 

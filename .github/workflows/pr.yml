@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Harper Release Drafter
+name: pr-checks
 
 on:
+  pull_request:
+    types: [opened, edited, synchronize]
   push:
-    branches:
-      - main
-
-permissions:
-  contents: write
-  pull-requests: write
+    branches: [main]
 
 jobs:
-  update_release_draft:
+  pr-check:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
     steps:
-      - uses: release-drafter/release-drafter@v6
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check PR Titles
+        uses: ./.github/actions/pr
