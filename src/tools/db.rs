@@ -70,20 +70,20 @@ pub fn run_query(response: &str) -> crate::core::error::HarperResult<String> {
         .next()
         .map_err(|e| HarperError::Command(format!("Failed to read row: {}", e)))?
     {
-        let mut row_str = String::new();
-        for (i, name) in column_names.iter().enumerate() {
-            let value: SqlResult<String> = row.get(i);
-            row_str.push_str(&format!(
-                "{}: {:?}, ",
-                name,
-                value.unwrap_or_else(|_| "NULL".to_string())
-            ));
-        }
-        result.push_str(&format!(
-            "Row {}: {}\n",
-            count,
-            row_str.trim_end_matches(", ")
-        ));
+        let row_str = column_names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let value: SqlResult<String> = row.get(i);
+                format!(
+                    "'{:?}': '{:?}'",
+                    name,
+                    value.unwrap_or_else(|_| "NULL".to_string())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        result.push_str(&format!("Row {}: {{{}}}\n", count, row_str));
         count += 1;
         if count > 100 {
             // limit rows
