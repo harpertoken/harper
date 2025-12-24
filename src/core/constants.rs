@@ -153,6 +153,34 @@ pub mod tools {
     #[allow(dead_code)]
     pub const TODO: &str = "[TODO";
 
+    /// GitHub issue creation prefix
+    #[allow(dead_code)]
+    pub const GITHUB_ISSUE: &str = "[GITHUB_ISSUE";
+
+    /// GitHub PR creation prefix
+    #[allow(dead_code)]
+    pub const GITHUB_PR: &str = "[GITHUB_PR";
+
+    /// API testing prefix
+    #[allow(dead_code)]
+    pub const API_TEST: &str = "[API_TEST";
+
+    /// Code analysis prefix
+    #[allow(dead_code)]
+    pub const CODE_ANALYZE: &str = "[CODE_ANALYZE";
+
+    /// Database query prefix
+    #[allow(dead_code)]
+    pub const DB_QUERY: &str = "[DB_QUERY";
+
+    /// Image info prefix
+    #[allow(dead_code)]
+    pub const IMAGE_INFO: &str = "[IMAGE_INFO";
+
+    /// Image resize prefix
+    #[allow(dead_code)]
+    pub const IMAGE_RESIZE: &str = "[IMAGE_RESIZE";
+
     /// Command suffix
     #[allow(dead_code)]
     pub const COMMAND_SUFFIX: &str = "]";

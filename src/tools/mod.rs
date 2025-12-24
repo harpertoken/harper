@@ -17,8 +17,13 @@
 //! This module provides a unified interface to various tools
 //! for file operations, shell commands, web search, and todos.
 
+pub mod api;
+pub mod code_analysis;
+pub mod db;
 pub mod filesystem;
 pub mod git;
+pub mod github;
+pub mod image;
 pub mod shell;
 pub mod todo;
 pub mod web;
@@ -127,6 +132,48 @@ impl<'a> ToolService<'a> {
                 .call_llm_after_tool(client, history, &add_result)
                 .await?;
             Ok(Some((final_response, add_result)))
+        } else if response.to_uppercase().starts_with(tools::GITHUB_ISSUE) {
+            let issue_result = github::create_issue(response)?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &issue_result)
+                .await?;
+            Ok(Some((final_response, issue_result)))
+        } else if response.to_uppercase().starts_with(tools::GITHUB_PR) {
+            let pr_result = github::create_pr(response)?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &pr_result)
+                .await?;
+            Ok(Some((final_response, pr_result)))
+        } else if response.to_uppercase().starts_with(tools::API_TEST) {
+            let api_result = api::test_api(response).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &api_result)
+                .await?;
+            Ok(Some((final_response, api_result)))
+        } else if response.to_uppercase().starts_with(tools::CODE_ANALYZE) {
+            let analysis_result = code_analysis::analyze_code(response)?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &analysis_result)
+                .await?;
+            Ok(Some((final_response, analysis_result)))
+        } else if response.to_uppercase().starts_with(tools::DB_QUERY) {
+            let db_result = db::run_query(response)?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &db_result)
+                .await?;
+            Ok(Some((final_response, db_result)))
+        } else if response.to_uppercase().starts_with(tools::IMAGE_INFO) {
+            let info_result = image::get_image_info(response)?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &info_result)
+                .await?;
+            Ok(Some((final_response, info_result)))
+        } else if response.to_uppercase().starts_with(tools::IMAGE_RESIZE) {
+            let resize_result = image::resize_image(response)?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &resize_result)
+                .await?;
+            Ok(Some((final_response, resize_result)))
         } else {
             Ok(None)
         }
