@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Release
+name: release
 # Automated Release Workflow for Harper
 #
 # Safely handles re-runs, overwrites assets if draft, or deletes and recreates

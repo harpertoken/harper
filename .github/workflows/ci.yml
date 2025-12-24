@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: CI
+name: ci
 on:
   push:
     branches: [ main, develop ]
@@ -29,7 +29,7 @@ env:
   RUSTUP_MAX_RETRIES: 10
 jobs:
   test:
-    name: Test
+    name: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -65,16 +65,16 @@ jobs:
         RUST_LOG: debug
     - name: Build in release mode
       run: cargo build --release --all-features --workspace --verbose
-    - name: Test release build
+    - name: test release build
       run: cargo test --release --all-features --workspace --verbose
     - name: Run security audit
-      uses: ./.github/actions/security-audit
+      uses: ./.github/actions/audit
     - name: Run E2E tests
       uses: ./.github/actions/e2e
       with:
         os: ubuntu-latest
   security:
-    name: Security Audit
+    name: audit
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
     steps:
@@ -91,9 +91,9 @@ jobs:
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
     - name: Run security audit
-      uses: ./.github/actions/security-audit
+      uses: ./.github/actions/audit
   coverage:
-    name: Code Coverage
+    name: coverage
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code

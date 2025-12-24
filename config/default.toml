@@ -42,4 +42,4 @@ theme = "default"
 [custom_commands]
 # commands = { "hello" = "Say hello to the user", "status" = "Show system status" }
 
-# Updated for v0.3.3
+# Updated for v0.3.4

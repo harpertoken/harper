@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: 'Security Audit'
+name: audit
 description: 'Run security audit tools (cargo-audit and cargo-deny)'
 runs:
   using: 'composite'

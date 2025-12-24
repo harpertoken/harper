@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Title Checks
+name: pr-checks
+description: 'Validate commit messages and PR titles'
+runs:
+  using: 'composite'
+  steps:
+    - name: Commitlint (on push)
+      if: github.event_name == 'push'
+      uses: wagoid/commitlint-github-action@v5
+      with:
+        configFile: 'ci/commitlint.config.js'
 
-on:
-  pull_request:
-    types: [opened, edited, synchronize]
-  push:
-    branches: [main]
-
-jobs:
-  title-check:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Check Titles
-        uses: ./.github/actions/title-check
+    - name: PR Title Check (on PR)
+      if: github.event_name == 'pull_request'
+      uses: thehanimo/pr-title-checker@v1.4.0
+      with:
+        GITHUB_TOKEN: ${{ github.token }}
+        pass_on_octokit_error: false
+        configuration_path: .github/pr-title-checker-config.json
