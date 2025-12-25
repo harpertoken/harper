@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arboard::{Clipboard, ImageData};
 use crossterm::event::{Event, KeyCode, KeyModifiers};
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 use uuid::Uuid;
 
 use super::app::{AppState, ChatState, SessionInfo, TuiApp};
@@ -50,51 +52,69 @@ pub fn handle_event(
     app: &mut TuiApp,
     session_service: &SessionService,
 ) -> EventResult {
-    if let Event::Key(key) = event {
-        // Clear message on any key press
-        if app.message.is_some() {
-            app.message = None;
-        }
+    match event {
+        Event::Key(key) => {
+            // Clear message on any key press
+            if app.message.is_some() {
+                app.message = None;
+            }
 
-        match key.code {
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return EventResult::Quit;
-            }
-            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let AppState::Chat(chat_state) = &mut app.state {
-                    chat_state.web_search_enabled = !chat_state.web_search_enabled;
-                    app.message = Some(format!(
-                        "Web search {}",
-                        if chat_state.web_search_enabled {
-                            "enabled"
-                        } else {
-                            "disabled"
-                        }
-                    ));
+            match key.code {
+                KeyCode::Char('c')
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && key.modifiers.contains(KeyModifiers::SHIFT) =>
+                {
+                    handle_copy(app);
                 }
-            }
-            KeyCode::Char('q') => {
-                if matches!(app.state, AppState::Chat(..)) {
-                    app.state = AppState::Menu(0);
-                } else {
+                KeyCode::Char('v')
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && key.modifiers.contains(KeyModifiers::SHIFT) =>
+                {
+                    handle_image_paste(app);
+                }
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     return EventResult::Quit;
                 }
+                KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    if let AppState::Chat(chat_state) = &mut app.state {
+                        chat_state.web_search_enabled = !chat_state.web_search_enabled;
+                        app.message = Some(format!(
+                            "Web search {}",
+                            if chat_state.web_search_enabled {
+                                "enabled"
+                            } else {
+                                "disabled"
+                            }
+                        ));
+                    }
+                }
+                KeyCode::Char('q') => {
+                    if matches!(app.state, AppState::Chat(..)) {
+                        app.state = AppState::Menu(0);
+                    } else {
+                        return EventResult::Quit;
+                    }
+                }
+                KeyCode::Esc => match &app.state {
+                    AppState::Menu(_) => return EventResult::Quit,
+                    AppState::Sessions(_, _) => app.state = AppState::Menu(0),
+                    AppState::Chat(..) => app.state = AppState::Menu(0),
+                    AppState::Tools(_) => app.state = AppState::Menu(0),
+                    AppState::ViewSession(_, _, _) => app.state = AppState::Menu(0),
+                },
+                KeyCode::Down | KeyCode::Char('j') => app.next(),
+                KeyCode::Up | KeyCode::Char('k') => app.previous(),
+                KeyCode::Enter => return handle_enter(app, session_service),
+                KeyCode::Tab => handle_tab(app),
+                KeyCode::Char(c) => handle_char_input(app, c),
+                KeyCode::Backspace => handle_backspace(app),
+                _ => {}
             }
-            KeyCode::Esc => match &app.state {
-                AppState::Menu(_) => return EventResult::Quit,
-                AppState::Sessions(_, _) => app.state = AppState::Menu(0),
-                AppState::Chat(..) => app.state = AppState::Menu(0),
-                AppState::Tools(_) => app.state = AppState::Menu(0),
-                AppState::ViewSession(_, _, _) => app.state = AppState::Menu(0),
-            },
-            KeyCode::Down | KeyCode::Char('j') => app.next(),
-            KeyCode::Up | KeyCode::Char('k') => app.previous(),
-            KeyCode::Enter => return handle_enter(app, session_service),
-            KeyCode::Tab => handle_tab(app),
-            KeyCode::Char(c) => handle_char_input(app, c),
-            KeyCode::Backspace => handle_backspace(app),
-            _ => {}
         }
+        Event::Paste(content) => {
+            handle_paste(app, content);
+        }
+        _ => {}
     }
     EventResult::Continue
 }
@@ -194,6 +214,91 @@ fn handle_backspace(app: &mut TuiApp) {
         chat_state.completion_candidates.clear();
         chat_state.completion_index = 0;
         chat_state.completion_prefix = None; // Reset completion state when user types
+    }
+}
+
+fn handle_paste(app: &mut TuiApp, content: String) {
+    if let AppState::Chat(chat_state) = &mut app.state {
+        chat_state.input.push_str(&content);
+        chat_state.completion_candidates.clear();
+        chat_state.completion_index = 0;
+        chat_state.completion_prefix = None; // Reset completion state when pasting
+    }
+}
+
+fn handle_image_paste(app: &mut TuiApp) {
+    if let AppState::Chat(chat_state) = &mut app.state {
+        match Clipboard::new() {
+            Ok(mut clipboard) => match clipboard.get_image() {
+                Ok(image_data) => match save_image_to_temp(&image_data) {
+                    Ok(file_path) => {
+                        let reference = format!("@{}", file_path.display());
+                        chat_state.input.push_str(&reference);
+                        chat_state.completion_candidates.clear();
+                        chat_state.completion_index = 0;
+                        chat_state.completion_prefix = None;
+                        app.message = Some(format!(
+                            "Image pasted and saved as: {}",
+                            file_path.display()
+                        ));
+                    }
+                    Err(e) => {
+                        app.message = Some(format!("Failed to save pasted image: {}", e));
+                    }
+                },
+                Err(_) => {
+                    app.message = Some("No image found in clipboard".to_string());
+                }
+            },
+            Err(e) => {
+                app.message = Some(format!("Clipboard not available: {}", e));
+            }
+        }
+    }
+}
+
+fn save_image_to_temp(image_data: &ImageData) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    // Create temp directory if it doesn't exist
+    let temp_dir = std::env::temp_dir().join("harper_images");
+    fs::create_dir_all(&temp_dir)?;
+
+    // Generate unique filename
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_millis();
+    let filename = format!("pasted_image_{}.png", timestamp);
+    let file_path = temp_dir.join(filename);
+
+    // Convert RGBA to RGB if needed and save as PNG
+    let width = image_data.width as u32;
+    let height = image_data.height as u32;
+
+    // Create image buffer from raw bytes
+    let img = image::RgbaImage::from_raw(width, height, image_data.bytes.to_vec())
+        .ok_or("Failed to create image from clipboard data")?;
+
+    // Save as PNG
+    img.save(&file_path)?;
+
+    Ok(file_path)
+}
+
+fn handle_copy(app: &mut TuiApp) {
+    if let AppState::Chat(chat_state) = &mut app.state {
+        if !chat_state.input.is_empty() {
+            match Clipboard::new() {
+                Ok(mut clipboard) => {
+                    if clipboard.set_text(&chat_state.input).is_ok() {
+                        app.message = Some("Copied to clipboard".to_string());
+                    } else {
+                        app.message = Some("Failed to copy to clipboard".to_string());
+                    }
+                }
+                Err(e) => {
+                    app.message = Some(format!("Clipboard not available: {}", e));
+                }
+            }
+        }
     }
 }
 
