@@ -18,6 +18,7 @@ use std::env;
 
 use colored::Colorize;
 use harper::core::ApiConfig;
+use harper::error::HarperError;
 
 use std::io::Write;
 
@@ -63,7 +64,7 @@ fn get_api_key(config: &HarperConfig) -> String {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), HarperError> {
     // Load .env file if it exists
     let _ = dotenvy::dotenv();
 
@@ -77,14 +78,10 @@ async fn main() {
     let api_key = get_api_key(&config);
 
     let api_config = harper::core::ApiConfig {
-        provider: config
-            .api
-            .get_provider()
-            .map_err(|e| {
-                eprintln!("Configuration error: {}", e);
-                e
-            })
-            .unwrap(),
+        provider: config.api.get_provider().map_err(|e| {
+            eprintln!("Configuration error: {}", e);
+            e
+        })?,
         api_key,
         base_url: config.api.base_url.clone(),
         model_name: config.api.model_name.clone(),
@@ -243,4 +240,6 @@ async fn main() {
         )
         .await;
     }
+
+    Ok(())
 }

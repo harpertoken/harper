@@ -126,9 +126,9 @@ mod tests {
         use rusqlite::Connection;
         use tempfile::NamedTempFile;
 
-        let temp_file = NamedTempFile::new().unwrap();
-        let conn = Connection::open(temp_file.path()).unwrap();
-        init_db(&conn).unwrap();
+        let temp_file = NamedTempFile::new().expect("Failed to create temp file for test");
+        let conn = Connection::open(temp_file.path()).expect("Failed to open test database");
+        init_db(&conn).expect("Failed to initialize test database");
 
         let config = ApiConfig {
             provider: ApiProvider::OpenAI,
@@ -153,13 +153,96 @@ mod tests {
     }
 
     #[test]
+    fn test_preprocess_file_references() {
+        use rusqlite::Connection;
+        use tempfile::NamedTempFile;
+
+        let temp_file = NamedTempFile::new().expect("Failed to create temp file for test");
+        let conn = Connection::open(temp_file.path()).expect("Failed to open test database");
+        init_db(&conn).expect("Failed to initialize test database");
+
+        let config = ApiConfig {
+            provider: ApiProvider::OpenAI,
+            api_key: "test-key".to_string(),
+            base_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            model_name: "gpt-4".to_string(),
+        };
+
+        let chat_service = ChatService::new_test(&conn, &config);
+
+        // Test basic file reference
+        let result = chat_service.preprocess_file_references("Check this file @src/main.rs");
+        assert_eq!(result, "Check this file [READ_FILE src/main.rs]");
+
+        // Test file reference at start
+        let result = chat_service.preprocess_file_references("@Cargo.toml please");
+        assert_eq!(result, "[READ_FILE Cargo.toml] please");
+
+        // Test multiple @ symbols (should process all file references)
+        let result = chat_service.preprocess_file_references("Look at @file1.txt and @file2.txt");
+        assert_eq!(
+            result,
+            "Look at [READ_FILE file1.txt] and [READ_FILE file2.txt]"
+        );
+
+        // Test no @ symbol
+        let result = chat_service.preprocess_file_references("Just a normal message");
+        assert_eq!(result, "Just a normal message");
+
+        // Test @ followed by nothing
+        let result = chat_service.preprocess_file_references("Message with @");
+        assert_eq!(result, "Message with @");
+
+        // Test @ followed by command-like syntax (should skip)
+        let result = chat_service.preprocess_file_references("Use @/help command");
+        assert_eq!(result, "Use @/help command");
+
+        // Test multiple file references with mixed valid/invalid
+        let result = chat_service.preprocess_file_references("@file1.txt @/invalid @file2.txt");
+        assert_eq!(
+            result,
+            "[READ_FILE file1.txt] @/invalid [READ_FILE file2.txt]"
+        );
+
+        // Test file references with spaces in names (should work with spaces)
+        let result = chat_service.preprocess_file_references("Check @src/main.rs and @README.md");
+        assert_eq!(
+            result,
+            "Check [READ_FILE src/main.rs] and [READ_FILE README.md]"
+        );
+
+        // Test empty file reference (should skip)
+        let result = chat_service.preprocess_file_references("Check @ and continue");
+        assert_eq!(result, "Check @ and continue");
+
+        // Test @ followed by space (should skip)
+        let result = chat_service.preprocess_file_references("Check @ file.txt");
+        assert_eq!(result, "Check @ file.txt");
+
+        // Test file path containing @ symbol (should treat as single path)
+        let result = chat_service.preprocess_file_references("@file1.txt@file2.txt");
+        assert_eq!(result, "[READ_FILE file1.txt@file2.txt]");
+
+        // Test @ at end of string
+        let result = chat_service.preprocess_file_references("Check this @");
+        assert_eq!(result, "Check this @");
+
+        // Test multiple @ with invalid ones mixed in
+        let result = chat_service.preprocess_file_references("@valid.txt @ @invalid/ @another.txt");
+        assert_eq!(
+            result,
+            "[READ_FILE valid.txt] @ [READ_FILE invalid/] [READ_FILE another.txt]"
+        );
+    }
+
+    #[test]
     fn test_chat_service_should_exit() {
         use rusqlite::Connection;
         use tempfile::NamedTempFile;
 
-        let temp_file = NamedTempFile::new().unwrap();
-        let conn = Connection::open(temp_file.path()).unwrap();
-        init_db(&conn).unwrap();
+        let temp_file = NamedTempFile::new().expect("Failed to create temp file for test");
+        let conn = Connection::open(temp_file.path()).expect("Failed to open test database");
+        init_db(&conn).expect("Failed to initialize test database");
 
         let config = ApiConfig {
             provider: ApiProvider::OpenAI,
