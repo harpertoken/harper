@@ -79,9 +79,7 @@ pub fn manage_todo(
             Ok(format!("Removed todo: {}", desc))
         }
         "clear" => {
-            let todos = storage::load_todos(conn)?;
-            let count = todos.len();
-            storage::clear_todos(conn)?;
+            let count = storage::clear_todos(conn)?;
             Ok(format!("Cleared {} todos", count))
         }
         _ => Err(HarperError::Command(format!(
