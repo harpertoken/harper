@@ -27,7 +27,8 @@ pub fn manage_todo(
     conn: &rusqlite::Connection,
     response: &str,
 ) -> crate::core::error::HarperResult<String> {
-    let args = parsing::extract_tool_args(response, "[TODO", 1)?;
+    let arg_str = parsing::extract_tool_arg(response, "[TODO")?;
+    let args = parsing::parse_quoted_args(&arg_str)?;
 
     if args.is_empty() {
         return Err(HarperError::Command("No todo command provided".to_string()));
@@ -67,15 +68,27 @@ pub fn manage_todo(
             let index: usize = args[1]
                 .parse()
                 .map_err(|_| HarperError::Command("Invalid todo index".to_string()))?;
-            let todos = storage::load_todos(conn)?;
-            if index == 0 || index > todos.len() {
-                return Err(HarperError::Command(format!(
-                    "Invalid todo index: {}",
-                    index
-                )));
+            if index == 0 {
+                return Err(HarperError::Command(
+                    "Invalid todo index: 1-based index expected".to_string(),
+                ));
             }
-            let (id, desc) = &todos[index - 1];
-            storage::delete_todo(conn, *id)?;
+            let (id, desc): (i64, String) = match conn.query_row(
+                "SELECT id, description FROM todos ORDER BY id ASC LIMIT 1 OFFSET ?1",
+                [index - 1],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            ) {
+                Ok(todo) => todo,
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    return Err(HarperError::Command(format!(
+                        "Invalid todo index: {}",
+                        index
+                    )));
+                }
+                Err(e) => return Err(HarperError::Database(e.to_string())),
+            };
+
+            storage::delete_todo(conn, id)?;
             Ok(format!("Removed todo: {}", desc))
         }
         "clear" => {
