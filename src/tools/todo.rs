@@ -52,11 +52,13 @@ pub fn manage_todo(
             if todos.is_empty() {
                 Ok("No todos found".to_string())
             } else {
-                let mut result = "Current todos:\n".to_string();
-                for (i, (_id, desc)) in todos.iter().enumerate() {
-                    result.push_str(&format!("{}. {}\n", i + 1, desc));
-                }
-                Ok(result.trim_end().to_string())
+                let list = todos
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (_id, desc))| format!("{}. {}", i + 1, desc))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                Ok(format!("Current todos:\n{}", list))
             }
         }
         "remove" => {
