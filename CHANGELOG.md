@@ -77,6 +77,14 @@ This release fixes critical TUI stability issues and enhances file reference fun
 * **User Experience**: Clean separation of regular vs hidden files with intuitive access patterns.
 * **Code Quality**: Added unit test for file reference preprocessing.
 
+### Performance & Code Quality Enhancements
+
+* **Todo Clear Optimization**: Modified `clear_todos()` to return deleted row count directly from SQL execution, eliminating unnecessary SELECT query and reducing database round trips.
+* **Todo Remove Optimization**: Replaced load_all + index lookup with direct SQL LIMIT/OFFSET query to avoid race conditions and improve performance by fetching only the specific todo.
+* **Database Query Simplification**: Replaced manual iteration with `collect()` in `load_todos()` for more idiomatic Rust code and better performance.
+* **Tool Execution Unification**: Combined duplicate `execute_sync_tool` and `execute_sync_tool_with_conn` functions into single generic implementation, eliminating code duplication.
+* **String Building Optimization**: Replaced manual loop with iterator `map().collect().join()` pattern for todo list formatting, improving performance and code clarity.
+
 ---
 
 ## [0.3.4] - 2025-12-24
