@@ -225,10 +225,7 @@ pub fn load_todos(conn: &Connection) -> HarperResult<Vec<(i64, String)>> {
     let mut stmt = conn.prepare("SELECT id, description FROM todos ORDER BY id ASC")?;
     let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
 
-    let mut todos = Vec::new();
-    for todo in rows {
-        todos.push(todo?);
-    }
+    let todos = rows.collect::<Result<Vec<_>, _>>()?;
     Ok(todos)
 }
 
