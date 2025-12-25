@@ -202,83 +202,91 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
 fn handle_char_input(app: &mut TuiApp, c: char) {
     if let AppState::Chat(chat_state) = &mut app.state {
         chat_state.input.push(c);
-        chat_state.completion_candidates.clear();
-        chat_state.completion_index = 0;
-        chat_state.completion_prefix = None; // Reset completion state when user types
+        chat_state.reset_completion();
     }
 }
 
 fn handle_backspace(app: &mut TuiApp) {
     if let AppState::Chat(chat_state) = &mut app.state {
         chat_state.input.pop();
-        chat_state.completion_candidates.clear();
-        chat_state.completion_index = 0;
-        chat_state.completion_prefix = None; // Reset completion state when user types
+        chat_state.reset_completion();
     }
 }
 
 fn handle_paste(app: &mut TuiApp, content: String) {
     if let AppState::Chat(chat_state) = &mut app.state {
         chat_state.input.push_str(&content);
-        chat_state.completion_candidates.clear();
-        chat_state.completion_index = 0;
-        chat_state.completion_prefix = None; // Reset completion state when pasting
+        chat_state.reset_completion();
     }
 }
 
 fn handle_image_paste(app: &mut TuiApp) {
     if let AppState::Chat(chat_state) = &mut app.state {
-        match Clipboard::new() {
-            Ok(mut clipboard) => match clipboard.get_image() {
-                Ok(image_data) => match save_image_to_temp(&image_data) {
-                    Ok(file_path) => {
-                        let reference = format!("@{}", file_path.display());
-                        chat_state.input.push_str(&reference);
-                        chat_state.completion_candidates.clear();
-                        chat_state.completion_index = 0;
-                        chat_state.completion_prefix = None;
-                        app.message = Some(format!(
-                            "Image pasted and saved as: {}",
-                            file_path.display()
-                        ));
-                    }
-                    Err(e) => {
-                        app.message = Some(format!("Failed to save pasted image: {}", e));
-                    }
-                },
-                Err(_) => {
-                    app.message = Some("No image found in clipboard".to_string());
-                }
-            },
+        let mut clipboard = match Clipboard::new() {
+            Ok(clipboard) => clipboard,
             Err(e) => {
                 app.message = Some(format!("Clipboard not available: {}", e));
+                return;
+            }
+        };
+
+        let image_data = match clipboard.get_image() {
+            Ok(image) => image,
+            Err(_) => {
+                app.message = Some("No image found in clipboard".to_string());
+                return;
+            }
+        };
+
+        match save_image_to_temp(&image_data) {
+            Ok(file_path) => {
+                let reference = format!("@{}", file_path.display());
+                chat_state.input.push_str(&reference);
+                chat_state.reset_completion();
+                app.message = Some(format!(
+                    "Image pasted and saved as: {}",
+                    file_path.display()
+                ));
+            }
+            Err(e) => {
+                app.message = Some(format!("Failed to save pasted image: {}", e));
             }
         }
     }
 }
 
-fn save_image_to_temp(image_data: &ImageData) -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub(crate) fn save_image_to_temp(
+    image_data: &ImageData,
+) -> crate::core::error::HarperResult<PathBuf> {
     // Create temp directory if it doesn't exist
     let temp_dir = std::env::temp_dir().join("harper_images");
-    fs::create_dir_all(&temp_dir)?;
+    fs::create_dir_all(&temp_dir)
+        .map_err(|e| crate::core::error::HarperError::Io(e.to_string()))?;
 
     // Generate unique filename
     let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| crate::core::error::HarperError::Io(format!("System time error: {}", e)))?
         .as_millis();
     let filename = format!("pasted_image_{}.png", timestamp);
     let file_path = temp_dir.join(filename);
 
-    // Convert RGBA to RGB if needed and save as PNG
+    // Create image buffer from raw bytes and save as PNG
     let width = image_data.width as u32;
     let height = image_data.height as u32;
 
     // Create image buffer from raw bytes
-    let img = image::RgbaImage::from_raw(width, height, image_data.bytes.to_vec())
-        .ok_or("Failed to create image from clipboard data")?;
+    let img =
+        image::RgbaImage::from_raw(width, height, image_data.bytes.to_vec()).ok_or_else(|| {
+            crate::core::error::HarperError::File(
+                "Failed to create image from clipboard data".to_string(),
+            )
+        })?;
 
     // Save as PNG
-    img.save(&file_path)?;
+    img.save(&file_path).map_err(|e| {
+        crate::core::error::HarperError::File(format!("Failed to save image: {}", e))
+    })?;
 
     Ok(file_path)
 }
