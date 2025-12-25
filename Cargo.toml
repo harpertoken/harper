@@ -27,6 +27,7 @@ keywords = ["ai", "agent", "cli", "assistant", "llm"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+arboard = "3.4.0"
 chrono = "0.4.41"
 colored = "3.0.0"
 config = "0.14.0"
