@@ -150,7 +150,7 @@ impl<'a> ChatService<'a> {
         Ok(())
     }
 
-    /// Preprocess @file references into [READ_FILE] commands
+    /// Preprocess @file references into \[READ_FILE\] commands
     pub(crate) fn preprocess_file_references(&self, user_msg: &str) -> String {
         let mut processed = user_msg.to_string();
         let mut search_start = 0;
