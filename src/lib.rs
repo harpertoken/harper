@@ -236,6 +236,33 @@ mod tests {
     }
 
     #[test]
+    fn test_clear_todos_returns_count() {
+        use rusqlite::Connection;
+        use tempfile::NamedTempFile;
+
+        let temp_file = NamedTempFile::new().expect("Failed to create temp file for test");
+        let conn = Connection::open(temp_file.path()).expect("Failed to open test database");
+        init_db(&conn).expect("Failed to initialize test database");
+
+        // Add some todos
+        crate::memory::storage::save_todo(&conn, "Test todo 1").unwrap();
+        crate::memory::storage::save_todo(&conn, "Test todo 2").unwrap();
+        crate::memory::storage::save_todo(&conn, "Test todo 3").unwrap();
+
+        // Verify todos were added
+        let todos = crate::memory::storage::load_todos(&conn).unwrap();
+        assert_eq!(todos.len(), 3);
+
+        // Clear todos and check return count
+        let cleared_count = crate::memory::storage::clear_todos(&conn).unwrap();
+        assert_eq!(cleared_count, 3);
+
+        // Verify todos were cleared
+        let todos_after = crate::memory::storage::load_todos(&conn).unwrap();
+        assert_eq!(todos_after.len(), 0);
+    }
+
+    #[test]
     fn test_chat_service_should_exit() {
         use rusqlite::Connection;
         use tempfile::NamedTempFile;
