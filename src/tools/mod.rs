@@ -86,17 +86,25 @@ impl<'a> ToolService<'a> {
                 .await?;
             Ok(Some((final_response, command_result)))
         } else if response.to_uppercase().starts_with(tools::READ_FILE) {
-            self.execute_sync_tool(client, history, response, filesystem::read_file)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                filesystem::read_file(response)
+            })
+            .await
         } else if response.to_uppercase().starts_with(tools::WRITE_FILE) {
-            self.execute_sync_tool(client, history, response, filesystem::write_file)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                filesystem::write_file(response)
+            })
+            .await
         } else if response.to_uppercase().starts_with(tools::SEARCH_REPLACE) {
-            self.execute_sync_tool(client, history, response, filesystem::search_replace)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                filesystem::search_replace(response)
+            })
+            .await
         } else if response.to_uppercase().starts_with(tools::TODO) {
-            self.execute_sync_tool_with_conn(client, history, response, todo::manage_todo)
-                .await
+            self.execute_sync_tool(client, history, response, |conn, response| {
+                todo::manage_todo(conn.unwrap(), response)
+            })
+            .await
         } else if web_search_enabled && response.to_uppercase().starts_with(tools::SEARCH) {
             let search_result = web::perform_web_search(response).await?;
             let final_response = self
@@ -104,23 +112,31 @@ impl<'a> ToolService<'a> {
                 .await?;
             Ok(Some((final_response, search_result)))
         } else if response.to_uppercase().starts_with(git_tools::GIT_STATUS) {
-            self.execute_sync_tool(client, history, response, |_| git::git_status())
+            self.execute_sync_tool(client, history, response, |_, _| git::git_status())
                 .await
         } else if response.to_uppercase().starts_with(git_tools::GIT_DIFF) {
-            self.execute_sync_tool(client, history, response, |_| git::git_diff())
+            self.execute_sync_tool(client, history, response, |_, _| git::git_diff())
                 .await
         } else if response.to_uppercase().starts_with(git_tools::GIT_COMMIT) {
-            self.execute_sync_tool(client, history, response, git::git_commit)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                git::git_commit(response)
+            })
+            .await
         } else if response.to_uppercase().starts_with(git_tools::GIT_ADD) {
-            self.execute_sync_tool(client, history, response, git::git_add)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                git::git_add(response)
+            })
+            .await
         } else if response.to_uppercase().starts_with(tools::GITHUB_ISSUE) {
-            self.execute_sync_tool(client, history, response, github::create_issue)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                github::create_issue(response)
+            })
+            .await
         } else if response.to_uppercase().starts_with(tools::GITHUB_PR) {
-            self.execute_sync_tool(client, history, response, github::create_pr)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                github::create_pr(response)
+            })
+            .await
         } else if response.to_uppercase().starts_with(tools::API_TEST) {
             let api_result = api::test_api(response).await?;
             let final_response = self
@@ -128,17 +144,25 @@ impl<'a> ToolService<'a> {
                 .await?;
             Ok(Some((final_response, api_result)))
         } else if response.to_uppercase().starts_with(tools::CODE_ANALYZE) {
-            self.execute_sync_tool(client, history, response, code_analysis::analyze_code)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                code_analysis::analyze_code(response)
+            })
+            .await
         } else if response.to_uppercase().starts_with(tools::DB_QUERY) {
-            self.execute_sync_tool(client, history, response, db::run_query)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                db::run_query(response)
+            })
+            .await
         } else if response.to_uppercase().starts_with(tools::IMAGE_INFO) {
-            self.execute_sync_tool(client, history, response, image::get_image_info)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                image::get_image_info(response)
+            })
+            .await
         } else if response.to_uppercase().starts_with(tools::IMAGE_RESIZE) {
-            self.execute_sync_tool(client, history, response, image::resize_image)
-                .await
+            self.execute_sync_tool(client, history, response, |_, response| {
+                image::resize_image(response)
+            })
+            .await
         } else {
             Ok(None)
         }
@@ -296,26 +320,9 @@ impl<'a> ToolService<'a> {
         tool_fn: F,
     ) -> Result<Option<(String, String)>, HarperError>
     where
-        F: FnOnce(&str) -> HarperResult<String>,
+        F: FnOnce(Option<&Connection>, &str) -> HarperResult<String>,
     {
-        let tool_result = tool_fn(response)?;
-        let final_response = self
-            .call_llm_after_tool(client, history, &tool_result)
-            .await?;
-        Ok(Some((final_response, tool_result)))
-    }
-
-    async fn execute_sync_tool_with_conn<F>(
-        &mut self,
-        client: &Client,
-        history: &[Message],
-        response: &str,
-        tool_fn: F,
-    ) -> Result<Option<(String, String)>, HarperError>
-    where
-        F: FnOnce(&Connection, &str) -> HarperResult<String>,
-    {
-        let tool_result = tool_fn(self.conn, response)?;
+        let tool_result = tool_fn(Some(self.conn), response)?;
         let final_response = self
             .call_llm_after_tool(client, history, &tool_result)
             .await?;
