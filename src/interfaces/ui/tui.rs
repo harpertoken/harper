@@ -72,13 +72,16 @@ pub async fn run_tui(
             match result {
                 EventResult::Quit => break,
                 EventResult::SendMessage(message) => {
-                    if let AppState::Chat(session_id, messages, _, _, web_search_enabled, ..) =
-                        &mut app.state
-                    {
-                        let session_id = &session_id;
+                    if let AppState::Chat(chat_state) = &mut app.state {
+                        let session_id = &chat_state.session_id;
                         // Send to AI
                         match chat_service
-                            .send_message(&message, messages, *web_search_enabled, session_id)
+                            .send_message(
+                                &message,
+                                &mut chat_state.messages,
+                                chat_state.web_search_enabled,
+                                session_id,
+                            )
                             .await
                         {
                             Ok(_) => {

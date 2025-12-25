@@ -139,12 +139,58 @@ impl<'a> ChatService<'a> {
             return Ok(());
         }
 
+        // Preprocess @file references
+        let processed_msg = self.preprocess_file_references(user_msg);
+
         // Normal message processing
-        self.add_user_message(history, session_id, user_msg)?;
+        self.add_user_message(history, session_id, &processed_msg)?;
         let response = self.process_message(history, web_search_enabled).await?;
         self.add_assistant_message(history, session_id, &response)?;
         self.trim_history(history);
         Ok(())
+    }
+
+    /// Preprocess @file references into [READ_FILE] commands
+    pub(crate) fn preprocess_file_references(&self, user_msg: &str) -> String {
+        let mut processed = user_msg.to_string();
+        let mut search_start = 0;
+
+        // Process all @file references in the message
+        while let Some(at_pos) = processed[search_start..].find('@') {
+            let absolute_at_pos = search_start + at_pos;
+
+            // Find the end of the file path (next space or end of string)
+            let after_at = &processed[absolute_at_pos + 1..];
+            let path_end = after_at.find(' ').unwrap_or(after_at.len());
+            let file_path = &after_at[..path_end];
+
+            // Skip if empty or looks like a command (starts with / or !)
+            if !file_path.is_empty() && !file_path.starts_with('/') && !file_path.starts_with('!') {
+                // Replace @filepath with [READ_FILE filepath]
+                let replacement = format!("[READ_FILE {}]", file_path);
+                let old_pattern = format!("@{}", file_path);
+
+                // Find the position of the old pattern in the current processed string
+                if let Some(replace_pos) = processed[absolute_at_pos..].find(&old_pattern) {
+                    let actual_replace_pos = absolute_at_pos + replace_pos;
+                    processed.replace_range(
+                        actual_replace_pos..actual_replace_pos + old_pattern.len(),
+                        &replacement,
+                    );
+
+                    // Update search position to continue after this replacement
+                    search_start = actual_replace_pos + replacement.len();
+                } else {
+                    // Pattern not found, skip this @ and continue
+                    search_start = absolute_at_pos + 1;
+                }
+            } else {
+                // Not a valid file reference, skip this @ and continue
+                search_start = absolute_at_pos + 1;
+            }
+        }
+
+        processed
     }
 
     /// Generate help text for commands
@@ -154,7 +200,7 @@ impl<'a> ChatService<'a> {
         help_text.push_str("  /exit - Exit the session\n");
         help_text.push_str("  /clear - Clear chat history\n");
         help_text.push_str("  !command - Execute shell command directly\n");
-        help_text.push_str("  @file - Reference files (with Tab completion)\n");
+        help_text.push_str("  @file - Reference and read files (with Tab completion)\n");
         for (cmd, desc) in &self.custom_commands {
             help_text.push_str(&format!("  /{} - {}\n", cmd, desc));
         }

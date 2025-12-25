@@ -17,7 +17,7 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use super::app::{AppState, SessionInfo, TuiApp};
+use super::app::{AppState, ChatState, SessionInfo, TuiApp};
 use crate::memory::session_service::SessionService;
 
 pub enum EventResult {
@@ -61,11 +61,11 @@ pub fn handle_event(
                 return EventResult::Quit;
             }
             KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let AppState::Chat(_, _, _, _, web_search_enabled, ..) = &mut app.state {
-                    *web_search_enabled = !*web_search_enabled;
+                if let AppState::Chat(chat_state) = &mut app.state {
+                    chat_state.web_search_enabled = !chat_state.web_search_enabled;
                     app.message = Some(format!(
                         "Web search {}",
-                        if *web_search_enabled {
+                        if chat_state.web_search_enabled {
                             "enabled"
                         } else {
                             "disabled"
@@ -104,15 +104,17 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
         AppState::Menu(selected) => {
             match *selected {
                 0 => {
-                    app.state = AppState::Chat(
-                        Uuid::new_v4().to_string(),
-                        vec![],
-                        String::new(),
-                        false,
-                        false,
-                        vec![],
-                        0,
-                    )
+                    app.state = AppState::Chat(ChatState {
+                        session_id: Uuid::new_v4().to_string(),
+                        messages: vec![],
+                        input: String::new(),
+                        web_search: false,
+                        web_search_enabled: false,
+                        completion_candidates: vec![],
+                        completion_index: 0,
+                        scroll_offset: 0,
+                        completion_prefix: None,
+                    })
                 } // Start Chat
                 1 => load_sessions_into_state(app, session_service),
                 2 => load_sessions_into_state(app, session_service),
@@ -122,11 +124,11 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 _ => {}
             }
         }
-        AppState::Chat(_, _messages, input, ..) => {
-            if !input.is_empty() {
-                let message = input.clone();
+        AppState::Chat(chat_state) => {
+            if !chat_state.input.is_empty() {
+                let message = chat_state.input.clone();
                 // Clear input
-                *input = String::new();
+                chat_state.input = String::new();
                 return EventResult::SendMessage(message);
             }
         }
@@ -135,15 +137,17 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 let session = &sessions[*selected];
                 match session_service.view_session_data(&session.id) {
                     Ok(messages) => {
-                        app.state = AppState::Chat(
-                            session.id.clone(),
+                        app.state = AppState::Chat(ChatState {
+                            session_id: session.id.clone(),
                             messages,
-                            String::new(),
-                            false,
-                            false,
-                            vec![],
-                            0,
-                        );
+                            input: String::new(),
+                            web_search: false,
+                            web_search_enabled: false,
+                            completion_candidates: vec![],
+                            completion_index: 0,
+                            scroll_offset: 0,
+                            completion_prefix: None,
+                        });
                     }
                     Err(e) => {
                         app.message = Some(format!("Error loading session: {}", e));
@@ -176,81 +180,119 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
 }
 
 fn handle_char_input(app: &mut TuiApp, c: char) {
-    if let AppState::Chat(_, _, input, _, _, candidates, index) = &mut app.state {
-        input.push(c);
-        candidates.clear();
-        *index = 0;
+    if let AppState::Chat(chat_state) = &mut app.state {
+        chat_state.input.push(c);
+        chat_state.completion_candidates.clear();
+        chat_state.completion_index = 0;
+        chat_state.completion_prefix = None; // Reset completion state when user types
     }
 }
 
 fn handle_backspace(app: &mut TuiApp) {
-    if let AppState::Chat(_, _, input, _, _, candidates, index) = &mut app.state {
-        input.pop();
-        candidates.clear();
-        *index = 0;
+    if let AppState::Chat(chat_state) = &mut app.state {
+        chat_state.input.pop();
+        chat_state.completion_candidates.clear();
+        chat_state.completion_index = 0;
+        chat_state.completion_prefix = None; // Reset completion state when user types
     }
 }
 
 fn handle_tab(app: &mut TuiApp) {
-    if let AppState::Chat(_, _, input, _, _, candidates, index) = &mut app.state {
-        if input.starts_with('@') {
-            // File completion
-            if candidates.is_empty() {
-                let prefix = &input[1..];
-                let path = Path::new(prefix);
+    if let AppState::Chat(chat_state) = &mut app.state {
+        if chat_state.input.starts_with('@') {
+            let prefix = &chat_state.input[1..];
+            let path = Path::new(prefix);
 
-                let dir_to_read = if prefix.is_empty() || prefix.ends_with('/') {
-                    path
-                } else {
-                    path.parent().unwrap_or_else(|| Path::new("."))
-                };
+            // Determine directory to read and file prefix to match
+            let (dir_to_read, file_prefix) = if prefix.is_empty() {
+                // Just "@" - show all files/directories in current dir
+                (Path::new("."), "")
+            } else if prefix.ends_with('/') {
+                // "@somedir/" - show contents of somedir
+                (path, "")
+            } else if prefix == "." {
+                // "@." - show hidden files/directories in current dir
+                (Path::new("."), ".")
+            } else if prefix.starts_with('.') && !prefix.contains('/') {
+                // "@.something" - show hidden files starting with ".something"
+                (Path::new("."), prefix)
+            } else {
+                // "@somedir/file" - show files in somedir starting with "file"
+                let parent = path.parent().unwrap_or_else(|| Path::new("."));
+                let file_part = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                (parent, file_part)
+            };
 
-                let file_prefix = if !prefix.is_empty() && !prefix.ends_with('/') {
-                    path.file_name().unwrap_or_default().to_str().unwrap_or("")
-                } else {
-                    ""
-                };
+            // Check if we need to refresh candidates
+            // Only refresh if this is truly a new completion (not cycling existing results)
+            let is_showing_candidate = !chat_state.completion_candidates.is_empty()
+                && chat_state.completion_candidates.contains(&chat_state.input);
+            let needs_refresh = chat_state.completion_candidates.is_empty()
+                || (!is_showing_candidate
+                    && chat_state.completion_prefix.as_deref() != Some(prefix));
 
+            if needs_refresh {
+                chat_state.completion_prefix = Some(prefix.to_string());
+                chat_state.completion_candidates.clear();
+                chat_state.completion_index = 0;
+
+                // Read directory and collect matching entries
                 if let Ok(entries) = fs::read_dir(dir_to_read) {
                     for entry in entries.flatten() {
                         if let Some(name) = entry.file_name().to_str() {
+                            // Skip hidden files/directories unless explicitly requested
+                            let show_hidden = file_prefix.starts_with('.');
+                            if !show_hidden && name.starts_with('.') {
+                                continue;
+                            }
+
                             if name.starts_with(file_prefix) {
+                                // Build the full path relative to where we started
                                 let full_path = dir_to_read.join(name);
+
                                 if let Some(full_path_str) = full_path.to_str() {
-                                    // Normalize path separators for consistency
-                                    candidates
-                                        .push(format!("@{}", full_path_str.replace('\\', "/")));
+                                    // Normalize path separators and add @ prefix
+                                    let normalized_path: String = full_path_str.replace('\\', "/");
+                                    chat_state
+                                        .completion_candidates
+                                        .push(format!("@{}", normalized_path));
                                 }
                             }
                         }
                     }
                 }
-                candidates.sort();
-                *index = 0;
+
+                chat_state.completion_candidates.sort();
             }
-            if !candidates.is_empty() {
-                *input = candidates[*index].clone();
-                *index = (*index + 1) % candidates.len();
+
+            // Cycle through candidates
+            if !chat_state.completion_candidates.is_empty() {
+                chat_state.input =
+                    chat_state.completion_candidates[chat_state.completion_index].clone();
+                chat_state.completion_index =
+                    (chat_state.completion_index + 1) % chat_state.completion_candidates.len();
             }
-        } else if input.starts_with('/') {
+        } else if chat_state.input.starts_with('/') {
             // Command completion
-            if candidates.is_empty() {
+            if chat_state.completion_candidates.is_empty() {
                 let commands = vec!["/help", "/quit", "/clear", "/exit"];
                 for cmd in commands {
-                    if cmd.starts_with(&*input) {
-                        candidates.push(cmd.to_string());
+                    if cmd.starts_with(&chat_state.input) {
+                        chat_state.completion_candidates.push(cmd.to_string());
                     }
                 }
-                candidates.sort();
-                *index = 0;
+                chat_state.completion_candidates.sort();
+                chat_state.completion_index = 0;
             }
-            if !candidates.is_empty() {
-                *input = candidates[*index].clone();
-                *index = (*index + 1) % candidates.len();
+            if !chat_state.completion_candidates.is_empty() {
+                chat_state.input =
+                    chat_state.completion_candidates[chat_state.completion_index].clone();
+                chat_state.completion_index =
+                    (chat_state.completion_index + 1) % chat_state.completion_candidates.len();
             }
         } else {
-            candidates.clear();
-            *index = 0;
+            chat_state.completion_candidates.clear();
+            chat_state.completion_index = 0;
         }
     }
 }
