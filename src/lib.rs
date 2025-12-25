@@ -236,6 +236,59 @@ mod tests {
     }
 
     #[test]
+    fn test_remove_todo_by_index() {
+        use rusqlite::Connection;
+        use tempfile::NamedTempFile;
+
+        let temp_file = NamedTempFile::new().expect("Failed to create temp file for test");
+        let conn = Connection::open(temp_file.path()).expect("Failed to open test database");
+        init_db(&conn).expect("Failed to initialize test database");
+
+        // Add some todos
+        crate::memory::storage::save_todo(&conn, "First todo").unwrap();
+        crate::memory::storage::save_todo(&conn, "Second todo").unwrap();
+        crate::memory::storage::save_todo(&conn, "Third todo").unwrap();
+
+        // Test removing middle todo (index 2)
+        let result = crate::tools::todo::manage_todo(&conn, "[TODO remove 2]").unwrap();
+        assert_eq!(result, "Removed todo: Second todo");
+
+        // Verify remaining todos
+        let todos = crate::memory::storage::load_todos(&conn).unwrap();
+        assert_eq!(todos.len(), 2);
+        assert_eq!(todos[0].1, "First todo");
+        assert_eq!(todos[1].1, "Third todo");
+
+        // Test removing first todo (index 1)
+        let result = crate::tools::todo::manage_todo(&conn, "[TODO remove 1]").unwrap();
+        assert_eq!(result, "Removed todo: First todo");
+
+        // Test removing last todo (index 1 after removal)
+        let result = crate::tools::todo::manage_todo(&conn, "[TODO remove 1]").unwrap();
+        assert_eq!(result, "Removed todo: Third todo");
+
+        // Verify no todos left
+        let todos = crate::memory::storage::load_todos(&conn).unwrap();
+        assert_eq!(todos.len(), 0);
+
+        // Test invalid index (too high)
+        let result = crate::tools::todo::manage_todo(&conn, "[TODO remove 1]");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid todo index: 1"));
+
+        // Test invalid index (zero)
+        let result = crate::tools::todo::manage_todo(&conn, "[TODO remove 0]");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("1-based index expected"));
+    }
+
+    #[test]
     fn test_clear_todos_returns_count() {
         use rusqlite::Connection;
         use tempfile::NamedTempFile;
