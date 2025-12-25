@@ -250,9 +250,12 @@ pub fn delete_todo(conn: &Connection, id: i64) -> HarperResult<()> {
 /// # Arguments
 /// * `conn` - SQLite database connection
 ///
+/// # Returns
+/// Returns the number of todos that were cleared
+///
 /// # Errors
 /// Returns `HarperError::Database` if the delete operation fails
-pub fn clear_todos(conn: &Connection) -> HarperResult<()> {
-    conn.execute("DELETE FROM todos", [])?;
-    Ok(())
+pub fn clear_todos(conn: &Connection) -> HarperResult<usize> {
+    let count = conn.execute("DELETE FROM todos", [])?;
+    Ok(count)
 }
