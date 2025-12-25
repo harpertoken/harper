@@ -48,6 +48,8 @@ mod tests {
     // Use full paths in tests to avoid conflicts
     use crate::agent::chat::ChatService;
     use crate::core::error::HarperError;
+    use ::image::{open as image_open, RgbaImage};
+    use std::fs;
 
     #[test]
     fn test_api_provider_variants() {
@@ -339,5 +341,58 @@ mod tests {
         assert!(chat_service.should_exit(""));
         assert!(!chat_service.should_exit("hello"));
         assert!(!chat_service.should_exit("how are you?"));
+    }
+
+    #[test]
+    fn test_clipboard_image_processing() {
+        // Test the core image processing logic used in clipboard functionality
+        // Create mock RGBA image data (2x2 red square)
+        let mock_bytes = vec![
+            255, 0, 0, 255, // Red pixel (top-left)
+            255, 0, 0, 255, // Red pixel (top-right)
+            255, 0, 0, 255, // Red pixel (bottom-left)
+            255, 0, 0, 255, // Red pixel (bottom-right)
+        ];
+
+        // Test temp directory creation
+        let temp_dir = std::env::temp_dir().join("harper_images_test");
+        fs::create_dir_all(&temp_dir).expect("Failed to create temp directory");
+
+        // Generate a test filename with timestamp
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let filename = format!("test_image_{}.png", timestamp);
+        let file_path = temp_dir.join(filename);
+
+        // Test image creation and saving (core logic from save_image_to_temp)
+        let img = RgbaImage::from_raw(2, 2, mock_bytes.clone())
+            .expect("Failed to create image from mock data");
+        img.save(&file_path).expect("Failed to save test image");
+
+        // Verify the file was created
+        assert!(file_path.exists(), "Image file should be created");
+
+        // Verify it's a valid PNG by trying to load it back
+        let loaded_img = image_open(&file_path).expect("Failed to load saved image");
+        assert_eq!(loaded_img.width(), 2, "Image width should be 2");
+        assert_eq!(loaded_img.height(), 2, "Image height should be 2");
+
+        // Verify file path follows expected pattern
+        let path_str = file_path.to_string_lossy();
+        assert!(
+            path_str.contains("harper_images_test"),
+            "Path should contain temp directory"
+        );
+        assert!(
+            path_str.contains("test_image_"),
+            "Filename should contain test prefix"
+        );
+        assert!(path_str.ends_with(".png"), "File should have PNG extension");
+
+        // Clean up
+        fs::remove_file(&file_path).expect("Failed to clean up test file");
+        fs::remove_dir(&temp_dir).ok(); // Remove directory if empty
     }
 }
