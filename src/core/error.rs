@@ -30,6 +30,8 @@ pub enum HarperError {
     Crypto(String),
     /// I/O related errors
     Io(String),
+    /// File operation errors
+    File(String),
     /// Command execution errors
     Command(String),
     /// Web search errors
@@ -46,6 +48,7 @@ impl fmt::Display for HarperError {
             HarperError::Mcp(msg) => write!(f, "MCP error: {}", msg),
             HarperError::Crypto(msg) => write!(f, "Cryptography error: {}", msg),
             HarperError::Io(msg) => write!(f, "I/O error: {}", msg),
+            HarperError::File(msg) => write!(f, "File operation error: {}", msg),
             HarperError::Command(msg) => write!(f, "Command execution error: {}", msg),
             HarperError::WebSearch(msg) => write!(f, "Web search error: {}", msg),
         }

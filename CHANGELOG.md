@@ -50,6 +50,35 @@ Still working on some cool stuff:
 
 ---
 
+## [Unreleased]
+
+This release fixes critical TUI stability issues and enhances file reference functionality with proper tab completion support.
+
+### What We Fixed
+
+* **File Reference Processing**: Fixed `@file` syntax to properly convert to `[READ_FILE file]` commands for AI processing, enabling seamless file reading capabilities.
+* **Tab Completion Cycling**: Resolved tab completion that only showed first result - now properly cycles through all matching files and directories.
+* **Hidden File Access**: Added support for `@.` syntax to access hidden files and directories (`.cargo`, `.git`, etc.) while keeping them filtered from regular completion for cleaner UX.
+* **TUI Stability**: Fixed critical panic in chat interface when accessing empty message lists by adding proper bounds checking and enum field management.
+* **Memory Safety**: Resolved field sharing issues between completion indexing and scroll offset that caused crashes.
+
+### What Changed
+
+* Enhanced file reference preprocessing in `ChatService` to handle `@file` syntax correctly.
+* Completely rewrote tab completion logic in `events.rs` with intelligent cycling and prefix tracking.
+* Added hidden file filtering with explicit access via `@.` syntax.
+* Expanded `AppState::Chat` enum with separate fields for completion tracking and scrolling.
+* Added test coverage for file reference preprocessing.
+
+### Technical Improvements
+
+* **Robust Tab Completion**: Smart detection of completion vs cycling states prevents UI freezes.
+* **Path Resolution**: Enhanced path handling for edge cases like `.` and hidden files.
+* **User Experience**: Clean separation of regular vs hidden files with intuitive access patterns.
+* **Code Quality**: Added unit test for file reference preprocessing.
+
+---
+
 ## [0.3.4] - 2025-12-24
 
 This release expands Harper's tool ecosystem with advanced integrations for software development workflows, including GitHub operations, code analysis, database queries, API testing, and image processing.
@@ -69,6 +98,7 @@ This release expands Harper's tool ecosystem with advanced integrations for soft
 * Integrated async API testing with reqwest and image processing with the image crate.
 * Enhanced user approval workflows for all new tools with descriptive prompts.
 * Updated ToolService to handle async and sync tool executions appropriately.
+* Refactored ToolService to accept database connection parameter for better integration with SQLite operations.
 
 ### Technical Improvements
 

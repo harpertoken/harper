@@ -15,10 +15,23 @@
 use crate::core::Message;
 
 #[derive(Clone)]
+pub struct ChatState {
+    pub session_id: String,
+    pub messages: Vec<Message>,
+    pub input: String,
+    pub web_search: bool,
+    pub web_search_enabled: bool,
+    pub completion_candidates: Vec<String>,
+    pub completion_index: usize,
+    pub scroll_offset: usize,
+    pub completion_prefix: Option<String>,
+}
+
+#[derive(Clone)]
 pub enum AppState {
     Menu(usize),
     #[allow(dead_code)]
-    Chat(String, Vec<Message>, String, bool, bool, Vec<String>, usize), // session_id, messages, input, web_search, web_search_enabled, completion_candidates, completion_index
+    Chat(ChatState),
     Sessions(Vec<SessionInfo>, usize), // sessions, selected
     Tools(usize),                      // selected tool
     #[allow(dead_code)]
@@ -59,8 +72,9 @@ impl TuiApp {
     pub fn next(&mut self) {
         match &mut self.state {
             AppState::Menu(sel) => *sel = (*sel + 1) % 6,
-            AppState::Chat(_, messages, _, _, _, _, scroll) => {
-                *scroll = (*scroll + 1).min(messages.len().saturating_sub(1));
+            AppState::Chat(chat_state) => {
+                chat_state.scroll_offset =
+                    (chat_state.scroll_offset + 1).min(chat_state.messages.len());
             }
             AppState::Sessions(sessions, sel) => {
                 if !sessions.is_empty() {
@@ -79,8 +93,8 @@ impl TuiApp {
     pub fn previous(&mut self) {
         match &mut self.state {
             AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
-            AppState::Chat(_, _, _, _, _, _, scroll) => {
-                *scroll = scroll.saturating_sub(1);
+            AppState::Chat(chat_state) => {
+                chat_state.scroll_offset = chat_state.scroll_offset.saturating_sub(1);
             }
             AppState::Sessions(sessions, sel) => {
                 if !sessions.is_empty() {
