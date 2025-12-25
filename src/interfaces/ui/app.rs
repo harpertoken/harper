@@ -27,6 +27,14 @@ pub struct ChatState {
     pub completion_prefix: Option<String>,
 }
 
+impl ChatState {
+    pub fn reset_completion(&mut self) {
+        self.completion_candidates.clear();
+        self.completion_index = 0;
+        self.completion_prefix = None;
+    }
+}
+
 #[derive(Clone)]
 pub enum AppState {
     Menu(usize),
