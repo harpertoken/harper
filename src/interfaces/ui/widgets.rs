@@ -72,38 +72,80 @@ pub fn parse_content_with_code<'a>(
 pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     match &app.state {
         AppState::Menu(selected) => draw_menu(frame, *selected, theme),
-        AppState::Chat(_, messages, input, _, web_search_enabled, _, scroll_offset) => draw_chat(
-            frame,
-            messages,
-            input,
-            *web_search_enabled,
-            *scroll_offset,
-            theme,
-        ),
+        AppState::Chat(chat_state) => {
+            // Create layout for chat: messages area and input area
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Min(5),    // Messages area
+                    Constraint::Length(3), // Input area
+                ])
+                .split(frame.area());
+
+            // Messages area
+            let safe_scroll_offset = chat_state.scroll_offset.min(chat_state.messages.len());
+            let displayed_messages = &chat_state.messages[safe_scroll_offset..];
+            let message_lines: Vec<Line> = displayed_messages
+                .iter()
+                .flat_map(|msg| {
+                    let color = match msg.role.as_str() {
+                        "user" => theme.input,
+                        "assistant" => theme.output,
+                        _ => theme.foreground,
+                    };
+                    msg.content
+                        .lines()
+                        .map(|line| Line::styled(line, color))
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+
+            let title = if chat_state.web_search_enabled {
+                "Chat (Web Search Enabled)"
+            } else {
+                "Chat"
+            };
+
+            let messages_widget = Paragraph::new(message_lines)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(title)
+                        .border_style(theme.border_style())
+                        .title_style(theme.title_style()),
+                )
+                .wrap(Wrap { trim: false });
+
+            frame.render_widget(messages_widget, chunks[0]);
+
+            // Input area
+            let input_widget = Paragraph::new(format!("> {}", chat_state.input))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Input")
+                        .border_style(theme.border_style())
+                        .title_style(theme.title_style()),
+                )
+                .style(Style::default().bg(theme.background).fg(theme.input));
+
+            frame.render_widget(input_widget, chunks[1]);
+        }
         AppState::Sessions(sessions, selected) => draw_sessions(frame, sessions, *selected, theme),
         AppState::Tools(selected) => draw_tools(frame, *selected, theme),
         AppState::ViewSession(name, messages, selected) => {
             draw_view_session(frame, name, messages, *selected, theme)
         }
     }
-
-    // Draw status bar
-    draw_status_bar(frame, app, theme);
-
-    // Draw message overlay if any
-    if let Some(msg) = &app.message {
-        draw_message_overlay(frame, msg, theme);
-    }
 }
 
 fn draw_menu(frame: &mut Frame, selected: usize, theme: &Theme) {
     let menu_items = [
         "Start Chat",
-        "List Sessions",
-        "Resume Session",
+        "Load Session",
+        "Save Session",
         "Tools",
-        "Export Session",
-        "Quit",
+        "Exit",
     ];
 
     let items: Vec<ListItem> = menu_items
@@ -123,76 +165,13 @@ fn draw_menu(frame: &mut Frame, selected: usize, theme: &Theme) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Harper AI Agent")
+                .title("Harper AI Assistant")
                 .border_style(theme.border_style())
                 .title_style(theme.title_style()),
         )
         .highlight_style(Style::default().add_modifier(Modifier::BOLD));
 
     frame.render_widget(menu, frame.area());
-}
-
-fn draw_chat(
-    frame: &mut Frame,
-    messages: &[crate::core::Message],
-    input: &str,
-    web_search_enabled: bool,
-    scroll_offset: usize,
-    theme: &Theme,
-) {
-    let syntax_theme = &theme.syntax_theme;
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(3)])
-        .split(frame.area());
-
-    // Messages area
-    let displayed_messages = &messages[scroll_offset..];
-    let message_lines: Vec<Line> = displayed_messages
-        .iter()
-        .flat_map(|msg| {
-            let color = match msg.role.as_str() {
-                "user" => theme.input,
-                "assistant" => theme.output,
-                _ => theme.foreground,
-            };
-            let prefix = format!("[{}] ", msg.role.to_uppercase());
-            let prefix_span = Span::styled(prefix, Style::default().fg(color));
-            let mut content_spans = parse_content_with_code(&msg.content, color, syntax_theme);
-            let mut all_spans = vec![prefix_span];
-            all_spans.append(&mut content_spans);
-            vec![Line::from(all_spans)]
-        })
-        .collect();
-
-    let title = format!(
-        "Chat (Web Search: {})",
-        if web_search_enabled { "ON" } else { "OFF" }
-    );
-    let messages_widget = Paragraph::new(message_lines)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .border_style(theme.border_style())
-                .title_style(theme.title_style()),
-        )
-        .wrap(Wrap { trim: false });
-
-    frame.render_widget(messages_widget, chunks[0]);
-
-    // Input area
-    let input_widget = Paragraph::new(format!("> {}", input))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Input")
-                .border_style(theme.border_style())
-                .title_style(theme.title_style()),
-        )
-        .style(Style::default().bg(theme.background).fg(theme.input));
-
-    frame.render_widget(input_widget, chunks[1]);
 }
 
 fn draw_sessions(frame: &mut Frame, sessions: &[SessionInfo], selected: usize, theme: &Theme) {
@@ -292,6 +271,7 @@ fn draw_view_session(
     frame.render_widget(view, frame.area());
 }
 
+#[allow(dead_code)]
 fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     let mode = match &app.state {
         AppState::Menu(_) => "MENU",
@@ -317,6 +297,7 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     frame.render_widget(status_bar, status_area);
 }
 
+#[allow(dead_code)]
 fn draw_message_overlay(frame: &mut Frame, message: &str, theme: &Theme) {
     let overlay = Paragraph::new(message)
         .block(
