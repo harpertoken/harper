@@ -64,18 +64,26 @@ This release fixes critical TUI stability issues and enhances file reference fun
 
 ### What Changed
 
+* **Clipboard Support**: Added comprehensive clipboard functionality including text paste/copy and image paste from desktop.
+  - `Ctrl+V` / `Cmd+V` (macOS): Pastes text content into chat input
+  - `Ctrl+Shift+C`: Copies current chat input to system clipboard
+  - `Ctrl+Shift+V`: Pastes images from desktop clipboard, saves them as PNG files, and inserts file references
+  - Automatic temp directory management for saved images
+  - Cross-platform clipboard support using `arboard` crate
 * Enhanced file reference preprocessing in `ChatService` to handle `@file` syntax correctly.
 * Completely rewrote tab completion logic in `events.rs` with intelligent cycling and prefix tracking.
 * Added hidden file filtering with explicit access via `@.` syntax.
 * Expanded `AppState::Chat` enum with separate fields for completion tracking and scrolling.
-* Added test coverage for file reference preprocessing.
+* Added test coverage for file reference preprocessing and clipboard image processing.
 
 ### Technical Improvements
 
+* **Clipboard Integration**: Added `arboard` dependency for cross-platform clipboard access with proper error handling.
+* **Image Processing**: Implemented automatic PNG conversion and temp file management for pasted images.
 * **Robust Tab Completion**: Smart detection of completion vs cycling states prevents UI freezes.
 * **Path Resolution**: Enhanced path handling for edge cases like `.` and hidden files.
 * **User Experience**: Clean separation of regular vs hidden files with intuitive access patterns.
-* **Code Quality**: Added unit test for file reference preprocessing.
+* **Code Quality**: Added unit tests for file reference preprocessing and clipboard image processing.
 
 ### Performance & Code Quality Enhancements
 
