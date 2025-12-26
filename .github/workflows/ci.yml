@@ -122,7 +122,7 @@ jobs:
         RUST_LOG: debug
     - name: Upload coverage to Codecov
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       with:
         files: lcov.info
         fail_ci_if_error: false
