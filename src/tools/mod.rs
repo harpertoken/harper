@@ -102,9 +102,9 @@ impl<'a> ToolService<'a> {
             .await
         } else if response.to_uppercase().starts_with(tools::TODO) {
             self.execute_sync_tool(client, history, response, |conn, response| {
-                let conn = conn.ok_or(HarperError::Io(
-                    "Connection required for todo management".to_string(),
-                ))?;
+                let conn = conn.ok_or_else(|| {
+                    HarperError::Database("Connection required for todo management".to_string())
+                })?;
                 todo::manage_todo(conn, response)
             })
             .await
