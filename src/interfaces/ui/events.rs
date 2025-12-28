@@ -260,13 +260,12 @@ pub(crate) fn save_image_to_temp(
 ) -> crate::core::error::HarperResult<PathBuf> {
     // Create temp directory if it doesn't exist
     let temp_dir = std::env::temp_dir().join("harper_images");
-    fs::create_dir_all(&temp_dir)
-        .map_err(|e| crate::core::error::HarperError::Io(e.to_string()))?;
+    fs::create_dir_all(&temp_dir)?;
 
     // Generate unique filename
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| crate::core::error::HarperError::Io(format!("System time error: {}", e)))?
+        .map_err(|e| crate::core::error::HarperError::Api(format!("System time error: {}", e)))?
         .as_millis();
     let filename = format!("pasted_image_{}.png", timestamp);
     let file_path = temp_dir.join(filename);
