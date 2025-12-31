@@ -72,11 +72,12 @@ impl CryptoUtils {
     }
 
     /// Helper function to generate a nonce
-    fn generate_nonce() -> aead::Nonce {
+    fn generate_nonce() -> HarperResult<aead::Nonce> {
         let rng = SystemRandom::new();
         let mut nonce_bytes = [0u8; crypto::AES_GCM_NONCE_LEN];
-        rng.fill(&mut nonce_bytes).unwrap();
-        aead::Nonce::assume_unique_for_key(nonce_bytes)
+        rng.fill(&mut nonce_bytes)
+            .map_err(|e| HarperError::Crypto(format!("Nonce generation failed: {}", e)))?;
+        Ok(aead::Nonce::assume_unique_for_key(nonce_bytes))
     }
 }
 
