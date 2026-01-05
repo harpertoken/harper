@@ -30,3 +30,11 @@ jobs:
           fetch-depth: 0
       - name: Check PR Titles
         uses: ./.github/actions/pr
+  label:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
