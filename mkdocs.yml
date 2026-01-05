@@ -33,6 +33,9 @@ nav:
   - About:
       - Privacy Policy: about/privacy.md
       - Governance: about/governance.md
+  - Additional:
+      - Privacy: PRIVACY.md
+      - Reset Guide: RESET.md
 
 plugins:
   - search
