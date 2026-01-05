@@ -782,6 +782,7 @@ server_url = "http://localhost:5000"
         // Set the working directory to the temp directory so it finds the config file
         command
             .current_dir(temp_dir.path())
+            .env("TERM", "dumb") // Force fallback to text menu
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
