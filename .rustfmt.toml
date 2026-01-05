@@ -1,0 +1,26 @@
+# Rust formatting configuration
+edition = "2021"
+max_width = 100
+hard_tabs = false
+tab_spaces = 4
+newline_style = "Auto"
+use_small_heuristics = "Default"
+reorder_imports = true
+reorder_modules = true
+remove_nested_parens = true
+blank_lines_upper_bound = 1
+blank_lines_lower_bound = 0
+wrap_comments = false
+format_code_in_doc_comments = false
+doc_comment_code_block_width = 100
+comment_width = 80
+normalize_comments = false
+normalize_doc_attributes = false
+format_strings = false
+format_macro_matchers = false
+format_macro_bodies = true
+hex_literal_case = "Preserve"
+imports_indent = "Block"
+imports_layout = "Mixed"
+group_imports = "StdExternalCrate"
+merge_imports = false

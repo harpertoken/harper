@@ -1,0 +1,26 @@
+# Set default behavior to automatically normalize line endings
+* text=auto eol=lf
+
+# Rust source files
+*.rs text eol=lf
+
+# TOML files
+*.toml text eol=lf
+
+# Markdown files
+*.md text eol=lf
+
+# YAML files
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# JSON files
+*.json text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
