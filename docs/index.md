@@ -11,8 +11,8 @@ Welcome to Harper, an AI agent for intelligent interactions.
 
 ## Getting Started
 
-See the [Installation](getting-started/installation.md) guide.
+Harper is a command-line AI assistant. Install Rust and run `cargo build --release` to get started.
 
 ## Contributing
 
-See [Contributing](development/contributing.md).
+See the main repository for contribution guidelines.

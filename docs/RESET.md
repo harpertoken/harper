@@ -270,7 +270,7 @@ cd harper
 
 ### Getting Help
 
-- **Documentation**: See [Contributing Guide](../CONTRIBUTING.md)
+- **Documentation**: See [Contributing Guide](https://github.com/harpertoken/harper/blob/main/CONTRIBUTING.md)
 - **Issues**: [Report problems](https://github.com/harpertoken/harper/issues)
 - **Discussions**: [Ask questions](https://github.com/harpertoken/harper/discussions)
 
@@ -278,4 +278,4 @@ cd harper
 
 **Remember**: When in doubt, commit your work first! It's always safer to have changes in git history than to lose them permanently.
 
-For more information about Harper development, see the main [README](../README.md) and [Contributing Guide](../CONTRIBUTING.md).
+For more information about Harper development, see the main [README](https://github.com/harpertoken/harper/blob/main/README.md) and [Contributing Guide](https://github.com/harpertoken/harper/blob/main/CONTRIBUTING.md).
