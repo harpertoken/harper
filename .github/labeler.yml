@@ -1,5 +1,3 @@
-version: v1
-
 labels:
   - label: "area: core"
     matcher:
