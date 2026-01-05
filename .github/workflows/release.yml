@@ -15,9 +15,3 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-      - name: Update release PR title
-        if: ${{ steps.release.outputs.release_created }}
-        run: |
-          gh pr edit ${{ steps.release.outputs.pull-request-number }} --title "chore: release ${{ steps.release.outputs.tag_name }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
