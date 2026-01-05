@@ -81,7 +81,7 @@ jobs:
       with:
         os: ubuntu-latest
   security:
-    name: audit
+    name: audit (weekly)
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
     steps:
