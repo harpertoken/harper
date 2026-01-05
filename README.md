@@ -126,3 +126,31 @@ These options favor clarity and containment without introducing operational comp
 ## Implementation Notes (For Maintainers)
 
 Harper prioritizes environment-based configuration for sensitive values and applies lightweight validation at runtime.
+
+---
+
+## Code Scanning
+
+Harper uses GitHub Code Scanning with CodeQL to automatically find security vulnerabilities and errors in the codebase.
+
+### Features Enabled
+- **Automated scans** on pushes and PRs
+- **CodeQL analysis** for Rust code
+- **SARIF reports** for detailed findings
+- **Alert management** in Security tab
+
+### Supported Repository Types
+- Public repositories on GitHub.com
+- Organization repositories with GitHub Code Security
+
+### How It Works
+Code scanning analyzes the code to identify vulnerabilities and errors. Results appear as alerts in the repository's Security tab. GitHub Copilot Autofix may suggest fixes for detected issues.
+
+### Billing
+Uses GitHub Actions minutes. Private repos require GitHub Code Security license.
+
+### Tools
+- **CodeQL**: GitHub's primary analysis engine
+- **Third-party tools**: Supported via SARIF upload
+
+For setup details, see [Configuring code scanning](https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning).
