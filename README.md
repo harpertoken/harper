@@ -112,6 +112,7 @@ cargo run --release
 ```bash
 docker build -t harper .
 docker run --rm -it \
+  -v "$(pwd)/data:/app/data" \
   --env-file .env \
   --read-only \
   --tmpfs /tmp \
