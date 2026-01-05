@@ -673,6 +673,7 @@ mod e2e_tests {
         assert_eq!(parsed_history[2].role, "system");
     }
 
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_binary_execution_e2e() {
         use std::fs;
