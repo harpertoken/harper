@@ -19,13 +19,6 @@
 
 set -euo pipefail  # Exit on any error, undefined vars, or pipe failures
 
-echo ""
-echo -e "${BLUE}╭──────────────────────────────────────────────╮${NC}"
-echo -e "${BLUE}│          Harper Validation Suite              │${NC}"
-echo -e "${BLUE}│        Calm checks. Strong guarantees.        │${NC}"
-echo -e "${BLUE}╰──────────────────────────────────────────────╯${NC}"
-echo ""
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,6 +28,13 @@ NC='\033[0m' # No Color
 
 # Quiet mode
 QUIET=${QUIET:-0}
+
+echo ""
+echo -e "${BLUE}╭──────────────────────────────────────────────╮${NC}"
+echo -e "${BLUE}│          Harper Validation Suite              │${NC}"
+echo -e "${BLUE}│        Calm checks. Strong guarantees.        │${NC}"
+echo -e "${BLUE}╰──────────────────────────────────────────────╯${NC}"
+echo ""
 
 # Function to print status
 print_status() {
