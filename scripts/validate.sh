@@ -19,8 +19,12 @@
 
 set -euo pipefail  # Exit on any error, undefined vars, or pipe failures
 
-echo "Peace and faith..."
-echo "=================================================="
+echo ""
+echo -e "${BLUE}╭──────────────────────────────────────────────╮${NC}"
+echo -e "${BLUE}│          Harper Validation Suite              │${NC}"
+echo -e "${BLUE}│        Calm checks. Strong guarantees.        │${NC}"
+echo -e "${BLUE}╰──────────────────────────────────────────────╯${NC}"
+echo ""
 
 # Colors for output
 RED='\033[0;31m'
@@ -28,6 +32,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Quiet mode
+QUIET=${QUIET:-0}
 
 # Function to print status
 print_status() {
@@ -59,9 +66,9 @@ print_status "INFO" "Starting validation checks..."
 
 # 1. Rust Compilation Check
 echo ""
-print_status "INFO" "1. Checking Rust compilation..."
+print_status "INFO" "[1/14] Checking Rust compilation..."
 if cargo check --quiet 2>/dev/null; then
-    print_status "PASS" "Rust compilation successful"
+    print_status "PASS" "Rust compilation successful ✓"
 else
     print_status "FAIL" "Rust compilation failed"
     echo "Run 'cargo check' for details"
@@ -74,8 +81,8 @@ print_status "INFO" "2. Running Clippy linter..."
 if cargo clippy --all-targets --all-features --quiet -- -D warnings 2>/dev/null; then
     print_status "PASS" "Clippy linting passed"
 else
-    print_status "FAIL" "Clippy found issues"
-    echo "Run 'cargo clippy' for details"
+print_status "FAIL" "Clippy reported issues that need attention"
+echo "→ Tip: run 'cargo clippy' locally to inspect them calmly"
     exit 1
 fi
 
@@ -235,23 +242,14 @@ fi
 
 # Summary
 echo ""
-echo "=================================================="
-print_status "INFO" "Harper validation suite completed successfully"
+echo -e "${GREEN}✓ Harper validation completed successfully${NC}"
 echo ""
-echo "Summary:"
-echo "   PASS: Compilation"
-echo "   PASS: Linting"
-echo "   PASS: Formatting"
-echo "   PASS: Testing"
-echo "   PASS: Security"
-echo "   PASS: File sizes"
-echo "   PASS: Sensitive files"
-echo "   PASS: YAML validation"
-echo "   PASS: Documentation"
-echo "   PASS: Licensing"
-echo "   PASS: Performance"
-echo "   PASS: Integration"
-echo "   PASS: Optimization"
+echo "What this means:"
+echo " • Code builds cleanly"
+echo " • Linting and formatting are consistent"
+echo " • Tests and docs are healthy"
+echo " • No obvious security or licensing risks"
 echo ""
-echo "Your Harper codebase is production-ready!"
-echo "=================================================="
+echo "You can merge, release, or ship with confidence."
+echo ""
+echo "Strong systems are built calmly."
