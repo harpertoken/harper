@@ -37,7 +37,7 @@ These are not flaws, but natural considerations for tools that interact with ext
 
 * Use **environment variables** for all API keys
 * Keep configuration files free of real secrets
-* Ensure `.env` files are excluded from version control
+* Ensure `.env` files and the `.harper/` data directory are excluded from version control
 
 This keeps credentials local to the runtime environment and easy to rotate.
 
