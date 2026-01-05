@@ -1,14 +1,13 @@
 labels:
   - label: "area: core"
-    files:
-      - "src/core/**"
+    matcher:
+      files: ["src/core/**"]
   - label: "area: docs"
-    files:
-      - "docs/**"
+    matcher:
+      files: ["docs/**"]
   - label: "risk: high"
-    files:
-      - "Cargo.toml"
-      - "src/main.rs"
+    matcher:
+      files: ["Cargo.toml", "src/main.rs"]
   - label: "needs-design-review"
-    files:
-      - "src/**"
+    matcher:
+      files: ["src/**"]
