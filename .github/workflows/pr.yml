@@ -23,7 +23,7 @@ on:
 jobs:
   pr-check:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false && !contains(github.event.pull_request.title, 'release'))
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
     steps:
       - uses: actions/checkout@v6
         with:
