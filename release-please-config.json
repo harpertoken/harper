@@ -1,9 +1,9 @@
 {
   "packages": {
     ".": {
-      "release-type": "simple",
+      "release-type": "rust",
+      "package-name": "harper",
       "changelog-path": "CHANGELOG.md",
-      "versioning": "default",
       "prerelease": false
     }
   },
