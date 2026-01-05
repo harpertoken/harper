@@ -8,11 +8,13 @@
   "packageRules": [
     {
       "matchManagers": ["cargo"],
-      "enabled": true
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "cargo dependencies"
     },
     {
       "matchManagers": ["github-actions"],
-      "enabled": true
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "github actions"
     }
   ]
 }

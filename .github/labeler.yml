@@ -10,4 +10,13 @@ labels:
       files: ["Cargo.toml", "src/main.rs"]
   - label: "needs-design-review"
     matcher:
-      files: ["src/**"]
+      files: ["src/core/**", "src/lib.rs"]
+  - label: "area: testing"
+    matcher:
+      files: ["tests/**"]
+  - label: "area: ci"
+    matcher:
+      files: [".github/**", ".editorconfig", ".gitattributes", "renovate.json"]
+  - label: "area: governance"
+    matcher:
+      files: ["GOVERNANCE.md", "MAINTAINERS.md"]
