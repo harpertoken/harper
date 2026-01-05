@@ -51,6 +51,7 @@ jobs:
           brew install sqlite3 pkg-config
         fi
         # Windows uses bundled sqlite, no install needed
+      shell: bash
     - name: Machine info
       run: uname -a
     - name: Install Rust toolchain
