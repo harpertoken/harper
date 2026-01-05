@@ -50,6 +50,8 @@ jobs:
         elif [[ "$RUNNER_OS" == "macOS" ]]; then
           brew install sqlite3 pkg-config
         fi
+    - name: Machine info
+      run: uname -a
     - name: Install Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
