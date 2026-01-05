@@ -33,7 +33,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     permissions:
       contents: read
       security-events: write
@@ -50,6 +50,7 @@ jobs:
         elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
           brew install sqlite3 pkg-config
         fi
+        # Windows uses bundled sqlite, no install needed
     - name: Machine info
       run: uname -a
     - name: Install Rust toolchain
