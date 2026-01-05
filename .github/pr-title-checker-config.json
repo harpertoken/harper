@@ -4,7 +4,7 @@
     "color": "B60205"
   },
   "CHECKS": {
-    "prefixes": ["build:", "chore:", "ci:", "docs:", "feat:", "fix:", "perf:", "refactor:", "revert:", "style:", "test:"]
+    "prefixes": ["build:", "chore:", "chore(main):", "ci:", "docs:", "feat:", "fix:", "perf:", "refactor:", "revert:", "style:", "test:"]
   },
   "MESSAGES": {
     "success": "PR title is valid",
