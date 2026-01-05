@@ -1,0 +1,21 @@
+queue_rules:
+  - name: default
+    conditions:
+      - status-success=ci
+
+pull_request_rules:
+  - name: merge using the merge queue
+    conditions:
+      - base=main
+      - status-success=ci
+      - "#approved-reviews-by>=1"
+    actions:
+      queue:
+        method: squash
+        name: default
+  - name: rebase PRs
+    conditions:
+      - base=main
+      - -conflict
+    actions:
+      update:
