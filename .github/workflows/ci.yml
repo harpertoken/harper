@@ -41,23 +41,23 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
       with:
-        fetch-depth: 0
+       fetch-depth: 0
     - name: Install system dependencies
       run: |
-        if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libsqlite3-dev
-        elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-          brew install sqlite3 pkg-config
-        fi
-        # Windows uses bundled sqlite, no install needed
-      shell: bash
+       if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+       sudo apt-get update
+       sudo apt-get install -y build-essential pkg-config libsqlite3-dev
+       elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+       brew install sqlite3 pkg-config
+       fi
+       # Windows uses bundled sqlite, no install needed
+       shell: bash
     - name: Machine info
       run: uname -a
     - name: Install Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
-        components: rustfmt, clippy
+       components: rustfmt, clippy
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
     - name: Run validation checks
@@ -83,7 +83,7 @@ jobs:
     - name: Run E2E tests
       uses: ./.github/actions/e2e
       with:
-        os: ubuntu-latest
+       os: ${{ matrix.os }}
   security:
     name: audit (weekly)
     runs-on: ubuntu-latest
@@ -92,11 +92,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
       with:
-        fetch-depth: 0
+       fetch-depth: 0
     - name: Install system dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential pkg-config libsqlite3-dev
+       sudo apt-get update
+       sudo apt-get install -y build-essential pkg-config libsqlite3-dev
     - name: Install Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Cache Rust dependencies
@@ -110,21 +110,21 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
       with:
-        fetch-depth: 0
+       fetch-depth: 0
     - name: Install system dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential pkg-config libsqlite3-dev
+       sudo apt-get update
+       sudo apt-get install -y build-essential pkg-config libsqlite3-dev
     - name: Install Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
-        components: llvm-tools-preview
+       components: llvm-tools-preview
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
     - name: Install system dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libsqlite3-dev pkg-config
+       sudo apt-get update
+       sudo apt-get install -y libsqlite3-dev pkg-config
     - name: Install cargo-llvm-cov
       run: cargo install --locked cargo-llvm-cov
     - name: Generate test coverage
@@ -132,8 +132,9 @@ jobs:
       env:
         RUST_LOG: debug
     - name: Upload coverage to Codecov
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       with:
         files: lcov.info
         fail_ci_if_error: false
