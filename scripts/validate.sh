@@ -19,7 +19,7 @@
 
 set -e  # Exit on any error
 
-echo "Running comprehensive Harper validation suite..."
+echo "Peace and faith..."
 echo "=================================================="
 
 # Colors for output
