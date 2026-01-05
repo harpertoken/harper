@@ -19,8 +19,20 @@ theme:
 
 nav:
   - Home: index.md
-  - Privacy: PRIVACY.md
-  - Reset: RESET.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+  - User Guide:
+      - Clipboard Features: user-guide/clipboard.md
+      - Chat Interface: user-guide/chat.md
+      - Configuration: user-guide/configuration.md
+  - Development:
+      - Contributing: development/contributing.md
+      - CI/CD: development/cicd.md
+      - API Reference: development/api.md
+  - About:
+      - Privacy Policy: about/privacy.md
+      - Governance: about/governance.md
 
 plugins:
   - search
