@@ -49,9 +49,9 @@ jobs:
        sudo apt-get install -y build-essential pkg-config libsqlite3-dev
        elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
        brew install sqlite3 pkg-config
-       fi
-       # Windows uses bundled sqlite, no install needed
-       shell: bash
+        fi
+        # Windows uses bundled sqlite, no install needed
+shell: bash
     - name: Machine info
       run: uname -a
     - name: Install Rust toolchain
