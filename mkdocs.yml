@@ -1,0 +1,47 @@
+site_name: Harper
+site_description: AI Agent for Intelligent Interactions
+site_author: Harper Contributors
+
+repo_url: https://github.com/harpertoken/harper
+repo_name: harpertoken/harper
+
+theme:
+  name: material
+  palette:
+    primary: blue
+    accent: blue
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+  - User Guide:
+      - Clipboard Features: user-guide/clipboard.md
+      - Chat Interface: user-guide/chat.md
+      - Configuration: user-guide/configuration.md
+  - Development:
+      - Contributing: development/contributing.md
+      - CI/CD: development/cicd.md
+      - API Reference: development/api.md
+  - About:
+      - Privacy Policy: about/privacy.md
+      - Governance: about/governance.md
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/harpertoken/harper
+
+copyright: Copyright &copy; 2025 Harper Contributors
