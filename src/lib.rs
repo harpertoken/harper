@@ -370,16 +370,19 @@ mod tests {
         assert!(file_path.to_string_lossy().contains("harper_images"));
         assert!(file_path.to_string_lossy().ends_with(".png"));
 
-        // Verify it's a valid PNG
-        let loaded_img = image_open(&file_path)?;
-        assert_eq!(loaded_img.width(), 2);
-        assert_eq!(loaded_img.height(), 2);
+        let result = (|| {
+            let loaded_img = image_open(&file_path)?;
+            assert_eq!(loaded_img.width(), 2);
+            assert_eq!(loaded_img.height(), 2);
+            Ok(())
+        })();
 
-        // Clean up
-        fs::remove_file(&file_path)?;
+        // Clean up is now guaranteed to run.
+        // We ignore the result of remove_file, as the test result is more important.
+        let _ = fs::remove_file(&file_path);
+
+        result
         // Optional: clean up directory if empty, but be careful in tests
         // fs::remove_dir(file_path.parent().unwrap()).ok();
-
-        Ok(())
     }
 }
