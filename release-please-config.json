@@ -1,0 +1,23 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "changelog-path": "CHANGELOG.md",
+      "versioning": "default",
+      "prerelease": false
+    }
+  },
+  "changelog-sections": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" },
+    { "type": "refactor", "section": "Refactors" },
+    { "type": "docs", "section": "Documentation" },
+    { "type": "style", "section": "Styles" },
+    { "type": "test", "section": "Tests" },
+    { "type": "chore", "section": "Chores" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "ci", "section": "CI" },
+    { "type": "build", "section": "Build" },
+    { "type": "revert", "section": "Reverts" }
+  ]
+}

@@ -1,0 +1,40 @@
+name: Fix Changelog Formatting
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+jobs:
+  fix-changelog:
+    if: github.head_ref == 'release-please--branches--main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fix extra blank line in CHANGELOG.md
+        run: |
+          # Remove extra blank line after the first version header
+          sed -i '/^## \[.*\](.*) (.*)$/{n;/^$/d;}' CHANGELOG.md
+
+      - name: Check for changes
+        id: check
+        run: |
+          if git diff --quiet; then
+            echo "no_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "no_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check.outputs.no_changes == 'false'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add CHANGELOG.md
+          git commit -m "fix: remove extra blank line in changelog"
+          git push
