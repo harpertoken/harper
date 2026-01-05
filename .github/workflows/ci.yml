@@ -58,7 +58,7 @@ jobs:
         components: rustfmt, clippy
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
-    - name: Run comprehensive validation
+    - name: Run validation checks
       run: bash scripts/validate.sh
     - name: Run Clippy lints
       uses: ./.github/actions/lint
