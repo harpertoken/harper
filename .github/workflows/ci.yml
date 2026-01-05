@@ -44,10 +44,10 @@ jobs:
         fetch-depth: 0
     - name: Install system dependencies
       run: |
-        if [[ "$RUNNER_OS" == "Linux" ]]; then
+        if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libsqlite3-dev
-        elif [[ "$RUNNER_OS" == "macOS" ]]; then
+        elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
           brew install sqlite3 pkg-config
         fi
     - name: Machine info
