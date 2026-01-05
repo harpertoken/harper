@@ -52,6 +52,7 @@ mod tests {
     use ::image::open as image_open;
     use arboard::ImageData;
     use std::borrow::Cow;
+    use std::error::Error;
     use std::fs;
 
     #[test]
@@ -347,7 +348,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clipboard_image_processing() {
+    fn test_clipboard_image_processing() -> Result<(), Box<dyn Error>> {
         // Test the core image processing logic used in clipboard functionality
         // Create mock RGBA image data (2x2 red square)
         let mock_bytes = vec![
@@ -370,13 +371,15 @@ mod tests {
         assert!(file_path.to_string_lossy().ends_with(".png"));
 
         // Verify it's a valid PNG
-        let loaded_img = image_open(&file_path).expect("Failed to load saved image");
+        let loaded_img = image_open(&file_path)?;
         assert_eq!(loaded_img.width(), 2);
         assert_eq!(loaded_img.height(), 2);
 
         // Clean up
-        fs::remove_file(&file_path).expect("Failed to clean up test file");
+        fs::remove_file(&file_path)?;
         // Optional: clean up directory if empty, but be careful in tests
         // fs::remove_dir(file_path.parent().unwrap()).ok();
+
+        Ok(())
     }
 }
