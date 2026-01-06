@@ -1,32 +1,30 @@
-{
-  "labels": [
-    {
-      "name": "area: core",
-      "files": ["src/core/**"]
-    },
-    {
-      "name": "area: docs",
-      "files": ["docs/**"]
-    },
-    {
-      "name": "risk: high",
-      "files": ["Cargo.toml", "src/main.rs"]
-    },
-    {
-      "name": "needs-design-review",
-      "files": ["src/core/**", "src/lib.rs"]
-    },
-    {
-      "name": "area: testing",
-      "files": ["tests/**"]
-    },
-    {
-      "name": "area: ci",
-      "files": [".github/**", ".editorconfig", ".gitattributes", "renovate.json"]
-    },
-    {
-      "name": "area: governance",
-      "files": ["GOVERNANCE.md", "MAINTAINERS.md"]
-    }
-  ]
-}
+[
+  {
+    "label": "area: core",
+    "files": ["src/core/**"]
+  },
+  {
+    "label": "area: docs",
+    "files": ["docs/**"]
+  },
+  {
+    "label": "risk: high",
+    "files": ["Cargo.toml", "src/main.rs"]
+  },
+  {
+    "label": "needs-design-review",
+    "files": ["src/core/**", "src/lib.rs"]
+  },
+  {
+    "label": "area: testing",
+    "files": ["tests/**"]
+  },
+  {
+    "label": "area: ci",
+    "files": [".github/**", ".editorconfig", ".gitattributes", "renovate.json"]
+  },
+  {
+    "label": "area: governance",
+    "files": ["GOVERNANCE.md", "MAINTAINERS.md"]
+  }
+]
