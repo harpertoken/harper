@@ -16,6 +16,13 @@
 
 use crate::core::constants::crypto;
 use crate::core::error::{HarperError, HarperResult};
+use aes::{
+    cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit},
+    Aes256,
+};
+use block_padding::Pkcs7;
+use cbc::{Decryptor, Encryptor};
+use ctr::{cipher::StreamCipher, Ctr64BE};
 use ring::{
     aead, digest,
     rand::{SecureRandom, SystemRandom},
@@ -79,6 +86,111 @@ impl CryptoUtils {
             .map_err(|_| HarperError::Crypto("Nonce generation failed".to_string()))?;
         Ok(aead::Nonce::assume_unique_for_key(nonce_bytes))
     }
+
+    /// Encrypt data using AES-CBC block cipher
+    pub fn encrypt_block_cipher(data: &[u8]) -> HarperResult<(Vec<u8>, Vec<u8>, Vec<u8>)> {
+        if data.is_empty() {
+            return Err(HarperError::Crypto("empty data".to_string()));
+        }
+
+        let rng = SystemRandom::new();
+
+        let mut key = vec![0u8; 32];
+        rng.fill(&mut key)
+            .map_err(|e| HarperError::Crypto(format!("Key generation failed: {}", e)))?;
+
+        let mut iv = vec![0u8; 16];
+        rng.fill(&mut iv)
+            .map_err(|e| HarperError::Crypto(format!("IV generation failed: {}", e)))?;
+
+        let cipher = Encryptor::<Aes256>::new_from_slices(&key, &iv)
+            .map_err(|_| HarperError::Crypto("Invalid key or IV".to_string()))?;
+
+        let block_size = 16;
+        let padded_len = data.len().div_ceil(block_size) * block_size;
+        let mut buf = vec![0u8; padded_len];
+        buf[..data.len()].copy_from_slice(data);
+        let encrypted = cipher
+            .encrypt_padded_mut::<Pkcs7>(&mut buf, data.len())
+            .map_err(|_| HarperError::Crypto("Encryption failed".to_string()))?;
+
+        Ok((encrypted.to_vec(), key, iv))
+    }
+
+    /// Decrypt data using AES-CBC block cipher
+    pub fn decrypt_block_cipher(encrypted: &[u8], key: &[u8], iv: &[u8]) -> HarperResult<Vec<u8>> {
+        if encrypted.is_empty() {
+            return Err(HarperError::Crypto("empty data".to_string()));
+        }
+
+        if key.len() != 32 {
+            return Err(HarperError::Crypto("invalid key length".to_string()));
+        }
+
+        if iv.len() != 16 {
+            return Err(HarperError::Crypto("invalid IV length".to_string()));
+        }
+
+        let cipher = Decryptor::<Aes256>::new_from_slices(key, iv)
+            .map_err(|_| HarperError::Crypto("Invalid key or IV".to_string()))?;
+
+        let mut buf = encrypted.to_vec();
+        let decrypted = cipher
+            .decrypt_padded_mut::<Pkcs7>(&mut buf)
+            .map_err(|_| HarperError::Crypto("decryption failed".to_string()))?;
+
+        Ok(decrypted.to_vec())
+    }
+
+    /// Encrypt data using AES-CTR block cipher mode
+    pub fn encrypt_block_cipher_ctr(data: &[u8]) -> HarperResult<(Vec<u8>, Vec<u8>, Vec<u8>)> {
+        if data.is_empty() {
+            return Err(HarperError::Crypto("empty data".to_string()));
+        }
+
+        let rng = SystemRandom::new();
+
+        let mut key = vec![0u8; 32];
+        rng.fill(&mut key)
+            .map_err(|e| HarperError::Crypto(format!("Key generation failed: {}", e)))?;
+
+        let mut nonce = vec![0u8; 16];
+        rng.fill(&mut nonce)
+            .map_err(|e| HarperError::Crypto(format!("Nonce generation failed: {}", e)))?;
+
+        let mut cipher = Ctr64BE::<Aes256>::new(key[..].into(), nonce[..].into());
+
+        let mut result = data.to_vec();
+        cipher.apply_keystream(&mut result);
+
+        Ok((result, key, nonce))
+    }
+
+    /// Decrypt data using AES-CTR (same as encrypt)
+    pub fn decrypt_block_cipher_ctr(
+        encrypted: &[u8],
+        key: &[u8],
+        nonce: &[u8],
+    ) -> HarperResult<Vec<u8>> {
+        if encrypted.is_empty() {
+            return Err(HarperError::Crypto("empty data".to_string()));
+        }
+
+        if key.len() != 32 {
+            return Err(HarperError::Crypto("invalid key length".to_string()));
+        }
+
+        if nonce.len() != 16 {
+            return Err(HarperError::Crypto("invalid nonce length".to_string()));
+        }
+
+        let mut cipher = Ctr64BE::<Aes256>::new(key[..].into(), nonce[..].into());
+
+        let mut result = encrypted.to_vec();
+        cipher.apply_keystream(&mut result);
+
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -103,6 +215,39 @@ mod tests {
         let (challenge, response) = CryptoUtils::generate_zk_proof(secret_data, public_data)?;
         let is_valid = CryptoUtils::verify_zk_proof(public_data, &challenge, &response)?;
         assert!(is_valid);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_cipher_encrypt_decrypt() -> HarperResult<()> {
+        let message = b"Hello, block cipher world!";
+        let (encrypted, key, iv) = CryptoUtils::encrypt_block_cipher(message)?;
+
+        assert!(!encrypted.is_empty());
+        assert_eq!(key.len(), 32);
+        assert_eq!(iv.len(), 16);
+
+        let decrypted = CryptoUtils::decrypt_block_cipher(&encrypted, &key, &iv)?;
+
+        assert_eq!(decrypted, message);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_cipher_ctr_encrypt_decrypt() -> HarperResult<()> {
+        let message = b"Hello, CTR block cipher world!";
+        let (encrypted, key, nonce) = CryptoUtils::encrypt_block_cipher_ctr(message)?;
+
+        assert!(!encrypted.is_empty());
+        assert_eq!(encrypted.len(), message.len()); // No padding
+        assert_eq!(key.len(), 32);
+        assert_eq!(nonce.len(), 16);
+
+        let decrypted = CryptoUtils::decrypt_block_cipher_ctr(&encrypted, &key, &nonce)?;
+
+        assert_eq!(decrypted, message);
 
         Ok(())
     }
