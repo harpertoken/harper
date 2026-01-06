@@ -1,33 +1,20 @@
-- label: "area: core"
-  files:
-    - "src/core/**"
-
-- label: "area: docs"
-  files:
-    - "docs/**"
-
-- label: "risk: high"
-  files:
-    - "Cargo.toml"
-    - "src/main.rs"
-
-- label: "needs-design-review"
-  files:
-    - "src/core/**"
-    - "src/lib.rs"
-
-- label: "area: testing"
-  files:
-    - "tests/**"
-
-- label: "area: ci"
-  files:
-    - ".github/**"
-    - ".editorconfig"
-    - ".gitattributes"
-    - "renovate.json"
-
-- label: "area: governance"
-  files:
-    - "GOVERNANCE.md"
-    - "MAINTAINERS.md"
+"area: core":
+  - "src/core/**"
+"area: docs":
+  - "docs/**"
+"risk: high":
+  - "Cargo.toml"
+  - "src/main.rs"
+"needs-design-review":
+  - "src/core/**"
+  - "src/lib.rs"
+"area: testing":
+  - "tests/**"
+"area: ci":
+  - ".github/**"
+  - ".editorconfig"
+  - ".gitattributes"
+  - "renovate.json"
+"area: governance":
+  - "GOVERNANCE.md"
+  - "MAINTAINERS.md"
