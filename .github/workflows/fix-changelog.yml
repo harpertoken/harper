@@ -1,4 +1,4 @@
-name: Fix Changelog Formatting
+name: Fix Changelog
 
 on:
   pull_request:
