@@ -1,13 +1,11 @@
 ## Why
-What problem does this solve?
+<1–2 factual sentences>
 
 ## What changed
-High-level summary only.
+- bullet points tied to files or logic
+
+## Behavior change
+- what happens now vs before
 
 ## Risk
-- [ ] Low (refactor, docs)
-- [ ] Medium (behavior change)
-- [ ] High (public API, semantics)
-
-## Validation
-How was this tested?
+- low / medium / high + why
