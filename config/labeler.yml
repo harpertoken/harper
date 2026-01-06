@@ -1,0 +1,27 @@
+"area: core":
+  - changed-files:
+      - any-glob-to-any-file: ["src/core/**"]
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file: ["docs/**"]
+
+"risk: high":
+  - changed-files:
+      - any-glob-to-any-file: ["Cargo.toml", "src/main.rs"]
+
+"needs-design-review":
+  - changed-files:
+      - any-glob-to-any-file: ["src/core/**", "src/lib.rs"]
+
+"area: testing":
+  - changed-files:
+      - any-glob-to-any-file: ["tests/**"]
+
+"area: ci":
+  - changed-files:
+      - any-glob-to-any-file: [".github/**", ".editorconfig", ".gitattributes", "renovate.json"]
+
+"area: governance":
+  - changed-files:
+      - any-glob-to-any-file: ["GOVERNANCE.md", "MAINTAINERS.md"]
