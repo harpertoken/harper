@@ -44,5 +44,7 @@ jobs:
       run: cargo build --release --all-features --workspace --verbose
     - name: Dependency scanning (audit)
       uses: ./.github/actions/audit
+    - name: Install cargo-deny
+      run: cargo install cargo-deny
     - name: License checks (deny)
       run: cargo deny check

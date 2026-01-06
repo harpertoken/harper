@@ -1,0 +1,50 @@
+# Copyright 2025 harpertoken
+#
+# Licensed under the Apache License, Version 2.0
+
+name: pr-checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, ready_for_review]
+  push:
+    branches: [main]
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pr-check:
+    name: PR validation
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.draft == false)
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate PR metadata
+        uses: ./.github/actions/pr
+
+  label:
+    name: Auto-label PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/labeler@v6
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: config/labeler.yml
