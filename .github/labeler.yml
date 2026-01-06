@@ -1,22 +1,21 @@
-labels:
-  - label: "area: core"
-    matcher:
-      files: ["src/core/**"]
-  - label: "area: docs"
-    matcher:
-      files: ["docs/**"]
-  - label: "risk: high"
-    matcher:
-      files: ["Cargo.toml", "src/main.rs"]
-  - label: "needs-design-review"
-    matcher:
-      files: ["src/core/**", "src/lib.rs"]
-  - label: "area: testing"
-    matcher:
-      files: ["tests/**"]
-  - label: "area: ci"
-    matcher:
-      files: [".github/**", ".editorconfig", ".gitattributes", "renovate.json"]
-  - label: "area: governance"
-    matcher:
-      files: ["GOVERNANCE.md", "MAINTAINERS.md"]
+- label: "area: core"
+  matcher:
+    files: ["src/core/**"]
+- label: "area: docs"
+  matcher:
+    files: ["docs/**"]
+- label: "risk: high"
+  matcher:
+    files: ["Cargo.toml", "src/main.rs"]
+- label: "needs-design-review"
+  matcher:
+    files: ["src/core/**", "src/lib.rs"]
+- label: "area: testing"
+  matcher:
+    files: ["tests/**"]
+- label: "area: ci"
+  matcher:
+    files: [".github/**", ".editorconfig", ".gitattributes", "renovate.json"]
+- label: "area: governance"
+  matcher:
+    files: ["GOVERNANCE.md", "MAINTAINERS.md"]
