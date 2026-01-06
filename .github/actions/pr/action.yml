@@ -15,7 +15,7 @@ runs:
 
         echo "PR title: $TITLE"
 
-        if [[ ! "$TITLE" =~ "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\([^)]+\\))?:\\ .+" ]]; then
+        if [[ ! "$TITLE" =~ '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?:[[:space:]].+' ]]; then
           echo "::error::PR title must follow Conventional Commits (e.g. fix(core): handle dt=0)"
           exit 1
         fi
