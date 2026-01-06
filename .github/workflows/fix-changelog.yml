@@ -8,7 +8,7 @@ on:
 
 jobs:
   fix-changelog:
-    if: github.head_ref == 'release-please--branches--main'
+    if: contains(github.head_ref, 'release-please--branches--main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
