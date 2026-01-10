@@ -49,3 +49,9 @@ coverage/
 *.temp
 tarpaulin-report.html
 *.db-*
+
+# Bazel build artifacts
+bazel-*
+bazel-bin/
+bazel-out/
+bazel-testlogs/

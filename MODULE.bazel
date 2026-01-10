@@ -1,0 +1,37 @@
+###############################################################################
+# Bazel now uses Bzlmod by default to manage external dependencies.
+# Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
+#
+# For more details, please check https://github.com/bazelbuild/bazel/issues/18958
+###############################################################################
+
+bazel_dep(name = "rules_rust", version = "0.68.1")
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    lockfile = "//:cargo-bazel-lock.json",
+    manifests = ["//:Cargo.toml"],
+)
+
+crate.annotation(
+    crate = "zune-jpeg",
+    version = "0.5.8",
+    patches = ["//patches:zune_jpeg_neon_allow_unsafe.patch", "//patches:zune_jpeg_avx2_unsafe.patch"],
+)
+
+crate.annotation(
+    crate = "rav1e",
+    build_script_env = {
+        "CARGO_PKG_AUTHORS": "Thomas Daede <tdaede@xiph.org>",
+        "CARGO_PKG_DESCRIPTION": "The fastest and safest AV1 encoder",
+        "CARGO_PKG_HOMEPAGE": "https://github.com/xiph/rav1e",
+        "CARGO_PKG_REPOSITORY": "https://github.com/xiph/rav1e",
+        "CARGO_PKG_VERSION": "0.8.1",
+        "CARGO_PKG_NAME": "rav1e",
+        "CARGO_PKG_LICENSE": "BSD-2-Clause",
+        "CARGO_PKG_README": "README.md",
+    },
+)
+use_repo(crate, "crates")
