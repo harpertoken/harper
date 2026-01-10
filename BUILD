@@ -10,5 +10,5 @@ rust_library(
 rust_binary(
     name = "harper_bin",
     srcs = ["src/main.rs"],
-    deps = [":harper"] + all_crate_deps(normal = True),
+    deps = [":harper"],
 )
