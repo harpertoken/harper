@@ -1,5 +1,5 @@
---- a/src/upsampler/neon.rs
-+++ b/src/upsampler/neon.rs
+--- src/upsampler/neon.rs
++++ src/upsampler/neon.rs
 @@ -6,1 +6,2 @@
   */
 + #![allow(unsafe_code)]
