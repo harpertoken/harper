@@ -27,5 +27,10 @@ crate.annotation(
         "CARGO_PKG_README": "README.md",
     },
 )
+crate.annotation(
+    crate = "zune-jpeg",
+    version = "0.5.8",
+    patches = ["//patches:zune_jpeg_neon_allow_unsafe.patch"],
+)
 
 use_repo(crate, "crates")
