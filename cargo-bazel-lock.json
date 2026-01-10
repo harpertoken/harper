@@ -1,5 +1,5 @@
 {
-  "checksum": "fc55423e2e599609ee6adeaf76ac75e78f02fe60ac29c08c41046c95ce738932",
+  "checksum": "7033f7c41395b07e484c6174ccd34064f1af35f19a7d20c8cc4061c5038e59b9",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -15668,14 +15668,14 @@
         },
         "build_script_env": {
           "common": {
-            "CARGO_PKG_AUTHORS": "Harper Contributors",
-            "CARGO_PKG_DESCRIPTION": "An AI agent that connects to multiple providers, executes shell commands, and maintains conversation history",
-            "CARGO_PKG_HOMEPAGE": "https://github.com/harpertoken/harper",
-            "CARGO_PKG_LICENSE": "Apache-2.0",
-            "CARGO_PKG_NAME": "harper",
+            "CARGO_PKG_AUTHORS": "Thomas Daede <tdaede@xiph.org>",
+            "CARGO_PKG_DESCRIPTION": "The fastest and safest AV1 encoder",
+            "CARGO_PKG_HOMEPAGE": "https://github.com/xiph/rav1e",
+            "CARGO_PKG_LICENSE": "BSD-2-Clause",
+            "CARGO_PKG_NAME": "rav1e",
             "CARGO_PKG_README": "README.md",
-            "CARGO_PKG_REPOSITORY": "https://github.com/harpertoken/harper",
-            "CARGO_PKG_VERSION": "0.3.4"
+            "CARGO_PKG_REPOSITORY": "https://github.com/xiph/rav1e",
+            "CARGO_PKG_VERSION": "0.8.1"
           },
           "selects": {}
         }
@@ -27707,7 +27707,10 @@
       "repository": {
         "Http": {
           "url": "https://static.crates.io/crates/zune-jpeg/0.5.8/download",
-          "sha256": "e35aee689668bf9bd6f6f3a6c60bb29ba1244b3b43adfd50edd554a371da37d5"
+          "sha256": "e35aee689668bf9bd6f6f3a6c60bb29ba1244b3b43adfd50edd554a371da37d5",
+          "patches": [
+            "@@//patches:zune_jpeg_neon_allow_unsafe.patch"
+          ]
         }
       },
       "targets": [
