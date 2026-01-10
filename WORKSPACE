@@ -22,7 +22,7 @@ crate_universe_dependencies()
 load("@rules_rust//crate_universe:defs.bzl", "crates_repository")
 
 crates_repository(
-    name = "crate_index",
+    name = "crates",
     cargo_lockfile = "//:Cargo.lock",
     manifests = ["//:Cargo.toml"],
 )
