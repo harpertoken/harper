@@ -3,7 +3,7 @@ load("@crates//:defs.bzl", "all_crate_deps")
 
 rust_library(
     name = "harper",
-    srcs = glob(["src/**/*.rs"]),
+    srcs = glob(["src/**/*.rs"], exclude = ["src/main.rs"]),
     deps = all_crate_deps(normal = True),
 )
 
