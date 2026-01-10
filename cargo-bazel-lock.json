@@ -1,5 +1,5 @@
 {
-  "checksum": "7033f7c41395b07e484c6174ccd34064f1af35f19a7d20c8cc4061c5038e59b9",
+  "checksum": "1b4a0adb3fb4110db3ecfd71b577b55b51a7f2f1a9ec2e2e292a7ecbc108adb8",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -27709,6 +27709,7 @@
           "url": "https://static.crates.io/crates/zune-jpeg/0.5.8/download",
           "sha256": "e35aee689668bf9bd6f6f3a6c60bb29ba1244b3b43adfd50edd554a371da37d5",
           "patches": [
+            "@@//patches:zune_jpeg_avx2_unsafe.patch",
             "@@//patches:zune_jpeg_neon_allow_unsafe.patch"
           ]
         }
