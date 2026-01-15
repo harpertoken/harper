@@ -18,8 +18,12 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use super::app::{AppState, SessionInfo, TuiApp};
 use super::theme::Theme;
 use crate::plugins::syntax::highlight_code;
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
 
 pub fn parse_content_with_code<'a>(
+    syntax_set: &SyntaxSet,
+    theme_set: &ThemeSet,
     content: &'a str,
     default_color: Color,
     syntax_theme: &str,
@@ -44,7 +48,13 @@ pub fn parse_content_with_code<'a>(
             if let Some(newline_pos) = code_block.find('\n') {
                 let language = &code_block[..newline_pos].trim();
                 let code = &code_block[newline_pos + 1..];
-                spans.extend(highlight_code(language, code, syntax_theme));
+                spans.extend(highlight_code(
+                    syntax_set,
+                    theme_set,
+                    language,
+                    code,
+                    syntax_theme,
+                ));
             } else {
                 // No language, treat as plain
                 spans.push(Span::styled(code_block, Style::default().fg(default_color)));
@@ -327,18 +337,39 @@ mod tests {
     use super::*;
     use ratatui::style::Color;
 
+    fn setup() -> (SyntaxSet, ThemeSet) {
+        (
+            SyntaxSet::load_defaults_newlines(),
+            ThemeSet::load_defaults(),
+        )
+    }
+
     #[test]
     fn test_parse_content_with_code_no_code() {
+        let (syntax_set, theme_set) = setup();
         let content = "Hello world";
-        let spans = parse_content_with_code(content, Color::White, "base16-ocean.dark");
+        let spans = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content,
+            Color::White,
+            "base16-ocean.dark",
+        );
         assert_eq!(spans.len(), 1);
         assert_eq!(spans[0].content, "Hello world");
     }
 
     #[test]
     fn test_parse_content_with_code_with_code_block() {
+        let (syntax_set, theme_set) = setup();
         let content = "Before ```rust\nfn main() {}\n``` After";
-        let spans = parse_content_with_code(content, Color::White, "base16-ocean.dark");
+        let spans = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content,
+            Color::White,
+            "base16-ocean.dark",
+        );
         // Should have spans for "Before ", highlighted code, " After"
         assert!(spans.len() > 1);
         // First span plain
@@ -348,8 +379,15 @@ mod tests {
 
     #[test]
     fn test_parse_content_with_code_unclosed_code_block() {
+        let (syntax_set, theme_set) = setup();
         let content = "Text ```code";
-        let spans = parse_content_with_code(content, Color::White, "base16-ocean.dark");
+        let spans = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content,
+            Color::White,
+            "base16-ocean.dark",
+        );
         // Should treat as plain text before and the unclosed block as plain
         assert_eq!(spans.len(), 2, "Should have two spans for unclosed block");
         assert_eq!(spans[0].content, "Text ");
@@ -358,8 +396,15 @@ mod tests {
 
     #[test]
     fn test_parse_content_with_code_multiple_blocks() {
+        let (syntax_set, theme_set) = setup();
         let content = "```js\nconsole.log()\n``` and ```python\nprint()\n```";
-        let spans = parse_content_with_code(content, Color::White, "base16-ocean.dark");
+        let spans = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content,
+            Color::White,
+            "base16-ocean.dark",
+        );
         assert!(spans.len() > 2);
     }
 }
