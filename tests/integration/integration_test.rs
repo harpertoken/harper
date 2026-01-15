@@ -1032,10 +1032,21 @@ Full output:
     fn test_syntax_highlighting_parsing() {
         use harper::interfaces::ui::widgets::parse_content_with_code;
         use ratatui::style::Color;
+        use syntect::highlighting::ThemeSet;
+        use syntect::parsing::SyntaxSet;
+
+        let syntax_set = SyntaxSet::load_defaults_newlines();
+        let theme_set = ThemeSet::load_defaults();
 
         // Test parsing content with code blocks
         let content = "Here is some Rust code:\n```rust\nfn main() {\n    println!(\"Hello!\");\n}\n```\nAnd that's it.";
-        let spans = parse_content_with_code(content, Color::White, "base16-ocean.dark");
+        let spans = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content,
+            Color::White,
+            "base16-ocean.dark",
+        );
 
         // Should have spans: plain text, highlighted code, plain text
         assert!(spans.len() >= 3, "Should have multiple spans");
@@ -1047,7 +1058,13 @@ Full output:
         // Test with multiple code blocks
         let content_multi =
             "```python\nprint('hello')\n```\nAnd\n```javascript\nconsole.log('world');\n```";
-        let spans_multi = parse_content_with_code(content_multi, Color::White, "base16-ocean.dark");
+        let spans_multi = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content_multi,
+            Color::White,
+            "base16-ocean.dark",
+        );
         // The number of spans varies based on syntax highlighting complexity
         assert!(
             spans_multi.len() >= 3,
@@ -1062,7 +1079,13 @@ Full output:
 
         // Test with no code blocks
         let content_plain = "Just plain text.";
-        let spans_plain = parse_content_with_code(content_plain, Color::White, "base16-ocean.dark");
+        let spans_plain = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content_plain,
+            Color::White,
+            "base16-ocean.dark",
+        );
         assert_eq!(spans_plain.len(), 1, "Plain text should have one span");
         assert_eq!(spans_plain[0].content, content_plain);
     }
