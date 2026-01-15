@@ -25,26 +25,27 @@ use syntect::highlighting::{Style as SynStyle, ThemeSet};
 use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
-use once_cell::sync::Lazy;
-
-static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
-static THEME_SET: Lazy<ThemeSet> = Lazy::new(ThemeSet::load_defaults);
-
-pub fn highlight_code(language: &str, code: &str, theme_name: &str) -> Vec<Span<'static>> {
-    let syntax = SYNTAX_SET
+pub fn highlight_code(
+    syntax_set: &SyntaxSet,
+    theme_set: &ThemeSet,
+    language: &str,
+    code: &str,
+    theme_name: &str,
+) -> Vec<Span<'static>> {
+    let syntax = syntax_set
         .find_syntax_by_extension(language)
-        .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
+        .unwrap_or_else(|| syntax_set.find_syntax_plain_text());
 
-    let theme = THEME_SET
+    let theme = theme_set
         .themes
         .get(theme_name)
-        .unwrap_or(&THEME_SET.themes["base16-ocean.dark"]);
+        .unwrap_or(&theme_set.themes["base16-ocean.dark"]);
     let mut highlighter = HighlightLines::new(syntax, theme);
 
     LinesWithEndings::from(code)
         .flat_map(|line| {
             let ranges: Vec<(SynStyle, &str)> = highlighter
-                .highlight_line(line, &SYNTAX_SET)
+                .highlight_line(line, syntax_set)
                 .unwrap_or_default();
 
             ranges
@@ -66,10 +67,18 @@ fn syntect_to_ratatui_color(color: syntect::highlighting::Color) -> Color {
 mod tests {
     use super::*;
 
+    fn setup() -> (SyntaxSet, ThemeSet) {
+        (
+            SyntaxSet::load_defaults_newlines(),
+            ThemeSet::load_defaults(),
+        )
+    }
+
     #[test]
     fn test_highlight_code_rust() {
+        let (syntax_set, theme_set) = setup();
         let code = "fn main() {\n    println!(\"Hello\");\n}";
-        let spans = highlight_code("rs", code, "base16-ocean.dark");
+        let spans = highlight_code(&syntax_set, &theme_set, "rs", code, "base16-ocean.dark");
         assert!(!spans.is_empty());
         // Check that spans contain expected text
         let all_text: String = spans
@@ -83,15 +92,23 @@ mod tests {
 
     #[test]
     fn test_highlight_code_unknown_language() {
+        let (syntax_set, theme_set) = setup();
         let code = "print('hello')";
-        let spans = highlight_code("unknown", code, "base16-ocean.dark");
+        let spans = highlight_code(
+            &syntax_set,
+            &theme_set,
+            "unknown",
+            code,
+            "base16-ocean.dark",
+        );
         assert!(!spans.is_empty());
         // Should fall back to plain text syntax
     }
 
     #[test]
     fn test_highlight_code_empty() {
-        let spans = highlight_code("rs", "", "base16-ocean.dark");
+        let (syntax_set, theme_set) = setup();
+        let spans = highlight_code(&syntax_set, &theme_set, "rs", "", "base16-ocean.dark");
         assert!(spans.is_empty());
     }
 }
