@@ -40,7 +40,7 @@ pub fn highlight_code(
         .themes
         .get(theme_name)
         .or_else(|| theme_set.themes.get("base16-ocean.dark"))
-        .expect("Could not find the requested theme or the default 'base16-ocean.dark' theme.")
+        .expect("Could not find the requested theme or the default 'base16-ocean.dark' theme.");
     let mut highlighter = HighlightLines::new(syntax, theme);
 
     LinesWithEndings::from(code)
