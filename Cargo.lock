@@ -1301,26 +1301,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "harper"
-version = "0.3.4"
-dependencies = [
- "criterion",
- "harper-core",
- "harper-ui",
- "lazy_static",
- "num_cpus",
- "rand 0.8.5",
- "ratatui",
- "regex",
- "rusqlite",
- "serde_json",
- "syntect",
- "tempfile",
- "tokio",
- "wait-timeout",
-]
-
-[[package]]
 name = "harper-core"
 version = "0.3.4"
 dependencies = [
@@ -1382,6 +1362,26 @@ dependencies = [
  "tokio",
  "turul-mcp-client",
  "uuid",
+]
+
+[[package]]
+name = "harper-workspace"
+version = "0.3.4"
+dependencies = [
+ "criterion",
+ "harper-core",
+ "harper-ui",
+ "lazy_static",
+ "num_cpus",
+ "rand 0.8.5",
+ "ratatui",
+ "regex",
+ "rusqlite",
+ "serde_json",
+ "syntect",
+ "tempfile",
+ "tokio",
+ "wait-timeout",
 ]
 
 [[package]]

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
-use harper::*;
+use harper_workspace::*;
 use rusqlite::Connection;
 use std::hint::black_box;
 use std::thread;

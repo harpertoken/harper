@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use harper::*;
+use harper_workspace::*;
 use rand::Rng;
 use regex::Regex;
 use rusqlite::Connection;
@@ -472,7 +472,7 @@ fn test_message_creation() {
 
 #[tokio::test]
 async fn test_web_search_mock() {
-    use harper::utils::web_search;
+    use harper_workspace::utils::web_search;
 
     // Skip this test in CI environments where network access might be restricted
     if std::env::var("CI").is_ok() {
@@ -832,7 +832,7 @@ server_url = "http://localhost:5000"
         let mut child = command.spawn().expect("Failed to start binary");
 
         // Send quit command using the constant
-        use harper::core::constants::{menu, messages};
+        use harper_workspace::core::constants::{menu, messages};
 
         let quit_command = format!(
             "{}
@@ -1063,7 +1063,7 @@ Full output:
 
     #[test]
     fn test_syntax_highlighting_parsing() {
-        use harper::interfaces::ui::widgets::parse_content_with_code;
+        use harper_workspace::interfaces::ui::widgets::parse_content_with_code;
         use ratatui::style::Color;
         use syntect::highlighting::ThemeSet;
         use syntect::parsing::SyntaxSet;

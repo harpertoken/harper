@@ -17,7 +17,7 @@ members = ["lib/harper-core", "lib/harper-ui"]
 resolver = "2"
 
 [package]
-name = "harper"
+name = "harper-workspace"
 version = "0.3.4"
 edition = "2021"
 rust-version = "1.85.0"
@@ -26,7 +26,7 @@ license = "Apache-2.0"
 description = "Harper AI assistant"
 
 [lib]
-name = "harper"
+name = "harper_workspace"
 path = "src/lib.rs"
 
 [dependencies]
