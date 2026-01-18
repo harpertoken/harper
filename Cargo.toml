@@ -23,12 +23,6 @@ license = "Apache-2.0"
 [[bin]]
 name = "harper-batch"
 path = "src/bin/batch.rs"
-description = "An AI agent that connects to multiple providers, executes shell commands, and maintains conversation history"
-homepage = "https://github.com/harpertoken/harper"
-repository = "https://github.com/harpertoken/harper"
-readme = "README.md"
-keywords = ["ai", "agent", "cli", "assistant", "llm"]
-categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 arboard = "3.4.0"
