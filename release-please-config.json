@@ -1,15 +1,16 @@
 {
   "packages": {
-    ".": {
+    "lib/harper-core": {
       "release-type": "rust",
+      "package-manifest": "Cargo.toml",
       "changelog-path": "CHANGELOG.md",
       "prerelease": false
     },
-    "lib/harper-core": {
-      "release-type": "rust"
-    },
     "lib/harper-ui": {
-      "release-type": "rust"
+      "release-type": "rust",
+      "package-manifest": "Cargo.toml",
+      "changelog-path": "CHANGELOG.md",
+      "prerelease": false
     }
   },
   "changelog-sections": [
