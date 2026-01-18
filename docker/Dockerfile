@@ -48,7 +48,7 @@ COPY lib ./lib
 COPY tests ./tests
 
     # Run E2E tests in debug mode as some tests may not work in release.
-    RUN cargo test --workspace --test integration --test session_service_test
+    RUN cargo test --workspace --tests
 
 # Runtime stage
 FROM debian:bookworm-slim
