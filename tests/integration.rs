@@ -799,7 +799,9 @@ server_url = "http://localhost:5000"
 
         // Build the command
         let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
-        let binary_path = std::path::Path::new(&target_dir)
+        let binary_path = std::env::current_dir()
+            .unwrap()
+            .join(&target_dir)
             .join(profile)
             .join("harper");
         let mut command = Command::new(binary_path);
