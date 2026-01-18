@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright 2025 harpertoken
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,8 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-#!/bin/bash
 set -euo pipefail
 
 echo "Running comprehensive Harper tests..."
@@ -83,7 +83,7 @@ fi
 print_success "Unit tests passed"
 
 print_status "Running integration tests..."
-if ! cargo test --test '*' --all-features --workspace --verbose; then
+if ! cargo test --tests --all-features --workspace --verbose; then
     print_error "Integration tests failed"
     exit 1
 fi

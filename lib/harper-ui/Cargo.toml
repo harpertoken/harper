@@ -1,0 +1,35 @@
+[package]
+name = "harper-ui"
+version = "0.3.4"
+edition = "2021"
+rust-version = "1.85.0"
+authors = ["Harper Contributors"]
+license = "Apache-2.0"
+description = "UI components for Harper AI assistant"
+
+[lib]
+name = "harper_ui"
+path = "src/lib.rs"
+
+[dependencies]
+harper-core = { path = "../harper-core" }
+arboard = "3.4.0"
+colored = "3.0.0"
+crossterm = "0.28.1"
+dotenvy = "0.15"
+ratatui = "0.30"
+syntect = { version = "5.3", features = ["parsing", "html"] }
+image = "0.25.6"
+rustyline = "14.0"
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
+turul-mcp-client = "0.2.1"
+uuid = { version = "1.17.0", features = ["v4"] }
+
+[[bin]]
+name = "harper"
+path = "src/main.rs"
+
+[[bin]]
+name = "harper-batch"
+path = "src/bin/batch.rs"
