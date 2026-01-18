@@ -20,6 +20,7 @@ use std::thread;
 use std::time::Duration;
 use tempfile::NamedTempFile;
 
+#[allow(dead_code)]
 fn setup_database(size: usize) -> (Connection, String) {
     let temp_file = NamedTempFile::new().unwrap();
     let conn = Connection::open(temp_file.path()).unwrap();
@@ -39,6 +40,7 @@ fn setup_database(size: usize) -> (Connection, String) {
     (conn, temp_file.path().to_str().unwrap().to_string())
 }
 
+#[allow(dead_code)]
 fn save_messages_benchmark(c: &mut Criterion) {
     let sizes = [1, 10, 100, 1000];
 
@@ -72,6 +74,7 @@ fn save_messages_benchmark(c: &mut Criterion) {
     }
 }
 
+#[allow(dead_code)]
 fn load_history_benchmark(c: &mut Criterion) {
     let sizes = [1, 10, 100, 1000, 10_000];
 
@@ -116,6 +119,7 @@ fn load_history_benchmark(c: &mut Criterion) {
     }
 }
 
+#[allow(dead_code)]
 fn concurrent_access_benchmark(c: &mut Criterion) {
     let num_threads = num_cpus::get();
     let messages_per_thread = 100;
@@ -160,6 +164,7 @@ fn concurrent_access_benchmark(c: &mut Criterion) {
     });
 }
 
+#[allow(dead_code)]
 fn large_message_benchmark(c: &mut Criterion) {
     let sizes = [1_000, 10_000, 100_000];
 
