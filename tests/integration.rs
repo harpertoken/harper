@@ -784,7 +784,11 @@ server_url = "http://localhost:5000"
         }
 
         // Build the binary first
-        let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
+        let profile = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        };
         let mut build_cmd = std::process::Command::new("cargo");
         build_cmd.args(["build", "-p", "harper-ui", "--bin", "harper"]);
         if profile == "release" {
@@ -795,7 +799,9 @@ server_url = "http://localhost:5000"
 
         // Build the command
         let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
-        let binary_path = std::path::Path::new(&target_dir).join(profile).join("harper");
+        let binary_path = std::path::Path::new(&target_dir)
+            .join(profile)
+            .join("harper");
         let mut command = Command::new(binary_path);
 
         // Set the working directory to the temp directory so it finds the config file
