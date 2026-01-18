@@ -22,11 +22,12 @@ use crate::core::{ApiConfig, Message};
 use crate::runtime::config::ExecPolicyConfig;
 use crate::tools::ToolService;
 use chrono::Datelike;
-use colored::*;
+use colored::Colorize;
 use reqwest::Client;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::io::{self, Write};
+use turul_mcp_client::{McpClient, ResourceContent};
 
 #[derive(Debug)]
 enum CommandAction {
@@ -42,6 +43,8 @@ pub struct ChatService<'a> {
     config: &'a ApiConfig,
     api_cache: Option<&'a mut ApiResponseCache>,
     #[allow(dead_code)]
+    mcp_client: Option<&'a McpClient>,
+    #[allow(dead_code)]
     todos: Vec<String>,
     prompt_id: Option<String>,
     custom_commands: HashMap<String, String>,
@@ -54,6 +57,7 @@ impl<'a> ChatService<'a> {
     pub fn new(
         conn: &'a Connection,
         config: &'a ApiConfig,
+        mcp_client: Option<&'a McpClient>,
         api_cache: Option<&'a mut ApiResponseCache>,
         prompt_id: Option<String>,
         custom_commands: HashMap<String, String>,
@@ -62,6 +66,7 @@ impl<'a> ChatService<'a> {
         Self {
             conn,
             config,
+            mcp_client,
             api_cache,
             todos: Vec::new(),
             prompt_id,
@@ -77,6 +82,7 @@ impl<'a> ChatService<'a> {
         Self {
             conn,
             config,
+            mcp_client: None,
             api_cache: None,
             todos: Vec::new(),
             prompt_id: None,
@@ -88,15 +94,45 @@ impl<'a> ChatService<'a> {
         }
     }
 
+    /// Get available MCP tools as formatted text for system prompt
+    async fn get_mcp_tools_text(&self) -> Option<String> {
+        if let Some(client) = &self.mcp_client {
+            match client.list_tools().await {
+                Ok(tools) => {
+                    if tools.is_empty() {
+                        return None;
+                    }
+
+                    let mut tools_text = String::from("\n\nMCP Tools (Model Context Protocol):\n");
+                    for tool in &tools {
+                        tools_text.push_str(&format!(
+                            "- {}: {}\n",
+                            tool.name,
+                            tool.description.as_deref().unwrap_or("No description")
+                        ));
+                    }
+                    tools_text.push_str("\nTo use an MCP tool, respond with: {\"mcp_tool\": \"tool_name\", \"arguments\": {...}}");
+                    Some(tools_text)
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to list MCP tools: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
+
     /// Start a new interactive chat session
-    pub fn create_session(
+    pub async fn create_session(
         &self,
         web_search_enabled: bool,
     ) -> Result<(Vec<Message>, String), HarperError> {
         let session_id = uuid::Uuid::new_v4().to_string();
         self.save_session(&session_id)?;
 
-        let system_prompt = self.build_system_prompt(web_search_enabled);
+        let system_prompt = self.build_system_prompt(web_search_enabled).await;
 
         let history = vec![Message {
             role: "system".to_string(),
@@ -139,8 +175,11 @@ impl<'a> ChatService<'a> {
             return Ok(());
         }
 
-        // Preprocess @file references
+        // Preprocess @file and @mcp_resource references
         let processed_msg = self.preprocess_file_references(user_msg);
+        let processed_msg = self
+            .preprocess_mcp_resource_references(&processed_msg)
+            .await;
 
         // Normal message processing
         self.add_user_message(history, session_id, &processed_msg)?;
@@ -148,6 +187,87 @@ impl<'a> ChatService<'a> {
         self.add_assistant_message(history, session_id, &response)?;
         self.trim_history(history);
         Ok(())
+    }
+
+    /// Preprocess @mcp_resource references into content
+    pub(crate) async fn preprocess_mcp_resource_references(&self, user_msg: &str) -> String {
+        if self.mcp_client.is_none() {
+            return user_msg.to_string();
+        }
+
+        let mut processed = user_msg.to_string();
+        let mut search_start = 0;
+
+        // Process all @mcp_resource references in the message
+        while let Some(at_pos) = processed[search_start..].find('@') {
+            let absolute_at_pos = search_start + at_pos;
+
+            // Find the end of the resource URI (next space or end of string)
+            let after_at = &processed[absolute_at_pos + 1..];
+            let resource_end = after_at.find(' ').unwrap_or(after_at.len());
+            let resource_part = &after_at[..resource_end];
+
+            // Check if it starts with "mcp:" to identify MCP resources
+            if let Some(resource_uri) = resource_part.strip_prefix("mcp:") {
+                // Try to read the MCP resource
+                match self.read_mcp_resource(resource_uri).await {
+                    Ok(content) => {
+                        // Replace @mcp:uri with the resource content
+                        let replacement =
+                            format!("\n[READ MCP RESOURCE: {}]\n{}\n", resource_uri, content);
+                        let end_of_pattern = absolute_at_pos + 1 + resource_part.len();
+                        processed.replace_range(absolute_at_pos..end_of_pattern, &replacement);
+
+                        // Update search position to continue after this replacement
+                        search_start = absolute_at_pos + replacement.len();
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to read MCP resource {}: {}",
+                            resource_uri, e
+                        );
+                        search_start = absolute_at_pos + 1;
+                    }
+                }
+            } else {
+                // Not an MCP resource, skip this @
+                search_start = absolute_at_pos + 1;
+            }
+        }
+
+        processed
+    }
+
+    /// Read an MCP resource by URI
+    async fn read_mcp_resource(&self, uri: &str) -> Result<String, HarperError> {
+        let Some(client) = self.mcp_client else {
+            return Err(HarperError::Config("MCP client not available".to_string()));
+        };
+
+        match client.read_resource(uri).await {
+            Ok(contents) => {
+                let mut content_parts = Vec::new();
+                for item in &contents {
+                    match item {
+                        ResourceContent::Text(text_content) => {
+                            content_parts.push(text_content.text.clone());
+                        }
+                        ResourceContent::Blob(blob_content) => {
+                            content_parts.push(format!(
+                                "[Binary content: {} bytes, type: {}]",
+                                blob_content.blob.len(),
+                                blob_content
+                                    .mime_type
+                                    .clone()
+                                    .unwrap_or("unknown".to_string())
+                            ));
+                        }
+                    }
+                }
+                Ok(content_parts.join("\n"))
+            }
+            Err(e) => Err(HarperError::Mcp(format!("MCP resource read failed: {}", e))),
+        }
     }
 
     /// Preprocess @file references into \[READ_FILE\] commands
@@ -226,7 +346,7 @@ impl<'a> ChatService<'a> {
 
     /// Start the chat session
     pub async fn start_session(&mut self, web_search_enabled: bool) -> Result<(), HarperError> {
-        let (mut history, session_id) = self.create_session(web_search_enabled)?;
+        let (mut history, session_id) = self.create_session(web_search_enabled).await?;
 
         self.display_session_start();
 
@@ -235,7 +355,7 @@ impl<'a> ChatService<'a> {
     }
 
     /// Build system prompt
-    pub fn build_system_prompt(&self, web_search_enabled: bool) -> String {
+    pub async fn build_system_prompt(&self, web_search_enabled: bool) -> String {
         // Load custom prompt if specified
         if let Some(ref id) = self.prompt_id {
             if id != "default" {
@@ -269,6 +389,11 @@ Available tools:
 - todo(action, description?, index?): Manage todo list (actions: add, list, remove, clear)
 
 To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"path\": \"example.txt\", \"content\": \"Hello world\"}");
+
+        // Add MCP tools if available
+        if let Some(mcp_tools) = self.get_mcp_tools_text().await {
+            prompt.push_str(&mcp_tools);
+        }
 
         // Load and append agent guidelines
         match std::fs::read_to_string("AGENTS.md") {
@@ -430,7 +555,8 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
             .trim()
             .trim_matches(|c| c == '\'' || c == '\"' || c == '`');
 
-        let mut tool_service = ToolService::new(self.conn, self.config, &self.exec_policy);
+        let mut tool_service =
+            ToolService::new(self.conn, self.config, &self.exec_policy, self.mcp_client);
         let tool_option = tool_service
             .handle_tool_use(
                 &client,
