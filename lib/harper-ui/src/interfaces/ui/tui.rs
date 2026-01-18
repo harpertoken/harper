@@ -24,9 +24,9 @@ use super::events::{handle_event, EventResult};
 use super::theme::Theme;
 use super::widgets::draw;
 use harper_core::agent::chat::ChatService;
+use harper_core::core::ApiConfig;
 use harper_core::memory::session_service::SessionService;
 use harper_core::runtime::config::ExecPolicyConfig;
-use harper_core::core::ApiConfig;
 use std::collections::HashMap;
 
 pub async fn run_tui(

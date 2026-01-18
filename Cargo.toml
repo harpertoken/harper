@@ -14,5 +14,3 @@
 
 [workspace]
 members = ["lib/harper-core", "lib/harper-ui"]
-
-
