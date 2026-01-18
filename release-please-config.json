@@ -5,8 +5,12 @@
       "changelog-path": "CHANGELOG.md",
       "prerelease": false
     },
-    "lib/harper-core": {},
-    "lib/harper-ui": {}
+    "lib/harper-core": {
+      "release-type": "rust"
+    },
+    "lib/harper-ui": {
+      "release-type": "rust"
+    }
   },
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
