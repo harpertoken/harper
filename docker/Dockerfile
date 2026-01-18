@@ -27,7 +27,7 @@ COPY lib ./lib
 COPY src ./src
 
 # Build application
-RUN cargo build --release
+RUN cargo build --release -p harper-ui --bin harper
 
 # Test stage
 FROM rust:1.92.0 AS tester
