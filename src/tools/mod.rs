@@ -37,6 +37,7 @@ use crate::core::{ApiConfig, Message};
 use crate::runtime::config::ExecPolicyConfig;
 use reqwest::Client;
 use rusqlite::Connection;
+use turul_mcp_client::{ContentBlock, McpClient};
 
 // Git command constants
 mod git_tools {
@@ -51,6 +52,7 @@ pub struct ToolService<'a> {
     conn: &'a Connection,
     config: &'a ApiConfig,
     exec_policy: &'a ExecPolicyConfig,
+    mcp_client: Option<&'a turul_mcp_client::McpClient>,
 }
 
 impl<'a> ToolService<'a> {
@@ -59,11 +61,13 @@ impl<'a> ToolService<'a> {
         conn: &'a Connection,
         config: &'a ApiConfig,
         exec_policy: &'a ExecPolicyConfig,
+        mcp_client: Option<&'a McpClient>,
     ) -> Self {
         Self {
             conn,
             config,
             exec_policy,
+            mcp_client,
         }
     }
 
@@ -75,8 +79,21 @@ impl<'a> ToolService<'a> {
         response: &str,
         web_search_enabled: bool,
     ) -> Result<Option<(String, String)>, HarperError> {
-        // Try to parse as JSON tool call first
-        // JSON parsing commented out for debugging
+        // Try to parse as JSON tool call first (including MCP tools)
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(response) {
+            // Check for MCP tool call
+            if let Some(mcp_tool_name) = json_value.get("mcp_tool").and_then(|v| v.as_str()) {
+                return self
+                    .handle_mcp_tool_call(client, history, mcp_tool_name, &json_value)
+                    .await;
+            }
+            // Check for regular tool call
+            if let Some(tool_name) = json_value.get("tool").and_then(|v| v.as_str()) {
+                return self
+                    .handle_regular_json_tool(client, history, tool_name, &json_value)
+                    .await;
+            }
+        }
 
         // Fallback to old bracket format
         if response.to_uppercase().starts_with(tools::RUN_COMMAND) {
@@ -171,7 +188,7 @@ impl<'a> ToolService<'a> {
         }
     }
     #[allow(dead_code)]
-    async fn handle_json_tool(
+    async fn handle_regular_json_tool(
         &mut self,
         client: &Client,
         history: &[Message],
@@ -311,6 +328,79 @@ impl<'a> ToolService<'a> {
                 }
             }
             _ => Ok(None),
+        }
+    }
+
+    /// Handle MCP tool calls
+    async fn handle_mcp_tool_call(
+        &mut self,
+        client: &Client,
+        history: &[Message],
+        tool_name: &str,
+        json_value: &serde_json::Value,
+    ) -> Result<Option<(String, String)>, HarperError> {
+        let Some(mcp_client) = self.mcp_client else {
+            return Ok(Some((
+                "MCP client not available".to_string(),
+                "Error: MCP client not configured".to_string(),
+            )));
+        };
+
+        // Extract arguments from the JSON
+        let arguments = json_value
+            .get("arguments")
+            .unwrap_or(&serde_json::Value::Object(serde_json::Map::new()))
+            .clone();
+
+        match mcp_client.call_tool(tool_name, arguments).await {
+            Ok(results) => {
+                // Format the response for the LLM
+                let mut result_parts = Vec::new();
+
+                for result in &results {
+                    match result {
+                        ContentBlock::Text { text, .. } => {
+                            result_parts.push(text.clone());
+                        }
+                        ContentBlock::Image {
+                            data, mime_type, ..
+                        } => {
+                            result_parts.push(format!(
+                                "[Image: {} bytes, type: {}]",
+                                data.len(),
+                                mime_type
+                            ));
+                        }
+                        ContentBlock::Audio { .. } => {
+                            result_parts.push("[Audio content]".to_string());
+                        }
+                        ContentBlock::ResourceLink { .. } => {
+                            result_parts.push("[Resource link]".to_string());
+                        }
+                        ContentBlock::Resource { .. } => {
+                            result_parts.push("[Resource content]".to_string());
+                        }
+                    }
+                }
+
+                let tool_result = if result_parts.is_empty() {
+                    "Tool executed successfully (no output)".to_string()
+                } else {
+                    result_parts.join("\n")
+                };
+
+                let final_response = self
+                    .call_llm_after_tool(client, history, &tool_result)
+                    .await?;
+                Ok(Some((final_response, tool_result)))
+            }
+            Err(e) => {
+                let error_msg = format!("MCP tool call failed: {}", e);
+                let final_response = self
+                    .call_llm_after_tool(client, history, &error_msg)
+                    .await?;
+                Ok(Some((final_response, error_msg)))
+            }
         }
     }
 
