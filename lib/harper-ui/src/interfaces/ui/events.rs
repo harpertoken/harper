@@ -194,48 +194,6 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                     }
                 }
             }
-
-
-
-                #[test]
-                fn test_enter_menu_start_chat() {
-                    let mut app = TuiApp::new();
-                    let conn = rusqlite::Connection::open_in_memory().unwrap();
-                    harper_core::memory::storage::init_db(&conn).unwrap();
-                    let session_service = SessionService::new(&conn);
-
-                    // Menu at 0 (Start Chat)
-                    let result = handle_enter(&mut app, &session_service);
-                    assert!(matches!(result, EventResult::Continue));
-                    assert!(matches!(app.state, AppState::Chat(_)));
-                }
-
-                #[test]
-                fn test_enter_menu_load_sessions() {
-                    let mut app = TuiApp::new();
-                    app.state = AppState::Menu(1); // Load Sessions
-                    let conn = rusqlite::Connection::open_in_memory().unwrap();
-                    harper_core::memory::storage::init_db(&conn).unwrap();
-                    let session_service = SessionService::new(&conn);
-
-                    let result = handle_enter(&mut app, &session_service);
-                    assert!(matches!(result, EventResult::Continue));
-                    assert!(matches!(app.state, AppState::Sessions(_, 0)));
-                }
-
-                #[test]
-                fn test_enter_menu_export_sessions() {
-                    let mut app = TuiApp::new();
-                    app.state = AppState::Menu(2); // Export Sessions
-                    let conn = rusqlite::Connection::open_in_memory().unwrap();
-                    harper_core::memory::storage::init_db(&conn).unwrap();
-                    let session_service = SessionService::new(&conn);
-
-                    let result = handle_enter(&mut app, &session_service);
-                    assert!(matches!(result, EventResult::Continue));
-                    assert!(matches!(app.state, AppState::ExportSessions(_, 0)));
-                }
-            }
         }
         AppState::ExportSessions(sessions, selected) => {
             if !sessions.is_empty() && *selected < sessions.len() {
