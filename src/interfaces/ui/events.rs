@@ -196,6 +196,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             }
 
             #[cfg(test)]
+            #[allow(dead_code)]
             mod tests {
                 use super::*;
                 use crate::interfaces::ui::app::{AppState, TuiApp};
