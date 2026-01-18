@@ -195,27 +195,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 }
             }
 
-            #[cfg(test)]
-            #[allow(dead_code)]
-            mod tests {
-                use super::*;
-                use crate::interfaces::ui::app::{AppState, TuiApp};
-                use harper_core::memory::session_service::SessionService;
 
-                #[test]
-                fn test_menu_navigation() {
-                    let mut app = TuiApp::new();
-                    assert!(matches!(app.state, AppState::Menu(0)));
-
-                    app.next();
-                    assert!(matches!(app.state, AppState::Menu(1)));
-
-                    app.next();
-                    assert!(matches!(app.state, AppState::Menu(2)));
-
-                    app.previous();
-                    assert!(matches!(app.state, AppState::Menu(1)));
-                }
 
                 #[test]
                 fn test_enter_menu_start_chat() {
@@ -496,5 +476,67 @@ fn handle_tab(app: &mut TuiApp) {
             chat_state.completion_candidates.clear();
             chat_state.completion_index = 0;
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+mod tests {
+    use super::*;
+    use crate::interfaces::ui::app::{AppState, TuiApp};
+    use harper_core::memory::session_service::SessionService;
+
+    #[test]
+    fn test_menu_navigation() {
+        let mut app = TuiApp::new();
+        assert!(matches!(app.state, AppState::Menu(0)));
+
+        app.next();
+        assert!(matches!(app.state, AppState::Menu(1)));
+
+        app.next();
+        assert!(matches!(app.state, AppState::Menu(2)));
+
+        app.previous();
+        assert!(matches!(app.state, AppState::Menu(1)));
+    }
+
+    #[test]
+    fn test_enter_menu_start_chat() {
+        let mut app = TuiApp::new();
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        // Menu at 0 (Start Chat)
+        let result = handle_enter(&mut app, &session_service);
+        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(app.state, AppState::Chat(_)));
+    }
+
+    #[test]
+    fn test_enter_menu_load_sessions() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Menu(1); // Load Sessions
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_enter(&mut app, &session_service);
+        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(app.state, AppState::Sessions(_, 0)));
+    }
+
+    #[test]
+    fn test_enter_menu_export_sessions() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Menu(2); // Export Sessions
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_enter(&mut app, &session_service);
+        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(app.state, AppState::ExportSessions(_, 0)));
     }
 }
