@@ -50,7 +50,7 @@ block-padding = "0.3"
 
 crossterm = "0.28.1"
 ratatui = "0.30"
-syntect = { version = "5.3", features = ["default-fancy"] }
+syntect = { version = "5.3", features = ["parsing", "html"] }
 image = "0.25.6"
 
 # Dependency resolution to reduce duplicate versions
