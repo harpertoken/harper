@@ -127,8 +127,8 @@ mod tests {
     // Config validation tests are disabled due to import conflicts in test scope
     // These tests would validate configuration parsing and validation logic
 
-    #[test]
-    fn test_chat_service_build_system_prompt() {
+    #[tokio::test]
+    async fn test_chat_service_build_system_prompt() {
         use rusqlite::Connection;
         use tempfile::NamedTempFile;
 
@@ -146,13 +146,13 @@ mod tests {
         let chat_service = ChatService::new_test(&conn, &config);
 
         // Test without web search
-        let prompt = chat_service.build_system_prompt(false);
+        let prompt = chat_service.build_system_prompt(false).await;
         assert!(prompt.contains("gpt-4"));
         assert!(prompt.contains("run_command")); // Tools are always available now
         assert!(!prompt.contains("SEARCH:"));
 
         // Test with web search
-        let prompt = chat_service.build_system_prompt(true);
+        let prompt = chat_service.build_system_prompt(true).await;
         assert!(prompt.contains("gpt-4"));
         assert!(prompt.contains("run_command"));
         assert!(prompt.contains("SEARCH:"));

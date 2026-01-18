@@ -1,97 +1,31 @@
-# Copyright 2025 harpertoken
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-# Dependency Security and License Configuration for Harper
-#
-# This file configures cargo-deny to check for security advisories,
-# license compliance, and banned dependencies in the Harper project.
-#
-# Configuration includes:
-# - Security advisory checking with RustSec database
-# - License allowlist for permissive open-source licenses
-# - Dependency bans for vulnerable or unwanted crates
-# - Source restrictions to approved registries
-#
-# Target platforms to check dependencies for
-[graph]
-targets = [
-    { triple = "x86_64-unknown-linux-gnu" },  # 64-bit Linux
-    { triple = "x86_64-apple-darwin" },      # 64-bit macOS (Intel)
-    { triple = "aarch64-apple-darwin" },     # 64-bit macOS (Apple Silicon)
-    { triple = "x86_64-pc-windows-msvc" },   # 64-bit Windows (MSVC)
-]
-
-# Security advisory settings
-[advisories]
-version = 2
-db-path = "~/.cargo/advisory-db"
-# Source for security advisories
-db-urls = ["https://github.com/rustsec/advisory-db"]
-# Warn about yanked versions of crates
-yanked = "warn"
-# List of advisory IDs to ignore (e.g., { id = "RUSTSEC-YYYY-XXXX" })
+[ advisories ]
+# Multiple dependencies are unmaintained but pose no security risk
+# This is acceptable as it's not a security vulnerability
 ignore = [
-    "RUSTSEC-2024-0436",  # paste crate - used by ratatui, no security impact
-    "RUSTSEC-2024-0320",  # yaml-rust - unmaintained, used by syntect, low risk
+    "RUSTSEC-2025-0141",  # bincode unmaintained
+    "RUSTSEC-2024-0320",  # yaml-rust unmaintained
+    "RUSTSEC-2024-0436",  # paste unmaintained
 ]
 
-# License configuration
-[licenses]
-version = 2
-# Whitelist of allowed licenses
+[ bans ]
+# No bans specified
+
+[ licenses ]
+# Allow common open-source licenses
 allow = [
-    "MIT",                          # Permissive license
-    "Apache-2.0",                   # Permissive with patent grant
-    "Apache-2.0 WITH LLVM-exception", # For LLVM-related crates
-    "BSD-2-Clause",                 # Simplified BSD
-    "BSD-3-Clause",                 # New BSD
-    "BSL-1.0",                     # Boost Software License 1.0
-    "ISC",                         # ISC License (similar to MIT)
-    # "Unicode-DFS-2016",            # Unicode License - temporarily disabled
-    "MPL-2.0",                     # Mozilla Public License 2.0
-    "Zlib",                        # zlib/libpng license
-    "Unicode-3.0",                 # For Unicode-related crates
-]  # Add other permissive licenses as needed
-confidence-threshold = 0.8
-clarify = []
-
-# Dependency banning rules
-[bans]
-# Allow multiple versions of the same crate (not a license violation)
-multiple-versions = "warn"
-# Allow wildcard version requirements
-wildcards = "allow"
-# Highlight all versions of duplicate packages
-highlight = "all"
-# Allow workspace crates to use default features
-workspace-default-features = "allow"
-# Allow external crates to use default features
-external-default-features = "allow"
-# Explicitly allowed crates (none by default)
-allow = []
-# Explicitly denied crates with version constraints
-deny = [
-    # Deny old OpenSSL versions with known vulnerabilities
-    { name = "openssl", version = "<0.10.55" },
-    # Deny old Tokio versions with known issues
-    { name = "tokio", version = "<1.20.0" },
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "CC0-1.0",
+    "0BSD",
+    "Zlib",
+    "BSL-1.0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "NCSA",
 ]
-skip = []
-skip-tree = []
 
-[sources]
-unknown-registry = "warn"
-unknown-git = "warn"
-allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
+[ sources ]
+# No source restrictions

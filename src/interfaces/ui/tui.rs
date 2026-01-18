@@ -17,6 +17,7 @@ use std::time::Duration;
 use crossterm::event;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use rusqlite::Connection;
+use turul_mcp_client::McpClient;
 
 use super::app::{AppState, TuiApp};
 use super::events::{handle_event, EventResult};
@@ -35,6 +36,7 @@ pub async fn run_tui(
     theme: &Theme,
     custom_commands: HashMap<String, String>,
     exec_policy: &ExecPolicyConfig,
+    mcp_client: Option<&McpClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Setup terminal
     crossterm::terminal::enable_raw_mode()?;
@@ -52,6 +54,7 @@ pub async fn run_tui(
     let mut chat_service = ChatService::new(
         conn,
         api_config,
+        mcp_client,
         None,
         None,
         custom_commands,
