@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use harper::core::error::HarperResult;
-use harper::core::io_traits::{Input, Output};
-use harper::memory::session_service::SessionService;
+use harper_workspace::core::error::HarperResult;
+use harper_workspace::core::io_traits::{Input, Output};
+use harper_workspace::memory::session_service::SessionService;
 use rusqlite::Connection;
 use tempfile::NamedTempFile;
 

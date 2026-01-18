@@ -20,15 +20,14 @@ WORKDIR /app
 # Copy manifests
 COPY Cargo.toml Cargo.lock ./
 
-# Build dependencies with a dummy main file
-RUN mkdir src && echo 'fn main() {}' > src/main.rs
-RUN cargo build --release
+# Copy workspace crates
+COPY lib ./lib
 
-# Copy application source
+# Copy root crate source
 COPY src ./src
 
-# Build application (will use cached dependencies)
-RUN cargo build --release
+# Build application
+RUN cargo build --release -p harper-ui --bin harper
 
 # Test stage
 FROM rust:1.92.0 AS tester
@@ -47,12 +46,13 @@ COPY --from=builder /usr/local/cargo/registry /usr/local/cargo/registry
 # Copy config files needed for tests
 COPY config ./config
 
-# Copy source and tests
+# Copy workspace and tests
+COPY lib ./lib
 COPY src ./src
 COPY tests ./tests
 
-# Run E2E tests in debug mode as some tests may not work in release.
-RUN cargo test --test integration --test session_service_test
+    # Run E2E tests in debug mode as some tests may not work in release.
+    RUN cargo test --workspace --tests
 
 # Runtime stage
 FROM debian:bookworm-slim
