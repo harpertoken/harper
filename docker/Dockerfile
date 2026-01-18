@@ -23,8 +23,11 @@ COPY Cargo.toml Cargo.lock ./
 # Copy workspace crates
 COPY lib ./lib
 
+# Copy root crate source
+COPY src ./src
+
 # Build application
-RUN cargo build --release
+RUN cargo build --release -p harper-ui --bin harper
 
 # Test stage
 FROM rust:1.92.0 AS tester
@@ -45,6 +48,7 @@ COPY config ./config
 
 # Copy workspace and tests
 COPY lib ./lib
+COPY src ./src
 COPY tests ./tests
 
     # Run E2E tests in debug mode as some tests may not work in release.

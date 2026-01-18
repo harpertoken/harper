@@ -14,7 +14,7 @@
 
 //! Unit tests for tool modules
 
-use harper::tools::parsing;
+use harper_workspace::tools::parsing;
 
 #[test]
 fn test_extract_tool_arg() {

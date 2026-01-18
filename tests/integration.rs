@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use harper::*;
+use harper_workspace::*;
+use rand::Rng;
 use regex::Regex;
 use rusqlite::Connection;
 use std::thread;
 use tempfile::NamedTempFile;
+
+#[path = "integration/performance_test.rs"]
+mod performance_test;
+
+#[path = "integration/security_test.rs"]
+mod security_test;
 
 lazy_static::lazy_static! {
     static ref TIMESTAMP_REGEX: Regex = Regex::new(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$").unwrap();
@@ -246,7 +253,6 @@ fn test_database_operations() {
 
 #[test]
 fn test_concurrent_access() {
-    use rand::Rng;
     use rusqlite::OpenFlags;
     use std::sync::Arc;
     use std::time::Duration;
@@ -307,7 +313,7 @@ fn test_concurrent_access() {
             for op in 0..OPS_PER_THREAD {
                 let result = (|| -> Result<(), Box<dyn std::error::Error>> {
                     // Randomly choose an operation
-                    let op_type = rand::rng().random_range(0..=3);
+                    let op_type = rand::thread_rng().gen_range(0..=3);
 
                     match op_type {
                         // Create a new session
@@ -328,7 +334,7 @@ fn test_concurrent_access() {
                         1 => {
                             let sessions = list_sessions(&conn)?;
                             if !sessions.is_empty() {
-                                let session_idx = rand::rng().random_range(0..sessions.len());
+                                let session_idx = rand::thread_rng().gen_range(0..sessions.len());
                                 let session_id = &sessions[session_idx];
 
                                 let role = if rand::random() { "user" } else { "assistant" };
@@ -355,7 +361,7 @@ fn test_concurrent_access() {
                         3 => {
                             let sessions = list_sessions(&conn)?;
                             if !sessions.is_empty() {
-                                let session_idx = rand::rng().random_range(0..sessions.len());
+                                let session_idx = rand::thread_rng().gen_range(0..sessions.len());
                                 let _ = load_history(&conn, &sessions[session_idx])?;
                             }
                         }
@@ -466,7 +472,7 @@ fn test_message_creation() {
 
 #[tokio::test]
 async fn test_web_search_mock() {
-    use harper::utils::web_search;
+    use harper_workspace::utils::web_search;
 
     // Skip this test in CI environments where network access might be restricted
     if std::env::var("CI").is_ok() {
@@ -777,8 +783,28 @@ server_url = "http://localhost:5000"
             println!("Database parent directory exists: {}", parent.exists());
         }
 
+        // Build the binary first
+        let profile = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        };
+        let mut build_cmd = std::process::Command::new("cargo");
+        build_cmd.args(["build", "-p", "harper-ui", "--bin", "harper"]);
+        if profile == "release" {
+            build_cmd.arg("--release");
+        }
+        let status = build_cmd.status().expect("Failed to build harper binary");
+        assert!(status.success(), "harper binary build failed");
+
         // Build the command
-        let mut command = Command::new(env!("CARGO_BIN_EXE_harper"));
+        let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
+        let binary_path = std::env::current_dir()
+            .unwrap()
+            .join(&target_dir)
+            .join(profile)
+            .join("harper");
+        let mut command = Command::new(binary_path);
 
         // Set the working directory to the temp directory so it finds the config file
         command
@@ -806,7 +832,7 @@ server_url = "http://localhost:5000"
         let mut child = command.spawn().expect("Failed to start binary");
 
         // Send quit command using the constant
-        use harper::core::constants::{menu, messages};
+        use harper_workspace::core::constants::{menu, messages};
 
         let quit_command = format!(
             "{}
@@ -1037,7 +1063,7 @@ Full output:
 
     #[test]
     fn test_syntax_highlighting_parsing() {
-        use harper::interfaces::ui::widgets::parse_content_with_code;
+        use harper_workspace::interfaces::ui::widgets::parse_content_with_code;
         use ratatui::style::Color;
         use syntect::highlighting::ThemeSet;
         use syntect::parsing::SyntaxSet;
