@@ -38,6 +38,7 @@ runs:
       run: |
         cargo clippy \
           --all-features \
+          --workspace \
           --message-format=json | clippy-sarif | tee rust-clippy-results.sarif | sarif-fmt
       shell: bash
       continue-on-error: true

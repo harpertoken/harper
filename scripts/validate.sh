@@ -67,7 +67,7 @@ print_status "INFO" "Starting validation checks..."
 # 1. Rust Compilation Check
 echo ""
 print_status "INFO" "[1/14] Checking Rust compilation..."
-if cargo check --quiet 2>/dev/null; then
+if cargo check --workspace --quiet 2>/dev/null; then
     print_status "PASS" "Rust compilation successful ✓"
 else
     print_status "FAIL" "Rust compilation failed"
@@ -78,7 +78,7 @@ fi
 # 2. Clippy Linting
 echo ""
 print_status "INFO" "2. Running Clippy linter..."
-if cargo clippy --all-targets --all-features --quiet -- -D warnings 2>/dev/null; then
+if cargo clippy --all-targets --all-features --workspace --quiet -- -D warnings 2>/dev/null; then
     print_status "PASS" "Clippy linting passed"
 else
 print_status "FAIL" "Clippy reported issues that need attention"
@@ -89,7 +89,7 @@ fi
 # 3. Code Formatting
 echo ""
 print_status "INFO" "3. Checking code formatting..."
-if cargo fmt --check 2>/dev/null; then
+if cargo fmt --all -- --check 2>/dev/null; then
     print_status "PASS" "Code formatting correct"
 else
     print_status "FAIL" "Code formatting issues found"
@@ -100,7 +100,7 @@ fi
 # 4. Unit Tests
 echo ""
 print_status "INFO" "4. Running unit tests..."
-if cargo test --quiet 2>/dev/null; then
+if cargo test --workspace --quiet 2>/dev/null; then
     print_status "PASS" "All unit tests passed"
 else
     print_status "FAIL" "Unit tests failed"
@@ -182,7 +182,7 @@ fi
 # 10. Documentation Check
 echo ""
 print_status "INFO" "10. Checking documentation..."
-if cargo doc --no-deps --quiet 2>/dev/null; then
+if cargo doc --no-deps --workspace --quiet 2>/dev/null; then
     print_status "PASS" "Documentation builds successfully"
 else
     print_status "FAIL" "Documentation build failed"
@@ -209,7 +209,7 @@ fi
 # 12. Performance Benchmark (if criterion is available)
 echo ""
 print_status "INFO" "12. Running performance benchmarks..."
-if cargo bench --quiet 2>/dev/null || true; then
+if cargo bench --workspace --quiet 2>/dev/null || true; then
     print_status "PASS" "Performance benchmarks completed"
 else
     print_status "WARN" "Performance benchmarks failed or not configured"
@@ -218,7 +218,7 @@ fi
 # 13. Integration Tests
 echo ""
 print_status "INFO" "13. Running integration tests..."
-if cargo test --tests --quiet 2>/dev/null; then
+if cargo test --tests --workspace --quiet 2>/dev/null; then
     print_status "PASS" "Integration tests passed"
 else
     print_status "WARN" "Integration tests failed or not configured"
@@ -227,7 +227,7 @@ fi
 # 14. Build Optimization Check
 echo ""
 print_status "INFO" "14. Checking build optimization..."
-if cargo build --release --quiet 2>/dev/null; then
+if cargo build --release --workspace --quiet 2>/dev/null; then
     if command -v stat >/dev/null 2>&1; then
         BIN=$(cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.packages[0].targets[] | select(.kind[]=="bin") | .name' 2>/dev/null || echo "harper")
         BINARY_SIZE=$(stat -f%z "target/release/$BIN" 2>/dev/null || stat -c%s "target/release/$BIN" 2>/dev/null || echo "unknown")
