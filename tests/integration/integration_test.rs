@@ -966,8 +966,15 @@ Full output:
         custom_commands.insert("testcmd".to_string(), "This is a test command".to_string());
 
         // Create chat service
-        let mut chat_service =
-            ChatService::new(&conn, &api_config, None, None, custom_commands, exec_policy);
+        let mut chat_service = ChatService::new(
+            &conn,
+            &api_config,
+            None,
+            None,
+            None,
+            custom_commands,
+            exec_policy,
+        );
 
         // Create a test session
         let session_id = "test-slash-session";

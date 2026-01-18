@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use turul_mcp_client::client::Client; // Temporarily disabled
 use rusqlite::Connection;
 use std::env;
 
@@ -21,6 +20,7 @@ use harper::core::ApiConfig;
 use harper::error::HarperError;
 
 use std::io::Write;
+use turul_mcp_client::McpClient;
 
 #[allow(unused_imports)]
 use harper::runtime::config::{ExecPolicyConfig, HarperConfig};
@@ -127,18 +127,34 @@ async fn main() -> Result<(), HarperError> {
     let exec_policy = config.exec_policy.clone();
 
     // MCP client initialization
-    // Note: MCP functionality is currently disabled due to dependency conflicts
-    // with reqwest versions (mcp-client uses v0.11, harper uses v0.12).
-    // This was done to resolve CodeQL duplicate dependency warnings and improve
-    // security analysis accuracy. MCP can be re-enabled with a compatible client
-    // version in the future.
-    // MCP client temporarily disabled due to dependency conflicts
-    let _mcp_client: Option<()> = None;
+    let mcp_client = if config.mcp.enabled {
+        match turul_mcp_client::transport::HttpTransport::new(&config.mcp.server_url) {
+            Ok(transport) => {
+                let client = turul_mcp_client::McpClientBuilder::new()
+                    .with_transport(Box::new(transport))
+                    .build();
+                match client.connect().await {
+                    Ok(_) => Some(client),
+                    Err(e) => {
+                        eprintln!("Failed to connect MCP client: {}", e);
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to create MCP transport: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     #[allow(dead_code, unused_variables)]
     async fn text_menu(
         conn: &Connection,
         api_config: &ApiConfig,
+        mcp_client: Option<&McpClient>,
         prompt_id: Option<String>,
         custom_commands: std::collections::HashMap<String, String>,
         exec_policy: ExecPolicyConfig,
@@ -177,7 +193,7 @@ async fn main() -> Result<(), HarperError> {
                     let mut chat_service = harper::agent::chat::ChatService::new(
                         conn,
                         api_config,
-                        // mcp_client.as_ref(), // Temporarily disabled
+                        mcp_client,
                         Some(&mut api_cache),
                         prompt_id.clone(),
                         custom_commands.clone(),
@@ -225,6 +241,7 @@ async fn main() -> Result<(), HarperError> {
         &theme,
         custom_commands.clone(),
         &exec_policy,
+        mcp_client.as_ref(),
     )
     .await
     {
@@ -234,6 +251,7 @@ async fn main() -> Result<(), HarperError> {
         text_menu(
             &conn,
             &api_config,
+            mcp_client.as_ref(),
             _prompt_id,
             custom_commands,
             exec_policy.clone(),
