@@ -1,3 +1,4 @@
 {
-  ".": "0.3.4"
+  "lib/harper-core": "0.3.4",
+  "lib/harper-ui": "0.3.4"
 }
