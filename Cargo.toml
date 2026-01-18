@@ -19,6 +19,10 @@ edition = "2021"
 rust-version = "1.85.0"
 authors = ["Harper Contributors"]
 license = "Apache-2.0"
+
+[[bin]]
+name = "harper-batch"
+path = "src/bin/batch.rs"
 description = "An AI agent that connects to multiple providers, executes shell commands, and maintains conversation history"
 homepage = "https://github.com/harpertoken/harper"
 repository = "https://github.com/harpertoken/harper"
