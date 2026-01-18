@@ -44,10 +44,6 @@ mod tests {
     use crate::core::error::HarperError;
     // use crate::interfaces::ui::events::save_image_to_temp;
     // use ::image::open as image_open;
-    use arboard::ImageData;
-    use std::borrow::Cow;
-    use std::error::Error;
-    use std::fs;
 
     #[test]
     fn test_api_provider_variants() {

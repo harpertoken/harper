@@ -1227,6 +1227,7 @@ dependencies = [
  "serde_json",
  "socket2",
  "sync_wrapper",
+ "tempfile",
  "thiserror 2.0.17",
  "thiserror-impl 2.0.17",
  "tokio",
