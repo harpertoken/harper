@@ -206,7 +206,6 @@ impl<'a> ChatService<'a> {
     }
 
     /// Get available MCP tools as formatted text for system prompt
-
     /// Start a new interactive chat session
     pub async fn create_session(
         &self,
