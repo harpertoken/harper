@@ -59,6 +59,16 @@ pub struct PromptConfig {
 #[derive(Debug, Deserialize)]
 pub struct UiConfig {
     pub theme: Option<String>,
+    pub keys: Option<KeyConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct KeyConfig {
+    pub next: Option<String>,
+    pub previous: Option<String>,
+    pub enter: Option<String>,
+    pub exit: Option<String>,
+    pub tab: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

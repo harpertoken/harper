@@ -17,7 +17,7 @@
 //! This module provides functionality for managing chat sessions,
 //! including listing, viewing, and exporting sessions.
 
-use crate::core::error::HarperResult;
+use crate::core::error::{HarperError, HarperResult};
 use crate::core::io_traits::{Input, Output};
 use crate::memory::storage::load_history;
 use chrono::Local;
@@ -200,5 +200,32 @@ impl<'a> SessionService<'a> {
         ))?;
 
         Ok(())
+    }
+
+    pub fn export_session_by_id(&self, session_id: &str) -> HarperResult<String> {
+        let history = load_history(self.conn, session_id).unwrap_or_default();
+
+        if history.is_empty() {
+            return Err(HarperError::File(format!(
+                "No history found for session {}",
+                session_id
+            )));
+        }
+
+        let default_filename = format!("harper_export_{}", session_id);
+        let output_path = format!("{}.txt", default_filename);
+
+        let mut file = File::create(&output_path)?;
+        for msg in &history {
+            writeln!(
+                &mut file,
+                "[{}] {}: {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                msg.role,
+                msg.content.replace('\n', "\n  ")
+            )?;
+        }
+
+        Ok(output_path)
     }
 }

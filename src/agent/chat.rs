@@ -16,17 +16,27 @@
 //!
 //! This module handles user input, chat loops, and message processing.
 
+use crate::agent::prompt::PromptBuilder;
 use crate::core::cache::{ApiCacheKey, ApiResponseCache};
 use crate::core::error::HarperError;
 use crate::core::{ApiConfig, Message};
 use crate::runtime::config::ExecPolicyConfig;
 use crate::tools::ToolService;
-use chrono::Datelike;
+
 use colored::Colorize;
 use reqwest::Client;
 use rusqlite::Connection;
+use rustyline::completion::{Completer, Pair};
+use rustyline::error::ReadlineError;
+use rustyline::highlight::Highlighter;
+use rustyline::hint::Hinter;
+use rustyline::validate::Validator;
+
+use rustyline::Editor;
+use rustyline::Helper;
 use std::collections::HashMap;
-use std::io::{self, Write};
+
+use std::path::Path;
 use turul_mcp_client::{McpClient, ResourceContent};
 
 #[derive(Debug)]
@@ -35,6 +45,107 @@ enum CommandAction {
     Exit,
     Custom(String),
     Unknown(String),
+}
+
+struct FileCompleter;
+
+impl Helper for FileCompleter {}
+
+impl Hinter for FileCompleter {
+    type Hint = String;
+
+    fn hint(&self, _line: &str, _pos: usize, _ctx: &rustyline::Context<'_>) -> Option<String> {
+        None
+    }
+}
+
+impl Highlighter for FileCompleter {
+    fn highlight<'l>(&self, line: &'l str, _pos: usize) -> std::borrow::Cow<'l, str> {
+        std::borrow::Cow::Borrowed(line)
+    }
+}
+
+impl Validator for FileCompleter {
+    fn validate(
+        &self,
+        _ctx: &mut rustyline::validate::ValidationContext,
+    ) -> rustyline::Result<rustyline::validate::ValidationResult> {
+        Ok(rustyline::validate::ValidationResult::Valid(None))
+    }
+}
+
+impl Completer for FileCompleter {
+    type Candidate = Pair;
+
+    fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        _ctx: &rustyline::Context<'_>,
+    ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
+        if !line.starts_with('@') {
+            return Ok((pos, Vec::new()));
+        }
+
+        let prefix = &line[1..pos];
+        let path = Path::new(prefix);
+
+        // Determine directory to read and file prefix to match
+        let (dir_to_read, file_prefix) = if prefix.is_empty() {
+            (Path::new("."), "")
+        } else if prefix.ends_with('/') {
+            (path, "")
+        } else if prefix == "." {
+            (Path::new("."), ".")
+        } else if prefix.starts_with('.') && !prefix.contains('/') {
+            (Path::new("."), prefix)
+        } else {
+            let parent = path.parent().unwrap_or_else(|| Path::new("."));
+            let file_part = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            (parent, file_part)
+        };
+
+        let mut candidates = Vec::new();
+
+        if let Ok(entries) = std::fs::read_dir(dir_to_read) {
+            for entry in entries.flatten() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if name.starts_with(file_prefix) {
+                        let mut completion = prefix.to_string();
+                        if prefix.is_empty() || prefix.ends_with('/') {
+                            completion.push_str(name);
+                        } else {
+                            // Replace the file part
+                            if let Some(parent) = path.parent() {
+                                let parent_str = parent.to_string_lossy();
+                                if parent_str.is_empty() {
+                                    completion = name.to_string();
+                                } else {
+                                    completion = format!("{}/{}", parent_str, name);
+                                }
+                            } else {
+                                completion = name.to_string();
+                            }
+                        }
+                        if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                            completion.push('/');
+                        }
+                        candidates.push(Pair {
+                            display: completion.clone(),
+                            replacement: completion,
+                        });
+                    }
+                }
+            }
+        }
+
+        let start = if prefix.is_empty() {
+            1
+        } else {
+            line.find('@').unwrap() + 1
+        };
+        Ok((start, candidates))
+    }
 }
 
 /// Chat service for handling conversations
@@ -95,34 +206,6 @@ impl<'a> ChatService<'a> {
     }
 
     /// Get available MCP tools as formatted text for system prompt
-    async fn get_mcp_tools_text(&self) -> Option<String> {
-        if let Some(client) = &self.mcp_client {
-            match client.list_tools().await {
-                Ok(tools) => {
-                    if tools.is_empty() {
-                        return None;
-                    }
-
-                    let mut tools_text = String::from("\n\nMCP Tools (Model Context Protocol):\n");
-                    for tool in &tools {
-                        tools_text.push_str(&format!(
-                            "- {}: {}\n",
-                            tool.name,
-                            tool.description.as_deref().unwrap_or("No description")
-                        ));
-                    }
-                    tools_text.push_str("\nTo use an MCP tool, respond with: {\"mcp_tool\": \"tool_name\", \"arguments\": {...}}");
-                    Some(tools_text)
-                }
-                Err(e) => {
-                    eprintln!("Warning: Failed to list MCP tools: {}", e);
-                    None
-                }
-            }
-        } else {
-            None
-        }
-    }
 
     /// Start a new interactive chat session
     pub async fn create_session(
@@ -356,63 +439,9 @@ impl<'a> ChatService<'a> {
 
     /// Build system prompt
     pub async fn build_system_prompt(&self, web_search_enabled: bool) -> String {
-        // Load custom prompt if specified
-        if let Some(ref id) = self.prompt_id {
-            if id != "default" {
-                if let Ok(custom_prompt) = self.load_custom_prompt(id) {
-                    return custom_prompt;
-                }
-            }
-        }
-
-        let mut prompt = format!(
-            "You are a helpful AI assistant powered by the {} model.
-You have the ability to read and write files, search and replace text in files, and run shell commands{}.",
-            self.config.model_name,
-            if web_search_enabled { " and search the web" } else { "" }
-        );
-
-        // Add project context
-        if let Ok(context) = self.get_project_context() {
-            prompt.push_str(&format!("\n\nProject Context:\n{}\n", context));
-        }
-
-        prompt.push_str("
-
-You have tools to interact with the system. To use a tool, respond with ONLY the tool command. Do not add any other text. If you cannot use a tool for the user's request, explain why.
-
-Available tools:
-- read_file(path): Read the contents of a file
-- write_file(path, content): Write content to a file
-- search_replace(path, old_string, new_string): Search and replace text in a file
-- run_command(command): Run a shell command
-- todo(action, description?, index?): Manage todo list (actions: add, list, remove, clear)
-
-To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"path\": \"example.txt\", \"content\": \"Hello world\"}");
-
-        // Add MCP tools if available
-        if let Some(mcp_tools) = self.get_mcp_tools_text().await {
-            prompt.push_str(&mcp_tools);
-        }
-
-        // Load and append agent guidelines
-        match std::fs::read_to_string("AGENTS.md") {
-            Ok(guidelines) => prompt.push_str(&format!("\n\nAgent Guidelines:\n{}\n", guidelines)),
-            Err(e) => eprintln!(
-                "Warning: Could not load AGENTS.md: {}. Agent will proceed without guidelines.",
-                e
-            ),
-        }
-
-        if web_search_enabled {
-            let current_year = chrono::Local::now().year();
-            prompt.push_str(&format!(
-                "\n- Search the web: `[SEARCH: your query]`. Current year: {}\n",
-                current_year
-            ));
-        }
-
-        prompt
+        let prompt_builder =
+            PromptBuilder::new(self.config, self.prompt_id.clone(), self.mcp_client);
+        prompt_builder.build_system_prompt(web_search_enabled).await
     }
 
     /// Display session start
@@ -521,13 +550,20 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
         Ok(())
     }
 
-    /// Get user input
+    /// Get user input with completion
     fn get_user_input(&self) -> Result<String, HarperError> {
-        print!("{} ", "You:".bold().blue());
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        Ok(input.trim().to_string())
+        let config = rustyline::Config::builder().build();
+        let mut rl: Editor<FileCompleter, _> = Editor::with_config(config)?;
+        rl.set_helper(Some(FileCompleter));
+        let prompt = format!("{} ", "You:".bold().blue());
+        match rl.readline(&prompt) {
+            Ok(line) => {
+                let _ = rl.add_history_entry(&line);
+                Ok(line.trim().to_string())
+            }
+            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => Ok("exit".to_string()),
+            Err(e) => Err(e.into()),
+        }
     }
 
     /// Check if should exit

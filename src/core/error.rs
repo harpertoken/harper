@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use colored::Colorize;
 use std::fmt;
 
 /// Custom error type for Harper application
@@ -57,6 +58,28 @@ impl fmt::Display for HarperError {
 
 impl std::error::Error for HarperError {}
 
+impl HarperError {
+    /// Get formatted error message for display
+    pub fn display_message(&self) -> String {
+        match self {
+            HarperError::Config(msg) => format!("Configuration error: {}", msg),
+            HarperError::Database(msg) => format!("Database error: {}", msg),
+            HarperError::Api(msg) => format!("API error: {}", msg),
+            HarperError::Mcp(msg) => format!("MCP error: {}", msg),
+            HarperError::Crypto(msg) => format!("Cryptography error: {}", msg),
+            HarperError::Io(msg) => format!("I/O error: {}", msg),
+            HarperError::File(msg) => format!("File operation error: {}", msg),
+            HarperError::Command(msg) => format!("Command execution error: {}", msg),
+            HarperError::WebSearch(msg) => format!("Web search error: {}", msg),
+        }
+    }
+
+    /// Get colored error message for CLI
+    pub fn cli_message(&self) -> colored::ColoredString {
+        self.display_message().red()
+    }
+}
+
 impl From<rusqlite::Error> for HarperError {
     fn from(err: rusqlite::Error) -> Self {
         HarperError::Database(err.to_string())
@@ -90,6 +113,12 @@ impl From<uuid::Error> for HarperError {
 impl From<serde_json::Error> for HarperError {
     fn from(err: serde_json::Error) -> Self {
         HarperError::Api(format!("JSON serialization error: {}", err))
+    }
+}
+
+impl From<rustyline::error::ReadlineError> for HarperError {
+    fn from(err: rustyline::error::ReadlineError) -> Self {
+        HarperError::Io(err.to_string())
     }
 }
 

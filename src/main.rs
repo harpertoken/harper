@@ -35,7 +35,7 @@ fn exit_on_error<T, E: std::fmt::Display>(result: Result<T, E>, message: &str) -
 macro_rules! handle_menu_error {
     ($expr:expr, $msg:expr) => {
         if let Err(e) = $expr {
-            eprintln!("{}: {}", $msg, e);
+            eprintln!("{}: {}", $msg, e.cli_message());
         }
     };
 }

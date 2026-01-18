@@ -38,17 +38,15 @@ impl ChatState {
 #[derive(Clone)]
 pub enum AppState {
     Menu(usize),
-    #[allow(dead_code)]
     Chat(ChatState),
-    Sessions(Vec<SessionInfo>, usize), // sessions, selected
-    Tools(usize),                      // selected tool
-    #[allow(dead_code)]
+    Sessions(Vec<SessionInfo>, usize),        // sessions, selected
+    ExportSessions(Vec<SessionInfo>, usize),  // sessions, selected for export
+    Tools(usize),                             // selected tool
     ViewSession(String, Vec<Message>, usize), // name, messages, selected
 }
 
 #[derive(Clone)]
 pub struct SessionInfo {
-    #[allow(dead_code)]
     pub id: String,
     pub name: String,
     pub created_at: String,
@@ -57,8 +55,6 @@ pub struct SessionInfo {
 #[derive(Clone)]
 pub struct TuiApp {
     pub state: AppState,
-    #[allow(dead_code)]
-    pub should_quit: bool,
     pub message: Option<String>,
 }
 
@@ -66,7 +62,6 @@ impl Default for TuiApp {
     fn default() -> Self {
         Self {
             state: AppState::Menu(0),
-            should_quit: false,
             message: None,
         }
     }
@@ -90,6 +85,11 @@ impl TuiApp {
                 }
             }
             AppState::Tools(sel) => *sel = (*sel + 1) % 5,
+            AppState::ExportSessions(sessions, sel) => {
+                if !sessions.is_empty() {
+                    *sel = (*sel + 1) % sessions.len();
+                }
+            }
             AppState::ViewSession(_, messages, sel) => {
                 if !messages.is_empty() {
                     *sel = (*sel + 1) % messages.len();
@@ -114,6 +114,15 @@ impl TuiApp {
                 }
             }
             AppState::Tools(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
+            AppState::ExportSessions(sessions, sel) => {
+                if !sessions.is_empty() {
+                    *sel = if *sel == 0 {
+                        sessions.len() - 1
+                    } else {
+                        *sel - 1
+                    };
+                }
+            }
             AppState::ViewSession(_, messages, sel) => {
                 if !messages.is_empty() {
                     *sel = if *sel == 0 {

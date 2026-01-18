@@ -18,3 +18,4 @@
 //! conversation management, tool coordination, and decision making.
 
 pub mod chat;
+pub mod prompt;

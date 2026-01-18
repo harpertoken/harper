@@ -42,7 +42,26 @@ fn load_sessions_into_state(app: &mut TuiApp, session_service: &SessionService) 
             app.state = AppState::Sessions(session_infos, 0);
         }
         Err(e) => {
-            app.message = Some(format!("Error loading sessions: {}", e));
+            app.message = Some(format!("Error loading sessions: {}", e.display_message()));
+        }
+    }
+}
+
+fn load_export_sessions_into_state(app: &mut TuiApp, session_service: &SessionService) {
+    match session_service.list_sessions_data() {
+        Ok(sessions) => {
+            let session_infos: Vec<SessionInfo> = sessions
+                .into_iter()
+                .map(|s| SessionInfo {
+                    id: s.id.clone(),
+                    name: s.id, // Use ID as name for now
+                    created_at: s.created_at,
+                })
+                .collect();
+            app.state = AppState::ExportSessions(session_infos, 0);
+        }
+        Err(e) => {
+            app.message = Some(format!("Error loading sessions: {}", e.display_message()));
         }
     }
 }
@@ -96,9 +115,10 @@ pub fn handle_event(
                     }
                 }
                 KeyCode::Esc => match &app.state {
-                    AppState::Menu(_) => return EventResult::Quit,
+                    AppState::Menu(_) => {}
+                    AppState::Chat(_) => app.state = AppState::Menu(0),
                     AppState::Sessions(_, _) => app.state = AppState::Menu(0),
-                    AppState::Chat(..) => app.state = AppState::Menu(0),
+                    AppState::ExportSessions(_, _) => app.state = AppState::Menu(0),
                     AppState::Tools(_) => app.state = AppState::Menu(0),
                     AppState::ViewSession(_, _, _) => app.state = AppState::Menu(0),
                 },
@@ -137,10 +157,9 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                     })
                 } // Start Chat
                 1 => load_sessions_into_state(app, session_service),
-                2 => load_sessions_into_state(app, session_service),
+                2 => load_export_sessions_into_state(app, session_service),
                 3 => app.state = AppState::Tools(0), // Tools
-                4 => app.message = Some("Export not implemented yet".to_string()), // Export
-                5 => return EventResult::Quit,       // Quit
+                4 => return EventResult::Quit,       // Exit
                 _ => {}
             }
         }
@@ -170,17 +189,25 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         });
                     }
                     Err(e) => {
-                        app.message = Some(format!("Error loading session: {}", e));
+                        app.message =
+                            Some(format!("Error loading session: {}", e.display_message()));
                     }
                 }
             }
         }
+        AppState::ExportSessions(sessions, selected) => {
+            if !sessions.is_empty() && *selected < sessions.len() {
+                let session = &sessions[*selected];
+                match session_service.export_session_by_id(&session.id) {
+                    Ok(path) => app.message = Some(format!("Session exported to {}", path)),
+                    Err(e) => app.message = Some(format!("Export failed: {}", e.display_message())),
+                }
+                app.state = AppState::Menu(0);
+            }
+        }
         AppState::Tools(selected) => {
             match *selected {
-                0 => {
-                    app.message =
-                        Some("File operations: Use AI chat to request file operations".to_string())
-                }
+                0 => app.message = Some("File Operations not implemented yet".to_string()),
                 1 => {
                     app.message =
                         Some("Git commands: Use AI chat to request git operations".to_string())
@@ -210,6 +237,67 @@ fn handle_backspace(app: &mut TuiApp) {
     if let AppState::Chat(chat_state) = &mut app.state {
         chat_state.input.pop();
         chat_state.reset_completion();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interfaces::ui::app::{AppState, TuiApp};
+    use crate::memory::session_service::SessionService;
+
+    #[test]
+    fn test_menu_navigation() {
+        let mut app = TuiApp::new();
+        assert!(matches!(app.state, AppState::Menu(0)));
+
+        app.next();
+        assert!(matches!(app.state, AppState::Menu(1)));
+
+        app.next();
+        assert!(matches!(app.state, AppState::Menu(2)));
+
+        app.previous();
+        assert!(matches!(app.state, AppState::Menu(1)));
+    }
+
+    #[test]
+    fn test_enter_menu_start_chat() {
+        let mut app = TuiApp::new();
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        // Menu at 0 (Start Chat)
+        let result = handle_enter(&mut app, &session_service);
+        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(app.state, AppState::Chat(_)));
+    }
+
+    #[test]
+    fn test_enter_menu_load_sessions() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Menu(1); // Load Sessions
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_enter(&mut app, &session_service);
+        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(app.state, AppState::Sessions(_, 0)));
+    }
+
+    #[test]
+    fn test_enter_menu_export_sessions() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Menu(2); // Export Sessions
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_enter(&mut app, &session_service);
+        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(app.state, AppState::ExportSessions(_, 0)));
     }
 }
 

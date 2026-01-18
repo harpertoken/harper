@@ -142,10 +142,21 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             frame.render_widget(input_widget, chunks[1]);
         }
         AppState::Sessions(sessions, selected) => draw_sessions(frame, sessions, *selected, theme),
+        AppState::ExportSessions(sessions, selected) => {
+            draw_export_sessions(frame, sessions, *selected, theme)
+        }
         AppState::Tools(selected) => draw_tools(frame, *selected, theme),
         AppState::ViewSession(name, messages, selected) => {
             draw_view_session(frame, name, messages, *selected, theme)
         }
+    }
+
+    // Draw status bar
+    draw_status_bar(frame, app, theme);
+
+    // Draw message overlay if present
+    if let Some(msg) = &app.message {
+        draw_message_overlay(frame, msg, theme);
     }
 }
 
@@ -153,7 +164,7 @@ fn draw_menu(frame: &mut Frame, selected: usize, theme: &Theme) {
     let menu_items = [
         "Start Chat",
         "Load Session",
-        "Save Session",
+        "Export Session",
         "Tools",
         "Exit",
     ];
@@ -209,6 +220,38 @@ fn draw_sessions(frame: &mut Frame, sessions: &[SessionInfo], selected: usize, t
         .highlight_style(Style::default().add_modifier(Modifier::BOLD));
 
     frame.render_widget(sessions_list, frame.area());
+}
+
+fn draw_export_sessions(
+    frame: &mut Frame,
+    sessions: &[SessionInfo],
+    selected: usize,
+    theme: &Theme,
+) {
+    let items: Vec<ListItem> = sessions
+        .iter()
+        .enumerate()
+        .map(|(i, session)| {
+            let style = if i == selected {
+                Style::default().bg(theme.accent).fg(theme.foreground)
+            } else {
+                Style::default().fg(theme.foreground)
+            };
+            ListItem::new(format!("{} - {}", session.name, session.created_at)).style(style)
+        })
+        .collect();
+
+    let export_list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Select Session to Export")
+                .border_style(theme.border_style())
+                .title_style(theme.title_style()),
+        )
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+
+    frame.render_widget(export_list, frame.area());
 }
 
 fn draw_tools(frame: &mut Frame, selected: usize, theme: &Theme) {
@@ -281,12 +324,12 @@ fn draw_view_session(
     frame.render_widget(view, frame.area());
 }
 
-#[allow(dead_code)]
 fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     let mode = match &app.state {
         AppState::Menu(_) => "MENU",
         AppState::Chat(..) => "CHAT",
         AppState::Sessions(_, _) => "SESSIONS",
+        AppState::ExportSessions(_, _) => "EXPORT",
         AppState::Tools(_) => "TOOLS",
         AppState::ViewSession(_, _, _) => "VIEW",
     };
@@ -307,7 +350,6 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     frame.render_widget(status_bar, status_area);
 }
 
-#[allow(dead_code)]
 fn draw_message_overlay(frame: &mut Frame, message: &str, theme: &Theme) {
     let overlay = Paragraph::new(message)
         .block(
