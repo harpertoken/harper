@@ -89,7 +89,7 @@ fi
 # 3. Code Formatting
 echo ""
 print_status "INFO" "3. Checking code formatting..."
-if cargo fmt --all --workspace -- --check 2>/dev/null; then
+if cargo fmt --all -- --check 2>/dev/null; then
     print_status "PASS" "Code formatting correct"
 else
     print_status "FAIL" "Code formatting issues found"
