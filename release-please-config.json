@@ -1,5 +1,11 @@
 {
   "packages": {
+    ".": {
+      "release-type": "cargo-workspace",
+      "package-name": "harper",
+      "changelog-path": "CHANGELOG.md",
+      "prerelease": false
+    },
     "lib/harper-core": {
       "release-type": "rust",
       "package-name": "harper-core",
