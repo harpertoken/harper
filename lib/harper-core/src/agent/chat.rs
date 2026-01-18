@@ -35,7 +35,7 @@ use rustyline::validate::Validator;
 use rustyline::Editor;
 use rustyline::Helper;
 use std::collections::HashMap;
-
+use std::fs;
 use std::path::Path;
 use turul_mcp_client::{McpClient, ResourceContent};
 
@@ -83,11 +83,13 @@ impl Completer for FileCompleter {
         pos: usize,
         _ctx: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
-        if !line.starts_with('@') {
-            return Ok((pos, Vec::new()));
-        }
+        // Find the last @ before the cursor position
+        let at_pos = match line[..pos].rfind('@') {
+            Some(pos) => pos,
+            None => return Ok((pos, Vec::new())), // No @ found, no completion
+        };
 
-        let prefix = &line[1..pos];
+        let prefix = &line[at_pos + 1..pos];
         let path = Path::new(prefix);
 
         // Determine directory to read and file prefix to match
@@ -107,7 +109,7 @@ impl Completer for FileCompleter {
 
         let mut candidates = Vec::new();
 
-        if let Ok(entries) = std::fs::read_dir(dir_to_read) {
+        if let Ok(entries) = fs::read_dir(dir_to_read) {
             for entry in entries.flatten() {
                 if let Some(name) = entry.file_name().to_str() {
                     if name.starts_with(file_prefix) {
@@ -139,11 +141,7 @@ impl Completer for FileCompleter {
             }
         }
 
-        let start = if prefix.is_empty() {
-            1
-        } else {
-            line.find('@').unwrap() + 1
-        };
+        let start = at_pos + 1;
         Ok((start, candidates))
     }
 }
