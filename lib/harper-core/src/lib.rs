@@ -14,9 +14,7 @@
 
 pub mod agent;
 pub mod core;
-pub mod interfaces;
 pub mod memory;
-pub mod plugins;
 pub mod runtime;
 pub mod tools;
 
@@ -38,18 +36,14 @@ pub use memory::storage::*;
 #[allow(unused_imports)]
 pub use runtime::*;
 
-// Re-export interfaces
-#[allow(unused_imports)]
-pub use interfaces::*;
-
 #[cfg(test)]
 mod tests {
     use super::*;
     // Use full paths in tests to avoid conflicts
     use crate::agent::chat::ChatService;
     use crate::core::error::HarperError;
-    use crate::interfaces::ui::events::save_image_to_temp;
-    use ::image::open as image_open;
+    // use crate::interfaces::ui::events::save_image_to_temp;
+    // use ::image::open as image_open;
     use arboard::ImageData;
     use std::borrow::Cow;
     use std::error::Error;
@@ -347,42 +341,42 @@ mod tests {
         assert!(!chat_service.should_exit("how are you?"));
     }
 
-    #[test]
-    fn test_clipboard_image_processing() -> Result<(), Box<dyn Error>> {
-        // Test the core image processing logic used in clipboard functionality
-        // Create mock RGBA image data (2x2 red square)
-        let mock_bytes = vec![
-            255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255,
-        ];
-        let image_data = ImageData {
-            width: 2,
-            height: 2,
-            bytes: Cow::from(mock_bytes),
-        };
+    // #[test]
+    // fn test_clipboard_image_processing() -> Result<(), Box<dyn Error>> {
+    //     // Test the core image processing logic used in clipboard functionality
+    //     // Create mock RGBA image data (2x2 red square)
+    //     let mock_bytes = vec![
+    //         255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255,
+    //     ];
+    //     let image_data = ImageData {
+    //         width: 2,
+    //         height: 2,
+    //         bytes: Cow::from(mock_bytes),
+    //     };
 
-        // Call the actual function
-        let result = save_image_to_temp(&image_data);
-        assert!(result.is_ok(), "save_image_to_temp should succeed");
-        let file_path = result.unwrap();
+    //     // Call the actual function
+    //     let result = save_image_to_temp(&image_data);
+    //     assert!(result.is_ok(), "save_image_to_temp should succeed");
+    //     let file_path = result.unwrap();
 
-        // Verify the file was created
-        assert!(file_path.exists(), "Image file should be created");
-        assert!(file_path.to_string_lossy().contains("harper_images"));
-        assert!(file_path.to_string_lossy().ends_with(".png"));
+    //     // Verify the file was created
+    //     assert!(file_path.exists(), "Image file should be created");
+    //     assert!(file_path.to_string_lossy().contains("harper_images"));
+    //     assert!(file_path.to_string_lossy().ends_with(".png"));
 
-        let result = (|| {
-            let loaded_img = image_open(&file_path)?;
-            assert_eq!(loaded_img.width(), 2);
-            assert_eq!(loaded_img.height(), 2);
-            Ok(())
-        })();
+    //     let result = (|| {
+    //         let loaded_img = image_open(&file_path)?;
+    //         assert_eq!(loaded_img.width(), 2);
+    //         assert_eq!(loaded_img.height(), 2);
+    //         Ok(())
+    //     })();
 
-        // Clean up is now guaranteed to run.
-        // We ignore the result of remove_file, as the test result is more important.
-        let _ = fs::remove_file(&file_path);
+    //     // Clean up is now guaranteed to run.
+    //     // We ignore the result of remove_file, as the test result is more important.
+    //     let _ = fs::remove_file(&file_path);
 
-        result
-        // Optional: clean up directory if empty, but be careful in tests
-        // fs::remove_dir(file_path.parent().unwrap()).ok();
-    }
+    //     result
+    //     // Optional: clean up directory if empty, but be careful in tests
+    //     // fs::remove_dir(file_path.parent().unwrap()).ok();
+    // }
 }

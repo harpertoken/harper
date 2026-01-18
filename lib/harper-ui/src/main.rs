@@ -16,14 +16,14 @@ use rusqlite::Connection;
 use std::env;
 
 use colored::Colorize;
-use harper::core::ApiConfig;
-use harper::error::HarperError;
+use harper_core::core::ApiConfig;
+use harper_core::error::HarperError;
 
 use std::io::Write;
 use turul_mcp_client::McpClient;
 
 #[allow(unused_imports)]
-use harper::runtime::config::{ExecPolicyConfig, HarperConfig};
+use harper_core::runtime::config::{ExecPolicyConfig, HarperConfig};
 
 fn exit_on_error<T, E: std::fmt::Display>(result: Result<T, E>, message: &str) -> T {
     result.unwrap_or_else(|e| {
@@ -41,7 +41,7 @@ macro_rules! handle_menu_error {
 }
 
 fn print_version() {
-    println!("harper v{}", harper::core::constants::VERSION);
+    println!("harper v{}", harper_core::core::constants::VERSION);
     std::process::exit(0);
 }
 
@@ -77,7 +77,7 @@ async fn main() -> Result<(), HarperError> {
 
     let api_key = get_api_key(&config);
 
-    let api_config = harper::core::ApiConfig {
+    let api_config = harper_core::core::ApiConfig {
         provider: config.api.get_provider().map_err(|e| {
             eprintln!("Configuration error: {}", e);
             e
@@ -110,7 +110,7 @@ async fn main() -> Result<(), HarperError> {
         "Failed to open database",
     );
     exit_on_error(
-        harper::memory::storage::init_db(&conn),
+        harper_core::memory::storage::init_db(&conn),
         "Failed to initialize database",
     );
 
@@ -160,7 +160,7 @@ async fn main() -> Result<(), HarperError> {
         exec_policy: ExecPolicyConfig,
     ) {
         loop {
-            use harper::core::constants::messages;
+            use harper_core::core::constants::messages;
 
             println!(
                 "
@@ -181,16 +181,16 @@ async fn main() -> Result<(), HarperError> {
                 "Failed to read input",
             );
 
-            let session_service = harper::memory::session_service::SessionService::new(conn);
-            let mut api_cache = harper::core::cache::new_api_cache();
+            let session_service = harper_core::memory::session_service::SessionService::new(conn);
+            let mut api_cache = harper_core::core::cache::new_api_cache();
 
             match menu_choice.trim() {
-                harper::core::constants::menu::START_CHAT => {
+                harper_core::core::constants::menu::START_CHAT => {
                     println!("Enable web search for this session? (y/n): ");
                     let mut choice = String::new();
                     let _ = std::io::stdin().read_line(&mut choice);
                     let web_search = choice.trim().eq_ignore_ascii_case("y");
-                    let mut chat_service = harper::agent::chat::ChatService::new(
+                    let mut chat_service = harper_core::agent::chat::ChatService::new(
                         conn,
                         api_config,
                         mcp_client,
@@ -204,16 +204,16 @@ async fn main() -> Result<(), HarperError> {
                         "Error in chat session"
                     );
                 }
-                harper::core::constants::menu::LIST_SESSIONS => {
+                harper_core::core::constants::menu::LIST_SESSIONS => {
                     handle_menu_error!(session_service.list_sessions(), "Error listing sessions");
                 }
-                harper::core::constants::menu::VIEW_SESSION => {
+                harper_core::core::constants::menu::VIEW_SESSION => {
                     handle_menu_error!(session_service.view_session(), "Error viewing session");
                 }
-                harper::core::constants::menu::EXPORT_SESSION => {
+                harper_core::core::constants::menu::EXPORT_SESSION => {
                     handle_menu_error!(session_service.export_session(), "Error exporting session");
                 }
-                harper::core::constants::menu::QUIT => {
+                harper_core::core::constants::menu::QUIT => {
                     println!("{}", messages::GOODBYE.bold().yellow());
                     break;
                 }
@@ -222,19 +222,19 @@ async fn main() -> Result<(), HarperError> {
         }
     }
 
-    let session_service = harper::memory::session_service::SessionService::new(&conn);
+    let session_service = harper_core::memory::session_service::SessionService::new(&conn);
 
     // Create theme
     let theme = config
         .ui
         .theme
         .as_ref()
-        .map(|t| harper::interfaces::ui::Theme::from_name(t))
+        .map(|t| harper_ui::interfaces::ui::Theme::from_name(t))
         .unwrap_or_default();
 
     // Try TUI first, fall back to text menu if TUI fails
     let custom_commands = config.custom_commands.commands.clone().unwrap_or_default();
-    if let Err(e) = harper::interfaces::ui::run_tui(
+    if let Err(e) = harper_ui::interfaces::ui::run_tui(
         &conn,
         &api_config,
         &session_service,

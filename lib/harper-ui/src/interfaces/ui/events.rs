@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 use super::app::{AppState, ChatState, SessionInfo, TuiApp};
-use crate::memory::session_service::SessionService;
+use harper_core::memory::session_service::SessionService;
 
 pub enum EventResult {
     Continue,
@@ -200,7 +200,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             mod tests {
                 use super::*;
                 use crate::interfaces::ui::app::{AppState, TuiApp};
-                use crate::memory::session_service::SessionService;
+                use harper_core::memory::session_service::SessionService;
 
                 #[test]
                 fn test_menu_navigation() {
@@ -221,7 +221,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 fn test_enter_menu_start_chat() {
                     let mut app = TuiApp::new();
                     let conn = rusqlite::Connection::open_in_memory().unwrap();
-                    crate::memory::storage::init_db(&conn).unwrap();
+                    harper_core::memory::storage::init_db(&conn).unwrap();
                     let session_service = SessionService::new(&conn);
 
                     // Menu at 0 (Start Chat)
@@ -235,7 +235,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                     let mut app = TuiApp::new();
                     app.state = AppState::Menu(1); // Load Sessions
                     let conn = rusqlite::Connection::open_in_memory().unwrap();
-                    crate::memory::storage::init_db(&conn).unwrap();
+                    harper_core::memory::storage::init_db(&conn).unwrap();
                     let session_service = SessionService::new(&conn);
 
                     let result = handle_enter(&mut app, &session_service);
@@ -248,7 +248,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                     let mut app = TuiApp::new();
                     app.state = AppState::Menu(2); // Export Sessions
                     let conn = rusqlite::Connection::open_in_memory().unwrap();
-                    crate::memory::storage::init_db(&conn).unwrap();
+                    harper_core::memory::storage::init_db(&conn).unwrap();
                     let session_service = SessionService::new(&conn);
 
                     let result = handle_enter(&mut app, &session_service);
@@ -345,7 +345,7 @@ fn handle_image_paste(app: &mut TuiApp) {
 
 pub(crate) fn save_image_to_temp(
     image_data: &ImageData,
-) -> crate::core::error::HarperResult<PathBuf> {
+) -> harper_core::core::error::HarperResult<PathBuf> {
     // Create temp directory if it doesn't exist
     let temp_dir = std::env::temp_dir().join("harper_images");
     fs::create_dir_all(&temp_dir)?;
@@ -353,7 +353,9 @@ pub(crate) fn save_image_to_temp(
     // Generate unique filename
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| crate::core::error::HarperError::Api(format!("System time error: {}", e)))?
+        .map_err(|e| {
+            harper_core::core::error::HarperError::Api(format!("System time error: {}", e))
+        })?
         .as_millis();
     let filename = format!("pasted_image_{}.png", timestamp);
     let file_path = temp_dir.join(filename);
@@ -365,14 +367,14 @@ pub(crate) fn save_image_to_temp(
     // Create image buffer from raw bytes
     let img =
         image::RgbaImage::from_raw(width, height, image_data.bytes.to_vec()).ok_or_else(|| {
-            crate::core::error::HarperError::File(
+            harper_core::core::error::HarperError::File(
                 "Failed to create image from clipboard data".to_string(),
             )
         })?;
 
     // Save as PNG
     img.save(&file_path).map_err(|e| {
-        crate::core::error::HarperError::File(format!("Failed to save image: {}", e))
+        harper_core::core::error::HarperError::File(format!("Failed to save image: {}", e))
     })?;
 
     Ok(file_path)

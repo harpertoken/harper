@@ -1,0 +1,68 @@
+[package]
+name = "harper-core"
+version = "0.3.4"
+edition = "2021"
+rust-version = "1.85.0"
+authors = ["Harper Contributors"]
+license = "Apache-2.0"
+description = "Core logic for Harper AI assistant"
+
+[dependencies]
+arboard = "3.4.0"
+chrono = { version = "0.4.41", features = ["serde"] }
+colored = "3.0.0"
+config = "0.14.0"
+dotenvy = "0.15"
+dirs = "5.0"
+turul-mcp-client = "0.2.1"
+reqwest = { version = "0.12.20", features = ["json", "native-tls"] }
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
+tower = "0.5"
+uuid = { version = "1.17.0", features = ["v4"] }
+ring = "0.17.14"
+aes = "0.8"
+cbc = "0.1"
+ctr = "0.9"
+block-padding = "0.3"
+hex-literal = "0.4.1"
+rustyline = "14.0"
+image = "0.25.6"
+
+# Dependency resolution
+[dependencies.base64]
+version = "0.22"
+[dependencies.bitflags]
+version = "2.0"
+[dependencies.getrandom]
+version = "0.2"
+[dependencies.h2]
+version = "0.4"
+[dependencies.hashbrown]
+version = "0.15"
+[dependencies.hashlink]
+version = "0.10"
+[dependencies.http]
+version = "1.0"
+[dependencies.http-body]
+version = "1.0"
+[dependencies.hyper]
+version = "1.0"
+[dependencies.socket2]
+version = "0.6"
+[dependencies.sync_wrapper]
+version = "1.0"
+[dependencies.thiserror]
+version = "2.0"
+[dependencies.thiserror-impl]
+version = "2.0"
+[dependencies.windows-sys]
+version = "0.60"
+[dependencies.windows-targets]
+version = "0.53"
+
+[features]
+default = []
+integration = []

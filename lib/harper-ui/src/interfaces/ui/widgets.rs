@@ -292,7 +292,7 @@ fn draw_tools(frame: &mut Frame, selected: usize, theme: &Theme) {
 fn draw_view_session(
     frame: &mut Frame,
     name: &str,
-    messages: &[crate::core::Message],
+    messages: &[harper_core::core::Message],
     _selected: usize,
     theme: &Theme,
 ) {
