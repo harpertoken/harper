@@ -340,10 +340,11 @@ impl<'a> ToolService<'a> {
         json_value: &serde_json::Value,
     ) -> Result<Option<(String, String)>, HarperError> {
         let Some(mcp_client) = self.mcp_client else {
-            return Ok(Some((
-                "MCP client not available".to_string(),
-                "Error: MCP client not configured".to_string(),
-            )));
+            let error_msg = "Error: MCP client not configured".to_string();
+            let final_response = self
+                .call_llm_after_tool(client, history, &error_msg)
+                .await?;
+            return Ok(Some((final_response, error_msg)));
         };
 
         // Extract arguments from the JSON
