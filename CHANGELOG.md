@@ -2,7 +2,6 @@
 
 ## [0.4.0](https://github.com/harpertoken/harper/compare/harper-v0.3.4...harper-v0.4.0) (2026-01-18)
 
-
 ### Features
 
 * add auto-merge and label sync ([4e055ee](https://github.com/harpertoken/harper/commit/4e055eeb5d5e6b36a4e13c92de837cc5d1532419))
