@@ -1,15 +1,14 @@
 {
   "packages": {
-    ".": {
+    "lib/harper-core": {
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
       "prerelease": false
     },
-    "lib/harper-core": {
-      "release-type": "rust"
-    },
     "lib/harper-ui": {
-      "release-type": "rust"
+      "release-type": "rust",
+      "changelog-path": "CHANGELOG.md",
+      "prerelease": false
     }
   },
   "changelog-sections": [
