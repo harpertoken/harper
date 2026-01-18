@@ -215,22 +215,11 @@ impl<'a> ChatService<'a> {
                         // Replace @mcp:uri with the resource content
                         let replacement =
                             format!("\n[READ MCP RESOURCE: {}]\n{}\n", resource_uri, content);
-                        let old_pattern = format!("@{}", resource_part);
+                        let end_of_pattern = absolute_at_pos + 1 + resource_part.len();
+                        processed.replace_range(absolute_at_pos..end_of_pattern, &replacement);
 
-                        // Find the position of the old pattern in the current processed string
-                        if let Some(replace_pos) = processed[absolute_at_pos..].find(&old_pattern) {
-                            let actual_replace_pos = absolute_at_pos + replace_pos;
-                            processed.replace_range(
-                                actual_replace_pos..actual_replace_pos + old_pattern.len(),
-                                &replacement,
-                            );
-
-                            // Update search position to continue after this replacement
-                            search_start = actual_replace_pos + replacement.len();
-                        } else {
-                            // Pattern not found, skip this @ and continue
-                            search_start = absolute_at_pos + 1;
-                        }
+                        // Update search position to continue after this replacement
+                        search_start = absolute_at_pos + replacement.len();
                     }
                     Err(e) => {
                         eprintln!(
