@@ -245,10 +245,11 @@ pub async fn call_llm(
 ")}]
                 });
             }
-            let url = format!("{}?key={}", config.base_url, config.api_key);
+            let url = config.base_url.clone();
             client
                 .post(&url)
                 .header(CONTENT_TYPE, "application/json")
+                .header("x-goog-api-key", &config.api_key)
                 .json(&body)
                 .send()
                 .await?
