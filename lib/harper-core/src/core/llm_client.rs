@@ -249,7 +249,7 @@ pub async fn call_llm(
             client
                 .post(&url)
                 .header(CONTENT_TYPE, "application/json")
-                .header(AUTHORIZATION, format!("Bearer {}", config.api_key))
+                .header("x-goog-api-key", &config.api_key)
                 .json(&body)
                 .send()
                 .await?
