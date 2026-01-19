@@ -1409,7 +1409,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "turul-mcp-json-rpc-server 0.1.1",
+ "tracing",
+ "turul-mcp-json-rpc-server",
 ]
 
 [[package]]
@@ -4072,23 +4073,10 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "turul-mcp-json-rpc-server 0.2.1",
+ "turul-mcp-json-rpc-server",
  "turul-mcp-protocol",
  "turul-mcp-protocol-2025-06-18",
  "url",
-]
-
-[[package]]
-name = "turul-mcp-json-rpc-server"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bef5d23f456e5a5906f282fb87a58f16afc6327e10260542e00db565f2dc93d"
-dependencies = [
- "async-trait",
- "futures",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -4123,7 +4111,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.17",
- "turul-mcp-json-rpc-server 0.2.1",
+ "turul-mcp-json-rpc-server",
 ]
 
 [[package]]
