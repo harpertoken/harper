@@ -79,6 +79,10 @@ pub fn handle_event(
             }
 
             match key.code {
+                KeyCode::F(1) => {
+                    // Show help overlay
+                    app.message = Some("F1:Help | Esc:Back | ↑↓:Navigate | Enter:Select | Ctrl+C:Quit | Ctrl+W:Toggle Web Search".to_string());
+                }
                 KeyCode::Char('c')
                     if key.modifiers.contains(KeyModifiers::CONTROL)
                         && key.modifiers.contains(KeyModifiers::SHIFT) =>

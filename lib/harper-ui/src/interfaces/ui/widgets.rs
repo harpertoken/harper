@@ -14,6 +14,7 @@
 
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
+use ratatui::style::Modifier;
 
 use super::app::{AppState, SessionInfo, TuiApp};
 use super::theme::Theme;
@@ -334,10 +335,10 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         AppState::ViewSession(_, _, _) => "VIEW",
     };
 
-    let status = format!(" {} | Harper AI Agent ", mode);
-    let status_bar = Paragraph::new(status)
-        .style(Style::default().bg(theme.accent).fg(theme.foreground))
-        .alignment(Alignment::Center);
+    // Enhanced status with provider info and shortcuts
+    let left_status = format!(" {} ", mode);
+    let center_status = "Harper AI Agent";
+    let right_status = " F1:Help | Ctrl+C:Quit ";
 
     let area = frame.area();
     let status_area = Rect {
@@ -347,27 +348,110 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         height: 1,
     };
 
-    frame.render_widget(status_bar, status_area);
+    // Left section
+    let left_width = left_status.len() as u16;
+    let left_area = Rect {
+        x: 0,
+        y: status_area.y,
+        width: left_width,
+        height: 1,
+    };
+    
+    let left_widget = Paragraph::new(left_status)
+        .style(theme.highlight_style().bg(theme.accent));
+    frame.render_widget(left_widget, left_area);
+
+    // Center section
+    let center_width = center_status.len() as u16;
+    let center_x = (area.width - center_width) / 2;
+    let center_area = Rect {
+        x: center_x,
+        y: status_area.y,
+        width: center_width,
+        height: 1,
+    };
+    
+    let center_widget = Paragraph::new(center_status)
+        .style(Style::default().bg(theme.accent).fg(theme.background).add_modifier(Modifier::BOLD));
+    frame.render_widget(center_widget, center_area);
+
+    // Right section
+    let right_width = right_status.len() as u16;
+    let right_area = Rect {
+        x: area.width - right_width,
+        y: status_area.y,
+        width: right_width,
+        height: 1,
+    };
+    
+    let right_widget = Paragraph::new(right_status)
+        .style(theme.muted_style().bg(theme.accent));
+    frame.render_widget(right_widget, right_area);
+
+    // Fill remaining space
+    let fill_start = left_width;
+    let fill_end = center_x;
+    if fill_end > fill_start {
+        let fill_area = Rect {
+            x: fill_start,
+            y: status_area.y,
+            width: fill_end - fill_start,
+            height: 1,
+        };
+        let fill_widget = Paragraph::new("")
+            .style(Style::default().bg(theme.accent));
+        frame.render_widget(fill_widget, fill_area);
+    }
+
+    let fill_start2 = center_x + center_width;
+    let fill_end2 = area.width - right_width;
+    if fill_end2 > fill_start2 {
+        let fill_area2 = Rect {
+            x: fill_start2,
+            y: status_area.y,
+            width: fill_end2 - fill_start2,
+            height: 1,
+        };
+        let fill_widget2 = Paragraph::new("")
+            .style(Style::default().bg(theme.accent));
+        frame.render_widget(fill_widget2, fill_area2);
+    }
 }
 
 fn draw_message_overlay(frame: &mut Frame, message: &str, theme: &Theme) {
+    // Determine message type and styling
+    let (title, style, border_style) = if message.starts_with("Error") || message.contains("error") {
+        ("⚠ Error", theme.error_style(), theme.error_style())
+    } else if message.starts_with("F1:Help") || message.contains("Help") {
+        ("💡 Keyboard Shortcuts", theme.info_style(), theme.info_style())
+    } else if message.contains("enabled") || message.contains("disabled") {
+        ("ℹ Status", theme.info_style(), theme.info_style())
+    } else {
+        ("📢 Message", theme.warning_style(), theme.warning_style())
+    };
+
     let overlay = Paragraph::new(message)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Message")
-                .border_style(theme.border_style())
+                .title(title)
+                .border_style(border_style)
                 .title_style(theme.title_style()),
         )
-        .style(Style::default().bg(theme.background).fg(theme.error))
-        .alignment(Alignment::Center);
+        .style(Style::default().bg(theme.background).fg(style.fg.unwrap_or(theme.foreground)))
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true });
 
     let area = frame.area();
+    let message_lines = message.lines().count().max(1) as u16;
+    let overlay_height = (message_lines + 2).min(area.height / 2);
+    let overlay_width = (message.len() as u16 + 4).min(area.width * 3 / 4);
+    
     let overlay_area = Rect {
-        x: area.width / 4,
-        y: area.height / 2 - 2,
-        width: area.width / 2,
-        height: 5,
+        x: (area.width - overlay_width) / 2,
+        y: (area.height - overlay_height) / 2,
+        width: overlay_width,
+        height: overlay_height,
     };
 
     frame.render_widget(Clear, overlay_area);
