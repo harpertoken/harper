@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use ratatui::style::Modifier;
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
 use super::app::{AppState, SessionInfo, TuiApp};
 use super::theme::Theme;
@@ -338,7 +338,7 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     // Enhanced status with provider info and shortcuts
     let left_status = format!(" {} ", mode);
     let center_status = "Harper AI Agent";
-    let right_status = " F1:Help | Ctrl+C:Quit ";
+    let right_status = " F1/Ctrl+H:Help | Ctrl+C:Quit ";
 
     let area = frame.area();
     let status_area = Rect {
@@ -356,9 +356,8 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         width: left_width,
         height: 1,
     };
-    
-    let left_widget = Paragraph::new(left_status)
-        .style(theme.highlight_style().bg(theme.accent));
+
+    let left_widget = Paragraph::new(left_status).style(theme.highlight_style().bg(theme.accent));
     frame.render_widget(left_widget, left_area);
 
     // Center section
@@ -370,9 +369,13 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         width: center_width,
         height: 1,
     };
-    
-    let center_widget = Paragraph::new(center_status)
-        .style(Style::default().bg(theme.accent).fg(theme.background).add_modifier(Modifier::BOLD));
+
+    let center_widget = Paragraph::new(center_status).style(
+        Style::default()
+            .bg(theme.accent)
+            .fg(theme.background)
+            .add_modifier(Modifier::BOLD),
+    );
     frame.render_widget(center_widget, center_area);
 
     // Right section
@@ -383,9 +386,8 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         width: right_width,
         height: 1,
     };
-    
-    let right_widget = Paragraph::new(right_status)
-        .style(theme.muted_style().bg(theme.accent));
+
+    let right_widget = Paragraph::new(right_status).style(theme.muted_style().bg(theme.accent));
     frame.render_widget(right_widget, right_area);
 
     // Fill remaining space
@@ -398,8 +400,7 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             width: fill_end - fill_start,
             height: 1,
         };
-        let fill_widget = Paragraph::new("")
-            .style(Style::default().bg(theme.accent));
+        let fill_widget = Paragraph::new("").style(Style::default().bg(theme.accent));
         frame.render_widget(fill_widget, fill_area);
     }
 
@@ -412,18 +413,22 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             width: fill_end2 - fill_start2,
             height: 1,
         };
-        let fill_widget2 = Paragraph::new("")
-            .style(Style::default().bg(theme.accent));
+        let fill_widget2 = Paragraph::new("").style(Style::default().bg(theme.accent));
         frame.render_widget(fill_widget2, fill_area2);
     }
 }
 
 fn draw_message_overlay(frame: &mut Frame, message: &str, theme: &Theme) {
     // Determine message type and styling
-    let (title, style, border_style) = if message.starts_with("Error") || message.contains("error") {
+    let (title, style, border_style) = if message.starts_with("Error") || message.contains("error")
+    {
         ("⚠ Error", theme.error_style(), theme.error_style())
     } else if message.starts_with("F1:Help") || message.contains("Help") {
-        ("💡 Keyboard Shortcuts", theme.info_style(), theme.info_style())
+        (
+            "💡 Keyboard Shortcuts",
+            theme.info_style(),
+            theme.info_style(),
+        )
     } else if message.contains("enabled") || message.contains("disabled") {
         ("ℹ Status", theme.info_style(), theme.info_style())
     } else {
@@ -438,7 +443,11 @@ fn draw_message_overlay(frame: &mut Frame, message: &str, theme: &Theme) {
                 .border_style(border_style)
                 .title_style(theme.title_style()),
         )
-        .style(Style::default().bg(theme.background).fg(style.fg.unwrap_or(theme.foreground)))
+        .style(
+            Style::default()
+                .bg(theme.background)
+                .fg(style.fg.unwrap_or(theme.foreground)),
+        )
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
 
@@ -446,7 +455,7 @@ fn draw_message_overlay(frame: &mut Frame, message: &str, theme: &Theme) {
     let message_lines = message.lines().count().max(1) as u16;
     let overlay_height = (message_lines + 2).min(area.height / 2);
     let overlay_width = (message.len() as u16 + 4).min(area.width * 3 / 4);
-    
+
     let overlay_area = Rect {
         x: (area.width - overlay_width) / 2,
         y: (area.height - overlay_height) / 2,

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #[allow(dead_code)]
-use ratatui::style::{Color, Style, Modifier};
+use ratatui::style::{Color, Modifier, Style};
 
 #[derive(Debug, Clone)]
 pub struct Theme {
@@ -39,7 +39,7 @@ impl Default for Theme {
         Self {
             background: Color::Black,
             foreground: Color::White,
-            accent: Color::Rgb(88, 166, 255),     // Modern blue
+            accent: Color::Rgb(88, 166, 255),    // Modern blue
             border: Color::Rgb(64, 64, 64),      // Subtle gray
             title: Color::Rgb(255, 215, 0),      // Gold
             input: Color::Rgb(0, 255, 255),      // Cyan
@@ -65,7 +65,7 @@ impl Theme {
         Self {
             background: Color::White,
             foreground: Color::Black,
-            accent: Color::Rgb(0, 122, 255),      // iOS blue
+            accent: Color::Rgb(0, 122, 255),     // iOS blue
             border: Color::Rgb(200, 200, 200),   // Light gray
             title: Color::Rgb(88, 86, 214),      // Purple
             input: Color::Rgb(0, 122, 255),      // Blue
@@ -92,20 +92,20 @@ impl Theme {
 
     pub fn github() -> Self {
         Self {
-            background: Color::Rgb(13, 17, 23),       // GitHub dark bg
-            foreground: Color::Rgb(230, 237, 243),    // GitHub text
-            accent: Color::Rgb(33, 136, 255),         // GitHub blue
-            border: Color::Rgb(48, 54, 61),          // GitHub border
-            title: Color::Rgb(125, 196, 228),        // GitHub cyan
-            input: Color::Rgb(33, 136, 255),         // GitHub blue
-            output: Color::Rgb(63, 185, 80),         // GitHub green
-            error: Color::Rgb(248, 81, 73),          // GitHub red
-            success: Color::Rgb(63, 185, 80),        // GitHub green
-            warning: Color::Rgb(219, 154, 4),        // GitHub yellow
-            info: Color::Rgb(125, 196, 228),         // GitHub cyan
-            muted: Color::Rgb(139, 148, 158),        // GitHub muted
-            highlight: Color::Rgb(255, 223, 93),     // GitHub highlight
-            selection: Color::Rgb(58, 117, 215),     // GitHub selection
+            background: Color::Rgb(13, 17, 23),    // GitHub dark bg
+            foreground: Color::Rgb(230, 237, 243), // GitHub text
+            accent: Color::Rgb(33, 136, 255),      // GitHub blue
+            border: Color::Rgb(48, 54, 61),        // GitHub border
+            title: Color::Rgb(125, 196, 228),      // GitHub cyan
+            input: Color::Rgb(33, 136, 255),       // GitHub blue
+            output: Color::Rgb(63, 185, 80),       // GitHub green
+            error: Color::Rgb(248, 81, 73),        // GitHub red
+            success: Color::Rgb(63, 185, 80),      // GitHub green
+            warning: Color::Rgb(219, 154, 4),      // GitHub yellow
+            info: Color::Rgb(125, 196, 228),       // GitHub cyan
+            muted: Color::Rgb(139, 148, 158),      // GitHub muted
+            highlight: Color::Rgb(255, 223, 93),   // GitHub highlight
+            selection: Color::Rgb(58, 117, 215),   // GitHub selection
             syntax_theme: "base16-ocean.dark".to_string(),
         }
     }
@@ -151,7 +151,9 @@ impl Theme {
     }
 
     pub fn highlight_style(&self) -> Style {
-        Style::default().fg(self.highlight).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(self.highlight)
+            .add_modifier(Modifier::BOLD)
     }
 
     pub fn selection_style(&self) -> Style {
