@@ -373,8 +373,9 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     let center_widget = Paragraph::new(center_status).style(
         Style::default()
             .bg(theme.accent)
-            .fg(theme.background)
+            .fg(theme.foreground)
             .add_modifier(Modifier::BOLD),
+    );
     );
     frame.render_widget(center_widget, center_area);
 
