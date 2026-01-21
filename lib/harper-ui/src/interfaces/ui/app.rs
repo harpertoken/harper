@@ -52,10 +52,24 @@ pub struct SessionInfo {
     pub created_at: String,
 }
 
+#[derive(Clone, Debug)]
+pub enum MessageType {
+    Error,
+    Help,
+    Status,
+    Info,
+}
+
+#[derive(Clone)]
+pub struct UiMessage {
+    pub content: String,
+    pub message_type: MessageType,
+}
+
 #[derive(Clone)]
 pub struct TuiApp {
     pub state: AppState,
-    pub message: Option<String>,
+    pub message: Option<UiMessage>,
 }
 
 impl Default for TuiApp {
@@ -70,6 +84,38 @@ impl Default for TuiApp {
 impl TuiApp {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn set_error_message(&mut self, content: String) {
+        self.message = Some(UiMessage {
+            content,
+            message_type: MessageType::Error,
+        });
+    }
+
+    pub fn set_help_message(&mut self, content: String) {
+        self.message = Some(UiMessage {
+            content,
+            message_type: MessageType::Help,
+        });
+    }
+
+    pub fn set_status_message(&mut self, content: String) {
+        self.message = Some(UiMessage {
+            content,
+            message_type: MessageType::Status,
+        });
+    }
+
+    pub fn set_info_message(&mut self, content: String) {
+        self.message = Some(UiMessage {
+            content,
+            message_type: MessageType::Info,
+        });
+    }
+
+    pub fn clear_message(&mut self) {
+        self.message = None;
     }
 
     pub fn next(&mut self) {
