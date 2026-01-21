@@ -16,8 +16,11 @@ use ratatui::prelude::*;
 use ratatui::style::Modifier;
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
-use super::app::{AppState, SessionInfo, TuiApp};
+use super::app::{AppState, MessageType, SessionInfo, TuiApp, UiMessage};
 use super::theme::Theme;
+
+// Keyboard shortcut constants
+const STATUS_BAR_SHORTCUTS: &str = " F1/Ctrl+H:Help | Ctrl+C:Quit ";
 use crate::plugins::syntax::highlight_code;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
@@ -338,7 +341,7 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     // Enhanced status with provider info and shortcuts
     let left_status = format!(" {} ", mode);
     let center_status = "Harper AI Agent";
-    let right_status = SHORTCUTS_MESSAGE;
+    let right_status = STATUS_BAR_SHORTCUTS;
 
     let area = frame.area();
     let status_area = Rect {
@@ -375,7 +378,6 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             .bg(theme.accent)
             .fg(theme.foreground)
             .add_modifier(Modifier::BOLD),
-    );
     );
     frame.render_widget(center_widget, center_area);
 
@@ -419,24 +421,19 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     }
 }
 
-fn draw_message_overlay(frame: &mut Frame, message: &str, theme: &Theme) {
-    // Determine message type and styling
-    let (title, style, border_style) = if message.starts_with("Error") || message.contains("error")
-    {
-        ("⚠ Error", theme.error_style(), theme.error_style())
-    } else if message.starts_with("F1:Help") || message.contains("Help") {
-        (
+fn draw_message_overlay(frame: &mut Frame, message: &UiMessage, theme: &Theme) {
+    let (title, style, border_style) = match message.message_type {
+        MessageType::Error => ("⚠ Error", theme.error_style(), theme.error_style()),
+        MessageType::Help => (
             "💡 Keyboard Shortcuts",
             theme.info_style(),
             theme.info_style(),
-        )
-    } else if message.contains("enabled") || message.contains("disabled") {
-        ("ℹ Status", theme.info_style(), theme.info_style())
-    } else {
-        ("📢 Message", theme.warning_style(), theme.warning_style())
+        ),
+        MessageType::Status => ("ℹ Status", theme.info_style(), theme.info_style()),
+        MessageType::Info => ("📢 Message", theme.warning_style(), theme.warning_style()),
     };
 
-    let overlay = Paragraph::new(message)
+    let overlay = Paragraph::new(message.content.as_str())
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -453,9 +450,9 @@ fn draw_message_overlay(frame: &mut Frame, message: &str, theme: &Theme) {
         .wrap(Wrap { trim: true });
 
     let area = frame.area();
-    let message_lines = message.lines().count().max(1) as u16;
+    let message_lines = message.content.lines().count().max(1) as u16;
     let overlay_height = (message_lines + 2).min(area.height / 2);
-    let overlay_width = (message.len() as u16 + 4).min(area.width * 3 / 4);
+    let overlay_width = (message.content.len() as u16 + 4).min(area.width * 3 / 4);
 
     let overlay_area = Rect {
         x: (area.width - overlay_width) / 2,

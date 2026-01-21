@@ -19,6 +19,10 @@ use std::path::Path;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+// Keyboard shortcut constants
+const HELP_MESSAGE: &str =
+    "Ctrl+H:Help | Esc:Back | ↑↓:Navigate | Enter:Select | Ctrl+C:Quit | Ctrl+W:Toggle Web Search";
+
 use super::app::{AppState, ChatState, SessionInfo, TuiApp};
 use harper_core::memory::session_service::SessionService;
 
@@ -42,7 +46,7 @@ fn load_sessions_into_state(app: &mut TuiApp, session_service: &SessionService) 
             app.state = AppState::Sessions(session_infos, 0);
         }
         Err(e) => {
-            app.message = Some(format!("Error loading sessions: {}", e.display_message()));
+            app.set_error_message(format!("Error loading sessions: {}", e.display_message()));
         }
     }
 }
@@ -61,7 +65,7 @@ fn load_export_sessions_into_state(app: &mut TuiApp, session_service: &SessionSe
             app.state = AppState::ExportSessions(session_infos, 0);
         }
         Err(e) => {
-            app.message = Some(format!("Error loading sessions: {}", e.display_message()));
+            app.set_error_message(format!("Error loading sessions: {}", e.display_message()));
         }
     }
 }
@@ -75,17 +79,17 @@ pub fn handle_event(
         Event::Key(key) => {
             // Clear message on any key press
             if app.message.is_some() {
-                app.message = None;
+                app.clear_message();
             }
 
             match key.code {
                 KeyCode::F(1) => {
                     // Show help overlay
-                    app.message = Some(HELP_MESSAGE.to_string());
+                    app.set_help_message(HELP_MESSAGE.to_string());
                 }
                 KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     // Alternative help key for Mac users
-                    app.message = Some(HELP_MESSAGE.to_string());
+                    app.set_help_message(HELP_MESSAGE.to_string());
                 }
                 KeyCode::Char('c')
                     if key.modifiers.contains(KeyModifiers::CONTROL)
@@ -105,13 +109,10 @@ pub fn handle_event(
                 KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     if let AppState::Chat(chat_state) = &mut app.state {
                         chat_state.web_search_enabled = !chat_state.web_search_enabled;
-                        app.message = Some(format!(
+                        let enabled = chat_state.web_search_enabled;
+                        app.set_status_message(format!(
                             "Web search {}",
-                            if chat_state.web_search_enabled {
-                                "enabled"
-                            } else {
-                                "disabled"
-                            }
+                            if enabled { "enabled" } else { "disabled" }
                         ));
                     }
                 }
@@ -197,8 +198,10 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         });
                     }
                     Err(e) => {
-                        app.message =
-                            Some(format!("Error loading session: {}", e.display_message()));
+                        app.set_error_message(format!(
+                            "Error loading session: {}",
+                            e.display_message()
+                        ));
                     }
                 }
             }
@@ -207,24 +210,24 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             if !sessions.is_empty() && *selected < sessions.len() {
                 let session = &sessions[*selected];
                 match session_service.export_session_by_id(&session.id) {
-                    Ok(path) => app.message = Some(format!("Session exported to {}", path)),
-                    Err(e) => app.message = Some(format!("Export failed: {}", e.display_message())),
+                    Ok(path) => app.set_info_message(format!("Session exported to {}", path)),
+                    Err(e) => {
+                        app.set_error_message(format!("Export failed: {}", e.display_message()))
+                    }
                 }
                 app.state = AppState::Menu(0);
             }
         }
         AppState::Tools(selected) => {
             match *selected {
-                0 => app.message = Some("File Operations not implemented yet".to_string()),
-                1 => {
-                    app.message =
-                        Some("Git commands: Use AI chat to request git operations".to_string())
-                }
-                2 => app.message = Some("Web search: Toggle with Ctrl+W in chat".to_string()),
-                3 => {
-                    app.message =
-                        Some("Shell commands: Use AI chat to request shell operations".to_string())
-                }
+                0 => app.set_info_message("File Operations not implemented yet".to_string()),
+                1 => app.set_info_message(
+                    "Git commands: Use AI chat to request git operations".to_string(),
+                ),
+                2 => app.set_info_message("Web search: Toggle with Ctrl+W in chat".to_string()),
+                3 => app.set_info_message(
+                    "Shell commands: Use AI chat to request shell operations".to_string(),
+                ),
                 4 => app.state = AppState::Menu(0), // Back to Menu
                 _ => {}
             }
@@ -259,7 +262,7 @@ fn handle_image_paste(app: &mut TuiApp) {
         let mut clipboard = match Clipboard::new() {
             Ok(clipboard) => clipboard,
             Err(e) => {
-                app.message = Some(format!("Clipboard not available: {}", e));
+                app.set_error_message(format!("Clipboard not available: {}", e));
                 return;
             }
         };
@@ -267,7 +270,7 @@ fn handle_image_paste(app: &mut TuiApp) {
         let image_data = match clipboard.get_image() {
             Ok(image) => image,
             Err(_) => {
-                app.message = Some("No image found in clipboard".to_string());
+                app.set_error_message("No image found in clipboard".to_string());
                 return;
             }
         };
@@ -277,13 +280,13 @@ fn handle_image_paste(app: &mut TuiApp) {
                 let reference = format!("@{}", file_path.display());
                 chat_state.input.push_str(&reference);
                 chat_state.reset_completion();
-                app.message = Some(format!(
+                app.set_info_message(format!(
                     "Image pasted and saved as: {}",
                     file_path.display()
                 ));
             }
             Err(e) => {
-                app.message = Some(format!("Failed to save pasted image: {}", e));
+                app.set_error_message(format!("Failed to save pasted image: {}", e));
             }
         }
     }
@@ -332,13 +335,13 @@ fn handle_copy(app: &mut TuiApp) {
             match Clipboard::new() {
                 Ok(mut clipboard) => {
                     if clipboard.set_text(&chat_state.input).is_ok() {
-                        app.message = Some("Copied to clipboard".to_string());
+                        app.set_info_message("Copied to clipboard".to_string());
                     } else {
-                        app.message = Some("Failed to copy to clipboard".to_string());
+                        app.set_error_message("Failed to copy to clipboard".to_string());
                     }
                 }
                 Err(e) => {
-                    app.message = Some(format!("Clipboard not available: {}", e));
+                    app.set_error_message(format!("Clipboard not available: {}", e));
                 }
             }
         }
