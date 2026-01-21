@@ -338,7 +338,7 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     // Enhanced status with provider info and shortcuts
     let left_status = format!(" {} ", mode);
     let center_status = "Harper AI Agent";
-    let right_status = " F1/Ctrl+H:Help | Ctrl+C:Quit ";
+    let right_status = SHORTCUTS_MESSAGE;
 
     let area = frame.area();
     let status_area = Rect {
