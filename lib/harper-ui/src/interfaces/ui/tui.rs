@@ -89,10 +89,10 @@ pub async fn run_tui(
                         {
                             Ok(_) => {
                                 // Response is already added to messages by send_message
-                                app.message = Some("AI responded".to_string());
+                                app.set_info_message("AI responded".to_string());
                             }
                             Err(e) => {
-                                app.message = Some(format!("Error: {}", e));
+                                app.set_error_message(format!("Error: {}", e));
                             }
                         }
                     }
