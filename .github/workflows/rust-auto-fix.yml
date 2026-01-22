@@ -15,7 +15,7 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
-    
+
     - name: Get PR info
       id: pr
       run: |
@@ -24,17 +24,17 @@ jobs:
         echo "branch=$(git branch --show-current)" >> $GITHUB_OUTPUT
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
+
     - name: Install Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         components: rustfmt, clippy
-    
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential pkg-config libsqlite3-dev
-    
+
     - name: Apply Rust fixes
       run: |
         comment="${{ github.event.comment.body }}"
@@ -51,7 +51,7 @@ jobs:
           cargo clippy --fix --allow-dirty --allow-staged
           echo "✅ Applied all Rust fixes (fmt + clippy)"
         fi
-    
+
     - name: Commit and push changes
       run: |
         git config --local user.email "action@github.com"
