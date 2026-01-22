@@ -47,7 +47,7 @@ fn load_sessions_into_state(app: &mut TuiApp, session_service: &SessionService) 
             app.state = AppState::Sessions(session_infos, 0);
         }
         Err(e) => {
-            app.set_error_message(format!("Error loading sessions: {}", e.display_message()));
+            app.set_error_message(format!("Error loading sessions: {}", e));
         }
     }
 }
@@ -66,7 +66,7 @@ fn load_export_sessions_into_state(app: &mut TuiApp, session_service: &SessionSe
             app.state = AppState::ExportSessions(session_infos, 0);
         }
         Err(e) => {
-            app.set_error_message(format!("Error loading sessions: {}", e.display_message()));
+            app.set_error_message(format!("Error loading sessions: {}", e));
         }
     }
 }
@@ -199,10 +199,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         });
                     }
                     Err(e) => {
-                        app.set_error_message(format!(
-                            "Error loading session: {}",
-                            e.display_message()
-                        ));
+                        app.set_error_message(format!("Error loading session: {}", e));
                     }
                 }
             }
@@ -212,9 +209,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 let session = &sessions[*selected];
                 match session_service.export_session_by_id(&session.id) {
                     Ok(path) => app.set_info_message(format!("Session exported to {}", path)),
-                    Err(e) => {
-                        app.set_error_message(format!("Export failed: {}", e.display_message()))
-                    }
+                    Err(e) => app.set_error_message(format!("Export failed: {}", e)),
                 }
                 app.state = AppState::Menu(0);
             }
