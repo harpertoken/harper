@@ -328,6 +328,15 @@ fn test_concurrent_access() {
         !sessions.is_empty(),
         "Should have created at least one session"
     );
+
+    // Verify that at least one message was also created.
+    let message_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))
+        .unwrap();
+    assert!(
+        message_count > 0,
+        "No messages were created, indicating a potential issue with concurrent writes."
+    );
 }
 
 #[test]
