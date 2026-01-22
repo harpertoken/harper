@@ -221,73 +221,10 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
         }
         AppState::Tools(selected) => {
             match *selected {
-                0 => {
-                    // File Operations - show current directory files
-                    let result: std::io::Result<Vec<String>> =
-                        std::fs::read_dir(".").and_then(|entries| {
-                            entries
-                                .map(|entry_result| {
-                                    entry_result.map(|entry| {
-                                        entry.file_name().to_string_lossy().into_owned()
-                                    })
-                                })
-                                .collect()
-                        });
-
-                    match result {
-                        Ok(file_list) => app.set_info_message(format!(
-                            "Files in current directory:\n{}",
-                            file_list.join("\n")
-                        )),
-                        Err(e) => app.set_error_message(format!("File error: {}", e)),
-                    }
-                }
-                1 => {
-                    // Git Commands - show actual git status
-                    match harper_core::tools::git::git_status() {
-                        Ok(status) => app.set_info_message(format!("Git Status:\n{}", status)),
-                        Err(e) => app.set_error_message(format!("Git error: {}", e)),
-                    }
-                }
-                2 => {
-                    // Web Search - show search capability info
-                    app.set_info_message("Web Search: Press Ctrl+W in chat mode to toggle web search.\nOr use AI chat with search queries.".to_string());
-                }
-                3 => {
-                    // Shell Commands - show current directory listing
-                    let command_output = {
-                        #[cfg(unix)]
-                        {
-                            std::process::Command::new("ls").arg("-la").output()
-                        }
-                        #[cfg(windows)]
-                        {
-                            std::process::Command::new("cmd")
-                                .args(["/C", "dir"])
-                                .output()
-                        }
-                        #[cfg(not(any(unix, windows)))]
-                        {
-                            Err(std::io::Error::new(
-                                std::io::ErrorKind::Unsupported,
-                                "Shell command tool not supported on this OS.",
-                            ))
-                        }
-                    };
-
-                    match command_output {
-                        Ok(output) => {
-                            if output.status.success() {
-                                let result = String::from_utf8_lossy(&output.stdout);
-                                app.set_info_message(format!("Directory listing:\n{}", result));
-                            } else {
-                                let error = String::from_utf8_lossy(&output.stderr);
-                                app.set_error_message(format!("Shell error:\n{}", error));
-                            }
-                        }
-                        Err(e) => app.set_error_message(format!("Shell error: {}", e)),
-                    }
-                }
+                0 => handle_file_operations(app),
+                1 => handle_git_commands(app),
+                2 => handle_web_search(app),
+                3 => handle_shell_commands(app),
                 4 => app.state = AppState::Menu(0), // Back to Menu
                 _ => {}
             }
@@ -295,6 +232,74 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
         _ => {}
     }
     EventResult::Continue
+}
+
+// Helper functions for tool operations
+fn handle_file_operations(app: &mut TuiApp) {
+    let result: std::io::Result<Vec<String>> = std::fs::read_dir(".").and_then(|entries| {
+        entries
+            .map(|entry_result| {
+                entry_result.map(|entry| entry.file_name().to_string_lossy().into_owned())
+            })
+            .collect()
+    });
+
+    match result {
+        Ok(file_list) => app.set_info_message(format!(
+            "Files in current directory:\n{}",
+            file_list.join("\n")
+        )),
+        Err(e) => app.set_error_message(format!("File error: {}", e)),
+    }
+}
+
+fn handle_git_commands(app: &mut TuiApp) {
+    match harper_core::tools::git::git_status() {
+        Ok(status) => app.set_info_message(format!("Git Status:\n{}", status)),
+        Err(e) => app.set_error_message(format!("Git error: {}", e)),
+    }
+}
+
+fn handle_web_search(app: &mut TuiApp) {
+    app.set_info_message(
+        "Web Search: Press Ctrl+W in chat mode to toggle web search.\nOr use AI chat with search queries."
+            .to_string(),
+    );
+}
+
+fn handle_shell_commands(app: &mut TuiApp) {
+    let command_output = {
+        #[cfg(unix)]
+        {
+            std::process::Command::new("ls").arg("-la").output()
+        }
+        #[cfg(windows)]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "dir"])
+                .output()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "Shell command tool not supported on this OS.",
+            ))
+        }
+    };
+
+    match command_output {
+        Ok(output) => {
+            if output.status.success() {
+                let result = String::from_utf8_lossy(&output.stdout);
+                app.set_info_message(format!("Directory listing:\n{}", result));
+            } else {
+                let error = String::from_utf8_lossy(&output.stderr);
+                app.set_error_message(format!("Shell error:\n{}", error));
+            }
+        }
+        Err(e) => app.set_error_message(format!("Shell error: {}", e)),
+    }
 }
 
 fn handle_char_input(app: &mut TuiApp, c: char) {
