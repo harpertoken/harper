@@ -292,10 +292,13 @@ fn test_concurrent_access() {
 
                 // Create session
                 if let Err(e) = save_session(&conn, &session_id) {
-                    println!("Warning: Failed to save session: {}", e);
-                    continue;
+                if let Err(e) = save_session(&conn, &session_id) {
+                    if e.to_string().contains("database is locked") {
+                        println!("Warning: Failed to save session due to lock: {}", e);
+                        continue;
+                    }
+                    panic!("Unexpected error during save_session: {}", e);
                 }
-
                 // Add a message
                 let content = format!("Message {} from thread {}", op, thread_id);
                 if let Err(e) = save_message(&conn, &session_id, "user", &content) {
