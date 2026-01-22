@@ -1,0 +1,65 @@
+name: Rust Auto-Fix Bot
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  rust-auto-fix:
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/rust-fix')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Get PR info
+      id: pr
+      run: |
+        pr_number=${{ github.event.issue.number }}
+        gh pr checkout $pr_number
+        echo "branch=$(git branch --show-current)" >> $GITHUB_OUTPUT
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Install Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        components: rustfmt, clippy
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential pkg-config libsqlite3-dev
+    
+    - name: Apply Rust fixes
+      run: |
+        comment="${{ github.event.comment.body }}"
+        if [[ "$comment" == *"/rust-fix fmt"* ]]; then
+          cargo fmt
+          echo "✅ Applied cargo fmt"
+        fi
+        if [[ "$comment" == *"/rust-fix clippy"* ]]; then
+          cargo clippy --fix --allow-dirty --allow-staged
+          echo "✅ Applied clippy auto-fixes"
+        fi
+        if [[ "$comment" == *"/rust-fix all"* ]]; then
+          cargo fmt
+          cargo clippy --fix --allow-dirty --allow-staged
+          echo "✅ Applied all Rust fixes (fmt + clippy)"
+        fi
+    
+    - name: Commit and push changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "Rust Auto-Fix Bot"
+        if git diff --quiet; then
+          echo "No changes to commit"
+          exit 0
+        fi
+        git add .
+        git commit -m "🦀 Auto-fix: ${{ github.event.comment.body }}"
+        git push
