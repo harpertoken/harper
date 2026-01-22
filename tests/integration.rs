@@ -290,7 +290,7 @@ fn test_concurrent_access() {
             // Simple operations without complex random access
             for op in 0..OPS_PER_THREAD {
                 let session_id = format!("session-{}-{}", thread_id, op);
-                
+
                 // Create session
                 if let Err(e) = save_session(&conn, &session_id) {
                     println!("Warning: Failed to save session: {}", e);
@@ -316,9 +316,12 @@ fn test_concurrent_access() {
     // Basic verification
     let conn = Connection::open(&*db_path).unwrap();
     let sessions = list_sessions(&conn).unwrap();
-    
+
     // Should have created some sessions
-    assert!(!sessions.is_empty(), "Should have created at least one session");
+    assert!(
+        !sessions.is_empty(),
+        "Should have created at least one session"
+    );
 }
 
 #[test]
