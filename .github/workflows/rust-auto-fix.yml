@@ -4,8 +4,47 @@ on:
     types: [created]
 
 jobs:
-  rust-auto-fix:
+  rust-auto-fix-request:
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/rust-fix')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+    - name: Check what fixes are requested
+      id: check
+      run: |
+        comment="${{ github.event.comment.body }}"
+        fixes=""
+        if [[ "$comment" == *"/rust-fix fmt"* ]]; then
+          fixes="cargo fmt"
+        fi
+        if [[ "$comment" == *"/rust-fix clippy"* ]]; then
+          fixes="${fixes:+$fixes + }clippy --fix"
+        fi
+        if [[ "$comment" == *"/rust-fix all"* ]]; then
+          fixes="cargo fmt + clippy --fix"
+        fi
+        echo "fixes=$fixes" >> $GITHUB_OUTPUT
+
+    - name: Comment confirmation
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: |
+              🦀 **Rust Auto-Fix Bot**
+
+              I'll apply: `${{ steps.check.outputs.fixes }}`
+
+              Reply with `/confirm` to proceed or `/cancel` to abort.
+          })
+
+  rust-auto-fix-execute:
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/confirm')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -35,21 +74,35 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential pkg-config libsqlite3-dev
 
+    - name: Get previous bot comment
+      id: prev
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const comments = await github.rest.issues.listComments({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          const botComment = comments.data.reverse().find(c =>
+            c.user.login === 'github-actions[bot]' &&
+            c.body.includes('Rust Auto-Fix Bot')
+          );
+          if (botComment) {
+            const fixes = botComment.body.match(/I'll apply: `([^`]+)`/)?.[1] || '';
+            core.setOutput('fixes', fixes);
+          }
+
     - name: Apply Rust fixes
       run: |
-        comment="${{ github.event.comment.body }}"
-        if [[ "$comment" == *"/rust-fix fmt"* ]]; then
+        fixes="${{ steps.prev.outputs.fixes }}"
+        if [[ "$fixes" == *"cargo fmt"* ]]; then
           cargo fmt
           echo "✅ Applied cargo fmt"
         fi
-        if [[ "$comment" == *"/rust-fix clippy"* ]]; then
+        if [[ "$fixes" == *"clippy"* ]]; then
           cargo clippy --fix --allow-dirty --allow-staged
           echo "✅ Applied clippy auto-fixes"
-        fi
-        if [[ "$comment" == *"/rust-fix all"* ]]; then
-          cargo fmt
-          cargo clippy --fix --allow-dirty --allow-staged
-          echo "✅ Applied all Rust fixes (fmt + clippy)"
         fi
 
     - name: Commit and push changes
@@ -61,5 +114,5 @@ jobs:
           exit 0
         fi
         git add .
-        git commit -m "🦀 Auto-fix: ${{ github.event.comment.body }}"
+        git commit -m "🦀 Auto-fix: ${{ steps.prev.outputs.fixes }}"
         git push
