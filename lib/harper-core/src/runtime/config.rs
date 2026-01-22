@@ -119,7 +119,7 @@ impl HarperConfig {
 
         // Check for multiple API keys and prevent conflicts
         let mut found_keys = Vec::new();
-        
+
         if env::var("OPENAI_API_KEY").is_ok_and(|k| !k.trim().is_empty()) {
             found_keys.push("OPENAI_API_KEY");
         }
