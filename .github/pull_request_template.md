@@ -1,6 +1,6 @@
 ## Why (brief):
 - Brief description of changes → change type
-- Another change description → change type  
+- Another change description → change type
 - Third change if applicable → change type
 
 <!-- Examples:
