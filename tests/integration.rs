@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use harper_workspace::*;
-use rand::Rng;
+
 use regex::Regex;
 use rusqlite::Connection;
 use std::thread;
@@ -259,7 +259,6 @@ fn test_concurrent_access() {
         return;
     }
 
-    use rusqlite::OpenFlags;
     use std::sync::Arc;
 
     // Create a temporary database file
