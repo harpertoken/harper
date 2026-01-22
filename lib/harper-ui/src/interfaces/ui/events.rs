@@ -221,7 +221,21 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
         }
         AppState::Tools(selected) => {
             match *selected {
-                0 => app.set_info_message("File Operations not implemented yet".to_string()),
+                0 => {
+                    // File Operations - show current directory files
+                    match std::fs::read_dir(".") {
+                        Ok(entries) => {
+                            let files: Result<Vec<String>, _> = entries
+                                .map(|e| e.map(|entry| entry.file_name().to_string_lossy().to_string()))
+                                .collect();
+                            match files {
+                                Ok(file_list) => app.set_info_message(format!("Files in current directory:\n{}", file_list.join("\n"))),
+                                Err(e) => app.set_error_message(format!("File error: {}", e)),
+                            }
+                        },
+                        Err(e) => app.set_error_message(format!("File error: {}", e)),
+                    }
+                },
                 1 => {
                     // Git Commands - show actual git status
                     match harper_core::tools::git::git_status() {
@@ -229,10 +243,20 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         Err(e) => app.set_error_message(format!("Git error: {}", e)),
                     }
                 },
-                2 => app.set_info_message("Web search: Toggle with Ctrl+W in chat".to_string()),
-                3 => app.set_info_message(
-                    "Shell commands: Use AI chat to request shell operations".to_string(),
-                ),
+                2 => {
+                    // Web Search - show search capability info
+                    app.set_info_message("Web Search: Press Ctrl+W in chat mode to toggle web search.\nOr use AI chat with search queries.".to_string());
+                },
+                3 => {
+                    // Shell Commands - show current directory listing
+                    match std::process::Command::new("ls").arg("-la").output() {
+                        Ok(output) => {
+                            let result = String::from_utf8_lossy(&output.stdout);
+                            app.set_info_message(format!("Directory listing:\n{}", result));
+                        },
+                        Err(e) => app.set_error_message(format!("Shell error: {}", e)),
+                    }
+                },
                 4 => app.state = AppState::Menu(0), // Back to Menu
                 _ => {}
             }
