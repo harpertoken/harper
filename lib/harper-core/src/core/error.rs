@@ -60,13 +60,14 @@ impl std::error::Error for HarperError {}
 
 impl HarperError {
     /// Get formatted error message for display
+    #[deprecated(note = "Please use `to_string()` instead")]
     pub fn display_message(&self) -> String {
         self.to_string()
     }
 
     /// Get colored error message for CLI
     pub fn cli_message(&self) -> colored::ColoredString {
-        self.display_message().red()
+        self.to_string().red()
     }
 }
 
