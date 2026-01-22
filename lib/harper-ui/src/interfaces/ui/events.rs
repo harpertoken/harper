@@ -254,10 +254,33 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 }
                 3 => {
                     // Shell Commands - show current directory listing
-                    match std::process::Command::new("ls").arg("-la").output() {
+                    let command_output = {
+                        #[cfg(unix)]
+                        {
+                            std::process::Command::new("ls").arg("-la").output()
+                        }
+                        #[cfg(windows)]
+                        {
+                            std::process::Command::new("cmd").args(["/C", "dir"]).output()
+                        }
+                        #[cfg(not(any(unix, windows)))]
+                        {
+                            Err(std::io::Error::new(
+                                std::io::ErrorKind::Unsupported,
+                                "Shell command tool not supported on this OS.",
+                            ))
+                        }
+                    };
+
+                    match command_output {
                         Ok(output) => {
-                            let result = String::from_utf8_lossy(&output.stdout);
-                            app.set_info_message(format!("Directory listing:\n{}", result));
+                            if output.status.success() {
+                                let result = String::from_utf8_lossy(&output.stdout);
+                                app.set_info_message(format!("Directory listing:\n{}", result));
+                            } else {
+                                let error = String::from_utf8_lossy(&output.stderr);
+                                app.set_error_message(format!("Shell error:\n{}", error));
+                            }
                         }
                         Err(e) => app.set_error_message(format!("Shell error: {}", e)),
                     }
