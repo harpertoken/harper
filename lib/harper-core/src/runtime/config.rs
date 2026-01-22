@@ -117,6 +117,26 @@ impl HarperConfig {
     ) -> HarperResult<()> {
         let mut temp_builder = std::mem::take(builder);
 
+        // Check for multiple API keys and prevent conflicts
+        let mut found_keys = Vec::new();
+        
+        if env::var("OPENAI_API_KEY").is_ok_and(|k| !k.trim().is_empty()) {
+            found_keys.push("OPENAI_API_KEY");
+        }
+        if env::var("SAMBASTUDIO_API_KEY").is_ok_and(|k| !k.trim().is_empty()) {
+            found_keys.push("SAMBASTUDIO_API_KEY");
+        }
+        if env::var("GEMINI_API_KEY").is_ok_and(|k| !k.trim().is_empty()) {
+            found_keys.push("GEMINI_API_KEY");
+        }
+
+        if found_keys.len() > 1 {
+            return Err(HarperError::Config(format!(
+                "Multiple API keys found: {}. Please set only one API key at a time.",
+                found_keys.join(", ")
+            )));
+        }
+
         // Map OPENAI_API_KEY to api settings
         if let Ok(key) = env::var("OPENAI_API_KEY") {
             if !key.trim().is_empty() {
