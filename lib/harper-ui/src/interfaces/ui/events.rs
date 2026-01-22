@@ -261,7 +261,9 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         }
                         #[cfg(windows)]
                         {
-                            std::process::Command::new("cmd").args(["/C", "dir"]).output()
+                            std::process::Command::new("cmd")
+                                .args(["/C", "dir"])
+                                .output()
                         }
                         #[cfg(not(any(unix, windows)))]
                         {
