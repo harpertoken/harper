@@ -227,8 +227,9 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         std::fs::read_dir(".").and_then(|entries| {
                             entries
                                 .map(|entry_result| {
-                                    entry_result
-                                        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                                    entry_result.map(|entry| {
+                                        entry.file_name().to_string_lossy().into_owned()
+                                    })
                                 })
                                 .collect()
                         });
