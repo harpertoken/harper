@@ -14,6 +14,7 @@
 
 use arboard::{Clipboard, ImageData};
 use crossterm::event::{Event, KeyCode, KeyModifiers};
+use harper_core;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -221,9 +222,13 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
         AppState::Tools(selected) => {
             match *selected {
                 0 => app.set_info_message("File Operations not implemented yet".to_string()),
-                1 => app.set_info_message(
-                    "Git commands: Use AI chat to request git operations".to_string(),
-                ),
+                1 => {
+                    // Git Commands - show actual git status
+                    match harper_core::tools::git::git_status() {
+                        Ok(status) => app.set_info_message(format!("Git Status:\n{}", status)),
+                        Err(e) => app.set_error_message(format!("Git error: {}", e)),
+                    }
+                },
                 2 => app.set_info_message("Web search: Toggle with Ctrl+W in chat".to_string()),
                 3 => app.set_info_message(
                     "Shell commands: Use AI chat to request shell operations".to_string(),
