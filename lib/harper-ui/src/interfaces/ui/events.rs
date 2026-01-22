@@ -223,21 +223,21 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             match *selected {
                 0 => {
                     // File Operations - show current directory files
-                    match std::fs::read_dir(".") {
-                        Ok(entries) => {
-                            let files: Result<Vec<String>, _> = entries
-                                .map(|e| {
-                                    e.map(|entry| entry.file_name().to_string_lossy().to_string())
+                    let result: std::io::Result<Vec<String>> =
+                        std::fs::read_dir(".").and_then(|entries| {
+                            entries
+                                .map(|entry_result| {
+                                    entry_result
+                                        .map(|entry| entry.file_name().to_string_lossy().into_owned())
                                 })
-                                .collect();
-                            match files {
-                                Ok(file_list) => app.set_info_message(format!(
-                                    "Files in current directory:\n{}",
-                                    file_list.join("\n")
-                                )),
-                                Err(e) => app.set_error_message(format!("File error: {}", e)),
-                            }
-                        }
+                                .collect()
+                        });
+
+                    match result {
+                        Ok(file_list) => app.set_info_message(format!(
+                            "Files in current directory:\n{}",
+                            file_list.join("\n")
+                        )),
                         Err(e) => app.set_error_message(format!("File error: {}", e)),
                     }
                 }
