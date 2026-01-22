@@ -118,17 +118,11 @@ impl HarperConfig {
         let mut temp_builder = std::mem::take(builder);
 
         // Check for multiple API keys and prevent conflicts
-        let mut found_keys = Vec::new();
-
-        if env::var("OPENAI_API_KEY").is_ok_and(|k| !k.trim().is_empty()) {
-            found_keys.push("OPENAI_API_KEY");
-        }
-        if env::var("SAMBASTUDIO_API_KEY").is_ok_and(|k| !k.trim().is_empty()) {
-            found_keys.push("SAMBASTUDIO_API_KEY");
-        }
-        if env::var("GEMINI_API_KEY").is_ok_and(|k| !k.trim().is_empty()) {
-            found_keys.push("GEMINI_API_KEY");
-        }
+        let api_key_vars = ["OPENAI_API_KEY", "SAMBASTUDIO_API_KEY", "GEMINI_API_KEY"];
+        let found_keys: Vec<_> = api_key_vars
+            .into_iter()
+            .filter(|key_name| env::var(key_name).is_ok_and(|k| !k.trim().is_empty()))
+            .collect();
 
         if found_keys.len() > 1 {
             return Err(HarperError::Config(format!(
