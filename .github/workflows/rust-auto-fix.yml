@@ -35,12 +35,11 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: |
-              🦀 **Rust Auto-Fix Bot**
+            body: `🦀 **Rust Auto-Fix Bot**
 
-              I'll apply: `${{ steps.check.outputs.fixes }}`
+          I'll apply: \`${{ steps.check.outputs.fixes }}\`
 
-              Reply with `/confirm` to proceed or `/cancel` to abort.
+          Reply with \`/confirm\` to proceed or \`/cancel\` to abort.`
           })
 
   rust-auto-fix-execute:
