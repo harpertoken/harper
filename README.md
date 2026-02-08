@@ -107,16 +107,16 @@ Harper: git checkout -b feature/my-new-feature
 Harper uses TOML configuration. Key settings in `config/default.toml`:
 
 ```toml
-[ai]
-provider = "openai"  # openai | sambanova | gemini
-model = "gpt-4"
+[api]
+provider = "OpenAI"  # OpenAI | Sambanova | Gemini
+model_name = "gpt-4-turbo"
 
-[security]
+[exec_policy]
 require_approval = true   # Prompt before running commands
 reject_metachars = true   # Block shell injection patterns
 
 [ui]
-theme = "dark"  # dark | light
+theme = "default"  # default | dark | light
 ```
 
 Environment variables (recommended for API keys):
