@@ -79,7 +79,9 @@ docker run --rm -it \
 Start Harper with:
 
 ```bash
-./bin/harper
+cargo run --release --bin harper
+# or
+./target/release/harper
 ```
 
 ### Quick Start
