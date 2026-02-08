@@ -123,7 +123,7 @@ Environment variables (recommended for API keys):
 
 ```bash
 export OPENAI_API_KEY="sk-..."
-export SAMBANOVA_API_KEY="..."
+export SAMBASTUDIO_API_KEY="..."
 export GEMINI_API_KEY="..."
 ```
 
