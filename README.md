@@ -209,7 +209,7 @@ OpenAI (GPT-4, GPT-3.5), Sambanova, and Gemini are currently supported.
 Yes. Configure any OpenAI-compatible API endpoint in `config/default.toml`.
 
 ### How does session storage work?
-Sessions are stored in `data/` as SQLite databases. Set `HARPER_SESSION_DIR` to customize.
+Sessions are stored in `.harper/sessions.db`. Set `DATABASE_PATH` to customize location.
 
 ### Is my data sent to third parties?
 Only to your configured AI provider. Harper does not collect or share data.
