@@ -272,6 +272,8 @@ fn log_operation(op: &OperationLog) {
 }
 ```
 
+Harper now persists shell executions to a `command_logs` table (session ID, command text, approval state, exit code, runtime, and stdout/stderr previews), ensuring every approved or rejected command is audit-able alongside the chat transcript. Operators can review the last `n` entries interactively via `/audit` (defaults to 10, e.g., `/audit 25 failed approved`) and see a summary in the session viewer/export flow.
+
 ### Session Tracking
 ```rust
 struct AgentSession {

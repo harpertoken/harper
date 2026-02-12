@@ -53,6 +53,8 @@ create a new feature branch
 Harper shows the command.
 You decide if it runs.
 
+Need to review what ran? Type `/audit` (or `/audit 25 failed approved`) any time to print the latest shell commands filtered by limit/status/approval, with exit codes and runtimes tied to the current session.
+
 ---
 
 ## Providers

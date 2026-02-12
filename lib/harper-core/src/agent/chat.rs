@@ -20,7 +20,9 @@ use crate::agent::prompt::PromptBuilder;
 use crate::core::cache::{ApiCacheKey, ApiResponseCache};
 use crate::core::error::HarperError;
 use crate::core::{ApiConfig, Message};
+use crate::memory::storage::CommandLogEntry;
 use crate::runtime::config::ExecPolicyConfig;
+use crate::tools::shell::CommandAuditContext;
 use crate::tools::ToolService;
 
 use colored::Colorize;
@@ -43,8 +45,23 @@ use turul_mcp_client::{McpClient, ResourceContent};
 enum CommandAction {
     Clear,
     Exit,
+    Audit(AuditParams),
     Custom(String),
     Unknown(String),
+}
+
+#[derive(Debug, Clone, Default)]
+struct AuditParams {
+    limit: Option<usize>,
+    status: Option<String>,
+    approval: Option<AuditApprovalFilter>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AuditApprovalFilter {
+    Approved,
+    Rejected,
+    Auto,
 }
 
 struct FileCompleter;
@@ -162,6 +179,8 @@ pub struct ChatService<'a> {
 
 #[allow(dead_code)]
 impl<'a> ChatService<'a> {
+    const AUDIT_LOG_LIMIT: usize = 10;
+
     /// Create a new chat service
     pub fn new(
         conn: &'a Connection,
@@ -240,9 +259,14 @@ impl<'a> ChatService<'a> {
                         history.clear();
                         "Chat history cleared.".to_string()
                     }
+                    CommandAction::Audit(params) => {
+                        self.format_command_audit(session_id, &params)?
+                    }
                     CommandAction::Custom(desc) => {
                         self.add_user_message(history, session_id, &desc)?;
-                        let response = self.process_message(history, web_search_enabled).await?;
+                        let response = self
+                            .process_message(history, web_search_enabled, session_id)
+                            .await?;
                         self.add_assistant_message(history, session_id, &response)?;
                         self.trim_history(history);
                         return Ok(());
@@ -263,7 +287,9 @@ impl<'a> ChatService<'a> {
 
         // Normal message processing
         self.add_user_message(history, session_id, &processed_msg)?;
-        let response = self.process_message(history, web_search_enabled).await?;
+        let response = self
+            .process_message(history, web_search_enabled, session_id)
+            .await?;
         self.add_assistant_message(history, session_id, &response)?;
         self.trim_history(history);
         Ok(())
@@ -399,6 +425,7 @@ impl<'a> ChatService<'a> {
         help_text.push_str("  /help - Show this help\n");
         help_text.push_str("  /exit - Exit the session\n");
         help_text.push_str("  /clear - Clear chat history\n");
+        help_text.push_str("  /audit [limit] - Show recent command executions\n");
         help_text.push_str("  !command - Execute shell command directly\n");
         help_text.push_str("  @file - Reference and read files (with Tab completion)\n");
         for (cmd, desc) in &self.custom_commands {
@@ -408,9 +435,33 @@ impl<'a> ChatService<'a> {
     }
 
     fn handle_command(&self, command: &str) -> CommandAction {
-        match command {
+        let trimmed = command.trim();
+        if trimmed.is_empty() {
+            return CommandAction::Unknown("No command provided.".to_string());
+        }
+
+        let mut split_idx = None;
+        for (idx, ch) in trimmed.char_indices() {
+            if ch.is_whitespace() {
+                split_idx = Some(idx);
+                break;
+            }
+        }
+
+        let (name, args) = if let Some(idx) = split_idx {
+            let (left, right) = trimmed.split_at(idx);
+            (left, Some(right.trim()))
+        } else {
+            (trimmed, None)
+        };
+
+        match name {
             "exit" => CommandAction::Exit,
             "clear" => CommandAction::Clear,
+            "audit" => match parse_audit_params(args) {
+                Ok(params) => CommandAction::Audit(params),
+                Err(err) => CommandAction::Unknown(err),
+            },
             cmd => {
                 if let Some(desc) = self.custom_commands.get(cmd) {
                     CommandAction::Custom(desc.clone())
@@ -472,10 +523,16 @@ impl<'a> ChatService<'a> {
 
             // Handle direct shell commands
             if let Some(command) = user_input.strip_prefix('!') {
+                let audit_ctx = CommandAuditContext {
+                    conn: self.conn,
+                    session_id: Some(session_id),
+                    source: "user_shell",
+                };
                 match crate::tools::shell::execute_command(
                     &format!("[RUN_COMMAND {}]", command),
                     self.config,
                     &self.exec_policy,
+                    Some(&audit_ctx),
                 ) {
                     Ok(result) => println!("{} {}", "Shell:".bold().cyan(), result.cyan()),
                     Err(e) => println!("{} {}", "Error:".bold().red(), e),
@@ -505,11 +562,18 @@ impl<'a> ChatService<'a> {
                             println!("{}", "Chat history cleared.".bold().green());
                             continue;
                         }
+                        CommandAction::Audit(params) => {
+                            let report = self.format_command_audit(session_id, &params)?;
+                            for line in report.lines() {
+                                println!("{}", line);
+                            }
+                            continue;
+                        }
                         CommandAction::Custom(desc) => {
                             println!("Custom command: {}", desc);
                             self.add_user_message(history, session_id, &desc)?;
                             let response = self
-                                .process_message(history, web_search_enabled)
+                                .process_message(history, web_search_enabled, session_id)
                                 .await
                                 .map_err(|e| {
                                     HarperError::Api(format!(
@@ -532,7 +596,7 @@ impl<'a> ChatService<'a> {
 
             self.add_user_message(history, session_id, &user_input)?;
             let response = self
-                .process_message(history, web_search_enabled)
+                .process_message(history, web_search_enabled, session_id)
                 .await
                 .map_err(|e| {
                     HarperError::Api(format!(
@@ -578,6 +642,7 @@ impl<'a> ChatService<'a> {
         &mut self,
         history: &mut Vec<Message>,
         web_search_enabled: bool,
+        session_id: &str,
     ) -> Result<String, HarperError> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(90))
@@ -588,8 +653,13 @@ impl<'a> ChatService<'a> {
             .trim()
             .trim_matches(|c| c == '\'' || c == '\"' || c == '`');
 
-        let mut tool_service =
-            ToolService::new(self.conn, self.config, &self.exec_policy, self.mcp_client);
+        let mut tool_service = ToolService::new(
+            self.conn,
+            self.config,
+            &self.exec_policy,
+            self.mcp_client,
+            Some(session_id),
+        );
         let tool_option = tool_service
             .handle_tool_use(
                 &client,
@@ -608,6 +678,96 @@ impl<'a> ChatService<'a> {
         }
 
         Ok(response)
+    }
+
+    fn format_command_audit(
+        &self,
+        session_id: &str,
+        params: &AuditParams,
+    ) -> Result<String, HarperError> {
+        let requested_limit = params.limit.unwrap_or(Self::AUDIT_LOG_LIMIT);
+        let limit = requested_limit.clamp(1, 100);
+        let fetch_limit = std::cmp::max(limit * 3, limit).min(300);
+
+        let entries = self.fetch_command_logs(session_id, fetch_limit)?;
+
+        let filtered: Vec<_> = entries
+            .into_iter()
+            .filter(|entry| params.matches(entry))
+            .take(limit)
+            .collect();
+
+        let mut lines = Vec::new();
+        let mut filters = Vec::new();
+        if let Some(status) = &params.status {
+            filters.push(format!("status={}", status));
+        }
+        if let Some(appr) = params.approval {
+            filters.push(format!(
+                "approval={}",
+                match appr {
+                    AuditApprovalFilter::Approved => "approved",
+                    AuditApprovalFilter::Rejected => "rejected",
+                    AuditApprovalFilter::Auto => "auto",
+                }
+            ));
+        }
+        if !filters.is_empty() {
+            lines.push(format!(
+                "Recent command executions (showing up to {}, filters: {})",
+                limit,
+                filters.join(", ")
+            ));
+        } else {
+            lines.push(format!(
+                "Recent command executions (showing up to {}):",
+                limit
+            ));
+        }
+
+        if filtered.is_empty() {
+            lines.push("No commands have been executed yet.".to_string());
+            return Ok(lines.join("\n"));
+        }
+
+        for (idx, entry) in filtered.iter().enumerate() {
+            let approval_state = if entry.requires_approval {
+                if entry.approved {
+                    "approved"
+                } else {
+                    "rejected"
+                }
+            } else {
+                "auto"
+            };
+            let exit = entry
+                .exit_code
+                .map(|code| format!("exit {}", code))
+                .unwrap_or_else(|| "no exit code".to_string());
+            let duration = entry
+                .duration_ms
+                .map(|ms| format!("{} ms", ms))
+                .unwrap_or_else(|| "-".to_string());
+            lines.push(format!(
+                "{:>2}. {} [{} | {} | {}]\n    {}",
+                idx + 1,
+                entry.status,
+                approval_state,
+                exit,
+                duration,
+                entry.command
+            ));
+        }
+
+        Ok(lines.join("\n"))
+    }
+
+    fn fetch_command_logs(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> Result<Vec<CommandLogEntry>, HarperError> {
+        crate::memory::storage::load_command_logs_for_session(self.conn, session_id, limit)
     }
 
     /// Call LLM
@@ -779,5 +939,171 @@ impl<'a> ChatService<'a> {
         }
 
         Ok(context)
+    }
+}
+
+fn parse_audit_params(args: Option<&str>) -> Result<AuditParams, String> {
+    let mut params = AuditParams::default();
+
+    let Some(arg_text) = args.filter(|a| !a.is_empty()) else {
+        return Ok(params);
+    };
+
+    for token in arg_text.split_whitespace() {
+        if token.chars().all(|c| c.is_ascii_digit()) {
+            if params.limit.is_some() {
+                return Err("Audit limit specified multiple times.".to_string());
+            }
+            let parsed = token
+                .parse::<usize>()
+                .map_err(|_| format!("Invalid limit '{}'. Use a positive integer.", token))?;
+            if parsed == 0 {
+                return Err("Audit limit must be greater than zero.".to_string());
+            }
+            params.limit = Some(parsed);
+            continue;
+        }
+
+        if let Some(value) = token.strip_prefix("status=") {
+            if params.status.is_some() {
+                return Err("Status filter specified multiple times.".to_string());
+            }
+            if value.is_empty() {
+                return Err("Status filter cannot be empty.".to_string());
+            }
+            params.status = Some(value.to_lowercase());
+            continue;
+        }
+
+        if let Some(value) = token.strip_prefix("approval=") {
+            if params.approval.is_some() {
+                return Err("Approval filter specified multiple times.".to_string());
+            }
+            params.approval = Some(match value.to_lowercase().as_str() {
+                "approved" => AuditApprovalFilter::Approved,
+                "rejected" => AuditApprovalFilter::Rejected,
+                "auto" => AuditApprovalFilter::Auto,
+                _ => {
+                    return Err(
+                        "Approval filter must be one of: approved, rejected, auto.".to_string()
+                    )
+                }
+            });
+            continue;
+        }
+
+        let lower = token.to_lowercase();
+        if matches!(
+            lower.as_str(),
+            "failed" | "succeeded" | "error" | "cancelled" | "blocked"
+        ) {
+            if params.status.is_some() {
+                return Err("Status filter specified multiple times.".to_string());
+            }
+            params.status = Some(lower);
+            continue;
+        }
+
+        if matches!(lower.as_str(), "approved" | "rejected" | "auto") {
+            if params.approval.is_some() {
+                return Err("Approval filter specified multiple times.".to_string());
+            }
+            params.approval = Some(match lower.as_str() {
+                "approved" => AuditApprovalFilter::Approved,
+                "rejected" => AuditApprovalFilter::Rejected,
+                "auto" => AuditApprovalFilter::Auto,
+                _ => unreachable!(),
+            });
+            continue;
+        }
+
+        return Err(format!(
+            "Unknown audit argument '{}'. Use /audit [limit] [status=...] [approval=approved|rejected|auto].",
+            token
+        ));
+    }
+
+    Ok(params)
+}
+
+impl AuditParams {
+    fn matches(&self, entry: &CommandLogEntry) -> bool {
+        let status_match = self
+            .status
+            .as_ref()
+            .map(|s| entry.status.eq_ignore_ascii_case(s))
+            .unwrap_or(true);
+
+        let approval_match = match self.approval {
+            Some(AuditApprovalFilter::Approved) => entry.requires_approval && entry.approved,
+            Some(AuditApprovalFilter::Rejected) => entry.requires_approval && !entry.approved,
+            Some(AuditApprovalFilter::Auto) => !entry.requires_approval,
+            None => true,
+        };
+
+        status_match && approval_match
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_audit_no_args() {
+        let params = parse_audit_params(None).expect("parse");
+        assert!(params.limit.is_none());
+        assert!(params.status.is_none());
+    }
+
+    #[test]
+    fn parse_audit_with_limit_and_filters() {
+        let params = parse_audit_params(Some("25 status=failed approval=rejected")).expect("parse");
+        assert_eq!(params.limit, Some(25));
+        assert_eq!(params.status.as_deref(), Some("failed"));
+        assert_eq!(params.approval, Some(AuditApprovalFilter::Rejected));
+    }
+
+    #[test]
+    fn parse_audit_errors_on_unknown_token() {
+        let err = parse_audit_params(Some("foo=bar")).expect_err("should fail");
+        assert!(err.contains("Unknown audit argument"));
+    }
+
+    #[test]
+    fn audit_params_matches_filters() {
+        let mut entry = CommandLogEntry {
+            command: "echo hi".to_string(),
+            source: "test".to_string(),
+            requires_approval: true,
+            approved: true,
+            status: "succeeded".to_string(),
+            exit_code: Some(0),
+            duration_ms: Some(10),
+            created_at: "2026-02-12".to_string(),
+        };
+
+        let params = AuditParams {
+            limit: Some(5),
+            status: Some("succeeded".to_string()),
+            approval: Some(AuditApprovalFilter::Approved),
+        };
+        assert!(params.matches(&entry));
+
+        entry.status = "failed".to_string();
+        assert!(!params.matches(&entry));
+    }
+
+    #[test]
+    fn parse_audit_shorthand_tokens() {
+        let params = parse_audit_params(Some("failed approved")).expect("parse");
+        assert_eq!(params.status.as_deref(), Some("failed"));
+        assert_eq!(params.approval, Some(AuditApprovalFilter::Approved));
+    }
+
+    #[test]
+    fn parse_audit_duplicate_status_errors() {
+        let err = parse_audit_params(Some("status=failed succeeded")).expect_err("should fail");
+        assert!(err.contains("Status filter specified multiple times"));
     }
 }
