@@ -1,6 +1,6 @@
 {
   "name": "Harper Development",
-  "image": "mcr.microsoft.com/devcontainers/rust:1-1.85-bullseye",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/git:1": {}

@@ -13,8 +13,10 @@ jobs:
     steps:
     - name: Check what fixes are requested
       id: check
+      env:
+        COMMENT_BODY: ${{ github.event.comment.body }}
       run: |
-        comment="${{ github.event.comment.body }}"
+        comment="$COMMENT_BODY"
         fixes=""
         if [[ "$comment" == *"/rust-fix fmt"* ]]; then
           fixes="cargo fmt"
@@ -25,7 +27,7 @@ jobs:
         if [[ "$comment" == *"/rust-fix all"* ]]; then
           fixes="cargo fmt + clippy --fix"
         fi
-        echo "fixes=$fixes" >> $GITHUB_OUTPUT
+        echo "fixes=$fixes" >> "$GITHUB_OUTPUT"
 
     - name: Comment confirmation
       uses: actions/github-script@v7
@@ -58,8 +60,8 @@ jobs:
       id: pr
       run: |
         pr_number=${{ github.event.issue.number }}
-        gh pr checkout $pr_number
-        echo "branch=$(git branch --show-current)" >> $GITHUB_OUTPUT
+        gh pr checkout "$pr_number"
+        echo "branch=$(git branch --show-current)" >> "$GITHUB_OUTPUT"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

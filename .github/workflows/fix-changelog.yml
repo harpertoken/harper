@@ -29,9 +29,9 @@ jobs:
         id: check
         run: |
           if git diff --quiet; then
-            echo "no_changes=true" >> $GITHUB_OUTPUT
+            echo "no_changes=true" >> "$GITHUB_OUTPUT"
           else
-            echo "no_changes=false" >> $GITHUB_OUTPUT
+            echo "no_changes=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Commit and push changes
