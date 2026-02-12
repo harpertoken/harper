@@ -19,7 +19,9 @@
 
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::io_traits::{Input, Output};
-use crate::memory::storage::load_history;
+use crate::memory::storage::{
+    load_command_logs_for_session, load_history, load_latest_command_log,
+};
 use chrono::Local;
 use colored::*;
 use rusqlite::Connection;
@@ -42,6 +44,8 @@ pub struct SessionService<'a> {
 }
 
 impl<'a> SessionService<'a> {
+    const AUDIT_SUMMARY_LIMIT: usize = 5;
+    const AUDIT_EXPORT_LIMIT: usize = 10;
     /// Create a new session service
     pub fn new(conn: &'a Connection) -> Self {
         Self::with_io(
@@ -83,12 +87,46 @@ impl<'a> SessionService<'a> {
     pub fn list_sessions(&self) -> HarperResult<()> {
         let sessions = self.list_sessions_data()?;
         self.output.println(&"Previous Sessions:".bold().yellow())?;
+        if sessions.is_empty() {
+            self.output
+                .println("No previous sessions found. Start a chat to create one.")?;
+            return Ok(());
+        }
+
         for (i, session) in sessions.iter().enumerate() {
+            let summary_text = match load_latest_command_log(self.conn, &session.id) {
+                Ok(Some(entry)) => {
+                    let approval_state = if entry.requires_approval {
+                        if entry.approved {
+                            "approved"
+                        } else {
+                            "rejected"
+                        }
+                    } else {
+                        "auto"
+                    };
+                    let exit = entry
+                        .exit_code
+                        .map(|code| format!("exit {}", code))
+                        .unwrap_or_else(|| "no exit".to_string());
+                    format!("cmd: {} [{} | {}]", entry.status, approval_state, exit)
+                }
+                Ok(None) => "cmd: none".to_string(),
+                Err(err) => {
+                    eprintln!(
+                        "Warning: failed to load audit summary for {}: {}",
+                        session.id, err
+                    );
+                    "cmd: ?".to_string()
+                }
+            };
+
             self.output.println(&format!(
-                "{}: {} ({})",
+                "{}: {} ({}) - {}",
                 i + 1,
                 session.id,
-                session.created_at
+                session.created_at,
+                summary_text
             ))?;
         }
         Ok(())
@@ -139,6 +177,8 @@ impl<'a> SessionService<'a> {
                 "Note:".bold().cyan()
             ))?;
         }
+
+        self.print_audit_summary(&session_id, Self::AUDIT_SUMMARY_LIMIT)?;
 
         Ok(())
     }
@@ -191,6 +231,7 @@ impl<'a> SessionService<'a> {
                     msg.content.replace('\n', "\n  ")
                 )?;
             }
+            self.write_audit_section(&mut file, &session_id)?;
         }
 
         self.output.println(&format!(
@@ -225,7 +266,95 @@ impl<'a> SessionService<'a> {
                 msg.content.replace('\n', "\n  ")
             )?;
         }
+        self.write_audit_section(&mut file, session_id)?;
 
         Ok(output_path)
+    }
+
+    fn print_audit_summary(&self, session_id: &str, limit: usize) -> HarperResult<()> {
+        let entries = load_command_logs_for_session(self.conn, session_id, limit)?;
+        self.output.println(&format!(
+            "
+{} (last {} commands)",
+            "Command Audit Summary:".bold().yellow(),
+            limit
+        ))?;
+
+        if entries.is_empty() {
+            self.output
+                .println("No commands have been recorded for this session.")?;
+            return Ok(());
+        }
+
+        for entry in entries {
+            let approval_state = if entry.requires_approval {
+                if entry.approved {
+                    "approved"
+                } else {
+                    "rejected"
+                }
+            } else {
+                "auto"
+            };
+            let exit = entry
+                .exit_code
+                .map(|code| format!("exit {}", code))
+                .unwrap_or_else(|| "no exit code".to_string());
+            let duration = entry
+                .duration_ms
+                .map(|ms| format!("{} ms", ms))
+                .unwrap_or_else(|| "-".to_string());
+            self.output.println(&format!(
+                "- {} [{} | {} | {}]",
+                entry.command, entry.status, approval_state, exit
+            ))?;
+            self.output.println(&format!("  Duration: {}", duration))?;
+        }
+        Ok(())
+    }
+
+    fn write_audit_section(&self, file: &mut File, session_id: &str) -> HarperResult<()> {
+        let entries =
+            load_command_logs_for_session(self.conn, session_id, Self::AUDIT_EXPORT_LIMIT)?;
+        writeln!(
+            file,
+            "\n---\nCommand Audit (last {} commands):",
+            Self::AUDIT_EXPORT_LIMIT
+        )?;
+        if entries.is_empty() {
+            writeln!(file, "No commands were recorded for this session.")?;
+            return Ok(());
+        }
+
+        for entry in entries {
+            let approval_state = if entry.requires_approval {
+                if entry.approved {
+                    "approved"
+                } else {
+                    "rejected"
+                }
+            } else {
+                "auto"
+            };
+            let exit = entry
+                .exit_code
+                .map(|code| format!("exit {}", code))
+                .unwrap_or_else(|| "no exit code".to_string());
+            let duration = entry
+                .duration_ms
+                .map(|ms| format!("{} ms", ms))
+                .unwrap_or_else(|| "-".to_string());
+            writeln!(
+                file,
+                "[{}] {} [{} | {} | {}] {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                entry.command,
+                entry.status,
+                approval_state,
+                exit,
+                duration
+            )?;
+        }
+        Ok(())
     }
 }
