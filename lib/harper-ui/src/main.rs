@@ -25,6 +25,8 @@ use turul_mcp_client::McpClient;
 #[allow(unused_imports)]
 use harper_core::runtime::config::{ExecPolicyConfig, HarperConfig};
 
+mod auth;
+
 fn exit_on_error<T, E: std::fmt::Display>(result: Result<T, E>, message: &str) -> T {
     result.unwrap_or_else(|e| {
         eprintln!("{}: {}", message, e);
@@ -60,6 +62,11 @@ fn get_api_key(config: &HarperConfig) -> String {
             api_key = env_key;
         }
     }
+    if api_key == config.api.api_key && auth::is_placeholder_key(&api_key) {
+        if let Some(keyring_key) = auth::load_keyring_key(&config.api.provider) {
+            api_key = keyring_key;
+        }
+    }
     api_key
 }
 
@@ -72,6 +79,9 @@ async fn main() -> Result<(), HarperError> {
     let args: Vec<String> = env::args().collect();
     if args.len() > 1 && (args[1] == "--version" || args[1] == "-v") {
         print_version();
+    }
+    if let Some(exit_code) = auth::handle_auth_command(&args) {
+        std::process::exit(exit_code);
     }
     let config = exit_on_error(HarperConfig::new(), "Failed to load configuration");
 

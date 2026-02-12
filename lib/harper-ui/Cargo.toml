@@ -17,6 +17,7 @@ arboard = "3.4.0"
 colored = "3.0.0"
 crossterm = "0.28.1"
 dotenvy = "0.15"
+keyring = "2.3"
 ratatui = "0.30"
 syntect = { version = "5.3", features = ["parsing", "html"] }
 image = "0.25.6"
