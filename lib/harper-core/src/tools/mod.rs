@@ -35,6 +35,7 @@ use crate::core::constants::tools;
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::{ApiConfig, Message};
 use crate::runtime::config::ExecPolicyConfig;
+use crate::tools::shell::CommandAuditContext;
 use reqwest::Client;
 use rusqlite::Connection;
 use turul_mcp_client::{ContentBlock, McpClient};
@@ -53,6 +54,7 @@ pub struct ToolService<'a> {
     config: &'a ApiConfig,
     exec_policy: &'a ExecPolicyConfig,
     mcp_client: Option<&'a turul_mcp_client::McpClient>,
+    session_id: Option<&'a str>,
 }
 
 impl<'a> ToolService<'a> {
@@ -62,12 +64,14 @@ impl<'a> ToolService<'a> {
         config: &'a ApiConfig,
         exec_policy: &'a ExecPolicyConfig,
         mcp_client: Option<&'a McpClient>,
+        session_id: Option<&'a str>,
     ) -> Self {
         Self {
             conn,
             config,
             exec_policy,
             mcp_client,
+            session_id,
         }
     }
 
@@ -97,7 +101,13 @@ impl<'a> ToolService<'a> {
 
         // Fallback to old bracket format
         if response.to_uppercase().starts_with(tools::RUN_COMMAND) {
-            let command_result = shell::execute_command(response, self.config, self.exec_policy)?;
+            let audit_ctx = CommandAuditContext {
+                conn: self.conn,
+                session_id: self.session_id,
+                source: "tool_run_command",
+            };
+            let command_result =
+                shell::execute_command(response, self.config, self.exec_policy, Some(&audit_ctx))?;
             let final_response = self
                 .call_llm_after_tool(client, history, &command_result)
                 .await?;
@@ -208,8 +218,17 @@ impl<'a> ToolService<'a> {
                 .and_then(|v| v.as_str());
                 if let Some(command) = command {
                     let bracket_command = format!("[RUN_COMMAND {}]", command);
-                    let command_result =
-                        shell::execute_command(&bracket_command, self.config, self.exec_policy)?;
+                    let audit_ctx = CommandAuditContext {
+                        conn: self.conn,
+                        session_id: self.session_id,
+                        source: "tool_run_command",
+                    };
+                    let command_result = shell::execute_command(
+                        &bracket_command,
+                        self.config,
+                        self.exec_policy,
+                        Some(&audit_ctx),
+                    )?;
                     let final_response = self
                         .call_llm_after_tool(client, history, &command_result)
                         .await?;

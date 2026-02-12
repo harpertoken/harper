@@ -61,6 +61,28 @@ pub fn init_db(conn: &Connection) -> HarperResult<()> {
          )",
         [],
     )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS command_logs (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             session_id TEXT,
+             command TEXT NOT NULL,
+             source TEXT NOT NULL,
+             requires_approval INTEGER NOT NULL,
+             approved INTEGER NOT NULL,
+             status TEXT NOT NULL,
+             exit_code INTEGER,
+             duration_ms INTEGER,
+             stdout_preview TEXT,
+             stderr_preview TEXT,
+             error_message TEXT,
+             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+         )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_command_logs_session_id ON command_logs(session_id)",
+        [],
+    )?;
     Ok(())
 }
 
@@ -255,4 +277,179 @@ pub fn delete_todo(conn: &Connection, id: i64) -> HarperResult<()> {
 pub fn clear_todos(conn: &Connection) -> HarperResult<usize> {
     let count = conn.execute("DELETE FROM todos", [])?;
     Ok(count)
+}
+
+/// Persisted record of a command execution attempt
+#[derive(Debug, Clone)]
+pub struct CommandLogRecord {
+    pub session_id: Option<String>,
+    pub command: String,
+    pub source: String,
+    pub requires_approval: bool,
+    pub approved: bool,
+    pub status: String,
+    pub exit_code: Option<i32>,
+    pub duration_ms: Option<i64>,
+    pub stdout_preview: Option<String>,
+    pub stderr_preview: Option<String>,
+    pub error_message: Option<String>,
+}
+
+impl CommandLogRecord {
+    #[allow(clippy::too_many_arguments)]
+    /// Helper constructor for building log entries from borrowed data
+    pub fn new(
+        session_id: Option<&str>,
+        command: &str,
+        source: &str,
+        requires_approval: bool,
+        approved: bool,
+        status: &str,
+        exit_code: Option<i32>,
+        duration_ms: Option<i64>,
+        stdout_preview: Option<String>,
+        stderr_preview: Option<String>,
+        error_message: Option<String>,
+    ) -> Self {
+        Self {
+            session_id: session_id.map(|s| s.to_string()),
+            command: command.to_string(),
+            source: source.to_string(),
+            requires_approval,
+            approved,
+            status: status.to_string(),
+            exit_code,
+            duration_ms,
+            stdout_preview,
+            stderr_preview,
+            error_message,
+        }
+    }
+}
+
+/// Insert a command log entry into the audit table
+pub fn insert_command_log(conn: &Connection, record: &CommandLogRecord) -> HarperResult<()> {
+    conn.execute(
+        "INSERT INTO command_logs (
+             session_id,
+             command,
+             source,
+             requires_approval,
+             approved,
+             status,
+             exit_code,
+             duration_ms,
+             stdout_preview,
+             stderr_preview,
+             error_message
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![
+            record.session_id,
+            record.command,
+            record.source,
+            record.requires_approval as i32,
+            record.approved as i32,
+            record.status,
+            record.exit_code,
+            record.duration_ms,
+            record.stdout_preview,
+            record.stderr_preview,
+            record.error_message,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Simplified view of an audit record for presentation
+#[derive(Debug, Clone)]
+pub struct CommandLogEntry {
+    pub command: String,
+    pub source: String,
+    pub requires_approval: bool,
+    pub approved: bool,
+    pub status: String,
+    pub exit_code: Option<i32>,
+    pub duration_ms: Option<i64>,
+    pub created_at: String,
+}
+
+/// Load recent command logs for a given session
+pub fn load_command_logs_for_session(
+    conn: &Connection,
+    session_id: &str,
+    limit: usize,
+) -> HarperResult<Vec<CommandLogEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT command,
+                source,
+                requires_approval,
+                approved,
+                status,
+                exit_code,
+                duration_ms,
+                created_at
+         FROM command_logs
+         WHERE session_id = ?1
+         ORDER BY id DESC
+         LIMIT ?2",
+    )?;
+
+    let rows = stmt.query_map(params![session_id, limit as i64], |row| {
+        Ok(CommandLogEntry {
+            command: row.get(0)?,
+            source: row.get(1)?,
+            requires_approval: row.get::<_, i32>(2)? != 0,
+            approved: row.get::<_, i32>(3)? != 0,
+            status: row.get(4)?,
+            exit_code: row.get(5)?,
+            duration_ms: row.get(6)?,
+            created_at: row.get(7)?,
+        })
+    })?;
+
+    let mut entries = Vec::new();
+    for row in rows {
+        entries.push(row?);
+    }
+    Ok(entries)
+}
+
+/// Fetch the most recent command log entry for a session
+pub fn load_latest_command_log(
+    conn: &Connection,
+    session_id: &str,
+) -> HarperResult<Option<CommandLogEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT command,
+                source,
+                requires_approval,
+                approved,
+                status,
+                exit_code,
+                duration_ms,
+                created_at
+         FROM command_logs
+         WHERE session_id = ?1
+         ORDER BY id DESC
+         LIMIT 1",
+    )?;
+
+    let result = stmt.query_row(params![session_id], |row| {
+        Ok(CommandLogEntry {
+            command: row.get(0)?,
+            source: row.get(1)?,
+            requires_approval: row.get::<_, i32>(2)? != 0,
+            approved: row.get::<_, i32>(3)? != 0,
+            status: row.get(4)?,
+            exit_code: row.get(5)?,
+            duration_ms: row.get(6)?,
+            created_at: row.get(7)?,
+        })
+    });
+
+    match result {
+        Ok(entry) => Ok(Some(entry)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
 }

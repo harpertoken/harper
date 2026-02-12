@@ -105,6 +105,43 @@ fn test_list_sessions_empty() -> HarperResult<()> {
     // Verify output
     let output_str = output_clone.get_output();
     assert!(output_str.contains("Previous Sessions:"));
+    assert!(output_str.contains("No previous sessions found."));
+
+    Ok(())
+}
+
+#[test]
+fn test_list_sessions_with_audit_summary() -> HarperResult<()> {
+    let temp_file = NamedTempFile::new()?;
+    let conn = Connection::open(temp_file.path())?;
+    storage::init_db(&conn)?;
+
+    // Seed session & audit log
+    storage::save_session(&conn, "sess-1")?;
+    let record = storage::CommandLogRecord::new(
+        Some("sess-1"),
+        "echo hi",
+        "test",
+        true,
+        true,
+        "succeeded",
+        Some(0),
+        Some(10),
+        Some("hi".to_string()),
+        None,
+        None,
+    );
+    storage::insert_command_log(&conn, &record)?;
+
+    let input = MockInput::new(vec![]);
+    let output = MockOutput::new();
+    let output_clone = output.clone();
+    let service = SessionService::with_io(&conn, input, output);
+
+    service.list_sessions()?;
+    let output_str = output_clone.get_output();
+    assert!(output_str.contains("cmd: succeeded"));
+    assert!(output_str.contains("approved"));
 
     Ok(())
 }
