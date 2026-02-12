@@ -6,6 +6,8 @@ rust-version = "1.85.0"
 authors = ["Harper Contributors"]
 license = "Apache-2.0"
 description = "UI components for Harper AI assistant"
+repository = "https://github.com/harpertoken/harper"
+homepage = "https://github.com/harpertoken/harper"
 
 [lib]
 name = "harper_ui"
