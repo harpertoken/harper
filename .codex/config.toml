@@ -1,0 +1,11 @@
+#:schema https://openai.com/schemas/codex/config.json
+
+# Project-scoped Codex CLI settings for this repo.
+# See OpenAI Codex configuration docs for available fields and defaults.
+
+model = "gpt-5-codex"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+# Treat these files as project-root markers when working from subdirectories.
+project_root_markers = [".git", "BUILD"]
