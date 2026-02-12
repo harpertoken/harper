@@ -15,6 +15,7 @@
 use harper_workspace::core::error::HarperResult;
 use harper_workspace::core::io_traits::{Input, Output};
 use harper_workspace::memory::session_service::SessionService;
+use harper_workspace::memory::storage;
 use rusqlite::Connection;
 use tempfile::NamedTempFile;
 
@@ -87,13 +88,7 @@ fn test_list_sessions_empty() -> HarperResult<()> {
     let conn = Connection::open(temp_file.path())?;
 
     // Initialize database schema
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS sessions (
-            id TEXT PRIMARY KEY,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )",
-        [],
-    )?;
+    storage::init_db(&conn)?;
 
     // Setup mock I/O
     let input = MockInput::new(vec![]);
@@ -120,13 +115,7 @@ fn test_view_nonexistent_session() -> HarperResult<()> {
     let conn = Connection::open(temp_file.path())?;
 
     // Initialize database schema
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS sessions (
-            id TEXT PRIMARY KEY,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )",
-        [],
-    )?;
+    storage::init_db(&conn)?;
 
     // Setup mock I/O
     let input = MockInput::new(vec!["nonexistent-session-id"]);
@@ -154,13 +143,7 @@ fn test_export_nonexistent_session() -> HarperResult<()> {
     let conn = Connection::open(temp_file.path())?;
 
     // Initialize database schema
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS sessions (
-            id TEXT PRIMARY KEY,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )",
-        [],
-    )?;
+    storage::init_db(&conn)?;
 
     // Setup mock I/O
     let input = MockInput::new(vec!["nonexistent-session-id", "txt", ""]);
