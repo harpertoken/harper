@@ -96,7 +96,7 @@ impl<'a> SessionService<'a> {
 
     /// View a specific session's history (returns data)
     pub fn view_session_data(&self, session_id: &str) -> HarperResult<Vec<crate::core::Message>> {
-        let history = load_history(self.conn, session_id).unwrap_or_default();
+        let history = load_history(self.conn, session_id)?;
         Ok(history)
     }
 
@@ -154,7 +154,7 @@ impl<'a> SessionService<'a> {
         let format_choice = self.input.read_line()?.trim().to_lowercase();
         let is_json = format_choice == "json";
 
-        let history = load_history(self.conn, &session_id).unwrap_or_default();
+        let history = load_history(self.conn, &session_id)?;
 
         if history.is_empty() {
             self.output
@@ -203,7 +203,7 @@ impl<'a> SessionService<'a> {
     }
 
     pub fn export_session_by_id(&self, session_id: &str) -> HarperResult<String> {
-        let history = load_history(self.conn, session_id).unwrap_or_default();
+        let history = load_history(self.conn, session_id)?;
 
         if history.is_empty() {
             return Err(HarperError::File(format!(
