@@ -24,6 +24,8 @@ rust-version = "1.85.0"
 authors = ["Harper Contributors"]
 license = "Apache-2.0"
 description = "Harper AI assistant"
+repository = "https://github.com/harpertoken/harper"
+homepage = "https://github.com/harpertoken/harper"
 
 [lib]
 name = "harper_workspace"
@@ -46,3 +48,8 @@ tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
 wait-timeout = "0.2"
 num_cpus = "1.16"
 serde_json = "1.0.140"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
