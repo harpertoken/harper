@@ -4,18 +4,21 @@
       "release-type": "rust",
       "package-name": "harper-core",
       "changelog-path": "CHANGELOG.md",
-      "prerelease": false
+      "prerelease": false,
+      "tag": "harper-core-${version}"
     },
     "lib/harper-ui": {
       "release-type": "rust",
       "package-name": "harper-ui",
       "changelog-path": "CHANGELOG.md",
-      "prerelease": false
+      "prerelease": false,
+      "tag": "harper-ui-${version}"
     }
   },
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "include-v-in-tag": false,
   "separate-pull-requests": false,
+  "pullRequestTitlePattern": "chore: release ${component} ${version}",
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },
