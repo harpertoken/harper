@@ -24,6 +24,7 @@ pub mod filesystem;
 pub mod git;
 pub mod github;
 pub mod image;
+pub mod screenpipe;
 pub mod shell;
 pub mod todo;
 pub mod web;
@@ -193,6 +194,12 @@ impl<'a> ToolService<'a> {
                 image::resize_image(response)
             })
             .await
+        } else if response.to_uppercase().starts_with(tools::SCREENPIPE) {
+            let search_result = screenpipe::search_screenpipe(response).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &search_result)
+                .await?;
+            Ok(Some((final_response, search_result)))
         } else {
             Ok(None)
         }

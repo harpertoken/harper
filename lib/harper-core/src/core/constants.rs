@@ -181,6 +181,10 @@ pub mod tools {
     #[allow(dead_code)]
     pub const IMAGE_RESIZE: &str = "[IMAGE_RESIZE";
 
+    /// Screenpipe search prefix
+    #[allow(dead_code)]
+    pub const SCREENPIPE: &str = "[SCREENPIPE";
+
     /// Command suffix
     #[allow(dead_code)]
     pub const COMMAND_SUFFIX: &str = "]";
