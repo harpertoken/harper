@@ -22,9 +22,11 @@ jobs:
     name: PR validation
     runs-on: ubuntu-latest
     if: >
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.draft == false)
+      (github.event_name == 'push' || github.event_name == 'pull_request') &&
+      github.repository_owner == 'harpertoken' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.draft == false))
 
     steps:
       - uses: actions/checkout@v6
@@ -37,7 +39,7 @@ jobs:
   label:
     name: Auto-label PR
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.repository_owner == 'harpertoken'
 
     permissions:
       contents: read

@@ -17,6 +17,7 @@ jobs:
   nightly-checks:
     name: nightly-checks
     runs-on: ubuntu-latest
+    if: github.repository_owner == 'harpertoken'
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
