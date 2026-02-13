@@ -5,7 +5,7 @@ on:
 
 jobs:
   rust-auto-fix-request:
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/rust-fix')
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/rust-fix') && github.repository_owner == 'harpertoken'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -45,7 +45,7 @@ jobs:
           })
 
   rust-auto-fix-execute:
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/confirm')
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/confirm') && github.repository_owner == 'harpertoken'
     runs-on: ubuntu-latest
     permissions:
       contents: write

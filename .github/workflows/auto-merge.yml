@@ -12,7 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     if: >
       contains(github.event.pull_request.labels.*.name, 'auto-merge') &&
-      github.event.pull_request.draft == false
+      github.event.pull_request.draft == false &&
+      github.repository_owner == 'harpertoken'
     steps:
       - name: Checkout
         uses: actions/checkout@v6
