@@ -52,4 +52,7 @@ serde_json = "1.0.140"
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
-lto = "thin"
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
