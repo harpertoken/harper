@@ -2,19 +2,20 @@
   "packages": {
     "lib/harper-core": {
       "release-type": "rust",
-      "package-manifest": "Cargo.toml",
+      "package-name": "harper-core",
       "changelog-path": "CHANGELOG.md",
       "prerelease": false
     },
     "lib/harper-ui": {
       "release-type": "rust",
-      "package-manifest": "Cargo.toml",
+      "package-name": "harper-ui",
       "changelog-path": "CHANGELOG.md",
       "prerelease": false
     }
   },
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "include-v-in-tag": false,
+  "separate-pull-requests": false,
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },
