@@ -7,7 +7,7 @@
 
 * keychain login/logout and key lookup ([#120](https://github.com/harpertoken/harper/issues/120)) ([b9731f5](https://github.com/harpertoken/harper/commit/b9731f5e460d72551ef8498d11e3eff278aa8922))
 * **ui:** add message types and improve status bar display ([#103](https://github.com/harpertoken/harper/issues/103)) ([1bc87d4](https://github.com/harpertoken/harper/commit/1bc87d499eb1b4aa37606313b02f8fe6cf5c8d56))
-* **ui:** implement [tui ops] ([#104](https://github.com/harpertoken/harper/issues/104)) ([8d1f0c3](https://github.com/harpertoken/harper/commit/8d1f0c3419f86513f8aa0b98ee28bcb7b6480b87))
+* **ui:** implement tui ops ([#104](https://github.com/harpertoken/harper/issues/104)) ([8d1f0c3](https://github.com/harpertoken/harper/commit/8d1f0c3419f86513f8aa0b98ee28bcb7b6480b87))
 
 
 ### Bug Fixes
