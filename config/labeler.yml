@@ -1,10 +1,22 @@
 "area: core":
   - changed-files:
-      - any-glob-to-any-file: ["src/core/**"]
+      - any-glob-to-any-file: ["src/core/**", "lib/harper-core/**"]
 
 "area: docs":
   - changed-files:
       - any-glob-to-any-file: ["docs/**"]
+
+"area: mcp-server":
+  - changed-files:
+      - any-glob-to-any-file: ["lib/harper-mcp-server/**"]
+
+"area: ui":
+  - changed-files:
+      - any-glob-to-any-file: ["lib/harper-ui/**"]
+
+"area: lib":
+  - changed-files:
+      - any-glob-to-any-file: ["lib/**"]
 
 "risk: high":
   - changed-files:

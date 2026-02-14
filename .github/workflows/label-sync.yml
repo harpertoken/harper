@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   label-sync:
@@ -14,9 +15,53 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
       - name: Sync Labels
         uses: actions/github-script@v7
         with:
           script: |
-            // Placeholder for label sync logic
-            console.log('Label sync placeholder');
+            const fs = require('fs');
+            const yaml = require('js-yaml');
+
+            const labelerConfig = yaml.load(fs.readFileSync('config/labeler.yml', 'utf8'));
+
+            const labelColors = {
+              'area:': '1d76db',
+              'risk:': 'd93f0b',
+              'needs-': 'fbca04'
+            };
+
+            const labelDescriptions = {
+              'area: core': 'Changes to core functionality',
+              'area: docs': 'Documentation changes',
+              'area: mcp-server': 'MCP server changes',
+              'area: ui': 'UI changes',
+              'area: lib': 'Library changes',
+              'area: testing': 'Test changes',
+              'area: ci': 'CI/CD changes',
+              'area: governance': 'Governance changes',
+              'risk: high': 'High risk changes',
+              'needs-design-review': 'Requires design review'
+            };
+
+            for (const [labelName, _] of Object.entries(labelerConfig)) {
+              const color = Object.entries(labelColors).find(([prefix, _]) => labelName.startsWith(prefix))?.[1] || 'ededed';
+              const description = labelDescriptions[labelName] || labelName;
+
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: labelName,
+                  color: color,
+                  description: description
+                });
+                console.log(`Created label: ${labelName}`);
+              } catch (e) {
+                if (e.status === 422) {
+                  console.log(`Label already exists: ${labelName}`);
+                } else {
+                  throw e;
+                }
+              }
+            }
