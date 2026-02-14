@@ -184,11 +184,11 @@ harper-mcp-server  extensibility
 │   ├── user-guide/              # User documentation
 │   ├── development/             # Developer docs
 │   └── getting-started/         # Getting started guides
-├── scripts/                      # Utility scripts
-├── config/                      # Configuration examples
-├── tests/                       # Test files
-├── Cargo.toml                    # Workspace manifest
-└── README.md                    # This file
+├── scripts/                 # Utility scripts
+├── config/                  # Configuration examples
+├── tests/                   # Test files
+├── Cargo.toml               # Workspace manifest
+└── README.md                # This file
 ```
 
 ### Key Components
