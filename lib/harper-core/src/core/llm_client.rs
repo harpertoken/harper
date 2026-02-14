@@ -274,11 +274,17 @@ pub async fn call_llm(
         .map_err(|e| HarperError::Api(e.to_string()))?;
 
     let assistant_reply = match config.provider {
-        ApiProvider::OpenAI | ApiProvider::Sambanova => resp_json["choices"][0]["message"]
-            ["content"]
-            .as_str()
-            .unwrap_or("[No response]")
-            .to_string(),
+        ApiProvider::OpenAI | ApiProvider::Sambanova => {
+            let message = &resp_json["choices"][0]["message"];
+            if let Some(tool_calls) = message.get("tool_calls") {
+                serde_json::to_string(tool_calls).unwrap_or_else(|_| "[No response]".to_string())
+            } else {
+                message["content"]
+                    .as_str()
+                    .unwrap_or("[No response]")
+                    .to_string()
+            }
+        }
         ApiProvider::Gemini => {
             let part = &resp_json["candidates"][0]["content"]["parts"][0];
             if let Some(function_call) = part.get("functionCall") {
