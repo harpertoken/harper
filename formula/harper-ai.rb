@@ -18,7 +18,7 @@ class HarperAi < Formula
 
   def install
     system "cargo", "build", "--release", "--manifest-path=Cargo.toml"
-    
+
     # Check both possible locations for binaries
     if File.exist?("bin/harper")
       bin.install "bin/harper" => "harper"

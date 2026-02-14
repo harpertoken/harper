@@ -14,8 +14,9 @@
 
 #[allow(dead_code)]
 use ratatui::style::{Color, Modifier, Style};
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
 
-#[derive(Debug, Clone)]
 pub struct Theme {
     pub background: Color,
     pub foreground: Color,
@@ -32,6 +33,8 @@ pub struct Theme {
     pub highlight: Color,
     pub selection: Color,
     pub syntax_theme: String,
+    pub syntax_set: SyntaxSet,
+    pub theme_set: ThemeSet,
 }
 
 impl Default for Theme {
@@ -52,13 +55,19 @@ impl Default for Theme {
             highlight: Color::Rgb(255, 255, 0),  // Yellow
             selection: Color::Rgb(70, 130, 180), // Steel blue
             syntax_theme: "base16-ocean.dark".to_string(),
+            syntax_set: SyntaxSet::load_defaults_newlines(),
+            theme_set: ThemeSet::load_defaults(),
         }
     }
 }
 
 impl Theme {
     pub fn dark() -> Self {
-        Self { ..Self::default() }
+        Self {
+            syntax_set: SyntaxSet::load_defaults_newlines(),
+            theme_set: ThemeSet::load_defaults(),
+            ..Self::default()
+        }
     }
 
     pub fn light() -> Self {
@@ -78,6 +87,8 @@ impl Theme {
             highlight: Color::Rgb(255, 235, 59), // Light yellow
             selection: Color::Rgb(0, 123, 255),  // Primary blue
             syntax_theme: "base16-ocean.light".to_string(),
+            syntax_set: SyntaxSet::load_defaults_newlines(),
+            theme_set: ThemeSet::load_defaults(),
         }
     }
 
@@ -107,6 +118,8 @@ impl Theme {
             highlight: Color::Rgb(255, 223, 93),   // GitHub highlight
             selection: Color::Rgb(58, 117, 215),   // GitHub selection
             syntax_theme: "base16-ocean.dark".to_string(),
+            syntax_set: SyntaxSet::load_defaults_newlines(),
+            theme_set: ThemeSet::load_defaults(),
         }
     }
 
