@@ -44,8 +44,8 @@ Explain what is causing the bug. Include code snippets if relevant.
 ## API Response Format (if applicable)
 If this is an AI provider issue, include the actual API response format:
 ```json
-// Expected format
-// Actual format
+// Paste the expected JSON response below this line
+// Paste the actual JSON response after the expected one
 ```
 
 ## Environment
