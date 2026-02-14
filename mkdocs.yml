@@ -20,12 +20,16 @@ theme:
 nav:
   - Home: index.md
   - Getting Started:
-      - Installation: getting-started/installation.md
-      - Quick Start: getting-started/quick-start.md
+      - Installation: user-guide/installation.md
+      - Quick Start: user-guide/quick-start.md
   - User Guide:
-      - Clipboard Features: user-guide/clipboard.md
+      - About the Binary: user-guide/about.md
       - Chat Interface: user-guide/chat.md
+      - Clipboard Features: user-guide/clipboard.md
       - Configuration: user-guide/configuration.md
+      - Keychain: user-guide/keychain.md
+      - Screenpipe: user-guide/screenpipe.md
+      - Troubleshooting: user-guide/troubleshooting.md
   - Development:
       - Contributing: development/contributing.md
       - CI/CD: development/cicd.md
