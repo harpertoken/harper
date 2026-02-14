@@ -38,10 +38,21 @@ A clear and concise description of what you expected to happen.
 ## Actual Behavior
 What actually happened.
 
+## Root Cause
+Explain what is causing the bug. Include code snippets if relevant.
+
+## API Response Format (if applicable)
+If this is an AI provider issue, include the actual API response format:
+```json
+// Expected format
+// Actual format
+```
+
 ## Environment
 - OS: [e.g., macOS, Linux, Windows]
 - Rust Version: [e.g., 1.82.0]
 - Harper Version: [e.g., v0.1.7]
+- AI Provider: [e.g., OpenAI, Sambanova, Gemini]
 
 ## Additional Context
 Add any other context about the problem here.
