@@ -105,7 +105,7 @@ Use this for:
 
 ```bash
 cargo build
-# Runs faster, larger binary
+# Slower runtime, faster compilation, larger binary
 ./target/debug/harper
 ```
 
