@@ -102,15 +102,26 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             let message_lines: Vec<Line> = displayed_messages
                 .iter()
                 .flat_map(|msg| {
-                    let color = match msg.role.as_str() {
+                    let default_color = match msg.role.as_str() {
                         "user" => theme.input,
                         "assistant" => theme.output,
                         _ => theme.foreground,
                     };
-                    msg.content
-                        .lines()
-                        .map(|line| Line::styled(line, color))
-                        .collect::<Vec<_>>()
+                    let spans = parse_content_with_code(
+                        &theme.syntax_set,
+                        &theme.theme_set,
+                        &msg.content,
+                        default_color,
+                        &theme.syntax_theme,
+                    );
+                    if spans.is_empty() {
+                        msg.content
+                            .lines()
+                            .map(|line| Line::styled(line, default_color))
+                            .collect::<Vec<_>>()
+                    } else {
+                        vec![Line::from(spans)]
+                    }
                 })
                 .collect();
 
@@ -190,7 +201,7 @@ fn draw_menu(frame: &mut Frame, selected: usize, theme: &Theme) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Harper AI Assistant")
+                .title("Harper")
                 .border_style(theme.border_style())
                 .title_style(theme.title_style()),
         )
@@ -329,18 +340,15 @@ fn draw_view_session(
 }
 
 fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
-    let mode = match &app.state {
-        AppState::Menu(_) => "MENU",
-        AppState::Chat(..) => "CHAT",
-        AppState::Sessions(_, _) => "SESSIONS",
-        AppState::ExportSessions(_, _) => "EXPORT",
-        AppState::Tools(_) => "TOOLS",
-        AppState::ViewSession(_, _, _) => "VIEW",
+    let status_text = match &app.state {
+        AppState::Menu(_) => " Ready ",
+        AppState::Chat(..) => " Chatting ",
+        AppState::Sessions(_, _) => " Sessions ",
+        AppState::ExportSessions(_, _) => " Export ",
+        AppState::Tools(_) => " Tools ",
+        AppState::ViewSession(_, _, _) => " Viewing ",
     };
 
-    // Enhanced status with provider info and shortcuts
-    let left_status = format!(" {} ", mode);
-    let center_status = "Harper AI Agent";
     let right_status = STATUS_BAR_SHORTCUTS;
 
     let area = frame.area();
@@ -352,7 +360,7 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     };
 
     // Left section
-    let left_width = left_status.len() as u16;
+    let left_width = status_text.len() as u16;
     let left_area = Rect {
         x: 0,
         y: status_area.y,
@@ -360,31 +368,14 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         height: 1,
     };
 
-    let left_widget = Paragraph::new(left_status).style(theme.highlight_style().bg(theme.accent));
+    let left_widget = Paragraph::new(status_text).style(theme.highlight_style().bg(theme.accent));
     frame.render_widget(left_widget, left_area);
-
-    // Center section
-    let center_width = center_status.len() as u16;
-    let center_x = (area.width - center_width) / 2;
-    let center_area = Rect {
-        x: center_x,
-        y: status_area.y,
-        width: center_width,
-        height: 1,
-    };
-
-    let center_widget = Paragraph::new(center_status).style(
-        Style::default()
-            .bg(theme.accent)
-            .fg(theme.foreground)
-            .add_modifier(Modifier::BOLD),
-    );
-    frame.render_widget(center_widget, center_area);
 
     // Right section
     let right_width = right_status.len() as u16;
+    let right_x = area.width.saturating_sub(right_width);
     let right_area = Rect {
-        x: area.width - right_width,
+        x: right_x,
         y: status_area.y,
         width: right_width,
         height: 1,
@@ -392,33 +383,6 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
 
     let right_widget = Paragraph::new(right_status).style(theme.muted_style().bg(theme.accent));
     frame.render_widget(right_widget, right_area);
-
-    // Fill remaining space
-    let fill_start = left_width;
-    let fill_end = center_x;
-    if fill_end > fill_start {
-        let fill_area = Rect {
-            x: fill_start,
-            y: status_area.y,
-            width: fill_end - fill_start,
-            height: 1,
-        };
-        let fill_widget = Paragraph::new("").style(Style::default().bg(theme.accent));
-        frame.render_widget(fill_widget, fill_area);
-    }
-
-    let fill_start2 = center_x + center_width;
-    let fill_end2 = area.width - right_width;
-    if fill_end2 > fill_start2 {
-        let fill_area2 = Rect {
-            x: fill_start2,
-            y: status_area.y,
-            width: fill_end2 - fill_start2,
-            height: 1,
-        };
-        let fill_widget2 = Paragraph::new("").style(Style::default().bg(theme.accent));
-        frame.render_widget(fill_widget2, fill_area2);
-    }
 }
 
 fn draw_message_overlay(frame: &mut Frame, message: &UiMessage, theme: &Theme) {
