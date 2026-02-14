@@ -9,7 +9,7 @@ Screenpipe records your screen and audio, making it searchable. Harper can query
 ## Requirements
 
 1. **Screenpipe installed and running**
-   - See [screenpipe](https://github.com/medill情报员/screenpipe) for installation
+   - See [screenpipe](https://github.com/screenpipe/screenpipe) for installation
    - Start screenpipe before using Harper
 
 2. **Screenpipe server running**
