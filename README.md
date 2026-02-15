@@ -1,48 +1,45 @@
-```text
- _   _
-| | | | __ _ _ __ _ __   ___ _ __
-| |_| |/ _` | '__| '_ \ / _ \ '__|
-|  _  | (_| | |  | |_) |  __/ |
-|_| |_|\__,_|_|  | .__/ \___|_|
-                  |_|
+# Welcome to Harper
+
+Harper is an AI-powered terminal assistant that translates natural language into shell commands. Instead of remembering complex CLI syntax, just describe what you want to do in plain English.
+
+```
+find rust files changed today
+show uncommitted git changes
+create a new feature branch
 ```
 
-# Harper
+Harper shows you the command. You decide if it runs.
 
-**AI for the terminal.**
-
-Harper is a terminal-native AI agent that translates natural language into reviewed, executable commands.
-
-<details>
-<summary>Show TUI preview</summary>
+---
 
 ![Harper TUI](./docs/harper_tui.png)
 
-</details>
+---
 
-&copy; 2026 harpertoken
+## How it works
+
+Just type what you want. Harper understands your intent and generates the exact shell command you need. Review it, approve it, and Harper executes it for you. No more copy-pasting from AI chatbots or manually constructing complex commands.
+
+## Key Features
+
+**Natural Language to Commands**
+Describe what you want in plain English and Harper generates the exact shell command. From simple file searches to complex git operations, just say what you need.
+
+**Persistent Context**
+Harper remembers your conversation, so you can build on previous commands and queries. Ask follow-up questions or reference earlier commands without repeating yourself.
+
+**Explicit Execution Approval**
+Never worry about accidental execution. Harper always shows you the command first and asks before running anything. You stay in complete control.
+
+**Command Audit Trail**
+Need to review what ran? Type `/audit` (or `/audit 25 failed approved`) to print the latest shell commands filtered by limit/status/approval, with exit codes and runtimes tied to the current session.
+
+**Multiple AI Providers**
+Choose from OpenAI, Sambanova, or Gemini. Harper also supports any OpenAI-compatible endpoint, giving you flexibility in how you power the AI.
 
 ---
 
-## What it does
-
-* Intent → shell commands
-* Persistent context
-* Explicit execution approval
-* Terminal-only workflow
-
----
-
-## Why
-
-The shell is exact.
-Humans are not.
-
-Harper sits between them.
-
----
-
-## Quick Start
+## Getting Started
 
 ```bash
 git clone https://github.com/harpertoken/harper.git
@@ -59,84 +56,18 @@ cargo build --release
 ./target/release/harper
 ```
 
----
-
 ## Requirements
 
-* Rust 1.85.0 or newer
-* API key for at least one provider (OpenAI, Sambanova, or Gemini)
-* Crossterm-compatible terminal
-
----
-
-## Usage
-
-Type what you want:
-
-```
-find rust files changed today
-show uncommitted git changes
-create a new feature branch
-```
-
-Harper shows the command.
-You decide if it runs.
-
-Need to review what ran? Type `/audit` (or `/audit 25 failed approved`) any time to print the latest shell commands filtered by limit/status/approval, with exit codes and runtimes tied to the current session.
-
----
-
-## Providers
-
-OpenAI · Sambanova · Gemini
-
-(OpenAI-compatible endpoints supported)
-
----
-
-## Configuration
-
-Harper uses TOML files and environment variables.
-
-* Select AI provider and model
-* Control command approval policy
-* Choose UI theme
-* Configure storage location
-
-API keys should be provided via environment variables.
-
-See [docs/user-guide/configuration.md](docs/user-guide/configuration.md) for detailed config options.
-
----
-
-## Documentation
-
-See [docs/](docs/) for detailed project documentation.
-
-### User Guide
-
-* [Installation](docs/user-guide/installation.md) - Install Harper
-* [Quick Start](docs/user-guide/quick-start.md) - Get started in 5 minutes
-* [About the Binary](docs/user-guide/about.md) - How Harper runs
-* [Chat Interface](docs/user-guide/chat.md) - Commands and features
-* [Clipboard](docs/user-guide/clipboard.md) - Image and text processing
-* [Configuration](docs/user-guide/configuration.md) - Complete config options
-* [Troubleshooting](docs/user-guide/troubleshooting.md) - Common issues
-
----
+- Rust 1.85.0 or newer
+- API key for at least one provider (OpenAI, Sambanova, or Gemini)
+- Crossterm-compatible terminal
 
 ## Security
 
-* No silent execution
-* Scoped filesystem access
-* Shell metachar filtering
-* Environment-based credentials
-
----
-
-## Development
-
-See Quick Start above for running Harper.
+- No silent execution — commands always require approval
+- Scoped filesystem access — Harper only touches what you ask it to
+- Shell metachar filtering — prevents injection attacks
+- Environment-based credentials — API keys stay in your environment
 
 ## Building
 
@@ -159,46 +90,6 @@ See Quick Start above for running Harper.
 
 Both build systems are supported. Cargo is recommended for development.
 
----
-
-## Architecture
-
-```
-harper-core        agents · tools · memory
-harper-ui          terminal interface
-harper-mcp-server  extensibility
-```
-
-### Project Structure
-
-```
-.
-├── .github/
-│   ├── ISSUE_TEMPLATE/          # Issue templates
-│   └── workflows/               # GitHub Actions
-├── lib/
-│   ├── harper-core/             # Core AI logic
-│   ├── harper-ui/               # Terminal interface
-│   └── harper-mcp-server/       # MCP server
-├── docs/
-│   ├── user-guide/              # User documentation
-│   ├── development/             # Developer docs
-│   └── getting-started/         # Getting started guides
-├── scripts/                 # Utility scripts
-├── config/                  # Configuration examples
-├── tests/                   # Test files
-├── Cargo.toml               # Workspace manifest
-└── README.md                # This file
-```
-
-### Key Components
-
-* `lib/harper-core/` - AI agents, tools, memory/persistence
-* `lib/harper-ui/` - Terminal UI, command parsing, session management
-* `lib/harper-mcp-server/` - MCP protocol server for extensibility
-
----
-
 ## Troubleshooting
 
 **Commands do not run**
@@ -215,19 +106,18 @@ Confirm your Rust toolchain meets the minimum version (1.85.0).
 
 See [docs/user-guide/troubleshooting.md](docs/user-guide/troubleshooting.md) for more solutions.
 
----
+## Documentation
 
-## Features
+See [docs/](docs/) for detailed project documentation.
 
-- Natural language to shell command translation
-- Persistent chat sessions
-- Command approval workflow with audit trail
-- Clipboard integration (images and text)
-- Multiple AI provider support
-- Session saving and loading
-- Command history with search
-
----
+- [Installation](docs/user-guide/installation.md)
+- [Quick Start](docs/user-guide/quick-start.md)
+- [About the Binary](docs/user-guide/about.md)
+- [Chat Interface](docs/user-guide/chat.md)
+- [Clipboard](docs/user-guide/clipboard.md)
+- [Configuration](docs/user-guide/configuration.md)
+- [Config Reference](docs/CONFIG_REFERENCE.md)
+- [Troubleshooting](docs/user-guide/troubleshooting.md)
 
 ## License
 
