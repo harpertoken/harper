@@ -37,7 +37,21 @@ Need to review what ran? Type `/audit` (or `/audit 25 failed approved`) to print
 **Multiple AI Providers**
 Choose from OpenAI, Sambanova, or Gemini. Harper also supports any OpenAI-compatible endpoint, giving you flexibility in how you power the AI.
 
----
+## Contributor License Agreement
+
+All contributors must sign the CLA before their pull requests can be merged.
+
+```
+❌ **CLA required**
+
+Hi @dependabot[bot], please sign the Contributor License Agreement to proceed.
+
+👉 https://harpertoken.github.io/cla.html
+
+Once signed, this check will pass automatically.
+```
+
+When you submit a pull request, the CLA bot will check if your GitHub username is listed in the approved contributors list. If your name is not on the list, the pull request will be blocked until you are added. To have your username added, please contact the project owner at harpertoken@icloud.com.
 
 ## Getting Started
 
