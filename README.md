@@ -44,7 +44,7 @@ All contributors must sign the CLA before their pull requests can be merged.
 ```
 ❌ **CLA required**
 
-Hi @dependabot[bot], please sign the Contributor License Agreement to proceed.
+Hi @username, please sign the Contributor License Agreement to proceed.
 
 👉 https://harpertoken.github.io/cla.html
 
