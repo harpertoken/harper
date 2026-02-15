@@ -4,13 +4,7 @@ updates:
     directory: /
     schedule:
       interval: daily
-
     allow:
-      - dependency-name: "*"
-
-    update-types:
-      - minor
-      - patch
-
+      - dependency-type: "direct"
     commit-message:
       prefix: deps
