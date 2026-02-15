@@ -1,6 +1,7 @@
 {
   "signed": [
     "bniladridas",
-    "harper-release-bot"
+    "harper-release-bot",
+    "dependabot[bot]"
   ]
 }
