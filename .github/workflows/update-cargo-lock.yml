@@ -1,0 +1,31 @@
+name: Update cargo.lock
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+  workflow_dispatch:
+
+jobs:
+  update-lockfile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Update cargo.lock
+        run: cargo update
+
+      - name: Create PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: 'chore(deps): update cargo.lock'
+          title: 'chore(deps): update cargo.lock'
+          body: 'Weekly cargo.lock update'
+          branch: cargo-lock-update
+          delete-branch: true
