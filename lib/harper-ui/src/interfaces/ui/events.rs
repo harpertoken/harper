@@ -486,7 +486,7 @@ fn handle_tab(app: &mut TuiApp) {
         } else if chat_state.input.starts_with('/') {
             // Command completion
             if chat_state.completion_candidates.is_empty() {
-                let commands = vec!["/help", "/quit", "/clear", "/exit"];
+                let commands = vec!["/help", "/quit", "/clear", "/exit", "/audit"];
                 for cmd in commands {
                     if cmd.starts_with(&chat_state.input) {
                         chat_state.completion_candidates.push(cmd.to_string());

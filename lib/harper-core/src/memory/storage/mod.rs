@@ -35,6 +35,38 @@ pub fn init_db(conn: &Connection) -> HarperResult<()> {
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
     // Enable foreign key constraints
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+
+    // Migration: Drop tables with old foreign key constraints
+    for table_name in &["messages", "command_logs"] {
+        let has_table: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                [table_name],
+                |row| row.get::<_, i32>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+
+        if has_table {
+            let has_fk = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_foreign_key_list(?1)",
+                    [table_name],
+                    |row| row.get::<_, i32>(0),
+                )
+                .unwrap_or(0)
+                > 0;
+
+            if has_fk {
+                if *table_name == "messages" {
+                    conn.execute("DROP TABLE IF EXISTS messages", [])?;
+                } else if *table_name == "command_logs" {
+                    conn.execute("DROP TABLE IF EXISTS command_logs", [])?;
+                }
+            }
+        }
+    }
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY,
@@ -48,8 +80,7 @@ pub fn init_db(conn: &Connection) -> HarperResult<()> {
              session_id TEXT,
              role TEXT,
              content TEXT,
-             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-             FOREIGN KEY(session_id) REFERENCES sessions(id)
+             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
          )",
         [],
     )?;
