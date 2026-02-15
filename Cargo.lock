@@ -113,7 +113,7 @@ dependencies = [
  "objc2-foundation",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
  "x11rb",
 ]
 
@@ -1714,7 +1714,7 @@ dependencies = [
  "turul-mcp-client",
  "urlencoding",
  "uuid",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
  "windows-targets 0.53.5",
 ]
 
