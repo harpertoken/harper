@@ -15,7 +15,7 @@ runs:
 
         echo "PR title: $TITLE"
 
-        REGEX='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?:[[:space:]].+'
+        REGEX='^(build|chore|ci|deps|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?:[[:space:]].+'
         if ! printf '%s\n' "$TITLE" | grep -E -q "$REGEX"; then
           echo "::error::PR title must follow Conventional Commits (e.g. fix(core): handle dt=0)"
           exit 1
