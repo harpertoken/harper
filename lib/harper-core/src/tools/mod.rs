@@ -92,8 +92,26 @@ impl<'a> ToolService<'a> {
                     .handle_mcp_tool_call(client, history, mcp_tool_name, &json_value)
                     .await;
             }
-            // Check for regular tool call
-            if let Some(tool_name) = json_value.get("tool").and_then(|v| v.as_str()) {
+            // Check for OpenAI tool_calls format (array with function objects)
+            if let Some(tool_calls) = json_value.as_array() {
+                if let Some(first_call) = tool_calls.first() {
+                    let tool_name = first_call
+                        .get("function")
+                        .and_then(|f| f.get("name"))
+                        .and_then(|v| v.as_str());
+                    if let Some(name) = tool_name {
+                        return self
+                            .handle_regular_json_tool(client, history, name, &json_value)
+                            .await;
+                    }
+                }
+            }
+            // Check for regular tool call - check both "tool" (OpenAI format) and "name" (Gemini format)
+            if let Some(tool_name) = json_value
+                .get("tool")
+                .and_then(|v| v.as_str())
+                .or_else(|| json_value.get("name").and_then(|v| v.as_str()))
+            {
                 return self
                     .handle_regular_json_tool(client, history, tool_name, &json_value)
                     .await;
