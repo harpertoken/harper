@@ -27,6 +27,7 @@ nav:
       - Chat Interface: user-guide/chat.md
       - Clipboard Features: user-guide/clipboard.md
       - Configuration: user-guide/configuration.md
+      - Config Reference: CONFIG_REFERENCE.md
       - Keychain: user-guide/keychain.md
       - Screenpipe: user-guide/screenpipe.md
       - Troubleshooting: user-guide/troubleshooting.md
@@ -34,6 +35,7 @@ nav:
       - Contributing: development/contributing.md
       - CI/CD: development/cicd.md
       - API Reference: development/api.md
+      - Agents: AGENTS.md
   - About:
       - Privacy Policy: about/privacy.md
       - Governance: about/governance.md
