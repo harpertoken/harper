@@ -1,6 +1,8 @@
-# Welcome to Harper
+# Harper (Commercial License)
 
 Harper is an AI-powered terminal assistant that translates natural language into shell commands. Instead of remembering complex CLI syntax, just describe what you want to do in plain English.
+
+> **Note:** This software is distributed under a Commercial License. See [COMMERCIAL_LICENSE](./COMMERCIAL_LICENSE) for terms. Use requires a valid license.
 
 ```
 find rust files changed today
