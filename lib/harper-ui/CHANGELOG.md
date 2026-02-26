@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/harpertoken/harper/compare/harper-ui-0.4.0...harper-ui-0.4.1) (2026-02-26)
+
+
+### Bug Fixes
+
+* tool calls for openai/sambanova ([#144](https://github.com/harpertoken/harper/issues/144)) ([57105b4](https://github.com/harpertoken/harper/commit/57105b43f8ee12d4807dcc9cb752fb12bbca33b7))
+
 ## [0.4.0](https://github.com/harpertoken/harper/compare/harper-ui-0.3.5...harper-ui-0.4.0) (2026-02-13)
 
 

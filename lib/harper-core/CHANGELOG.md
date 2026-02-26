@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/harpertoken/harper/compare/harper-core-0.5.0...harper-core-0.6.0) (2026-02-26)
+
+
+### Features
+
+* add screenpipe integration for screen/audio search ([#133](https://github.com/harpertoken/harper/issues/133)) ([89603b6](https://github.com/harpertoken/harper/commit/89603b61d61495b453be788c9942843b2723a779))
+
+
+### Bug Fixes
+
+* tool calls for openai/sambanova ([#144](https://github.com/harpertoken/harper/issues/144)) ([57105b4](https://github.com/harpertoken/harper/commit/57105b43f8ee12d4807dcc9cb752fb12bbca33b7))
+
 ## [0.5.0](https://github.com/harpertoken/harper/compare/harper-core-0.4.0...harper-core-0.5.0) (2026-02-13)
 
 
