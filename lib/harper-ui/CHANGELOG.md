@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/harpertoken/harper/compare/harper-ui-0.4.0...harper-ui-0.5.0) (2026-03-08)
+
+
+### Features
+
+* improve tui responsiveness and security approval ([#160](https://github.com/harpertoken/harper/issues/160)) ([e59d3f6](https://github.com/harpertoken/harper/commit/e59d3f61ed746c4795f51d35104f19883335b131))
+
+
+### Bug Fixes
+
+* tool calls for openai/sambanova ([#144](https://github.com/harpertoken/harper/issues/144)) ([57105b4](https://github.com/harpertoken/harper/commit/57105b43f8ee12d4807dcc9cb752fb12bbca33b7))
+
 ## [0.4.0](https://github.com/harpertoken/harper/compare/harper-ui-0.3.5...harper-ui-0.4.0) (2026-02-13)
 
 
