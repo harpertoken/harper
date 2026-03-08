@@ -49,6 +49,9 @@ mod git_tools {
     pub const GIT_ADD: &str = "[GIT_ADD";
 }
 
+use crate::core::io_traits::UserApproval;
+use std::sync::Arc;
+
 /// Tool execution service
 pub struct ToolService<'a> {
     conn: &'a Connection,
@@ -56,6 +59,7 @@ pub struct ToolService<'a> {
     exec_policy: &'a ExecPolicyConfig,
     mcp_client: Option<&'a turul_mcp_client::McpClient>,
     session_id: Option<&'a str>,
+    approver: Option<Arc<dyn UserApproval>>,
 }
 
 impl<'a> ToolService<'a> {
@@ -73,7 +77,14 @@ impl<'a> ToolService<'a> {
             exec_policy,
             mcp_client,
             session_id,
+            approver: None,
         }
+    }
+
+    /// Set a custom user approval provider
+    pub fn with_approver(mut self, approver: Arc<dyn UserApproval>) -> Self {
+        self.approver = Some(approver);
+        self
     }
 
     /// Handle tool usage (commands, web search, file operations)
@@ -125,27 +136,36 @@ impl<'a> ToolService<'a> {
                 session_id: self.session_id,
                 source: "tool_run_command",
             };
-            let command_result =
-                shell::execute_command(response, self.config, self.exec_policy, Some(&audit_ctx))?;
+            let command_result = shell::execute_command(
+                response,
+                self.config,
+                self.exec_policy,
+                Some(&audit_ctx),
+                self.approver.clone(),
+            )
+            .await?;
             let final_response = self
                 .call_llm_after_tool(client, history, &command_result)
                 .await?;
             Ok(Some((final_response, command_result)))
         } else if response.to_uppercase().starts_with(tools::READ_FILE) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                filesystem::read_file(response)
-            })
-            .await
+            let tool_result = filesystem::read_file(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &tool_result)
+                .await?;
+            Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::WRITE_FILE) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                filesystem::write_file(response)
-            })
-            .await
+            let tool_result = filesystem::write_file(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &tool_result)
+                .await?;
+            Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::SEARCH_REPLACE) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                filesystem::search_replace(response)
-            })
-            .await
+            let tool_result = filesystem::search_replace(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &tool_result)
+                .await?;
+            Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::TODO) {
             self.execute_sync_tool(client, history, response, |conn, response| {
                 let conn = conn.ok_or_else(|| {
@@ -167,15 +187,17 @@ impl<'a> ToolService<'a> {
             self.execute_sync_tool(client, history, response, |_, _| git::git_diff())
                 .await
         } else if response.to_uppercase().starts_with(git_tools::GIT_COMMIT) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                git::git_commit(response)
-            })
-            .await
+            let commit_result = git::git_commit(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &commit_result)
+                .await?;
+            Ok(Some((final_response, commit_result)))
         } else if response.to_uppercase().starts_with(git_tools::GIT_ADD) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                git::git_add(response)
-            })
-            .await
+            let add_result = git::git_add(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &add_result)
+                .await?;
+            Ok(Some((final_response, add_result)))
         } else if response.to_uppercase().starts_with(tools::GITHUB_ISSUE) {
             self.execute_sync_tool(client, history, response, |_, response| {
                 github::create_issue(response)
@@ -198,10 +220,11 @@ impl<'a> ToolService<'a> {
             })
             .await
         } else if response.to_uppercase().starts_with(tools::DB_QUERY) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                db::run_query(response)
-            })
-            .await
+            let tool_result = db::run_query(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &tool_result)
+                .await?;
+            Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::IMAGE_INFO) {
             self.execute_sync_tool(client, history, response, |_, response| {
                 image::get_image_info(response)
@@ -253,7 +276,9 @@ impl<'a> ToolService<'a> {
                         self.config,
                         self.exec_policy,
                         Some(&audit_ctx),
-                    )?;
+                        self.approver.clone(),
+                    )
+                    .await?;
                     let final_response = self
                         .call_llm_after_tool(client, history, &command_result)
                         .await?;
@@ -278,7 +303,8 @@ impl<'a> ToolService<'a> {
                 .and_then(|v| v.as_str());
                 if let (Some(path), Some(content)) = (path, content) {
                     let bracket_command = format!("[WRITE_FILE {} {}]", path, content);
-                    let write_result = filesystem::write_file(&bracket_command)?;
+                    let write_result =
+                        filesystem::write_file(&bracket_command, self.approver.clone()).await?;
                     let final_response = self
                         .call_llm_after_tool(client, history, &write_result)
                         .await?;
@@ -311,7 +337,8 @@ impl<'a> ToolService<'a> {
                 {
                     let bracket_command =
                         format!("[SEARCH_REPLACE {} {} {}]", path, old_string, new_string);
-                    let replace_result = filesystem::search_replace(&bracket_command)?;
+                    let replace_result =
+                        filesystem::search_replace(&bracket_command, self.approver.clone()).await?;
                     let final_response = self
                         .call_llm_after_tool(client, history, &replace_result)
                         .await?;
@@ -444,7 +471,7 @@ impl<'a> ToolService<'a> {
                 let final_response = self
                     .call_llm_after_tool(client, history, &error_msg)
                     .await?;
-                Ok(Some((final_response, error_msg)))
+                Ok::<Option<(String, String)>, HarperError>(Some((final_response, error_msg)))
             }
         }
     }

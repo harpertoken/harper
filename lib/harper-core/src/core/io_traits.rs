@@ -12,132 +12,113 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::{self, Write};
+//! I/O traits for abstracting user interaction
 
-/// Trait for input operations to allow for testing
-pub trait Input: Send + Sync {
-    fn read_line(&self) -> io::Result<String>;
+use crate::core::error::HarperResult;
+use async_trait::async_trait;
+
+/// Trait for obtaining user approval for sensitive operations
+#[async_trait]
+pub trait UserApproval: Send + Sync {
+    /// Request approval from the user
+    ///
+    /// # Arguments
+    /// * `prompt` - The message to show the user
+    /// * `command` - The command or operation being approved
+    ///
+    /// # Returns
+    /// `true` if approved, `false` otherwise
+    async fn approve(&self, prompt: &str, command: &str) -> HarperResult<bool>;
 }
 
-/// Default implementation using standard input
-pub struct StdInput;
+/// A default implementation that uses standard I/O (blocking)
+pub struct StdinApproval;
 
+#[async_trait]
+impl UserApproval for StdinApproval {
+    async fn approve(&self, prompt: &str, command: &str) -> HarperResult<bool> {
+        use colored::*;
+        use std::io::{self, Write};
+
+        let prompt = prompt.to_string();
+        let command = command.to_string();
+
+        let res = tokio::task::spawn_blocking(move || {
+            println!(
+                "{} {} {}",
+                prompt.bold().magenta(),
+                command.magenta(),
+                "(y/n): ".bold().magenta()
+            );
+            io::stdout()
+                .flush()
+                .map_err(|e| crate::core::error::HarperError::Io(e.to_string()))?;
+
+            let mut approval = String::new();
+            io::stdin()
+                .read_line(&mut approval)
+                .map_err(|e| crate::core::error::HarperError::Io(e.to_string()))?;
+            Ok::<bool, crate::core::error::HarperError>(approval.trim().eq_ignore_ascii_case("y"))
+        })
+        .await
+        .map_err(|e| crate::core::error::HarperError::Command(format!("Task failed: {}", e)))?;
+
+        res
+    }
+}
+
+/// A non-interactive implementation that always denies approval
+pub struct DenyApproval;
+
+#[async_trait]
+impl UserApproval for DenyApproval {
+    async fn approve(&self, _prompt: &str, _command: &str) -> HarperResult<bool> {
+        Ok(false)
+    }
+}
+
+/// Trait for reading input
+pub trait Input: Send + Sync {
+    /// Read a line of input
+    fn read_line(&self) -> HarperResult<String>;
+}
+
+/// Trait for writing output
+pub trait Output: Send + Sync {
+    /// Print text without a newline
+    fn print(&self, text: &str) -> HarperResult<()>;
+    /// Print text with a newline
+    fn println(&self, text: &str) -> HarperResult<()>;
+    /// Flush the output buffer
+    fn flush(&self) -> HarperResult<()>;
+}
+
+/// A default implementation of Input using standard input
+pub struct StdInput;
 impl Input for StdInput {
-    fn read_line(&self) -> io::Result<String> {
+    fn read_line(&self) -> HarperResult<String> {
         let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
+        std::io::stdin().read_line(&mut input)?;
         Ok(input)
     }
 }
 
-/// Trait for output operations to allow for testing
-pub trait Output: Send + Sync {
-    fn print(&self, text: &str) -> io::Result<()>;
-    fn println(&self, text: &str) -> io::Result<()>;
-    fn flush(&self) -> io::Result<()>;
-}
-
-/// Default implementation using standard output
+/// A default implementation of Output using standard output
 pub struct StdOutput;
-
 impl Output for StdOutput {
-    fn print(&self, text: &str) -> io::Result<()> {
+    fn print(&self, text: &str) -> HarperResult<()> {
         print!("{}", text);
         Ok(())
     }
-
-    fn println(&self, text: &str) -> io::Result<()> {
+    fn println(&self, text: &str) -> HarperResult<()> {
         println!("{}", text);
         Ok(())
     }
-
-    fn flush(&self) -> io::Result<()> {
-        io::stdout().flush()
-    }
-}
-
-/// Mock implementation for testing
-#[cfg(test)]
-pub mod test_helpers {
-    use super::*;
-    use std::sync::{Arc, Mutex};
-
-    /// Mock input that returns predefined responses
-    #[derive(Clone)]
-    #[allow(dead_code)]
-    pub struct MockInput {
-        responses: Arc<Mutex<Vec<String>>>,
-    }
-
-    impl MockInput {
-        #[allow(dead_code)]
-        pub fn new(responses: Vec<&str>) -> Self {
-            Self {
-                responses: Arc::new(Mutex::new(
-                    responses.into_iter().map(String::from).collect(),
-                )),
-            }
-        }
-    }
-
-    impl Input for MockInput {
-        fn read_line(&self) -> io::Result<String> {
-            let mut responses = self.responses.lock().unwrap();
-            if responses.is_empty() {
-                Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "No more test responses",
-                ))
-            } else {
-                Ok(responses.remove(0))
-            }
-        }
-    }
-
-    /// Mock output that captures all output
-    #[derive(Clone)]
-    #[allow(dead_code)]
-    pub struct MockOutput {
-        output: Arc<Mutex<Vec<String>>>,
-    }
-
-    impl Default for MockOutput {
-        fn default() -> Self {
-            Self {
-                output: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-    }
-
-    impl MockOutput {
-        #[allow(dead_code)]
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        #[allow(dead_code)]
-        pub fn get_output(&self) -> String {
-            self.output.lock().unwrap().join("")
-        }
-    }
-
-    impl Output for MockOutput {
-        fn print(&self, text: &str) -> io::Result<()> {
-            self.output.lock().unwrap().push(text.to_string());
-            Ok(())
-        }
-
-        fn println(&self, text: &str) -> io::Result<()> {
-            self.output.lock().unwrap().push(format!(
-                "{}
-",
-                text
-            ));
-            Ok(())
-        }
-
-        fn flush(&self) -> io::Result<()> {
-            Ok(())
-        }
+    fn flush(&self) -> HarperResult<()> {
+        use std::io::Write;
+        // Correct flush implementation
+        let mut stdout = std::io::stdout();
+        stdout.flush()?;
+        Ok(())
     }
 }
