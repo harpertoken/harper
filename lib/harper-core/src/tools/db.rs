@@ -12,30 +12,55 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Database queries tool
+//! Database operations tool
 //!
 //! This module provides functionality for running read-only SQL queries on SQLite databases.
 
-use crate::core::error::HarperError;
+use crate::core::error::{HarperError, HarperResult};
 use crate::tools::parsing;
 use colored::*;
 use rusqlite::{Connection, Result as SqlResult};
+use std::io::{self, Write};
+
+use crate::core::io_traits::UserApproval;
+use std::sync::Arc;
 
 /// Run a database query
-pub fn run_query(response: &str) -> crate::core::error::HarperResult<String> {
+pub async fn run_query(
+    response: &str,
+    approver: Option<Arc<dyn UserApproval>>,
+) -> HarperResult<String> {
     let args = parsing::extract_tool_args(response, "[DB_QUERY", 2)?;
     let db_path = &args[0];
     let query = &args[1];
 
-    println!(
-        "{} Run query on DB {} ? (y/n): {}",
-        "System:".bold().magenta(),
-        db_path.magenta(),
-        query.magenta()
-    );
-    let mut approval = String::new();
-    std::io::stdin().read_line(&mut approval)?;
-    if !approval.trim().eq_ignore_ascii_case("y") {
+    let is_approved = if let Some(appr) = approver {
+        appr.approve(&format!("Run query on DB {}?", db_path), query)
+            .await?
+    } else {
+        let db = db_path.clone();
+        let q = query.clone();
+        tokio::task::spawn_blocking(move || {
+            println!(
+                "{} Run query on DB {} ? (y/n): {}",
+                "System:".bold().magenta(),
+                db.magenta(),
+                q.magenta()
+            );
+            io::stdout()
+                .flush()
+                .map_err(|e| HarperError::Io(e.to_string()))?;
+            let mut approval = String::new();
+            io::stdin()
+                .read_line(&mut approval)
+                .map_err(|e| HarperError::Io(e.to_string()))?;
+            Ok::<bool, HarperError>(approval.trim().eq_ignore_ascii_case("y"))
+        })
+        .await
+        .map_err(|e| HarperError::Command(format!("Task failed: {}", e)))??
+    };
+
+    if !is_approved {
         return Ok("Query cancelled by user".to_string());
     }
 

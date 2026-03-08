@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
 
 use crossterm::terminal::{
@@ -31,7 +31,7 @@ use harper_core::runtime::config::ExecPolicyConfig;
 use rusqlite::Connection;
 use turul_mcp_client::McpClient;
 
-use super::app::{AppState, TuiApp};
+use super::app::{AppState, ApprovalState, TuiApp};
 use super::events::{self, EventResult};
 use super::theme::Theme;
 use super::widgets;
@@ -40,9 +40,12 @@ use async_trait::async_trait;
 use harper_core::core::error::HarperResult;
 use std::path::Path;
 
+/// Type alias for the approval message sent via channels
+type ApprovalMessage = (String, String, Arc<Mutex<Option<oneshot::Sender<bool>>>>);
+
 /// Approval provider for TUI that uses channels to communicate with the UI loop
 pub struct TuiApproval {
-    approval_tx: mpsc::Sender<(String, String, oneshot::Sender<bool>)>,
+    approval_tx: mpsc::Sender<ApprovalMessage>,
 }
 
 #[async_trait]
@@ -50,7 +53,11 @@ impl UserApproval for TuiApproval {
     async fn approve(&self, prompt: &str, command: &str) -> HarperResult<bool> {
         let (tx, rx) = oneshot::channel();
         self.approval_tx
-            .send((prompt.to_string(), command.to_string(), tx))
+            .send((
+                prompt.to_string(),
+                command.to_string(),
+                Arc::new(Mutex::new(Some(tx))),
+            ))
             .await
             .map_err(|_| {
                 harper_core::core::error::HarperError::Command(
@@ -96,7 +103,7 @@ pub async fn run_tui(
     // Set up terminal
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen, cursor::Show)?;
+    execute!(stdout, EnterAlternateScreen, cursor::Hide)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -105,8 +112,7 @@ pub async fn run_tui(
     // Set up channels for background worker
     let (worker_tx, mut worker_rx) = mpsc::channel::<WorkerMsg>(10);
     let (ui_tx, mut ui_rx) = mpsc::channel::<UiUpdate>(10);
-    let (approval_tx, mut approval_rx) =
-        mpsc::channel::<(String, String, oneshot::Sender<bool>)>(1);
+    let (approval_tx, mut approval_rx) = mpsc::channel::<ApprovalMessage>(1);
 
     // Clone data for worker
     let worker_api_config = api_config.clone();
@@ -115,6 +121,14 @@ pub async fn run_tui(
     let db_path = conn
         .path()
         .and_then(|p| Path::new(p).to_str().map(|s| s.to_string()));
+
+    // Wrap MCP client in Arc if present
+    // Note: This requires McpClient to be thread-safe (Send + Sync)
+    // We assume McpClient is Arc-cloneable or we wrap it.
+    // For now, if McpClient is not cloneable, we'd need a proxy.
+    // Let's assume the user can provide an Arc or we wrap it here if we had access to the type.
+    // Since we only have Option<&McpClient>, we can't easily Arc it for the worker thread.
+    // ARCHITECTURAL NOTE: To support MCP in TUI worker, McpClient should be passed as Arc<McpClient>.
 
     // Spawn background worker in a separate thread to handle non-Send Connection
     let ui_tx_clone = ui_tx.clone();
@@ -145,7 +159,7 @@ pub async fn run_tui(
                         let mut chat_service = ChatService::new(
                             &worker_conn,
                             &worker_api_config,
-                            None, // TODO: Handle MCP client in worker
+                            None, // TODO: Support MCP in worker thread
                             Some(&mut api_cache),
                             None,
                             worker_custom_commands.clone(),
@@ -185,7 +199,7 @@ pub async fn run_tui(
 
         // Handle both UI events and worker updates
         tokio::select! {
-            // UI Events
+            // UI Events - Bubble up errors from terminal IO
             event_res = async {
                 if crossterm::event::poll(std::time::Duration::from_millis(100))? {
                     Ok::<_, std::io::Error>(Some(crossterm::event::read()?))
@@ -193,7 +207,8 @@ pub async fn run_tui(
                     Ok(None)
                 }
             } => {
-                if let Ok(Some(event)) = event_res {
+                let event = event_res?; // Proper error propagation
+                if let Some(event) = event {
                     match events::handle_event(event, &mut app, session_service) {
                         EventResult::Quit => break,
                         EventResult::SendMessage(msg) => {
@@ -240,7 +255,13 @@ pub async fn run_tui(
             // Approval Requests
             approval = approval_rx.recv() => {
                 if let Some((prompt, command, tx)) = approval {
-                    app.state = AppState::Approval(prompt, command, tx);
+                    // Use the new pending_approval overlay instead of replacing state
+                    app.pending_approval = Some(ApprovalState {
+                        prompt,
+                        command,
+                        tx,
+                        scroll_offset: 0,
+                    });
                 }
             }
         }

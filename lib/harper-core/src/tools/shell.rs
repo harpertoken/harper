@@ -22,7 +22,7 @@ use crate::memory::storage::{self, CommandLogRecord};
 use crate::runtime::config::ExecPolicyConfig;
 use colored::*;
 use rusqlite::Connection;
-use std::io;
+use std::io::{self, Write};
 use std::time::Instant;
 
 const OUTPUT_PREVIEW_LIMIT: usize = 512;
@@ -70,10 +70,11 @@ pub async fn execute_command(
     // Security check to prevent shell injection and dangerous commands
     // Note: This is a defense-in-depth measure. The primary security comes from user approval.
     let dangerous_chars = [
-        ';', '|', '&', '`', '$', '(', ')', '<', '>', '*', '?', '[', ']', '{', '}', '!', '~',
+        ';', '|', '&', '`', '$', '(', ')', '<', '>', '*', '?', '[', ']', '{', '}', '!', '~', '\n',
+        '\r',
     ];
     if command_str.chars().any(|c| dangerous_chars.contains(&c)) {
-        let message = "Command contains potentially dangerous shell metacharacters. \
+        let message = "Command contains potentially dangerous shell metacharacters or newlines. \
              Only basic commands without shell features are allowed.";
         maybe_log_command(
             audit_ctx,
@@ -178,15 +179,28 @@ pub async fn execute_command(
         let is_approved = if let Some(appr) = approver {
             appr.approve("Execute command?", command_str).await?
         } else {
-            // Fallback to blocking stdin if no approver provided (legacy support)
-            println!(
-                "{} Execute command? {} (y/n): ",
-                "System:".bold().magenta(),
-                command_str.magenta()
-            );
-            let mut approval = String::new();
-            io::stdin().read_line(&mut approval)?;
-            approval.trim().eq_ignore_ascii_case("y")
+            // Fallback to spawn_blocking for stdin if no approver provided (legacy support)
+            let prompt = "Execute command?".to_string();
+            let cmd = command_str.to_string();
+            tokio::task::spawn_blocking(move || {
+                println!(
+                    "{} {} {} (y/n): ",
+                    "System:".bold().magenta(),
+                    prompt.bold().magenta(),
+                    cmd.magenta()
+                );
+                io::stdout()
+                    .flush()
+                    .map_err(|e| HarperError::Io(e.to_string()))?;
+
+                let mut approval = String::new();
+                io::stdin()
+                    .read_line(&mut approval)
+                    .map_err(|e| HarperError::Io(e.to_string()))?;
+                Ok::<bool, HarperError>(approval.trim().eq_ignore_ascii_case("y"))
+            })
+            .await
+            .map_err(|e| HarperError::Command(format!("Task execution failed: {}", e)))??
         };
 
         if !is_approved {

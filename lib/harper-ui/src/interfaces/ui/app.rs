@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use harper_core::core::Message;
+use std::sync::{Arc, Mutex};
+use tokio::sync::oneshot;
 
 #[derive(Clone)]
 pub struct ChatState {
@@ -35,6 +37,25 @@ impl ChatState {
     }
 }
 
+pub struct ApprovalState {
+    pub prompt: String,
+    pub command: String,
+    pub tx: Arc<Mutex<Option<oneshot::Sender<bool>>>>,
+    pub scroll_offset: u16,
+}
+
+impl Clone for ApprovalState {
+    fn clone(&self) -> Self {
+        Self {
+            prompt: self.prompt.clone(),
+            command: self.command.clone(),
+            tx: self.tx.clone(),
+            scroll_offset: self.scroll_offset,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub enum AppState {
     Menu(usize),
     Chat(ChatState),
@@ -42,29 +63,6 @@ pub enum AppState {
     ExportSessions(Vec<SessionInfo>, usize),  // sessions, selected for export
     Tools(usize),                             // selected tool
     ViewSession(String, Vec<Message>, usize), // name, messages, selected
-    Approval(String, String, tokio::sync::oneshot::Sender<bool>), // prompt, command, response channel
-}
-
-// Clone implementation for AppState (manual because Sender is not Clone)
-impl Clone for AppState {
-    fn clone(&self) -> Self {
-        match self {
-            AppState::Menu(s) => AppState::Menu(*s),
-            AppState::Chat(s) => AppState::Chat(s.clone()),
-            AppState::Sessions(s, sel) => AppState::Sessions(s.clone(), *sel),
-            AppState::ExportSessions(s, sel) => AppState::ExportSessions(s.clone(), *sel),
-            AppState::Tools(s) => AppState::Tools(*s),
-            AppState::ViewSession(n, m, sel) => AppState::ViewSession(n.clone(), m.clone(), *sel),
-            AppState::Approval(_p, _c, _) => {
-                // This is a bit of a hack since we can't clone the Sender.
-                // In practice, we should try to avoid cloning Approval state if possible.
-                // For now, we'll just panic if someone tries to clone an active approval state
-                // or return a "dummy" version if we must.
-                // Given the current TUI architecture, we might need a better way.
-                panic!("Cannot clone AppState::Approval due to oneshot::Sender");
-            }
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -92,6 +90,7 @@ pub struct UiMessage {
 pub struct TuiApp {
     pub state: AppState,
     pub message: Option<UiMessage>,
+    pub pending_approval: Option<ApprovalState>,
 }
 
 impl Default for TuiApp {
@@ -99,6 +98,7 @@ impl Default for TuiApp {
         Self {
             state: AppState::Menu(0),
             message: None,
+            pending_approval: None,
         }
     }
 }
@@ -141,6 +141,11 @@ impl TuiApp {
     }
 
     pub fn next(&mut self) {
+        if let Some(approval) = &mut self.pending_approval {
+            approval.scroll_offset = approval.scroll_offset.saturating_add(1);
+            return;
+        }
+
         match &mut self.state {
             AppState::Menu(sel) => *sel = (*sel + 1) % 5,
             AppState::Chat(chat_state) => {
@@ -163,11 +168,15 @@ impl TuiApp {
                     *sel = (*sel + 1) % messages.len();
                 }
             }
-            AppState::Approval(_, _, _) => {}
         }
     }
 
     pub fn previous(&mut self) {
+        if let Some(approval) = &mut self.pending_approval {
+            approval.scroll_offset = approval.scroll_offset.saturating_sub(1);
+            return;
+        }
+
         match &mut self.state {
             AppState::Menu(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
             AppState::Chat(chat_state) => {
@@ -201,7 +210,6 @@ impl TuiApp {
                     };
                 }
             }
-            AppState::Approval(_, _, _) => {}
         }
     }
 }

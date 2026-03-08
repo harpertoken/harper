@@ -16,7 +16,7 @@ use ratatui::prelude::*;
 use ratatui::style::Modifier;
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
-use super::app::{AppState, MessageType, SessionInfo, TuiApp, UiMessage};
+use super::app::{AppState, ApprovalState, MessageType, SessionInfo, TuiApp, UiMessage};
 use super::theme::Theme;
 
 // Keyboard shortcut constants
@@ -164,11 +164,15 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         AppState::ViewSession(name, messages, selected) => {
             draw_view_session(frame, name, messages, *selected, theme)
         }
-        AppState::Approval(prompt, command, _) => draw_approval(frame, prompt, command, theme),
     }
 
     // Draw status bar
     draw_status_bar(frame, app, theme);
+
+    // Draw approval overlay if present
+    if let Some(approval) = &app.pending_approval {
+        draw_approval(frame, approval, theme);
+    }
 
     // Draw message overlay if present
     if let Some(msg) = &app.message {
@@ -176,10 +180,10 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     }
 }
 
-fn draw_approval(frame: &mut Frame, prompt: &str, command: &str, theme: &Theme) {
+fn draw_approval(frame: &mut Frame, state: &ApprovalState, theme: &Theme) {
     let content = format!(
-        "{}\n\n{}\n\nPress 'y' to approve or 'n' to reject.",
-        prompt, command
+        "{}\n\n{}\n\nPress 'y' to approve or 'n' to reject.\nUse ↑↓ to scroll.",
+        state.prompt, state.command
     );
     let area = frame.area();
     let overlay_width = (content.len() as u16 + 4).min(area.width * 3 / 4).max(40);
@@ -204,7 +208,8 @@ fn draw_approval(frame: &mut Frame, prompt: &str, command: &str, theme: &Theme) 
     let paragraph = Paragraph::new(content)
         .block(block)
         .alignment(Alignment::Center)
-        .wrap(Wrap { trim: true });
+        .wrap(Wrap { trim: true })
+        .scroll((state.scroll_offset, 0));
 
     frame.render_widget(Clear, overlay_area);
     frame.render_widget(paragraph, overlay_area);
@@ -375,14 +380,17 @@ fn draw_view_session(
 }
 
 fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
-    let status_text = match &app.state {
-        AppState::Menu(_) => " Ready ",
-        AppState::Chat(..) => " Chatting ",
-        AppState::Sessions(_, _) => " Sessions ",
-        AppState::ExportSessions(_, _) => " Export ",
-        AppState::Tools(_) => " Tools ",
-        AppState::ViewSession(_, _, _) => " Viewing ",
-        AppState::Approval(_, _, _) => " Approval Required ",
+    let status_text = if app.pending_approval.is_some() {
+        " Approval Required "
+    } else {
+        match &app.state {
+            AppState::Menu(_) => " Ready ",
+            AppState::Chat(..) => " Chatting ",
+            AppState::Sessions(_, _) => " Sessions ",
+            AppState::ExportSessions(_, _) => " Export ",
+            AppState::Tools(_) => " Tools ",
+            AppState::ViewSession(_, _, _) => " Viewing ",
+        }
     };
 
     let right_status = STATUS_BAR_SHORTCUTS;

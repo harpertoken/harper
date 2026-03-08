@@ -149,20 +149,23 @@ impl<'a> ToolService<'a> {
                 .await?;
             Ok(Some((final_response, command_result)))
         } else if response.to_uppercase().starts_with(tools::READ_FILE) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                filesystem::read_file(response)
-            })
-            .await
+            let tool_result = filesystem::read_file(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &tool_result)
+                .await?;
+            Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::WRITE_FILE) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                filesystem::write_file(response)
-            })
-            .await
+            let tool_result = filesystem::write_file(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &tool_result)
+                .await?;
+            Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::SEARCH_REPLACE) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                filesystem::search_replace(response)
-            })
-            .await
+            let tool_result = filesystem::search_replace(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &tool_result)
+                .await?;
+            Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::TODO) {
             self.execute_sync_tool(client, history, response, |conn, response| {
                 let conn = conn.ok_or_else(|| {
@@ -217,10 +220,11 @@ impl<'a> ToolService<'a> {
             })
             .await
         } else if response.to_uppercase().starts_with(tools::DB_QUERY) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                db::run_query(response)
-            })
-            .await
+            let tool_result = db::run_query(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &tool_result)
+                .await?;
+            Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::IMAGE_INFO) {
             self.execute_sync_tool(client, history, response, |_, response| {
                 image::get_image_info(response)
@@ -299,7 +303,8 @@ impl<'a> ToolService<'a> {
                 .and_then(|v| v.as_str());
                 if let (Some(path), Some(content)) = (path, content) {
                     let bracket_command = format!("[WRITE_FILE {} {}]", path, content);
-                    let write_result = filesystem::write_file(&bracket_command)?;
+                    let write_result =
+                        filesystem::write_file(&bracket_command, self.approver.clone()).await?;
                     let final_response = self
                         .call_llm_after_tool(client, history, &write_result)
                         .await?;
@@ -332,7 +337,8 @@ impl<'a> ToolService<'a> {
                 {
                     let bracket_command =
                         format!("[SEARCH_REPLACE {} {} {}]", path, old_string, new_string);
-                    let replace_result = filesystem::search_replace(&bracket_command)?;
+                    let replace_result =
+                        filesystem::search_replace(&bracket_command, self.approver.clone()).await?;
                     let final_response = self
                         .call_llm_after_tool(client, history, &replace_result)
                         .await?;
@@ -465,7 +471,7 @@ impl<'a> ToolService<'a> {
                 let final_response = self
                     .call_llm_after_tool(client, history, &error_msg)
                     .await?;
-                Ok(Some((final_response, error_msg)))
+                Ok::<Option<(String, String)>, HarperError>(Some((final_response, error_msg)))
             }
         }
     }

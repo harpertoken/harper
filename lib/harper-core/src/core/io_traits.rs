@@ -40,17 +40,30 @@ impl UserApproval for StdinApproval {
         use colored::*;
         use std::io::{self, Write};
 
-        println!(
-            "{} {} {}",
-            prompt.bold().magenta(),
-            command.magenta(),
-            "(y/n): ".bold().magenta()
-        );
-        io::stdout().flush()?;
+        let prompt = prompt.to_string();
+        let command = command.to_string();
 
-        let mut approval = String::new();
-        io::stdin().read_line(&mut approval)?;
-        Ok(approval.trim().eq_ignore_ascii_case("y"))
+        let res = tokio::task::spawn_blocking(move || {
+            println!(
+                "{} {} {}",
+                prompt.bold().magenta(),
+                command.magenta(),
+                "(y/n): ".bold().magenta()
+            );
+            io::stdout()
+                .flush()
+                .map_err(|e| crate::core::error::HarperError::Io(e.to_string()))?;
+
+            let mut approval = String::new();
+            io::stdin()
+                .read_line(&mut approval)
+                .map_err(|e| crate::core::error::HarperError::Io(e.to_string()))?;
+            Ok::<bool, crate::core::error::HarperError>(approval.trim().eq_ignore_ascii_case("y"))
+        })
+        .await
+        .map_err(|e| crate::core::error::HarperError::Command(format!("Task failed: {}", e)))?;
+
+        res
     }
 }
 
@@ -103,7 +116,9 @@ impl Output for StdOutput {
     }
     fn flush(&self) -> HarperResult<()> {
         use std::io::Write;
-        std::io::stdout().flush()?;
+        // Correct flush implementation
+        let mut stdout = std::io::stdout();
+        stdout.flush()?;
         Ok(())
     }
 }
