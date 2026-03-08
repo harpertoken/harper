@@ -1237,25 +1237,6 @@ impl AuditParams {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::{NamedTempFile, TempDir};
-
-    struct CwdGuard {
-        original: std::path::PathBuf,
-    }
-
-    impl CwdGuard {
-        fn enter(path: &Path) -> Self {
-            let original = std::env::current_dir().expect("current dir");
-            std::env::set_current_dir(path).expect("set current dir");
-            Self { original }
-        }
-    }
-
-    impl Drop for CwdGuard {
-        fn drop(&mut self) {
-            let _ = std::env::set_current_dir(&self.original);
-        }
-    }
 
     #[test]
     fn parse_audit_no_args() {

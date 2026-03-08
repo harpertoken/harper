@@ -39,6 +39,7 @@ use crate::runtime::config::ExecPolicyConfig;
 use crate::tools::shell::CommandAuditContext;
 use reqwest::Client;
 use rusqlite::Connection;
+use serde_json::json;
 use turul_mcp_client::{ContentBlock, McpClient};
 
 // Git command constants
@@ -95,36 +96,69 @@ impl<'a> ToolService<'a> {
         response: &str,
         web_search_enabled: bool,
     ) -> Result<Option<(String, String)>, HarperError> {
-        // Try to parse as JSON tool call first (including MCP tools)
+        // Try to parse as JSON tool call first
         if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(response) {
-            // Check for MCP tool call
-            if let Some(mcp_tool_name) = json_value.get("mcp_tool").and_then(|v| v.as_str()) {
-                return self
-                    .handle_mcp_tool_call(client, history, mcp_tool_name, &json_value, response)
-                    .await;
-            }
-            // Check for OpenAI tool_calls format (array with function objects)
+            // Case 1: OpenAI tool_calls format (array of objects)
             if let Some(tool_calls) = json_value.as_array() {
                 if let Some(first_call) = tool_calls.first() {
-                    let tool_name = first_call
-                        .get("function")
+                    let function = first_call.get("function");
+                    let tool_name = function
                         .and_then(|f| f.get("name"))
                         .and_then(|v| v.as_str());
+
                     if let Some(name) = tool_name {
+                        // Extract arguments - OpenAI uses a JSON string for arguments
+                        let args_val = function.and_then(|f| f.get("arguments"));
+                        let args_json = if let Some(serde_json::Value::String(s)) = args_val {
+                            serde_json::from_str::<serde_json::Value>(s).unwrap_or(json!({}))
+                        } else {
+                            args_val.cloned().unwrap_or(json!({}))
+                        };
+
+                        // Check if it's an MCP tool
+                        if name.starts_with("mcp__") {
+                            return self
+                                .handle_mcp_tool_call(client, history, name, &args_json, response)
+                                .await;
+                        }
+
                         return self
-                            .handle_regular_json_tool(client, history, name, &json_value, response)
+                            .handle_regular_json_tool(client, history, name, &args_json, response)
                             .await;
                     }
                 }
             }
-            // Check for regular tool call - check both "tool" (OpenAI format) and "name" (Gemini format)
-            if let Some(tool_name) = json_value
+
+            // Case 2: Gemini or custom single-object format
+            // Check for MCP tool call first
+            if let Some(mcp_tool_name) = json_value.get("mcp_tool").and_then(|v| v.as_str()) {
+                let args = json_value.get("arguments").cloned().unwrap_or(json!({}));
+                return self
+                    .handle_mcp_tool_call(client, history, mcp_tool_name, &args, response)
+                    .await;
+            }
+
+            // Regular tool call - check both "tool" and "name"
+            let tool_name = json_value
                 .get("tool")
                 .and_then(|v| v.as_str())
-                .or_else(|| json_value.get("name").and_then(|v| v.as_str()))
-            {
+                .or_else(|| json_value.get("name").and_then(|v| v.as_str()));
+
+            if let Some(name) = tool_name {
+                let args = json_value
+                    .get("args")
+                    .or_else(|| json_value.get("arguments"));
+                let args_json = args.cloned().unwrap_or(json!({}));
+
+                // Handle possible mcp__ prefix in Gemini format too
+                if name.starts_with("mcp__") {
+                    return self
+                        .handle_mcp_tool_call(client, history, name, &args_json, response)
+                        .await;
+                }
+
                 return self
-                    .handle_regular_json_tool(client, history, tool_name, &json_value, response)
+                    .handle_regular_json_tool(client, history, name, &args_json, response)
                     .await;
             }
         }
@@ -245,27 +279,19 @@ impl<'a> ToolService<'a> {
             Ok(None)
         }
     }
+
     #[allow(dead_code)]
     async fn handle_regular_json_tool(
         &mut self,
         client: &Client,
         history: &[Message],
         tool_name: &str,
-        json_value: &serde_json::Value,
+        args: &serde_json::Value,
         raw_response: &str,
     ) -> Result<Option<(String, String)>, HarperError> {
-        // Get parameters from "args" (Gemini format) or directly from json_value
-        let args = json_value.get("args");
-
         match tool_name {
             "run_command" => {
-                let command = if let Some(args) = args {
-                    args.get("command")
-                } else {
-                    json_value.get("command")
-                }
-                .and_then(|v| v.as_str());
-                if let Some(command) = command {
+                if let Some(command) = args.get("command").and_then(|v| v.as_str()) {
                     let bracket_command = format!("[RUN_COMMAND {}]", command);
                     let audit_ctx = CommandAuditContext {
                         conn: self.conn,
@@ -290,13 +316,7 @@ impl<'a> ToolService<'a> {
             }
 
             "read_file" => {
-                let path = if let Some(args) = args {
-                    args.get("path")
-                } else {
-                    json_value.get("path")
-                }
-                .and_then(|v| v.as_str());
-                if let Some(path) = path {
+                if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
                     let bracket_command = format!("[READ_FILE {}]", path);
                     let read_result =
                         filesystem::read_file(&bracket_command, self.approver.clone()).await?;
@@ -310,18 +330,8 @@ impl<'a> ToolService<'a> {
             }
 
             "write_file" => {
-                let path = if let Some(args) = args {
-                    args.get("path")
-                } else {
-                    json_value.get("path")
-                }
-                .and_then(|v| v.as_str());
-                let content = if let Some(args) = args {
-                    args.get("content")
-                } else {
-                    json_value.get("content")
-                }
-                .and_then(|v| v.as_str());
+                let path = args.get("path").and_then(|v| v.as_str());
+                let content = args.get("content").and_then(|v| v.as_str());
                 if let (Some(path), Some(content)) = (path, content) {
                     let bracket_command = format!("[WRITE_FILE {} {}]", path, content);
                     let write_result =
@@ -335,24 +345,9 @@ impl<'a> ToolService<'a> {
                 }
             }
             "search_replace" => {
-                let path = if let Some(args) = args {
-                    args.get("path")
-                } else {
-                    json_value.get("path")
-                }
-                .and_then(|v| v.as_str());
-                let old_string = if let Some(args) = args {
-                    args.get("old_string")
-                } else {
-                    json_value.get("old_string")
-                }
-                .and_then(|v| v.as_str());
-                let new_string = if let Some(args) = args {
-                    args.get("new_string")
-                } else {
-                    json_value.get("new_string")
-                }
-                .and_then(|v| v.as_str());
+                let path = args.get("path").and_then(|v| v.as_str());
+                let old_string = args.get("old_string").and_then(|v| v.as_str());
+                let new_string = args.get("new_string").and_then(|v| v.as_str());
                 if let (Some(path), Some(old_string), Some(new_string)) =
                     (path, old_string, new_string)
                 {
@@ -369,22 +364,12 @@ impl<'a> ToolService<'a> {
                 }
             }
             "todo" => {
-                let action = if let Some(args) = args {
-                    args.get("action")
-                } else {
-                    json_value.get("action")
-                }
-                .and_then(|v| v.as_str());
-                if let Some(action) = action {
+                if let Some(action) = args.get("action").and_then(|v| v.as_str()) {
                     let bracket_command = match action {
                         "add" => {
-                            let description = if let Some(args) = args {
-                                args.get("description")
-                            } else {
-                                json_value.get("description")
-                            }
-                            .and_then(|v| v.as_str());
-                            if let Some(description) = description {
+                            if let Some(description) =
+                                args.get("description").and_then(|v| v.as_str())
+                            {
                                 format!("[TODO add {}]", description)
                             } else {
                                 "".to_string()
@@ -392,13 +377,7 @@ impl<'a> ToolService<'a> {
                         }
                         "list" => "[TODO list]".to_string(),
                         "remove" => {
-                            let index = if let Some(args) = args {
-                                args.get("index")
-                            } else {
-                                json_value.get("index")
-                            }
-                            .and_then(|v| v.as_i64());
-                            if let Some(index) = index {
+                            if let Some(index) = args.get("index").and_then(|v| v.as_i64()) {
                                 format!("[TODO remove {}]", index)
                             } else {
                                 "".to_string()
@@ -434,12 +413,7 @@ impl<'a> ToolService<'a> {
                 Ok(Some((final_response, diff_result)))
             }
             "git_add" => {
-                let files = if let Some(args) = args {
-                    args.get("files")
-                } else {
-                    json_value.get("files")
-                }
-                .and_then(|v| v.as_str());
+                let files = args.get("files").and_then(|v| v.as_str());
                 let bracket_command = format!("[GIT_ADD {}]", files.unwrap_or("."));
                 let add_result = git::git_add(&bracket_command, self.approver.clone()).await?;
                 let final_response = self
@@ -448,13 +422,7 @@ impl<'a> ToolService<'a> {
                 Ok(Some((final_response, add_result)))
             }
             "git_commit" => {
-                let message = if let Some(args) = args {
-                    args.get("message")
-                } else {
-                    json_value.get("message")
-                }
-                .and_then(|v| v.as_str());
-                if let Some(message) = message {
+                if let Some(message) = args.get("message").and_then(|v| v.as_str()) {
                     let bracket_command = format!("[GIT_COMMIT {}]", message);
                     let commit_result =
                         git::git_commit(&bracket_command, self.approver.clone()).await?;
@@ -467,25 +435,12 @@ impl<'a> ToolService<'a> {
                 }
             }
             "list_changed_files" => {
-                let ext = if let Some(args) = args {
-                    args.get("ext")
-                } else {
-                    json_value.get("ext")
-                }
-                .and_then(|v| v.as_str());
-                let tracked_only = if let Some(args) = args {
-                    args.get("tracked_only")
-                } else {
-                    json_value.get("tracked_only")
-                }
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-                let since = if let Some(args) = args {
-                    args.get("since")
-                } else {
-                    json_value.get("since")
-                }
-                .and_then(|v| v.as_str());
+                let ext = args.get("ext").and_then(|v| v.as_str());
+                let tracked_only = args
+                    .get("tracked_only")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let since = args.get("since").and_then(|v| v.as_str());
 
                 let audit_ctx = CommandAuditContext {
                     conn: self.conn,
@@ -517,7 +472,7 @@ impl<'a> ToolService<'a> {
         client: &Client,
         history: &[Message],
         tool_name: &str,
-        json_value: &serde_json::Value,
+        args: &serde_json::Value,
         raw_response: &str,
     ) -> Result<Option<(String, String)>, HarperError> {
         let Some(mcp_client) = self.mcp_client else {
@@ -528,13 +483,7 @@ impl<'a> ToolService<'a> {
             return Ok(Some((final_response, error_msg)));
         };
 
-        // Extract arguments from the JSON
-        let arguments = json_value
-            .get("arguments")
-            .unwrap_or(&serde_json::Value::Object(serde_json::Map::new()))
-            .clone();
-
-        match mcp_client.call_tool(tool_name, arguments).await {
+        match mcp_client.call_tool(tool_name, args.clone()).await {
             Ok(results) => {
                 // Format the response for the LLM
                 let mut result_parts = Vec::new();
