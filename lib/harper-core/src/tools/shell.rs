@@ -69,13 +69,13 @@ pub async fn execute_command(
 
     // Security check to prevent shell injection and dangerous commands
     // Note: This is a defense-in-depth measure. The primary security comes from user approval.
+    // We allow wildcards (*, ?) and git revision syntax (~, ^) but block chaining and subshells.
     let dangerous_chars = [
-        ';', '|', '&', '`', '$', '(', ')', '<', '>', '*', '?', '[', ']', '{', '}', '!', '~', '\n',
-        '\r',
+        ';', '|', '&', '`', '$', '(', ')', '<', '>', '\n', '\r',
     ];
     if command_str.chars().any(|c| dangerous_chars.contains(&c)) {
-        let message = "Command contains potentially dangerous shell metacharacters or newlines. \
-             Only basic commands without shell features are allowed.";
+        let message = "Command contains potentially dangerous shell metacharacters (like ;, |, &) or newlines. \
+             Command chaining and redirection are not allowed for security.";
         maybe_log_command(
             audit_ctx,
             command_str,
@@ -96,7 +96,6 @@ pub async fn execute_command(
         "rm -rf",
         "rmdir",
         "del ",
-        "format",
         "fdisk",
         "mkfs",
         "dd if=",
@@ -219,19 +218,7 @@ pub async fn execute_command(
             return Ok("Command execution cancelled by user".to_string());
         }
         approved = true;
-    } else {
-        println!(
-            "{} Executing allowed command: {}",
-            "System:".bold().magenta(),
-            command_str.magenta()
-        );
     }
-
-    println!(
-        "{} Running command: {}",
-        "System:".bold().magenta(),
-        command_str.magenta()
-    );
 
     let start = Instant::now();
     let output = std::process::Command::new("sh")

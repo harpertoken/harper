@@ -298,10 +298,10 @@ impl UiConfig {
     fn validate(&self) -> HarperResult<()> {
         if let Some(ref theme) = self.theme {
             match theme.as_str() {
-                "default" | "dark" | "light" => {}
+                "default" | "dark" | "light" | "github" => {}
                 _ => {
                     return Err(HarperError::Config(format!(
-                        "Invalid theme: {}. Supported themes: default, dark, light",
+                        "Invalid theme: {}. Supported themes: default, dark, light, github",
                         theme
                     )))
                 }

@@ -1657,7 +1657,7 @@ dependencies = [
 
 [[package]]
 name = "harper-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "aes",
  "arboard",
@@ -1717,7 +1717,7 @@ dependencies = [
 
 [[package]]
 name = "harper-ui"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "arboard",
  "async-trait",
@@ -5259,15 +5259,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.60.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
-dependencies = [
- "windows-targets 0.53.5",
 ]
 
 [[package]]

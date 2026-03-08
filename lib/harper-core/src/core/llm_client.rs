@@ -20,6 +20,7 @@
 use crate::core::constants::crypto::*;
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::{ApiConfig, ApiProvider, Message};
+use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use ring::{
     aead::{self},
@@ -229,6 +230,28 @@ pub async fn call_llm(
                             },
                             "required": ["files"]
                         }
+                    },
+                    {
+                        "name": "list_changed_files",
+                        "description": "List changed files with optional filters",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "ext": {
+                                    "type": "string",
+                                    "description": "Optional file extension filter, for example 'rs'"
+                                },
+                                "tracked_only": {
+                                    "type": "boolean",
+                                    "description": "When true, exclude untracked files"
+                                },
+                                "since": {
+                                    "type": "string",
+                                    "description": "Optional git --since expression, for example 'today'"
+                                }
+                            },
+                            "required": []
+                        }
                     }
                 ]
             });
@@ -262,10 +285,7 @@ pub async fn call_llm(
             .text()
             .await
             .unwrap_or_else(|_| "Could not read error body".to_string());
-        return Err(HarperError::Api(format!(
-            "API Error: {} ({})",
-            error_text, status
-        )));
+        return Err(HarperError::Api(format_api_error(status, &error_text)));
     }
 
     let resp_json: serde_json::Value = res
@@ -299,6 +319,40 @@ pub async fn call_llm(
     };
 
     Ok(assistant_reply)
+}
+
+fn format_api_error(status: StatusCode, error_text: &str) -> String {
+    if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(error_text) {
+        let message = error_json
+            .pointer("/error/message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown API error");
+        let reason = error_json
+            .pointer("/error/details/0/reason")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        let domain = error_json
+            .pointer("/error/details/0/domain")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+
+        if status == StatusCode::FORBIDDEN
+            && reason == "API_SERVICE_BLOCKED"
+            && domain == "googleapis.com"
+        {
+            return "Permission denied (403): Google Generative Language API is blocked for this key/project. Enable the API + billing in Google Cloud, or switch provider.".to_string();
+        }
+
+        return format!("{} ({})", message, status);
+    }
+
+    let compact = error_text.replace('\n', " ");
+    let truncated = if compact.chars().count() > 240 {
+        format!("{}...", compact.chars().take(240).collect::<String>())
+    } else {
+        compact
+    };
+    format!("{} ({})", truncated, status)
 }
 
 /// Encrypts data using AES-GCM with a randomly generated key

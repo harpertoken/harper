@@ -100,7 +100,7 @@ impl<'a> ToolService<'a> {
             // Check for MCP tool call
             if let Some(mcp_tool_name) = json_value.get("mcp_tool").and_then(|v| v.as_str()) {
                 return self
-                    .handle_mcp_tool_call(client, history, mcp_tool_name, &json_value)
+                    .handle_mcp_tool_call(client, history, mcp_tool_name, &json_value, response)
                     .await;
             }
             // Check for OpenAI tool_calls format (array with function objects)
@@ -112,7 +112,7 @@ impl<'a> ToolService<'a> {
                         .and_then(|v| v.as_str());
                     if let Some(name) = tool_name {
                         return self
-                            .handle_regular_json_tool(client, history, name, &json_value)
+                            .handle_regular_json_tool(client, history, name, &json_value, response)
                             .await;
                     }
                 }
@@ -124,7 +124,7 @@ impl<'a> ToolService<'a> {
                 .or_else(|| json_value.get("name").and_then(|v| v.as_str()))
             {
                 return self
-                    .handle_regular_json_tool(client, history, tool_name, &json_value)
+                    .handle_regular_json_tool(client, history, tool_name, &json_value, response)
                     .await;
             }
         }
@@ -145,25 +145,25 @@ impl<'a> ToolService<'a> {
             )
             .await?;
             let final_response = self
-                .call_llm_after_tool(client, history, &command_result)
+                .call_llm_after_tool(client, history, response, &command_result)
                 .await?;
             Ok(Some((final_response, command_result)))
         } else if response.to_uppercase().starts_with(tools::READ_FILE) {
             let tool_result = filesystem::read_file(response, self.approver.clone()).await?;
             let final_response = self
-                .call_llm_after_tool(client, history, &tool_result)
+                .call_llm_after_tool(client, history, response, &tool_result)
                 .await?;
             Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::WRITE_FILE) {
             let tool_result = filesystem::write_file(response, self.approver.clone()).await?;
             let final_response = self
-                .call_llm_after_tool(client, history, &tool_result)
+                .call_llm_after_tool(client, history, response, &tool_result)
                 .await?;
             Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::SEARCH_REPLACE) {
             let tool_result = filesystem::search_replace(response, self.approver.clone()).await?;
             let final_response = self
-                .call_llm_after_tool(client, history, &tool_result)
+                .call_llm_after_tool(client, history, response, &tool_result)
                 .await?;
             Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::TODO) {
@@ -177,7 +177,7 @@ impl<'a> ToolService<'a> {
         } else if web_search_enabled && response.to_uppercase().starts_with(tools::SEARCH) {
             let search_result = web::perform_web_search(response).await?;
             let final_response = self
-                .call_llm_after_tool(client, history, &search_result)
+                .call_llm_after_tool(client, history, response, &search_result)
                 .await?;
             Ok(Some((final_response, search_result)))
         } else if response.to_uppercase().starts_with(git_tools::GIT_STATUS) {
@@ -189,13 +189,13 @@ impl<'a> ToolService<'a> {
         } else if response.to_uppercase().starts_with(git_tools::GIT_COMMIT) {
             let commit_result = git::git_commit(response, self.approver.clone()).await?;
             let final_response = self
-                .call_llm_after_tool(client, history, &commit_result)
+                .call_llm_after_tool(client, history, response, &commit_result)
                 .await?;
             Ok(Some((final_response, commit_result)))
         } else if response.to_uppercase().starts_with(git_tools::GIT_ADD) {
             let add_result = git::git_add(response, self.approver.clone()).await?;
             let final_response = self
-                .call_llm_after_tool(client, history, &add_result)
+                .call_llm_after_tool(client, history, response, &add_result)
                 .await?;
             Ok(Some((final_response, add_result)))
         } else if response.to_uppercase().starts_with(tools::GITHUB_ISSUE) {
@@ -211,7 +211,7 @@ impl<'a> ToolService<'a> {
         } else if response.to_uppercase().starts_with(tools::API_TEST) {
             let api_result = api::test_api(response).await?;
             let final_response = self
-                .call_llm_after_tool(client, history, &api_result)
+                .call_llm_after_tool(client, history, response, &api_result)
                 .await?;
             Ok(Some((final_response, api_result)))
         } else if response.to_uppercase().starts_with(tools::CODE_ANALYZE) {
@@ -222,7 +222,7 @@ impl<'a> ToolService<'a> {
         } else if response.to_uppercase().starts_with(tools::DB_QUERY) {
             let tool_result = db::run_query(response, self.approver.clone()).await?;
             let final_response = self
-                .call_llm_after_tool(client, history, &tool_result)
+                .call_llm_after_tool(client, history, response, &tool_result)
                 .await?;
             Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::IMAGE_INFO) {
@@ -238,7 +238,7 @@ impl<'a> ToolService<'a> {
         } else if response.to_uppercase().starts_with(tools::SCREENPIPE) {
             let search_result = screenpipe::search_screenpipe(response).await?;
             let final_response = self
-                .call_llm_after_tool(client, history, &search_result)
+                .call_llm_after_tool(client, history, response, &search_result)
                 .await?;
             Ok(Some((final_response, search_result)))
         } else {
@@ -252,6 +252,7 @@ impl<'a> ToolService<'a> {
         history: &[Message],
         tool_name: &str,
         json_value: &serde_json::Value,
+        raw_response: &str,
     ) -> Result<Option<(String, String)>, HarperError> {
         // Get parameters from "args" (Gemini format) or directly from json_value
         let args = json_value.get("args");
@@ -280,9 +281,29 @@ impl<'a> ToolService<'a> {
                     )
                     .await?;
                     let final_response = self
-                        .call_llm_after_tool(client, history, &command_result)
+                        .call_llm_after_tool(client, history, raw_response, &command_result)
                         .await?;
                     Ok(Some((final_response, command_result)))
+                } else {
+                    Ok(None)
+                }
+            }
+
+            "read_file" => {
+                let path = if let Some(args) = args {
+                    args.get("path")
+                } else {
+                    json_value.get("path")
+                }
+                .and_then(|v| v.as_str());
+                if let Some(path) = path {
+                    let bracket_command = format!("[READ_FILE {}]", path);
+                    let read_result =
+                        filesystem::read_file(&bracket_command, self.approver.clone()).await?;
+                    let final_response = self
+                        .call_llm_after_tool(client, history, raw_response, &read_result)
+                        .await?;
+                    Ok(Some((final_response, read_result)))
                 } else {
                     Ok(None)
                 }
@@ -306,7 +327,7 @@ impl<'a> ToolService<'a> {
                     let write_result =
                         filesystem::write_file(&bracket_command, self.approver.clone()).await?;
                     let final_response = self
-                        .call_llm_after_tool(client, history, &write_result)
+                        .call_llm_after_tool(client, history, raw_response, &write_result)
                         .await?;
                     Ok(Some((final_response, write_result)))
                 } else {
@@ -340,7 +361,7 @@ impl<'a> ToolService<'a> {
                     let replace_result =
                         filesystem::search_replace(&bracket_command, self.approver.clone()).await?;
                     let final_response = self
-                        .call_llm_after_tool(client, history, &replace_result)
+                        .call_llm_after_tool(client, history, raw_response, &replace_result)
                         .await?;
                     Ok(Some((final_response, replace_result)))
                 } else {
@@ -391,12 +412,100 @@ impl<'a> ToolService<'a> {
                     }
                     let todo_result = todo::manage_todo(self.conn, &bracket_command)?;
                     let final_response = self
-                        .call_llm_after_tool(client, history, &todo_result)
+                        .call_llm_after_tool(client, history, raw_response, &todo_result)
                         .await?;
                     Ok(Some((final_response, todo_result)))
                 } else {
                     Ok(None)
                 }
+            }
+            "git_status" => {
+                let status_result = git::git_status()?;
+                let final_response = self
+                    .call_llm_after_tool(client, history, raw_response, &status_result)
+                    .await?;
+                Ok(Some((final_response, status_result)))
+            }
+            "git_diff" => {
+                let diff_result = git::git_diff()?;
+                let final_response = self
+                    .call_llm_after_tool(client, history, raw_response, &diff_result)
+                    .await?;
+                Ok(Some((final_response, diff_result)))
+            }
+            "git_add" => {
+                let files = if let Some(args) = args {
+                    args.get("files")
+                } else {
+                    json_value.get("files")
+                }
+                .and_then(|v| v.as_str());
+                let bracket_command = format!("[GIT_ADD {}]", files.unwrap_or("."));
+                let add_result = git::git_add(&bracket_command, self.approver.clone()).await?;
+                let final_response = self
+                    .call_llm_after_tool(client, history, raw_response, &add_result)
+                    .await?;
+                Ok(Some((final_response, add_result)))
+            }
+            "git_commit" => {
+                let message = if let Some(args) = args {
+                    args.get("message")
+                } else {
+                    json_value.get("message")
+                }
+                .and_then(|v| v.as_str());
+                if let Some(message) = message {
+                    let bracket_command = format!("[GIT_COMMIT {}]", message);
+                    let commit_result =
+                        git::git_commit(&bracket_command, self.approver.clone()).await?;
+                    let final_response = self
+                        .call_llm_after_tool(client, history, raw_response, &commit_result)
+                        .await?;
+                    Ok(Some((final_response, commit_result)))
+                } else {
+                    Ok(None)
+                }
+            }
+            "list_changed_files" => {
+                let ext = if let Some(args) = args {
+                    args.get("ext")
+                } else {
+                    json_value.get("ext")
+                }
+                .and_then(|v| v.as_str());
+                let tracked_only = if let Some(args) = args {
+                    args.get("tracked_only")
+                } else {
+                    json_value.get("tracked_only")
+                }
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+                let since = if let Some(args) = args {
+                    args.get("since")
+                } else {
+                    json_value.get("since")
+                }
+                .and_then(|v| v.as_str());
+
+                let audit_ctx = CommandAuditContext {
+                    conn: self.conn,
+                    session_id: self.session_id,
+                    source: "tool_list_changed_files",
+                };
+                let files_result = git::list_changed_files_with_policy(
+                    self.config,
+                    self.exec_policy,
+                    Some(&audit_ctx),
+                    self.approver.clone(),
+                    ext,
+                    tracked_only,
+                    since,
+                )
+                .await?;
+                let final_response = self
+                    .call_llm_after_tool(client, history, raw_response, &files_result)
+                    .await?;
+                Ok(Some((final_response, files_result)))
             }
             _ => Ok(None),
         }
@@ -409,11 +518,12 @@ impl<'a> ToolService<'a> {
         history: &[Message],
         tool_name: &str,
         json_value: &serde_json::Value,
+        raw_response: &str,
     ) -> Result<Option<(String, String)>, HarperError> {
         let Some(mcp_client) = self.mcp_client else {
             let error_msg = "Error: MCP client not configured".to_string();
             let final_response = self
-                .call_llm_after_tool(client, history, &error_msg)
+                .call_llm_after_tool(client, history, raw_response, &error_msg)
                 .await?;
             return Ok(Some((final_response, error_msg)));
         };
@@ -462,14 +572,14 @@ impl<'a> ToolService<'a> {
                 };
 
                 let final_response = self
-                    .call_llm_after_tool(client, history, &tool_result)
+                    .call_llm_after_tool(client, history, raw_response, &tool_result)
                     .await?;
                 Ok(Some((final_response, tool_result)))
             }
             Err(e) => {
                 let error_msg = format!("MCP tool call failed: {}", e);
                 let final_response = self
-                    .call_llm_after_tool(client, history, &error_msg)
+                    .call_llm_after_tool(client, history, raw_response, &error_msg)
                     .await?;
                 Ok::<Option<(String, String)>, HarperError>(Some((final_response, error_msg)))
             }
@@ -489,7 +599,7 @@ impl<'a> ToolService<'a> {
     {
         let tool_result = tool_fn(Some(self.conn), response)?;
         let final_response = self
-            .call_llm_after_tool(client, history, &tool_result)
+            .call_llm_after_tool(client, history, response, &tool_result)
             .await?;
         Ok(Some((final_response, tool_result)))
     }
@@ -499,18 +609,41 @@ impl<'a> ToolService<'a> {
         &self,
         client: &Client,
         history: &[Message],
+        tool_call_json: &str,
         tool_output: &str,
     ) -> Result<String, HarperError> {
         // Create a new history vector by cloning the existing one
         let mut new_history = history.to_vec();
 
-        // Add a new system message containing the tool's output
+        // Add the assistant's tool call message
+        // This ensures the model knows it just asked for this tool
         new_history.push(Message {
-            role: "system".to_string(),
-            content: format!("Tool execution result: {}", tool_output),
+            role: "assistant".to_string(),
+            content: tool_call_json.to_string(),
         });
 
-        // Call the LLM with the new history
-        crate::core::llm_client::call_llm(client, self.config, &new_history).await
+        // Add a new system message containing the tool's output and an instruction
+        new_history.push(Message {
+            role: "system".to_string(),
+            content: format!(
+                "Tool execution result:
+{}
+
+---
+SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the result.
+1. DO NOT output the tool call JSON again.
+2. DO NOT repeat the raw output.
+3. Analyze the result and provide a human-readable answer to the user's request.
+4. If the user asked to see a file, summarize it or show a relevant snippet, but do not dump the entire content if it is large.",
+                tool_output
+            ),
+        });
+
+        // Call the LLM with the new history. If that fails (quota, blocked API, etc.),
+        // fall back to returning the tool output directly so the user still gets a result.
+        match crate::core::llm_client::call_llm(client, self.config, &new_history).await {
+            Ok(response) => Ok(response),
+            Err(_) => Ok(format!("Tool result:\n{}", tool_output)),
+        }
     }
 }
