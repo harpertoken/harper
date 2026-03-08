@@ -83,6 +83,36 @@ pub fn handle_event(
                 app.clear_message();
             }
 
+            // PRIORITIZE: Handle input for the security approval modal if active
+            if let Some(approval) = &mut app.pending_approval {
+                match key.code {
+                    KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        if let Some(tx) = approval.tx.lock().unwrap().take() {
+                            let _ = tx.send(true);
+                        }
+                        app.pending_approval = None;
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                        if let Some(tx) = approval.tx.lock().unwrap().take() {
+                            let _ = tx.send(false);
+                        }
+                        app.pending_approval = None;
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        app.next(); // app.next() handles scroll offset for approval
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        app.previous(); // app.previous() handles scroll offset for approval
+                        return EventResult::Continue;
+                    }
+                    _ => return EventResult::Continue, // Consume all other keys while modal is up
+                }
+            }
+
+            // Normal state handling
             match key.code {
                 KeyCode::F(1) => {
                     // Show help overlay
@@ -117,13 +147,6 @@ pub fn handle_event(
                         ));
                     }
                 }
-                KeyCode::Char('q') => {
-                    if matches!(app.state, AppState::Chat(..)) {
-                        app.state = AppState::Menu(0);
-                    } else {
-                        return EventResult::Quit;
-                    }
-                }
                 KeyCode::Esc => match &app.state {
                     AppState::Menu(_) => {}
                     AppState::Chat(_) => app.state = AppState::Menu(0),
@@ -132,11 +155,42 @@ pub fn handle_event(
                     AppState::Tools(_) => app.state = AppState::Menu(0),
                     AppState::ViewSession(_, _, _) => app.state = AppState::Menu(0),
                 },
-                KeyCode::Down | KeyCode::Char('j') => app.next(),
-                KeyCode::Up | KeyCode::Char('k') => app.previous(),
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if matches!(app.state, AppState::Chat(_)) {
+                        if matches!(key.code, KeyCode::Down) {
+                            app.next();
+                        } else {
+                            handle_char_input(app, 'j');
+                        }
+                    } else {
+                        app.next();
+                    }
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if matches!(app.state, AppState::Chat(_)) {
+                        if matches!(key.code, KeyCode::Up) {
+                            app.previous();
+                        } else {
+                            handle_char_input(app, 'k');
+                        }
+                    } else {
+                        app.previous();
+                    }
+                }
                 KeyCode::Enter => return handle_enter(app, session_service),
                 KeyCode::Tab => handle_tab(app),
-                KeyCode::Char(c) => handle_char_input(app, c),
+                KeyCode::Char(c) => {
+                    // Handle q for quitting/returning only in non-input states
+                    if c == 'q' && !matches!(app.state, AppState::Chat(_)) {
+                        if matches!(app.state, AppState::Menu(_)) {
+                            return EventResult::Quit;
+                        } else {
+                            app.state = AppState::Menu(0);
+                            return EventResult::Continue;
+                        }
+                    }
+                    handle_char_input(app, c)
+                }
                 KeyCode::Backspace => handle_backspace(app),
                 _ => {}
             }
@@ -551,7 +605,11 @@ mod tests {
         harper_core::memory::storage::init_db(&conn).unwrap();
         let session_service = SessionService::new(&conn);
 
-        let result = handle_enter(&mut app, &session_service);
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
         assert!(matches!(result, EventResult::Continue));
         assert!(matches!(app.state, AppState::Sessions(_, 0)));
     }
@@ -564,7 +622,11 @@ mod tests {
         harper_core::memory::storage::init_db(&conn).unwrap();
         let session_service = SessionService::new(&conn);
 
-        let result = handle_enter(&mut app, &session_service);
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
         assert!(matches!(result, EventResult::Continue));
         assert!(matches!(app.state, AppState::ExportSessions(_, 0)));
     }
