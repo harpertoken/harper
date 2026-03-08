@@ -39,7 +39,8 @@ pub fn plan_offline_shell_commands(query: &str) -> Vec<String> {
             "in which dir",
             "in what dir",
         ],
-    ) || (has_any(&tokens, &["where", "which", "what"]) && has_any(&tokens, &["dir", "directory"]))
+    ) || (has_any(&tokens, &["where", "which", "what"])
+        && has_any(&tokens, &["dir", "directory"]))
     {
         return vec!["pwd".to_string()];
     }
@@ -61,7 +62,10 @@ pub fn plan_offline_shell_commands(query: &str) -> Vec<String> {
     {
         return vec!["ls -la".to_string()];
     }
-    if contains_any(&normalized, &["list processes", "running processes", "process list"]) {
+    if contains_any(
+        &normalized,
+        &["list processes", "running processes", "process list"],
+    ) {
         return vec!["ps aux".to_string()];
     }
     if contains_any(
@@ -81,19 +85,34 @@ pub fn plan_offline_shell_commands(query: &str) -> Vec<String> {
     }
     if contains_any(
         &normalized,
-        &["git status", "repo status", "repository status", "changes in git"],
+        &[
+            "git status",
+            "repo status",
+            "repository status",
+            "changes in git",
+        ],
     ) {
         return vec!["git status --short".to_string()];
     }
     if contains_any(
         &normalized,
-        &["what branch", "which branch", "current branch", "git branch"],
+        &[
+            "what branch",
+            "which branch",
+            "current branch",
+            "git branch",
+        ],
     ) {
         return vec!["git branch --show-current".to_string()];
     }
     if contains_any(
         &normalized,
-        &["last commit", "latest commit", "recent commit", "last git commit"],
+        &[
+            "last commit",
+            "latest commit",
+            "recent commit",
+            "last git commit",
+        ],
     ) {
         return vec!["git log -1 --oneline".to_string()];
     }
@@ -115,7 +134,10 @@ pub fn plan_offline_shell_commands(query: &str) -> Vec<String> {
     if contains_any(&normalized, &["java version"]) {
         return vec!["java -version".to_string()];
     }
-    if contains_any(&normalized, &["environment variables", "env vars", "show env"]) {
+    if contains_any(
+        &normalized,
+        &["environment variables", "env vars", "show env"],
+    ) {
         return vec!["printenv".to_string()];
     }
 
@@ -135,7 +157,16 @@ pub fn plan_offline_shell_commands(query: &str) -> Vec<String> {
         ],
     ) || has_any(
         &tokens,
-        &["network", "ip", "interface", "interfaces", "route", "routing", "ports", "dns"],
+        &[
+            "network",
+            "ip",
+            "interface",
+            "interfaces",
+            "route",
+            "routing",
+            "ports",
+            "dns",
+        ],
     );
     let asks_os = contains_any(&normalized, &["os info", "kernel version", "uname"])
         || has_any(&tokens, &["os", "kernel", "system"]);
@@ -259,6 +290,9 @@ mod tests {
 
     #[test]
     fn returns_none_for_non_shell_phrase() {
-        assert_eq!(plan_offline_shell_commands("write me a poem"), Vec::<String>::new());
+        assert_eq!(
+            plan_offline_shell_commands("write me a poem"),
+            Vec::<String>::new()
+        );
     }
 }

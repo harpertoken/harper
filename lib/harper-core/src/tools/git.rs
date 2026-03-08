@@ -96,19 +96,29 @@ pub fn list_changed_files(
         .map_err(|e| HarperError::Command(format!("Failed to run git status: {}", e)))?;
     if !status_output.status.success() {
         return Err(HarperError::Command(
-            String::from_utf8_lossy(&status_output.stderr).trim().to_string(),
+            String::from_utf8_lossy(&status_output.stderr)
+                .trim()
+                .to_string(),
         ));
     }
 
     let status_stdout = String::from_utf8_lossy(&status_output.stdout).to_string();
     let log_stdout = if let Some(since_expr) = since.map(str::trim).filter(|s| !s.is_empty()) {
         let log_output = std::process::Command::new("git")
-            .args(["log", "--name-only", "--pretty=format:", "--since", since_expr])
+            .args([
+                "log",
+                "--name-only",
+                "--pretty=format:",
+                "--since",
+                since_expr,
+            ])
             .output()
             .map_err(|e| HarperError::Command(format!("Failed to run git log: {}", e)))?;
         if !log_output.status.success() {
             return Err(HarperError::Command(
-                String::from_utf8_lossy(&log_output.stderr).trim().to_string(),
+                String::from_utf8_lossy(&log_output.stderr)
+                    .trim()
+                    .to_string(),
             ));
         }
         Some(String::from_utf8_lossy(&log_output.stdout).to_string())

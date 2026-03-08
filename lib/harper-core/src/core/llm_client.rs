@@ -20,8 +20,8 @@
 use crate::core::constants::crypto::*;
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::{ApiConfig, ApiProvider, Message};
-use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+use reqwest::StatusCode;
 use ring::{
     aead::{self},
     rand::{SecureRandom, SystemRandom},

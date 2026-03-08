@@ -70,9 +70,7 @@ pub async fn execute_command(
     // Security check to prevent shell injection and dangerous commands
     // Note: This is a defense-in-depth measure. The primary security comes from user approval.
     // We allow wildcards (*, ?) and git revision syntax (~, ^) but block chaining and subshells.
-    let dangerous_chars = [
-        ';', '|', '&', '`', '$', '(', ')', '<', '>', '\n', '\r',
-    ];
+    let dangerous_chars = [';', '|', '&', '`', '$', '(', ')', '<', '>', '\n', '\r'];
     if command_str.chars().any(|c| dangerous_chars.contains(&c)) {
         let message = "Command contains potentially dangerous shell metacharacters (like ;, |, &) or newlines. \
              Command chaining and redirection are not allowed for security.";

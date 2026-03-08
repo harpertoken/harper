@@ -33,7 +33,7 @@ pub fn route_intent(query: &str) -> Option<DeterministicIntent> {
     if is_changed_files_intent(&normalized, &tokens) {
         return Some(DeterministicIntent::ListChangedFiles(ChangedFilesIntent {
             ext: infer_extension_filter(&tokens),
-            tracked_only: tokens.iter().any(|t| *t == "tracked"),
+            tracked_only: tokens.contains(&"tracked"),
             since: infer_since_filter(&tokens),
         }));
     }
@@ -45,7 +45,13 @@ fn normalize(input: &str) -> String {
     input
         .to_ascii_lowercase()
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c.is_ascii_whitespace() { c } else { ' ' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c.is_ascii_whitespace() {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect::<String>()
 }
 
@@ -85,13 +91,13 @@ fn is_changed_files_intent(normalized: &str, tokens: &[&str]) -> bool {
 }
 
 fn infer_since_filter(tokens: &[&str]) -> Option<String> {
-    if tokens.iter().any(|t| *t == "today") {
+    if tokens.contains(&"today") {
         return Some("today".to_string());
     }
-    if tokens.iter().any(|t| *t == "yesterday") {
+    if tokens.contains(&"yesterday") {
         return Some("yesterday".to_string());
     }
-    if tokens.iter().any(|t| *t == "week") {
+    if tokens.contains(&"week") {
         return Some("1 week ago".to_string());
     }
     None

@@ -16,9 +16,9 @@
 //!
 //! This module handles user input, chat loops, and message processing.
 
-use crate::agent::prompt::PromptBuilder;
 use crate::agent::intent::{route_intent, DeterministicIntent};
 use crate::agent::offline_shell::plan_offline_shell_commands;
+use crate::agent::prompt::PromptBuilder;
 use crate::core::cache::{ApiCacheKey, ApiResponseCache};
 use crate::core::error::HarperError;
 use crate::core::{ApiConfig, Message};
@@ -887,7 +887,17 @@ impl<'a> ChatService<'a> {
 
         let file_token = user_msg
             .split_whitespace()
-            .map(|t| t.trim_matches(|c: char| c == '\'' || c == '"' || c == '`' || c == ',' || c == '.' || c == '?' || c == '!'))
+            .map(|t| {
+                t.trim_matches(|c: char| {
+                    c == '\''
+                        || c == '"'
+                        || c == '`'
+                        || c == ','
+                        || c == '.'
+                        || c == '?'
+                        || c == '!'
+                })
+            })
             .find(|t| t.contains('/') || t.contains('.'))
             .filter(|t| !t.is_empty());
 
@@ -900,8 +910,9 @@ impl<'a> ChatService<'a> {
             return Ok(None);
         };
 
-        let data = fs::read(&path)
-            .map_err(|e| HarperError::File(format!("Failed to read file {}: {}", path.display(), e)))?;
+        let data = fs::read(&path).map_err(|e| {
+            HarperError::File(format!("Failed to read file {}: {}", path.display(), e))
+        })?;
 
         let max_bytes = 16_000usize;
         let is_truncated = data.len() > max_bytes;
