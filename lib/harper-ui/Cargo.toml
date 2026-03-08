@@ -17,7 +17,7 @@ path = "src/lib.rs"
 harper-core = { path = "../harper-core" }
 arboard = "3.4.0"
 colored = "3.0.0"
-crossterm = "0.28.1"
+crossterm = "0.29.0"
 dotenvy = "0.15"
 keyring = "2.3"
 ratatui = "0.30"
