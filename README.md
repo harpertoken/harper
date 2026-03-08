@@ -1,144 +1,103 @@
-# Harper (Commercial License)
-
-Harper is an AI-powered terminal assistant that translates natural language into shell commands. Instead of remembering complex CLI syntax, just describe what you want to do in plain English.
-
-> **Note:** This software is distributed under a Commercial License. See [COMMERCIAL_LICENSE](./COMMERCIAL_LICENSE) for terms. Use requires a valid license.
-
-```
-find rust files changed today
-show uncommitted git changes
-create a new feature branch
-```
-
-Harper shows you the command. You decide if it runs.
+<div align="center">
+  <img src=".freeman/grok/sign.jpg" alt="Freeman Sign" width="200" />
+</div>
 
 ---
 
-![Harper TUI](./docs/harper_tui.png)
+# Harper
+
+Harper is an AI-powered terminal assistant designed to bridge the gap between human intent and shell execution. It translates natural language descriptions into precise, syntax-correct CLI commands across various shells and operating systems.
+
+By leveraging advanced Large Language Models, Harper allows developers to perform complex operations—from deep filesystem searches to multi-stage Git workflows—without context-switching to documentation or web searches.
+
+```bash
+# Input: "find all docker volumes older than 3 days and remove them"
+# Harper: docker volume ls -q -f "driver=local" | xargs -r docker volume rm
+```
 
 ---
 
-## How it works
+## Core Capabilities
 
-Just type what you want. Harper understands your intent and generates the exact shell command you need. Review it, approve it, and Harper executes it for you. No more copy-pasting from AI chatbots or manually constructing complex commands.
+### Natural Language Translation
+Describe your objective in plain English. Harper analyzes the request and generates the exact shell command required. It supports standard Unix utilities, version control systems, and container orchestration tools.
 
-## Key Features
+### State-Aware Context
+The assistant maintains a session-based history. Users can issue follow-up prompts (e.g., "now do that for the staging branch") without restating the original parameters.
 
-**Natural Language to Commands**
-Describe what you want in plain English and Harper generates the exact shell command. From simple file searches to complex git operations, just say what you need.
+### Explicit Security Model
+Harper operates on a "Review-First" architecture. No command is executed without explicit user approval via a dedicated security modal. The system filters for dangerous sequences and provides a clear preview of the proposed action.
 
-**Persistent Context**
-Harper remembers your conversation, so you can build on previous commands and queries. Ask follow-up questions or reference earlier commands without repeating yourself.
+### Provider Agility
+Integrate with your preferred AI backend. Harper provides native support for:
+* OpenAI (GPT-4o, GPT-4 Turbo)
+* SambaNova
+* Google Gemini
+* Any OpenAI-compatible REST endpoint
 
-**Explicit Execution Approval**
-Never worry about accidental execution. Harper always shows you the command first and asks before running anything. You stay in complete control.
+---
 
-**Command Audit Trail**
-Need to review what ran? Type `/audit` (or `/audit 25 failed approved`) to print the latest shell commands filtered by limit/status/approval, with exit codes and runtimes tied to the current session.
+## Technical Specifications
 
-**Multiple AI Providers**
-Choose from OpenAI, Sambanova, or Gemini. Harper also supports any OpenAI-compatible endpoint, giving you flexibility in how you power the AI.
+### Build Systems
+The project maintains support for both Cargo and Bazel to accommodate different enterprise environments.
 
-## Contributor License Agreement
+| Task | Cargo Command | Bazel Target |
+| :--- | :--- | :--- |
+| Build (Release) | `cargo build --release` | `bazel build //...` |
+| Run Interface | `cargo run -p harper-ui` | `bazel run //:harper` |
+| Execute Tests | `cargo test` | `bazel test //...` |
 
-All contributors must sign the CLA before their pull requests can be merged.
+### Security Features
+* **Command Audit Trail**: Access a complete log of approved and failed commands via the `/audit` command.
+* **Environment Isolation**: API credentials are never hardcoded and are managed strictly through environment variables.
+* **Input Sanitization**: Proactive filtering of potentially malicious shell sequences and newline injections.
 
-```
-❌ **CLA required**
-
-Hi @username, please sign the Contributor License Agreement to proceed.
-
-👉 https://harpertoken.github.io/cla.html
-
-Once signed, this check will pass automatically.
-```
-
-When you submit a pull request, the CLA bot will check if your GitHub username is listed in the approved contributors list. If your name is not on the list, the pull request will be blocked until you are added. To have your username added, please contact the project owner at harpertoken@icloud.com.
+---
 
 ## Getting Started
 
+### Prerequisites
+* **Rust Toolchain**: 1.85.0 or higher
+* **API Credentials**: A valid key for a supported AI provider
+* **Terminal**: A terminal emulator with support for 24-bit color (TrueColor)
+
+### Installation and Setup
 ```bash
 git clone https://github.com/harpertoken/harper.git
 cd harper
 cp .env.example .env
-# Add your API key to .env
+# Edit .env to include your API_KEY and preferred PROVIDER
 cargo run -p harper-ui --bin harper
 ```
 
-Or after building:
+---
 
-```bash
-cargo build --release
-./target/release/harper
-```
+## Contribution Policy
 
-## Requirements
+### Contributor License Agreement (CLA)
+To maintain the legal integrity of the codebase, all contributors are required to sign a CLA. Pull requests will remain in a blocked state until the signature is verified by the automation bot.
 
-- Rust 1.85.0 or newer
-- API key for at least one provider (OpenAI, Sambanova, or Gemini)
-- Crossterm-compatible terminal
+* **Registry**: [harpertoken.github.io/cla.html](https://harpertoken.github.io/cla.html)
+* **Support**: harpertoken@icloud.com
 
-## Security
-
-- No silent execution — commands always require approval
-- Scoped filesystem access — Harper only touches what you ask it to
-- Shell metachar filtering — prevents injection attacks
-- Environment-based credentials — API keys stay in your environment
-
-## Building
-
-### Cargo (Recommended)
-
-| Command | Description |
-|---------|-------------|
-| `cargo build` | Debug build |
-| `cargo build --release` | Release build |
-| `cargo run -p harper-ui --bin harper` | Run in dev mode |
-| `cargo test` | Run tests |
-
-### Bazel
-
-| Command | Description |
-|---------|-------------|
-| `bazel build //...` | Build all targets |
-| `bazel run //:harper` | Run harper |
-| `bazel test //...` | Run all tests |
-
-Both build systems are supported. Cargo is recommended for development.
-
-## Troubleshooting
-
-**Commands do not run**
-Check that execution approval is enabled and confirm prompts.
-
-**API errors**
-Verify API keys and provider quotas.
-
-**UI rendering issues**
-Ensure your terminal supports 24-bit color and try `TERM=xterm-256color`.
-
-**Build failures**
-Confirm your Rust toolchain meets the minimum version (1.85.0).
-
-See [docs/user-guide/troubleshooting.md](docs/user-guide/troubleshooting.md) for more solutions.
+---
 
 ## Documentation
+For detailed implementation details and advanced configuration, refer to the following:
+* [Installation Guide](docs/user-guide/installation.md)
+* [Configuration Reference](docs/CONFIG_REFERENCE.md)
+* [Provider Setup](docs/user-guide/configuration.md)
+* [Troubleshooting](docs/user-guide/troubleshooting.md)
 
-See [docs/](docs/) for detailed project documentation.
+---
 
-- [Installation](docs/user-guide/installation.md)
-- [Quick Start](docs/user-guide/quick-start.md)
-- [About the Binary](docs/user-guide/about.md)
-- [Chat Interface](docs/user-guide/chat.md)
-- [Clipboard](docs/user-guide/clipboard.md)
-- [Configuration](docs/user-guide/configuration.md)
-- [Config Reference](docs/CONFIG_REFERENCE.md)
-- [Troubleshooting](docs/user-guide/troubleshooting.md)
+## Licensing
+Harper is dual-licensed under the **Apache License, Version 2.0** and the **MIT License**.
 
-## License
+For entities requiring specialized terms or enterprise-grade support, please refer to the [COMMERCIAL_LICENSE](./COMMERCIAL_LICENSE) for further details.
 
-Licensed under either of:
-- Apache License, Version 2.0
-- MIT License
-
-See [LICENSE](LICENSE) for details.
+<div align="center">
+  <br />
+  <sub>Built with precision by Harpertoken. &copy; 2026</sub>
+</div>
