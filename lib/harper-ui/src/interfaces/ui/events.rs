@@ -147,13 +147,6 @@ pub fn handle_event(
                         ));
                     }
                 }
-                KeyCode::Char('q') => {
-                    if matches!(app.state, AppState::Chat(..)) {
-                        app.state = AppState::Menu(0);
-                    } else {
-                        return EventResult::Quit;
-                    }
-                }
                 KeyCode::Esc => match &app.state {
                     AppState::Menu(_) => {}
                     AppState::Chat(_) => app.state = AppState::Menu(0),
