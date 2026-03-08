@@ -24,3 +24,6 @@ path = ".harper/sessions.db"
 [mcp]
 enabled = true
 server_url = "http://localhost:5001"
+
+[ui]
+theme = "default"

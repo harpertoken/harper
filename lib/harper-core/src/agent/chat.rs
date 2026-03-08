@@ -16,6 +16,8 @@
 //!
 //! This module handles user input, chat loops, and message processing.
 
+use crate::agent::intent::{route_intent, DeterministicIntent};
+use crate::agent::offline_shell::plan_offline_shell_commands;
 use crate::agent::prompt::PromptBuilder;
 use crate::core::cache::{ApiCacheKey, ApiResponseCache};
 use crate::core::error::HarperError;
@@ -36,7 +38,7 @@ use rustyline::validate::Validator;
 
 use rustyline::Editor;
 use rustyline::Helper;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use turul_mcp_client::{McpClient, ResourceContent};
@@ -234,7 +236,6 @@ impl<'a> ChatService<'a> {
         }
     }
 
-    /// Get available MCP tools as formatted text for system prompt
     /// Start a new interactive chat session
     pub async fn create_session(
         &self,
@@ -299,6 +300,22 @@ impl<'a> ChatService<'a> {
 
         // Normal message processing
         self.add_user_message(history, session_id, &processed_msg)?;
+        if let Some(local_response) = self
+            .try_handle_deterministic_intent(&processed_msg, session_id)
+            .await?
+        {
+            self.add_assistant_message(history, session_id, &local_response)?;
+            self.trim_history(history);
+            return Ok(());
+        }
+        if let Some(local_response) = self
+            .try_handle_offline_shell_proxy(&processed_msg, session_id)
+            .await?
+        {
+            self.add_assistant_message(history, session_id, &local_response)?;
+            self.trim_history(history);
+            return Ok(());
+        }
         let response = self
             .process_message(history, web_search_enabled, session_id)
             .await?;
@@ -659,14 +676,15 @@ impl<'a> ChatService<'a> {
         web_search_enabled: bool,
         session_id: &str,
     ) -> Result<String, HarperError> {
+        const MAX_TOOL_ROUNDS: usize = 4;
+
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(90))
             .build()?;
-        let history_for_llm = history.clone();
+        let mut history_for_llm = history.clone();
         let mut response = self.call_llm(&client, &history_for_llm).await?;
-        let trimmed_response = response
-            .trim()
-            .trim_matches(|c| c == '\'' || c == '\"' || c == '`');
+        let mut executed_tool_calls: HashSet<String> = HashSet::new();
+        let mut last_tool_content: Option<String> = None;
 
         let mut tool_service = ToolService::new(
             self.conn,
@@ -678,24 +696,177 @@ impl<'a> ChatService<'a> {
         if let Some(approver) = &self.approver {
             tool_service = tool_service.with_approver(approver.clone());
         }
-        let tool_option = tool_service
-            .handle_tool_use(
-                &client,
-                &history_for_llm,
-                trimmed_response,
-                web_search_enabled,
-            )
-            .await?;
 
-        if let Some((tool_result, tool_content)) = tool_option {
-            history.push(Message {
-                role: "system".to_string(),
-                content: tool_content,
-            });
-            response = tool_result;
+        for _ in 0..MAX_TOOL_ROUNDS {
+            let clean_response = Self::sanitize_model_response(&response);
+            let tool_signature = Self::tool_call_signature(&clean_response);
+            let dedupe_key = tool_signature.unwrap_or_else(|| clean_response.clone());
+            if executed_tool_calls.contains(&dedupe_key) {
+                if let Some(content) = last_tool_content {
+                    return Ok(format!("Tool result:\n{}", content));
+                }
+                break;
+            }
+            let tool_option = tool_service
+                .handle_tool_use(
+                    &client,
+                    &history_for_llm,
+                    &clean_response,
+                    web_search_enabled,
+                )
+                .await?;
+
+            if let Some((tool_result, tool_content)) = tool_option {
+                executed_tool_calls.insert(dedupe_key);
+                last_tool_content = Some(tool_content.clone());
+                let tool_message = Message {
+                    role: "system".to_string(),
+                    content: tool_content,
+                };
+                history.push(tool_message.clone());
+                history_for_llm.push(tool_message);
+                response = tool_result;
+                continue;
+            }
+
+            break;
         }
 
         Ok(response)
+    }
+
+    fn sanitize_model_response(response: &str) -> String {
+        let trimmed_response = response.trim();
+
+        if trimmed_response.starts_with("```") {
+            let lines: Vec<&str> = trimmed_response.lines().collect();
+            if lines.len() >= 2 {
+                lines[1..lines.len() - 1].join("\n").trim().to_string()
+            } else {
+                trimmed_response.trim_matches('`').trim().to_string()
+            }
+        } else {
+            trimmed_response
+                .trim_matches(|c| c == '\'' || c == '\"' || c == '`')
+                .trim()
+                .to_string()
+        }
+    }
+
+    fn tool_call_signature(response: &str) -> Option<String> {
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(response) {
+            // OpenAI tool_calls array format
+            if let Some(arr) = json_value.as_array() {
+                if let Some(first) = arr.first() {
+                    let name = first
+                        .get("function")
+                        .and_then(|f| f.get("name"))
+                        .and_then(|v| v.as_str())?;
+                    let args = first
+                        .get("function")
+                        .and_then(|f| f.get("arguments"))
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null);
+                    return Some(format!("json:{}:{}", name, args));
+                }
+            }
+
+            // Gemini / regular JSON format
+            if let Some(name) = json_value
+                .get("tool")
+                .and_then(|v| v.as_str())
+                .or_else(|| json_value.get("name").and_then(|v| v.as_str()))
+                .or_else(|| json_value.get("mcp_tool").and_then(|v| v.as_str()))
+            {
+                let args = json_value
+                    .get("args")
+                    .cloned()
+                    .or_else(|| json_value.get("arguments").cloned())
+                    .unwrap_or(serde_json::Value::Null);
+                return Some(format!("json:{}:{}", name, args));
+            }
+        }
+
+        let upper = response.to_uppercase();
+        if upper.starts_with("[READ_FILE") {
+            return Some(response.trim().to_string());
+        }
+        if upper.starts_with("[RUN_COMMAND") {
+            return Some(response.trim().to_string());
+        }
+        if upper.starts_with("[WRITE_FILE")
+            || upper.starts_with("[SEARCH_REPLACE")
+            || upper.starts_with("[GIT_STATUS")
+            || upper.starts_with("[GIT_DIFF")
+            || upper.starts_with("[GIT_ADD")
+            || upper.starts_with("[GIT_COMMIT")
+        {
+            return Some(response.trim().to_string());
+        }
+        None
+    }
+
+    async fn try_handle_deterministic_intent(
+        &self,
+        user_msg: &str,
+        session_id: &str,
+    ) -> Result<Option<String>, HarperError> {
+        match route_intent(user_msg) {
+            Some(DeterministicIntent::ListChangedFiles(filters)) => {
+                let audit_ctx = CommandAuditContext {
+                    conn: self.conn,
+                    session_id: Some(session_id),
+                    source: "intent_list_changed_files",
+                };
+                let response = crate::tools::git::list_changed_files_with_policy(
+                    self.config,
+                    &self.exec_policy,
+                    Some(&audit_ctx),
+                    self.approver.clone(),
+                    filters.ext.as_deref(),
+                    filters.tracked_only,
+                    filters.since.as_deref(),
+                )
+                .await?;
+                Ok(Some(response))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn try_handle_offline_shell_proxy(
+        &self,
+        user_msg: &str,
+        session_id: &str,
+    ) -> Result<Option<String>, HarperError> {
+        let commands = plan_offline_shell_commands(user_msg);
+        if commands.is_empty() {
+            return Ok(None);
+        }
+
+        let audit_ctx = CommandAuditContext {
+            conn: self.conn,
+            session_id: Some(session_id),
+            source: "offline_shell_nlu",
+        };
+        let mut sections = Vec::new();
+        for command in commands {
+            let bracket = format!("[RUN_COMMAND {}]", command);
+            let output = crate::tools::shell::execute_command(
+                &bracket,
+                self.config,
+                &self.exec_policy,
+                Some(&audit_ctx),
+                self.approver.clone(),
+            )
+            .await?;
+            if output.trim().is_empty() {
+                sections.push(format!("$ {}\n[no output]", command));
+            } else {
+                sections.push(format!("$ {}\n{}", command, output.trim_end()));
+            }
+        }
+        Ok(Some(sections.join("\n\n")))
     }
 
     fn format_command_audit(

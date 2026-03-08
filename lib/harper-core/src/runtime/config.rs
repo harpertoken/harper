@@ -117,20 +117,6 @@ impl HarperConfig {
     ) -> HarperResult<()> {
         let mut temp_builder = std::mem::take(builder);
 
-        // Check for multiple API keys and prevent conflicts
-        let api_key_vars = ["OPENAI_API_KEY", "SAMBASTUDIO_API_KEY", "GEMINI_API_KEY"];
-        let found_keys: Vec<_> = api_key_vars
-            .into_iter()
-            .filter(|key_name| env::var(key_name).is_ok_and(|k| !k.trim().is_empty()))
-            .collect();
-
-        if found_keys.len() > 1 {
-            return Err(HarperError::Config(format!(
-                "Multiple API keys found: {}. Please set only one API key at a time.",
-                found_keys.join(", ")
-            )));
-        }
-
         // Map OPENAI_API_KEY to api settings
         if let Ok(key) = env::var("OPENAI_API_KEY") {
             if !key.trim().is_empty() {
@@ -140,6 +126,8 @@ impl HarperConfig {
                     temp_builder.set_override("api.base_url", ProviderModels::OPENAI.base_url)?;
                 temp_builder = temp_builder
                     .set_override("api.model_name", ProviderModels::OPENAI.default_model)?;
+                *builder = temp_builder;
+                return Ok(());
             }
         }
 
@@ -152,6 +140,8 @@ impl HarperConfig {
                     .set_override("api.base_url", ProviderModels::SAMBANOVA.base_url)?;
                 temp_builder = temp_builder
                     .set_override("api.model_name", ProviderModels::SAMBANOVA.default_model)?;
+                *builder = temp_builder;
+                return Ok(());
             }
         }
 
@@ -164,6 +154,8 @@ impl HarperConfig {
                     temp_builder.set_override("api.base_url", ProviderModels::GEMINI.base_url)?;
                 temp_builder = temp_builder
                     .set_override("api.model_name", ProviderModels::GEMINI.default_model)?;
+                *builder = temp_builder;
+                return Ok(());
             }
         }
 
@@ -298,10 +290,10 @@ impl UiConfig {
     fn validate(&self) -> HarperResult<()> {
         if let Some(ref theme) = self.theme {
             match theme.as_str() {
-                "default" | "dark" | "light" => {}
+                "default" | "dark" | "light" | "github" => {}
                 _ => {
                     return Err(HarperError::Config(format!(
-                        "Invalid theme: {}. Supported themes: default, dark, light",
+                        "Invalid theme: {}. Supported themes: default, dark, light, github",
                         theme
                     )))
                 }
