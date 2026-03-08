@@ -72,7 +72,6 @@ fn is_changed_files_intent(normalized: &str, tokens: &[&str]) -> bool {
                 | "edit"
                 | "edited"
                 | "editing"
-                | "working"
                 | "updated"
                 | "update"
                 | "touch"
@@ -129,15 +128,6 @@ mod tests {
     #[test]
     fn routes_am_changing_phrase() {
         let intent = route_intent("tell me the files am changing here in the codebase");
-        assert!(matches!(
-            intent,
-            Some(DeterministicIntent::ListChangedFiles(_))
-        ));
-    }
-
-    #[test]
-    fn routes_working_on_phrase() {
-        let intent = route_intent("show files i'm working on");
         assert!(matches!(
             intent,
             Some(DeterministicIntent::ListChangedFiles(_))

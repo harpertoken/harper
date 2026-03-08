@@ -236,7 +236,6 @@ impl<'a> ChatService<'a> {
         }
     }
 
-    /// Get available MCP tools as formatted text for system prompt
     /// Start a new interactive chat session
     pub async fn create_session(
         &self,
@@ -305,11 +304,6 @@ impl<'a> ChatService<'a> {
             .try_handle_deterministic_intent(&processed_msg, session_id)
             .await?
         {
-            self.add_assistant_message(history, session_id, &local_response)?;
-            self.trim_history(history);
-            return Ok(());
-        }
-        if let Some(local_response) = Self::try_handle_local_file_read_query(&processed_msg)? {
             self.add_assistant_message(history, session_id, &local_response)?;
             self.trim_history(history);
             return Ok(());
@@ -875,104 +869,6 @@ impl<'a> ChatService<'a> {
         Ok(Some(sections.join("\n\n")))
     }
 
-    fn try_handle_local_file_read_query(user_msg: &str) -> Result<Option<String>, HarperError> {
-        let normalized = user_msg.to_ascii_lowercase();
-        let asks_to_read = normalized.contains("show")
-            || normalized.contains("open")
-            || normalized.contains("read")
-            || normalized.contains("display");
-        if !asks_to_read {
-            return Ok(None);
-        }
-
-        let file_token = user_msg
-            .split_whitespace()
-            .map(|t| {
-                t.trim_matches(|c: char| {
-                    c == '\''
-                        || c == '"'
-                        || c == '`'
-                        || c == ','
-                        || c == '.'
-                        || c == '?'
-                        || c == '!'
-                })
-            })
-            .find(|t| t.contains('/') || t.contains('.'))
-            .filter(|t| !t.is_empty());
-
-        let Some(file_token) = file_token else {
-            return Ok(None);
-        };
-
-        let resolved_path = Self::resolve_file_path_case_insensitive(file_token);
-        let Some(path) = resolved_path else {
-            return Ok(None);
-        };
-
-        let data = fs::read(&path).map_err(|e| {
-            HarperError::File(format!("Failed to read file {}: {}", path.display(), e))
-        })?;
-
-        let max_bytes = 16_000usize;
-        let is_truncated = data.len() > max_bytes;
-        let content_bytes = if is_truncated {
-            &data[..max_bytes]
-        } else {
-            &data
-        };
-
-        let content = String::from_utf8_lossy(content_bytes);
-        let mut response = format!("Contents of {}:\n{}", path.display(), content);
-        if is_truncated {
-            response.push_str("\n\n[Output truncated to 16000 bytes]");
-        }
-        Ok(Some(response))
-    }
-
-    fn resolve_file_path_case_insensitive(candidate: &str) -> Option<std::path::PathBuf> {
-        let direct = Path::new(candidate);
-        if direct.exists() {
-            return Some(direct.to_path_buf());
-        }
-
-        let cwd = std::env::current_dir().ok()?;
-        let wanted = candidate.to_ascii_lowercase();
-        let mut stack = vec![cwd];
-        let mut visited = 0usize;
-        let max_dirs = 2000usize;
-
-        while let Some(dir) = stack.pop() {
-            if visited >= max_dirs {
-                break;
-            }
-            visited += 1;
-
-            let entries = match fs::read_dir(&dir) {
-                Ok(entries) => entries,
-                Err(_) => continue,
-            };
-
-            for entry in entries.flatten() {
-                let path = entry.path();
-                let name = entry.file_name();
-                let name = name.to_string_lossy();
-                if path.is_dir() {
-                    if name == ".git" || name == "target" || name == "node_modules" {
-                        continue;
-                    }
-                    stack.push(path);
-                    continue;
-                }
-                if name.to_ascii_lowercase() == wanted {
-                    return Some(path);
-                }
-            }
-        }
-
-        None
-    }
-
     fn format_command_audit(
         &self,
         session_id: &str,
@@ -1341,6 +1237,25 @@ impl AuditParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::{NamedTempFile, TempDir};
+
+    struct CwdGuard {
+        original: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn enter(path: &Path) -> Self {
+            let original = std::env::current_dir().expect("current dir");
+            std::env::set_current_dir(path).expect("set current dir");
+            Self { original }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.original);
+        }
+    }
 
     #[test]
     fn parse_audit_no_args() {
