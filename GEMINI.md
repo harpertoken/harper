@@ -16,6 +16,11 @@ Harper is an AI-powered terminal assistant. This file provides key constraints a
 - **Architecture**: Workspace-based (core, UI, and MCP server).
 - **Providers**: Integrates with OpenAI, Sambanova, and Gemini APIs.
 
+## User Interface
+- **Theme Configuration**: Harper's theme is set at startup via the `[ui]` section in `config/local.toml` or the `HARPER_UI_THEME` environment variable.
+- **Available Themes**: `default`, `dark`, `light`, and `github`.
+- **Runtime Changes**: Harper does not support runtime theme switching; the application must be restarted to apply theme changes.
+
 ## Pull Request Description Guidelines
 
 When generating a pull request description, follow this structure.
@@ -56,3 +61,12 @@ Include:
 PR descriptions should read like a developer explaining their thought process
 to a teammate. Prefer clarity over formality. Keep descriptions concise and
 avoid unnecessary repetition.
+
+## Troubleshooting
+
+### Version Mismatch (Old UI/Binary)
+If Harper is running an older version than expected or showing an outdated UI:
+1. **Rebuild the project:** `make build`
+2. **Update the local binary:** `cp target/release/harper bin/harper`
+3. **Update the system binary:** `cp target/release/harper ~/.local/bin/harper` (or your platform's equivalent)
+4. **Verify the version:** `harper --version`

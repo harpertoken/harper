@@ -58,3 +58,4 @@ bazel-testlogs/
 
 # MkDocs build
 site/
+/bin/

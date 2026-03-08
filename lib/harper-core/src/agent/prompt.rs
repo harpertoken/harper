@@ -64,7 +64,8 @@ You have the ability to read and write files, search and replace text in files, 
 
         prompt.push_str("
 
-You have tools to interact with the system. To use a tool, respond with ONLY the tool command. Do not add any other text. If you cannot use a tool for the user's request, explain why.
+You have tools to interact with the system. To use a tool, respond with the tool command in JSON format.
+If you have just received a tool execution result, analyze it and respond to the user in natural language. Do not output the tool call again.
 
 Available tools:
 - read_file(path): Read the contents of a file
@@ -72,6 +73,7 @@ Available tools:
 - search_replace(path, old_string, new_string): Search and replace text in a file
 - run_command(command): Run a shell command
 - todo(action, description?, index?): Manage todo list (actions: add, list, remove, clear)
+- list_changed_files(ext?, tracked_only?, since?): List changed files with optional filters
 
 To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"path\": \"example.txt\", \"content\": \"Hello world\"}");
 
