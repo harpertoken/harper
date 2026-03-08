@@ -1,0 +1,24 @@
+{
+  "general": {
+    "sessionRetention": {
+      "enabled": true,
+      "maxAge": "30d",
+      "maxCount": 50,
+      "minRetention": "1d"
+    },
+    "maxAttempts": 10
+  },
+  "model": {
+    "maxSessionTurns": -1,
+    "compressionThreshold": 0.5
+  },
+  "tools": {
+    "shell": {
+      "inactivityTimeout": 300
+    },
+    "truncateToolOutputThreshold": 40000
+  },
+  "context": {
+    "discoveryMaxDirs": 200
+  }
+}

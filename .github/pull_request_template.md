@@ -1,26 +1,43 @@
-## Summary
-Brief description of changes (1-2 sentences)
+## Why
 
-## Details
+Explain the motivation in your own words.
 
-### Issue
-Reference the issue this fixes (e.g., Fixes #123)
+Helpful prompts:
+- What did you notice while working?
+- What felt incorrect, confusing, or unnecessary?
+- What outcome were you aiming for?
 
-### Root Cause
-Explain what was causing the bug.
+Write naturally — a short explanation is enough.
 
-### Changes Made
-- Change 1 → change type
-- Change 2 → change type
+---
 
-<!-- Examples:
-- Tools menu options are now implemented → behavior change
-- Fixed non-functional menu actions → bug fix
-- Updated proc-macro2 dependency → build change
--->
+## What Changed
 
-### Testing
-- [ ] Tested with OpenAI
-- [ ] Tested with Sambanova
-- [ ] Tested with Gemini
-- [ ] Added unit tests (if applicable)
+Describe the change as you would explain it to a teammate.
+
+Helpful prompts:
+- What did you modify or remove?
+- Did you simplify, refactor, or fix something?
+- Are there any visible behavior or UI changes?
+
+A small bullet list is usually enough.
+
+---
+
+## Verification
+
+Explain how you checked the change.
+
+Helpful prompts:
+- What steps did you take to test it?
+- What should reviewers try locally?
+- What result should they expect?
+
+Steps to verify:
+
+1.
+2.
+3.
+
+Expected result:
+-

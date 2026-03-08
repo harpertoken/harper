@@ -163,6 +163,9 @@ impl Completer for FileCompleter {
     }
 }
 
+use crate::core::io_traits::UserApproval;
+use std::sync::Arc;
+
 /// Chat service for handling conversations
 pub struct ChatService<'a> {
     conn: &'a Connection,
@@ -175,6 +178,7 @@ pub struct ChatService<'a> {
     prompt_id: Option<String>,
     custom_commands: HashMap<String, String>,
     exec_policy: ExecPolicyConfig,
+    approver: Option<Arc<dyn UserApproval>>,
 }
 
 #[allow(dead_code)]
@@ -200,7 +204,14 @@ impl<'a> ChatService<'a> {
             prompt_id,
             custom_commands,
             exec_policy,
+            approver: None,
         }
+    }
+
+    /// Set a custom user approval provider
+    pub fn with_approver(mut self, approver: Arc<dyn UserApproval>) -> Self {
+        self.approver = Some(approver);
+        self
     }
 
     /// Create a new chat service for testing
@@ -219,6 +230,7 @@ impl<'a> ChatService<'a> {
                 allowed_commands: None,
                 blocked_commands: None,
             },
+            approver: None,
         }
     }
 
@@ -533,7 +545,10 @@ impl<'a> ChatService<'a> {
                     self.config,
                     &self.exec_policy,
                     Some(&audit_ctx),
-                ) {
+                    self.approver.clone(),
+                )
+                .await
+                {
                     Ok(result) => println!("{} {}", "Shell:".bold().cyan(), result.cyan()),
                     Err(e) => println!("{} {}", "Error:".bold().red(), e),
                 }
@@ -660,6 +675,9 @@ impl<'a> ChatService<'a> {
             self.mcp_client,
             Some(session_id),
         );
+        if let Some(approver) = &self.approver {
+            tool_service = tool_service.with_approver(approver.clone());
+        }
         let tool_option = tool_service
             .handle_tool_use(
                 &client,
