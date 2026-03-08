@@ -42,7 +42,7 @@ impl std::fmt::Display for ApiProvider {
 }
 
 /// Configuration for AI API connections
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApiConfig {
     /// The AI provider to use
     pub provider: ApiProvider,
