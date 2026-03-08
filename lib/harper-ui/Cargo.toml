@@ -17,7 +17,7 @@ path = "src/lib.rs"
 harper-core = { path = "../harper-core" }
 arboard = "3.4.0"
 colored = "3.0.0"
-crossterm = "0.28.1"
+crossterm = "0.29.0"
 dotenvy = "0.15"
 keyring = "2.3"
 ratatui = "0.30"
@@ -28,6 +28,7 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
 turul-mcp-client = "0.2.1"
 uuid = { version = "1.17.0", features = ["v4"] }
+async-trait = "0.1"
 
 [[bin]]
 name = "harper"

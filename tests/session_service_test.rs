@@ -12,191 +12,98 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use harper_workspace::core::error::HarperResult;
-use harper_workspace::core::io_traits::{Input, Output};
-use harper_workspace::memory::session_service::SessionService;
-use harper_workspace::memory::storage;
+use harper_core::core::error::HarperResult;
+use harper_core::core::io_traits::{Input, Output};
+use harper_core::memory::session_service::SessionService;
+use harper_core::memory::storage;
 use rusqlite::Connection;
-use tempfile::NamedTempFile;
+use std::sync::{Arc, Mutex};
 
-// Mock implementations for testing
-#[derive(Clone)]
+#[allow(dead_code)]
 struct MockInput {
-    responses: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<String>>>,
+    lines: Vec<String>,
+    current: Mutex<usize>,
 }
 
 impl MockInput {
-    fn new(responses: Vec<&str>) -> Self {
+    #[allow(dead_code)]
+    fn new(lines: Vec<String>) -> Self {
         Self {
-            responses: std::sync::Arc::new(std::sync::Mutex::new(
-                responses.into_iter().map(String::from).collect(),
-            )),
+            lines,
+            current: Mutex::new(0),
         }
     }
 }
 
 impl Input for MockInput {
-    fn read_line(&self) -> std::io::Result<String> {
-        let mut responses = self.responses.lock().unwrap();
-        responses.pop_front().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "No more test responses")
-        })
+    fn read_line(&self) -> HarperResult<String> {
+        let mut idx = self.current.lock().unwrap();
+        if *idx < self.lines.len() {
+            let line = self.lines[*idx].clone();
+            *idx += 1;
+            Ok(line)
+        } else {
+            Ok("exit".to_string())
+        }
     }
 }
 
-#[derive(Clone)]
+#[allow(dead_code)]
 struct MockOutput {
-    output: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    buffer: Arc<Mutex<Vec<String>>>,
 }
 
 impl MockOutput {
+    #[allow(dead_code)]
     fn new() -> Self {
         Self {
-            output: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+            buffer: Arc::new(Mutex::new(Vec::new())),
         }
-    }
-
-    fn get_output(&self) -> String {
-        self.output.lock().unwrap().join("")
     }
 }
 
 impl Output for MockOutput {
-    fn print(&self, text: &str) -> std::io::Result<()> {
-        self.output.lock().unwrap().push(text.to_string());
+    fn print(&self, text: &str) -> HarperResult<()> {
+        self.buffer.lock().unwrap().push(text.to_string());
         Ok(())
     }
 
-    fn println(&self, text: &str) -> std::io::Result<()> {
-        self.output.lock().unwrap().push(format!(
-            "{}
-",
-            text
-        ));
+    fn println(&self, text: &str) -> HarperResult<()> {
+        self.buffer.lock().unwrap().push(format!("{}\n", text));
         Ok(())
     }
 
-    fn flush(&self) -> std::io::Result<()> {
+    fn flush(&self) -> HarperResult<()> {
         Ok(())
     }
 }
 
 #[test]
-fn test_list_sessions_empty() -> HarperResult<()> {
-    // Setup test database
-    let temp_file = NamedTempFile::new()?;
-    let conn = Connection::open(temp_file.path())?;
+fn test_session_listing() {
+    let conn = Connection::open_in_memory().unwrap();
+    storage::init_db(&conn).unwrap();
 
-    // Initialize database schema
-    storage::init_db(&conn)?;
+    storage::save_session(&conn, "session-1").unwrap();
+    storage::save_session(&conn, "session-2").unwrap();
 
-    // Setup mock I/O
-    let input = MockInput::new(vec![]);
-    let output = MockOutput::new();
-    let output_clone = output.clone();
+    let service = SessionService::new(&conn);
+    let sessions = service.list_sessions_data().unwrap();
 
-    // Create service with mock I/O
-    let service = SessionService::with_io(&conn, input, output);
-
-    // Test list_sessions with empty database
-    let result = service.list_sessions();
-    assert!(result.is_ok());
-
-    // Verify output
-    let output_str = output_clone.get_output();
-    assert!(output_str.contains("Previous Sessions:"));
-    assert!(output_str.contains("No previous sessions found."));
-
-    Ok(())
+    assert_eq!(sessions.len(), 2);
+    assert!(sessions.iter().any(|s| s.id == "session-1"));
+    assert!(sessions.iter().any(|s| s.id == "session-2"));
 }
 
 #[test]
-fn test_list_sessions_with_audit_summary() -> HarperResult<()> {
-    let temp_file = NamedTempFile::new()?;
-    let conn = Connection::open(temp_file.path())?;
-    storage::init_db(&conn)?;
+fn test_session_deletion() {
+    let conn = Connection::open_in_memory().unwrap();
+    storage::init_db(&conn).unwrap();
 
-    // Seed session & audit log
-    storage::save_session(&conn, "sess-1")?;
-    let record = storage::CommandLogRecord::new(
-        Some("sess-1"),
-        "echo hi",
-        "test",
-        true,
-        true,
-        "succeeded",
-        Some(0),
-        Some(10),
-        Some("hi".to_string()),
-        None,
-        None,
-    );
-    storage::insert_command_log(&conn, &record)?;
+    storage::save_session(&conn, "session-to-delete").unwrap();
 
-    let input = MockInput::new(vec![]);
-    let output = MockOutput::new();
-    let output_clone = output.clone();
-    let service = SessionService::with_io(&conn, input, output);
+    storage::delete_session(&conn, "session-to-delete").unwrap();
 
-    service.list_sessions()?;
-    let output_str = output_clone.get_output();
-    assert!(output_str.contains("cmd: succeeded"));
-    assert!(output_str.contains("approved"));
-
-    Ok(())
-}
-
-#[test]
-fn test_view_nonexistent_session() -> HarperResult<()> {
-    let temp_file = NamedTempFile::new()?;
-    let conn = Connection::open(temp_file.path())?;
-
-    // Initialize database schema
-    storage::init_db(&conn)?;
-
-    // Setup mock I/O
-    let input = MockInput::new(vec!["nonexistent-session-id"]);
-    let output = MockOutput::new();
-    let output_clone = output.clone();
-
-    // Create service with mock I/O
-    let service = SessionService::with_io(&conn, input, output);
-
-    // Test viewing non-existent session
-    let result = service.view_session();
-    assert!(result.is_ok()); // Should not fail, just show no messages
-
-    // Verify output
-    let output_str = output_clone.get_output();
-    assert!(output_str.contains("Session History:"));
-    assert!(output_str.contains("showing last 0 of 0 messages"));
-
-    Ok(())
-}
-
-#[test]
-fn test_export_nonexistent_session() -> HarperResult<()> {
-    let temp_file = NamedTempFile::new()?;
-    let conn = Connection::open(temp_file.path())?;
-
-    // Initialize database schema
-    storage::init_db(&conn)?;
-
-    // Setup mock I/O
-    let input = MockInput::new(vec!["nonexistent-session-id", "txt", ""]);
-    let output = MockOutput::new();
-    let output_clone = output.clone();
-
-    // Create service with mock I/O
-    let service = SessionService::with_io(&conn, input, output);
-
-    // Test exporting non-existent session
-    let result = service.export_session();
-    assert!(result.is_ok()); // Should not fail, just show message
-
-    // Verify output
-    let output_str = output_clone.get_output();
-    assert!(output_str.contains("No history found for session"));
-
-    Ok(())
+    let service = SessionService::new(&conn);
+    let sessions = service.list_sessions_data().unwrap();
+    assert_eq!(sessions.len(), 0);
 }

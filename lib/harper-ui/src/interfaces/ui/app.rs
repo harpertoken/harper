@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use harper_core::core::Message;
+use std::sync::{Arc, Mutex};
+use tokio::sync::oneshot;
 
 #[derive(Clone)]
 pub struct ChatState {
@@ -32,6 +34,24 @@ impl ChatState {
         self.completion_candidates.clear();
         self.completion_index = 0;
         self.completion_prefix = None;
+    }
+}
+
+pub struct ApprovalState {
+    pub prompt: String,
+    pub command: String,
+    pub tx: Arc<Mutex<Option<oneshot::Sender<bool>>>>,
+    pub scroll_offset: u16,
+}
+
+impl Clone for ApprovalState {
+    fn clone(&self) -> Self {
+        Self {
+            prompt: self.prompt.clone(),
+            command: self.command.clone(),
+            tx: self.tx.clone(),
+            scroll_offset: self.scroll_offset,
+        }
     }
 }
 
@@ -70,6 +90,7 @@ pub struct UiMessage {
 pub struct TuiApp {
     pub state: AppState,
     pub message: Option<UiMessage>,
+    pub pending_approval: Option<ApprovalState>,
 }
 
 impl Default for TuiApp {
@@ -77,6 +98,7 @@ impl Default for TuiApp {
         Self {
             state: AppState::Menu(0),
             message: None,
+            pending_approval: None,
         }
     }
 }
@@ -119,8 +141,13 @@ impl TuiApp {
     }
 
     pub fn next(&mut self) {
+        if let Some(approval) = &mut self.pending_approval {
+            approval.scroll_offset = approval.scroll_offset.saturating_add(1);
+            return;
+        }
+
         match &mut self.state {
-            AppState::Menu(sel) => *sel = (*sel + 1) % 6,
+            AppState::Menu(sel) => *sel = (*sel + 1) % 5,
             AppState::Chat(chat_state) => {
                 chat_state.scroll_offset =
                     (chat_state.scroll_offset + 1).min(chat_state.messages.len());
@@ -145,8 +172,13 @@ impl TuiApp {
     }
 
     pub fn previous(&mut self) {
+        if let Some(approval) = &mut self.pending_approval {
+            approval.scroll_offset = approval.scroll_offset.saturating_sub(1);
+            return;
+        }
+
         match &mut self.state {
-            AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
+            AppState::Menu(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
             AppState::Chat(chat_state) => {
                 chat_state.scroll_offset = chat_state.scroll_offset.saturating_sub(1);
             }
