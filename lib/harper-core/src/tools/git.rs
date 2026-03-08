@@ -22,6 +22,9 @@ use crate::tools::parsing;
 use colored::*;
 use std::io;
 
+use crate::core::io_traits::UserApproval;
+use std::sync::Arc;
+
 /// Get git status
 pub fn git_status() -> crate::core::error::HarperResult<String> {
     println!("{} Running git status...", "System:".bold().magenta());
@@ -78,17 +81,26 @@ pub fn git_diff() -> crate::core::error::HarperResult<String> {
 }
 
 /// Commit changes
-pub fn git_commit(response: &str) -> crate::core::error::HarperResult<String> {
+pub async fn git_commit(
+    response: &str,
+    approver: Option<Arc<dyn UserApproval>>,
+) -> crate::core::error::HarperResult<String> {
     let message = extract_commit_message(response)?;
 
-    println!(
-        "{} Commit with message: '{}' ? (y/n): ",
-        "System:".bold().magenta(),
-        message.magenta()
-    );
-    let mut approval = String::new();
-    io::stdin().read_line(&mut approval)?;
-    if !approval.trim().eq_ignore_ascii_case("y") {
+    let is_approved = if let Some(appr) = approver {
+        appr.approve("Commit with message:", &message).await?
+    } else {
+        println!(
+            "{} Commit with message: '{}' ? (y/n): ",
+            "System:".bold().magenta(),
+            message.magenta()
+        );
+        let mut approval = String::new();
+        io::stdin().read_line(&mut approval)?;
+        approval.trim().eq_ignore_ascii_case("y")
+    };
+
+    if !is_approved {
         return Ok("Git commit cancelled by user".to_string());
     }
 
@@ -111,17 +123,27 @@ pub fn git_commit(response: &str) -> crate::core::error::HarperResult<String> {
 }
 
 /// Add files to git
-pub fn git_add(response: &str) -> crate::core::error::HarperResult<String> {
+pub async fn git_add(
+    response: &str,
+    approver: Option<Arc<dyn UserApproval>>,
+) -> crate::core::error::HarperResult<String> {
     let files = extract_files(response)?;
 
-    println!(
-        "{} Add files: {} ? (y/n): ",
-        "System:".bold().magenta(),
-        files.join(", ").magenta()
-    );
-    let mut approval = String::new();
-    io::stdin().read_line(&mut approval)?;
-    if !approval.trim().eq_ignore_ascii_case("y") {
+    let files_list = files.join(", ");
+    let is_approved = if let Some(appr) = approver {
+        appr.approve("Add files:", &files_list).await?
+    } else {
+        println!(
+            "{} Add files: {} ? (y/n): ",
+            "System:".bold().magenta(),
+            files_list.magenta()
+        );
+        let mut approval = String::new();
+        io::stdin().read_line(&mut approval)?;
+        approval.trim().eq_ignore_ascii_case("y")
+    };
+
+    if !is_approved {
         return Ok("Git add cancelled by user".to_string());
     }
 

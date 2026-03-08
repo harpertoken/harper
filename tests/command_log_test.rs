@@ -12,24 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use harper_workspace::core::{ApiConfig, ApiProvider};
-use harper_workspace::memory::storage;
-use harper_workspace::runtime::config::ExecPolicyConfig;
-use harper_workspace::tools::shell::{self, CommandAuditContext};
+use harper_core::core::{ApiConfig, ApiProvider};
+use harper_core::memory::storage::{self};
+use harper_core::runtime::config::ExecPolicyConfig;
+use harper_core::tools::shell::{self, CommandAuditContext};
 use rusqlite::Connection;
-use tempfile::NamedTempFile;
 
-#[test]
-fn test_execute_command_persists_audit_log() {
-    let temp_file = NamedTempFile::new().expect("temp db");
-    let conn = Connection::open(temp_file.path()).expect("open db");
-    storage::init_db(&conn).expect("init db");
+#[tokio::test]
+async fn test_command_logging() {
+    let conn = Connection::open_in_memory().unwrap();
+    storage::init_db(&conn).unwrap();
+
+    let session_id = "test-session";
+    storage::save_session(&conn, session_id).unwrap();
+
+    let audit_ctx = CommandAuditContext {
+        conn: &conn,
+        session_id: Some(session_id),
+        source: "test_source",
+    };
 
     let api_config = ApiConfig {
         provider: ApiProvider::OpenAI,
-        api_key: String::new(),
-        base_url: String::new(),
-        model_name: String::new(),
+        api_key: "test-key".to_string(),
+        base_url: "https://api.openai.com/v1".to_string(),
+        model_name: "gpt-4".to_string(),
     };
 
     let exec_policy = ExecPolicyConfig {
@@ -37,26 +44,22 @@ fn test_execute_command_persists_audit_log() {
         blocked_commands: None,
     };
 
-    let audit_ctx = CommandAuditContext {
-        conn: &conn,
-        session_id: Some("test-session"),
-        source: "test_harness",
-    };
-
     let output = shell::execute_command(
         "[RUN_COMMAND echo audit-log]",
         &api_config,
         &exec_policy,
         Some(&audit_ctx),
+        None,
     )
+    .await
     .expect("command should succeed");
+
     assert!(output.contains("audit-log"));
 
-    let entries =
-        storage::load_command_logs_for_session(&conn, "test-session", 5).expect("load logs");
-    assert_eq!(entries.len(), 1);
-    let entry = &entries[0];
-    assert!(entry.command.contains("echo"));
-    assert_eq!(entry.status, "succeeded");
-    assert!(entry.approved);
+    // Verify log entry exists
+    let logs = storage::load_command_logs_for_session(&conn, session_id, 10).unwrap();
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0].command, "echo audit-log");
+    assert_eq!(logs[0].status, "succeeded");
+    assert!(!logs[0].requires_approval); // Should be auto-approved
 }

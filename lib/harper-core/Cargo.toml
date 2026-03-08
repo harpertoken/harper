@@ -33,6 +33,7 @@ hex-literal = "0.4.1"
 rustyline = "14.0"
 image = "0.25.6"
 urlencoding = "2.1"
+async-trait = "0.1"
 
 # Dependency resolution
 [dependencies.base64]
