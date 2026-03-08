@@ -34,12 +34,16 @@ pub struct CommandAuditContext<'a> {
     pub source: &'a str,
 }
 
+use crate::core::io_traits::UserApproval;
+use std::sync::Arc;
+
 /// Execute a shell command with safety checks
-pub fn execute_command(
+pub async fn execute_command(
     response: &str,
     _config: &ApiConfig,
     exec_policy: &ExecPolicyConfig,
-    audit_ctx: Option<&CommandAuditContext>,
+    audit_ctx: Option<&CommandAuditContext<'_>>,
+    approver: Option<Arc<dyn UserApproval>>,
 ) -> crate::core::error::HarperResult<String> {
     let command_str = if let Some(pos) = response.find(' ') {
         response[pos..].trim_start().trim_end_matches(']')
@@ -171,14 +175,21 @@ pub fn execute_command(
 
     // Ask for approval if required
     if requires_approval {
-        println!(
-            "{} Execute command? {} (y/n): ",
-            "System:".bold().magenta(),
-            command_str.magenta()
-        );
-        let mut approval = String::new();
-        io::stdin().read_line(&mut approval)?;
-        if !approval.trim().eq_ignore_ascii_case("y") {
+        let is_approved = if let Some(appr) = approver {
+            appr.approve("Execute command?", command_str).await?
+        } else {
+            // Fallback to blocking stdin if no approver provided (legacy support)
+            println!(
+                "{} Execute command? {} (y/n): ",
+                "System:".bold().magenta(),
+                command_str.magenta()
+            );
+            let mut approval = String::new();
+            io::stdin().read_line(&mut approval)?;
+            approval.trim().eq_ignore_ascii_case("y")
+        };
+
+        if !is_approved {
             maybe_log_command(
                 audit_ctx,
                 command_str,

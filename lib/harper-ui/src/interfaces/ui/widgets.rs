@@ -164,6 +164,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         AppState::ViewSession(name, messages, selected) => {
             draw_view_session(frame, name, messages, *selected, theme)
         }
+        AppState::Approval(prompt, command, _) => draw_approval(frame, prompt, command, theme),
     }
 
     // Draw status bar
@@ -173,6 +174,40 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     if let Some(msg) = &app.message {
         draw_message_overlay(frame, msg, theme);
     }
+}
+
+fn draw_approval(frame: &mut Frame, prompt: &str, command: &str, theme: &Theme) {
+    let content = format!(
+        "{}\n\n{}\n\nPress 'y' to approve or 'n' to reject.",
+        prompt, command
+    );
+    let area = frame.area();
+    let overlay_width = (content.len() as u16 + 4).min(area.width * 3 / 4).max(40);
+    let overlay_height = (content.lines().count() as u16 + 4)
+        .min(area.height / 2)
+        .max(10);
+
+    let overlay_area = Rect {
+        x: (area.width - overlay_width) / 2,
+        y: (area.height - overlay_height) / 2,
+        width: overlay_width,
+        height: overlay_height,
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title("Security Approval Required")
+        .border_style(theme.warning_style())
+        .title_style(theme.title_style())
+        .style(Style::default().bg(theme.background));
+
+    let paragraph = Paragraph::new(content)
+        .block(block)
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(Clear, overlay_area);
+    frame.render_widget(paragraph, overlay_area);
 }
 
 fn draw_menu(frame: &mut Frame, selected: usize, theme: &Theme) {
@@ -347,6 +382,7 @@ fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         AppState::ExportSessions(_, _) => " Export ",
         AppState::Tools(_) => " Tools ",
         AppState::ViewSession(_, _, _) => " Viewing ",
+        AppState::Approval(_, _, _) => " Approval Required ",
     };
 
     let right_status = STATUS_BAR_SHORTCUTS;

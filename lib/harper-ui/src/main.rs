@@ -19,7 +19,7 @@ use colored::Colorize;
 use harper_core::core::ApiConfig;
 use harper_core::error::HarperError;
 
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use turul_mcp_client::McpClient;
 
 #[allow(unused_imports)]
@@ -98,7 +98,7 @@ async fn main() -> Result<(), HarperError> {
     };
 
     // Display selected model information (only for non-TUI)
-    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+    if !std::io::stdout().is_terminal() {
         println!(
             "🤖 Using {} - {}",
             api_config.provider, api_config.model_name
@@ -208,7 +208,10 @@ async fn main() -> Result<(), HarperError> {
                         prompt_id.clone(),
                         custom_commands.clone(),
                         exec_policy.clone(),
-                    );
+                    )
+                    .with_approver(std::sync::Arc::new(
+                        harper_core::core::io_traits::StdinApproval,
+                    ));
                     handle_menu_error!(
                         chat_service.start_session(web_search).await,
                         "Error in chat session"
@@ -244,18 +247,28 @@ async fn main() -> Result<(), HarperError> {
 
     // Try TUI first, fall back to text menu if TUI fails
     let custom_commands = config.custom_commands.commands.clone().unwrap_or_default();
-    if let Err(e) = harper_ui::interfaces::ui::run_tui(
-        &conn,
-        &api_config,
-        &session_service,
-        &theme,
-        custom_commands.clone(),
-        &exec_policy,
-        mcp_client.as_ref(),
-    )
-    .await
+
+    let mut run_tui_success = false;
+    if std::io::stdout().is_terminal()
+        && harper_ui::interfaces::ui::run_tui(
+            &conn,
+            &api_config,
+            &session_service,
+            &theme,
+            custom_commands.clone(),
+            &exec_policy,
+            mcp_client.as_ref(),
+        )
+        .await
+        .is_ok()
     {
-        eprintln!("TUI not available ({}), falling back to text menu...", e);
+        run_tui_success = true;
+    }
+
+    if !run_tui_success {
+        if std::io::stdout().is_terminal() {
+            eprintln!("TUI not available, falling back to text menu...");
+        }
 
         // Fall back to text menu
         text_menu(

@@ -1,3 +1,12 @@
+<div align="center">
+  <img src=".freeman/grok/sign.jpg" alt="Freeman Sign" width="200" />
+</div>
+
+<br />
+
+<details>
+<summary><strong>Click to expand project details</strong></summary>
+
 # Harper (Commercial License)
 
 Harper is an AI-powered terminal assistant that translates natural language into shell commands. Instead of remembering complex CLI syntax, just describe what you want to do in plain English.
@@ -142,3 +151,5 @@ Licensed under either of:
 - MIT License
 
 See [LICENSE](LICENSE) for details.
+
+</details>

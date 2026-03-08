@@ -49,6 +49,9 @@ mod git_tools {
     pub const GIT_ADD: &str = "[GIT_ADD";
 }
 
+use crate::core::io_traits::UserApproval;
+use std::sync::Arc;
+
 /// Tool execution service
 pub struct ToolService<'a> {
     conn: &'a Connection,
@@ -56,6 +59,7 @@ pub struct ToolService<'a> {
     exec_policy: &'a ExecPolicyConfig,
     mcp_client: Option<&'a turul_mcp_client::McpClient>,
     session_id: Option<&'a str>,
+    approver: Option<Arc<dyn UserApproval>>,
 }
 
 impl<'a> ToolService<'a> {
@@ -73,7 +77,14 @@ impl<'a> ToolService<'a> {
             exec_policy,
             mcp_client,
             session_id,
+            approver: None,
         }
+    }
+
+    /// Set a custom user approval provider
+    pub fn with_approver(mut self, approver: Arc<dyn UserApproval>) -> Self {
+        self.approver = Some(approver);
+        self
     }
 
     /// Handle tool usage (commands, web search, file operations)
@@ -125,8 +136,14 @@ impl<'a> ToolService<'a> {
                 session_id: self.session_id,
                 source: "tool_run_command",
             };
-            let command_result =
-                shell::execute_command(response, self.config, self.exec_policy, Some(&audit_ctx))?;
+            let command_result = shell::execute_command(
+                response,
+                self.config,
+                self.exec_policy,
+                Some(&audit_ctx),
+                self.approver.clone(),
+            )
+            .await?;
             let final_response = self
                 .call_llm_after_tool(client, history, &command_result)
                 .await?;
@@ -167,15 +184,17 @@ impl<'a> ToolService<'a> {
             self.execute_sync_tool(client, history, response, |_, _| git::git_diff())
                 .await
         } else if response.to_uppercase().starts_with(git_tools::GIT_COMMIT) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                git::git_commit(response)
-            })
-            .await
+            let commit_result = git::git_commit(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &commit_result)
+                .await?;
+            Ok(Some((final_response, commit_result)))
         } else if response.to_uppercase().starts_with(git_tools::GIT_ADD) {
-            self.execute_sync_tool(client, history, response, |_, response| {
-                git::git_add(response)
-            })
-            .await
+            let add_result = git::git_add(response, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, &add_result)
+                .await?;
+            Ok(Some((final_response, add_result)))
         } else if response.to_uppercase().starts_with(tools::GITHUB_ISSUE) {
             self.execute_sync_tool(client, history, response, |_, response| {
                 github::create_issue(response)
@@ -253,7 +272,9 @@ impl<'a> ToolService<'a> {
                         self.config,
                         self.exec_policy,
                         Some(&audit_ctx),
-                    )?;
+                        self.approver.clone(),
+                    )
+                    .await?;
                     let final_response = self
                         .call_llm_after_tool(client, history, &command_result)
                         .await?;

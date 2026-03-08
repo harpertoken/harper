@@ -12,22 +12,77 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot};
 
-use crossterm::event;
-use ratatui::{backend::CrosstermBackend, Terminal};
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
+use crossterm::{cursor, execute};
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
+
+use harper_core::agent::chat::ChatService;
+use harper_core::core::io_traits::UserApproval;
+use harper_core::core::ApiConfig;
+use harper_core::memory::session_service::SessionService;
+use harper_core::runtime::config::ExecPolicyConfig;
 use rusqlite::Connection;
 use turul_mcp_client::McpClient;
 
 use super::app::{AppState, TuiApp};
-use super::events::{handle_event, EventResult};
+use super::events::{self, EventResult};
 use super::theme::Theme;
-use super::widgets::draw;
-use harper_core::agent::chat::ChatService;
-use harper_core::core::ApiConfig;
-use harper_core::memory::session_service::SessionService;
-use harper_core::runtime::config::ExecPolicyConfig;
-use std::collections::HashMap;
+use super::widgets;
+
+use async_trait::async_trait;
+use harper_core::core::error::HarperResult;
+use std::path::Path;
+
+/// Approval provider for TUI that uses channels to communicate with the UI loop
+pub struct TuiApproval {
+    approval_tx: mpsc::Sender<(String, String, oneshot::Sender<bool>)>,
+}
+
+#[async_trait]
+impl UserApproval for TuiApproval {
+    async fn approve(&self, prompt: &str, command: &str) -> HarperResult<bool> {
+        let (tx, rx) = oneshot::channel();
+        self.approval_tx
+            .send((prompt.to_string(), command.to_string(), tx))
+            .await
+            .map_err(|_| {
+                harper_core::core::error::HarperError::Command(
+                    "Failed to send approval request".to_string(),
+                )
+            })?;
+
+        rx.await.map_err(|_| {
+            harper_core::core::error::HarperError::Command(
+                "Failed to receive approval response".to_string(),
+            )
+        })
+    }
+}
+
+/// Messages sent to the background chat worker
+enum WorkerMsg {
+    SendMessage {
+        user_msg: String,
+        session_id: String,
+        web_search: bool,
+    },
+}
+
+/// Messages sent from the background chat worker to the UI
+enum UiUpdate {
+    MessageProcessed {
+        session_id: String,
+        messages: Vec<harper_core::core::Message>,
+    },
+    Error(String),
+}
 
 pub async fn run_tui(
     conn: &Connection,
@@ -36,79 +91,164 @@ pub async fn run_tui(
     theme: &Theme,
     custom_commands: HashMap<String, String>,
     exec_policy: &ExecPolicyConfig,
-    mcp_client: Option<&McpClient>,
+    _mcp_client: Option<&McpClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Setup terminal
-    crossterm::terminal::enable_raw_mode()?;
+    // Set up terminal
+    enable_raw_mode()?;
     let mut stdout = std::io::stdout();
-    crossterm::execute!(
-        stdout,
-        crossterm::terminal::EnterAlternateScreen,
-        crossterm::cursor::Hide
-    )?;
-
+    execute!(stdout, EnterAlternateScreen, cursor::Show)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Create chat service
-    let mut chat_service = ChatService::new(
-        conn,
-        api_config,
-        mcp_client,
-        None,
-        None,
-        custom_commands,
-        exec_policy.clone(),
-    );
-
-    // Create app
     let mut app = TuiApp::new();
 
-    loop {
-        // Draw the UI
-        terminal.draw(|frame| draw(frame, &app, theme))?;
+    // Set up channels for background worker
+    let (worker_tx, mut worker_rx) = mpsc::channel::<WorkerMsg>(10);
+    let (ui_tx, mut ui_rx) = mpsc::channel::<UiUpdate>(10);
+    let (approval_tx, mut approval_rx) =
+        mpsc::channel::<(String, String, oneshot::Sender<bool>)>(1);
 
-        // Handle events
-        if event::poll(Duration::from_millis(100))? {
-            let event = event::read()?;
-            let result = handle_event(event, &mut app, session_service);
-            match result {
-                EventResult::Quit => break,
-                EventResult::SendMessage(message) => {
-                    if let AppState::Chat(chat_state) = &mut app.state {
-                        let session_id = &chat_state.session_id;
-                        // Send to AI
+    // Clone data for worker
+    let worker_api_config = api_config.clone();
+    let worker_custom_commands = custom_commands.clone();
+    let worker_exec_policy = exec_policy.clone();
+    let db_path = conn
+        .path()
+        .and_then(|p| Path::new(p).to_str().map(|s| s.to_string()));
+
+    // Spawn background worker in a separate thread to handle non-Send Connection
+    let ui_tx_clone = ui_tx.clone();
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to build worker runtime");
+
+        rt.block_on(async {
+            // Open worker connection
+            let worker_conn = if let Some(path) = db_path {
+                Connection::open(path).expect("Worker failed to open database")
+            } else {
+                Connection::open_in_memory().expect("Worker failed to open in-memory database")
+            };
+
+            let mut api_cache = harper_core::core::cache::new_api_cache();
+            let approver = Arc::new(TuiApproval { approval_tx });
+
+            while let Some(msg) = worker_rx.recv().await {
+                match msg {
+                    WorkerMsg::SendMessage {
+                        user_msg,
+                        session_id,
+                        web_search,
+                    } => {
+                        let mut chat_service = ChatService::new(
+                            &worker_conn,
+                            &worker_api_config,
+                            None, // TODO: Handle MCP client in worker
+                            Some(&mut api_cache),
+                            None,
+                            worker_custom_commands.clone(),
+                            worker_exec_policy.clone(),
+                        )
+                        .with_approver(approver.clone());
+
+                        // Load existing history
+                        let mut history =
+                            harper_core::memory::storage::load_history(&worker_conn, &session_id)
+                                .unwrap_or_default();
+
                         match chat_service
-                            .send_message(
-                                &message,
-                                &mut chat_state.messages,
-                                chat_state.web_search_enabled,
-                                session_id,
-                            )
+                            .send_message(&user_msg, &mut history, web_search, &session_id)
                             .await
                         {
                             Ok(_) => {
-                                // Response is already added to messages by send_message
-                                app.set_info_message("AI responded".to_string());
+                                let _ = ui_tx_clone
+                                    .send(UiUpdate::MessageProcessed {
+                                        session_id,
+                                        messages: history,
+                                    })
+                                    .await;
                             }
                             Err(e) => {
-                                app.set_error_message(format!("Error: {}", e));
+                                let _ = ui_tx_clone.send(UiUpdate::Error(e.to_string())).await;
                             }
                         }
                     }
                 }
-                crate::interfaces::ui::events::EventResult::Continue => {}
+            }
+        });
+    });
+
+    loop {
+        terminal.draw(|f| widgets::draw(f, &app, theme))?;
+
+        // Handle both UI events and worker updates
+        tokio::select! {
+            // UI Events
+            event_res = async {
+                if crossterm::event::poll(std::time::Duration::from_millis(100))? {
+                    Ok::<_, std::io::Error>(Some(crossterm::event::read()?))
+                } else {
+                    Ok(None)
+                }
+            } => {
+                if let Ok(Some(event)) = event_res {
+                    match events::handle_event(event, &mut app, session_service) {
+                        EventResult::Quit => break,
+                        EventResult::SendMessage(msg) => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                let session_id = chat_state.session_id.clone();
+                                let web_search = chat_state.web_search_enabled;
+
+                                // optimistic update
+                                chat_state.messages.push(harper_core::core::Message {
+                                    role: "user".to_string(),
+                                    content: msg.clone(),
+                                });
+
+                                let _ = worker_tx.send(WorkerMsg::SendMessage {
+                                    user_msg: msg,
+                                    session_id,
+                                    web_search,
+                                }).await;
+                            }
+                        }
+                        EventResult::Continue => {}
+                    }
+                }
+            }
+
+            // Worker Updates
+            update = ui_rx.recv() => {
+                if let Some(update) = update {
+                    match update {
+                        UiUpdate::MessageProcessed { session_id, messages } => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                if chat_state.session_id == session_id {
+                                    chat_state.messages = messages;
+                                }
+                            }
+                        }
+                        UiUpdate::Error(err) => {
+                            app.set_error_message(err);
+                        }
+                    }
+                }
+            }
+
+            // Approval Requests
+            approval = approval_rx.recv() => {
+                if let Some((prompt, command, tx)) = approval {
+                    app.state = AppState::Approval(prompt, command, tx);
+                }
             }
         }
     }
 
     // Restore terminal
-    crossterm::terminal::disable_raw_mode()?;
-    crossterm::execute!(
-        terminal.backend_mut(),
-        crossterm::terminal::LeaveAlternateScreen,
-        crossterm::cursor::Show
-    )?;
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, cursor::Show)?;
 
     Ok(())
 }

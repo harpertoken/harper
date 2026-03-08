@@ -35,7 +35,6 @@ impl ChatState {
     }
 }
 
-#[derive(Clone)]
 pub enum AppState {
     Menu(usize),
     Chat(ChatState),
@@ -43,6 +42,29 @@ pub enum AppState {
     ExportSessions(Vec<SessionInfo>, usize),  // sessions, selected for export
     Tools(usize),                             // selected tool
     ViewSession(String, Vec<Message>, usize), // name, messages, selected
+    Approval(String, String, tokio::sync::oneshot::Sender<bool>), // prompt, command, response channel
+}
+
+// Clone implementation for AppState (manual because Sender is not Clone)
+impl Clone for AppState {
+    fn clone(&self) -> Self {
+        match self {
+            AppState::Menu(s) => AppState::Menu(*s),
+            AppState::Chat(s) => AppState::Chat(s.clone()),
+            AppState::Sessions(s, sel) => AppState::Sessions(s.clone(), *sel),
+            AppState::ExportSessions(s, sel) => AppState::ExportSessions(s.clone(), *sel),
+            AppState::Tools(s) => AppState::Tools(*s),
+            AppState::ViewSession(n, m, sel) => AppState::ViewSession(n.clone(), m.clone(), *sel),
+            AppState::Approval(_p, _c, _) => {
+                // This is a bit of a hack since we can't clone the Sender.
+                // In practice, we should try to avoid cloning Approval state if possible.
+                // For now, we'll just panic if someone tries to clone an active approval state
+                // or return a "dummy" version if we must.
+                // Given the current TUI architecture, we might need a better way.
+                panic!("Cannot clone AppState::Approval due to oneshot::Sender");
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -120,7 +142,7 @@ impl TuiApp {
 
     pub fn next(&mut self) {
         match &mut self.state {
-            AppState::Menu(sel) => *sel = (*sel + 1) % 6,
+            AppState::Menu(sel) => *sel = (*sel + 1) % 5,
             AppState::Chat(chat_state) => {
                 chat_state.scroll_offset =
                     (chat_state.scroll_offset + 1).min(chat_state.messages.len());
@@ -141,12 +163,13 @@ impl TuiApp {
                     *sel = (*sel + 1) % messages.len();
                 }
             }
+            AppState::Approval(_, _, _) => {}
         }
     }
 
     pub fn previous(&mut self) {
         match &mut self.state {
-            AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
+            AppState::Menu(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
             AppState::Chat(chat_state) => {
                 chat_state.scroll_offset = chat_state.scroll_offset.saturating_sub(1);
             }
@@ -178,6 +201,7 @@ impl TuiApp {
                     };
                 }
             }
+            AppState::Approval(_, _, _) => {}
         }
     }
 }

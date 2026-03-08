@@ -28,6 +28,7 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
 turul-mcp-client = "0.2.1"
 uuid = { version = "1.17.0", features = ["v4"] }
+async-trait = "0.1"
 
 [[bin]]
 name = "harper"
