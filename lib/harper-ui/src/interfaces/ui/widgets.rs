@@ -20,7 +20,7 @@ use super::app::{AppState, ApprovalState, MessageType, SessionInfo, TuiApp, UiMe
 use super::theme::Theme;
 
 // Keyboard shortcut constants
-const STATUS_BAR_SHORTCUTS: &str = " F1/Ctrl+H:Help | Ctrl+C:Quit ";
+const STATUS_BAR_SHORTCUTS: &str = " F1/Ctrl+H:Help | @+Tab:File Complete | Ctrl+C:Quit ";
 use crate::plugins::syntax::highlight_code;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
@@ -101,26 +101,27 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             let displayed_messages = &chat_state.messages[safe_scroll_offset..];
             let message_lines: Vec<Line> = displayed_messages
                 .iter()
+                .filter(|msg| msg.role != "system")
                 .flat_map(|msg| {
                     let default_color = match msg.role.as_str() {
                         "user" => theme.input,
                         "assistant" => theme.output,
                         _ => theme.foreground,
                     };
-                    let spans = parse_content_with_code(
-                        &theme.syntax_set,
-                        &theme.theme_set,
-                        &msg.content,
-                        default_color,
-                        &theme.syntax_theme,
-                    );
-                    if spans.is_empty() {
+                    if msg.content.contains("```") {
+                        let spans = parse_content_with_code(
+                            &theme.syntax_set,
+                            &theme.theme_set,
+                            &msg.content,
+                            default_color,
+                            &theme.syntax_theme,
+                        );
+                        vec![Line::from(spans)]
+                    } else {
                         msg.content
                             .lines()
                             .map(|line| Line::styled(line, default_color))
                             .collect::<Vec<_>>()
-                    } else {
-                        vec![Line::from(spans)]
                     }
                 })
                 .collect();

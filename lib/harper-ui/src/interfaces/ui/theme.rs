@@ -40,10 +40,10 @@ pub struct Theme {
 impl Default for Theme {
     fn default() -> Self {
         Self {
-            background: Color::Black,
+            background: Color::Rgb(24, 24, 27), // Modern dark grey
             foreground: Color::White,
             accent: Color::Rgb(88, 166, 255),    // Modern blue
-            border: Color::Rgb(64, 64, 64),      // Subtle gray
+            border: Color::Rgb(63, 63, 70),      // Zinc-700
             title: Color::Rgb(255, 215, 0),      // Gold
             input: Color::Rgb(0, 255, 255),      // Cyan
             output: Color::Rgb(144, 238, 144),   // Light green

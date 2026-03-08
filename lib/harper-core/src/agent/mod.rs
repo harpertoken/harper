@@ -18,4 +18,6 @@
 //! conversation management, tool coordination, and decision making.
 
 pub mod chat;
+pub mod intent;
+pub mod offline_shell;
 pub mod prompt;
