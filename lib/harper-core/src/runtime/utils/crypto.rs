@@ -17,10 +17,9 @@
 use crate::core::constants::crypto;
 use crate::core::error::{HarperError, HarperResult};
 use aes::{
-    cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit},
+    cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit},
     Aes256,
 };
-use block_padding::Pkcs7;
 use cbc::{Decryptor, Encryptor};
 use ctr::{cipher::StreamCipher, Ctr64BE};
 use ring::{
