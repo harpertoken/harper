@@ -8,11 +8,9 @@ A structured summary of the execution results.
 
 ## Artifacts
 
-| Name | Type | Size |
-|------|------|------|
-| | | |
-
-[Download Artifact](#)
+| Name | Type | Size | Download |
+|------|------|------|----------|
+| | | | |
 
 ---
 
@@ -31,8 +29,8 @@ A structured summary of the execution results.
 <details>
 <summary>Error Logs</summary>
 
-```
-// Error output will appear here
+```log
+<!-- Paste error logs here -->
 ```
 
 </details>
