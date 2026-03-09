@@ -112,6 +112,94 @@ pub fn handle_event(
                 }
             }
 
+            // Handle Ctrl shortcuts first
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                match key.code {
+                    KeyCode::Char('g') => {
+                        app.set_help_message(HELP_MESSAGE.to_string());
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('x') => {
+                        return EventResult::Quit;
+                    }
+                    KeyCode::Char('o') => {
+                        match &app.state {
+                            AppState::Chat(chat_state) => {
+                                let session_id = chat_state.session_id.clone();
+                                match session_service.export_session_by_id(&session_id) {
+                                    Ok(path) => app
+                                        .set_info_message(format!("Session exported to {}", path)),
+                                    Err(e) => {
+                                        app.set_error_message(format!("Export failed: {}", e))
+                                    }
+                                }
+                            }
+                            _ => load_export_sessions_into_state(app, session_service),
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('r') => {
+                        load_sessions_into_state(app, session_service);
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('w') => {
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            chat_state.web_search_enabled = !chat_state.web_search_enabled;
+                            let enabled = chat_state.web_search_enabled;
+                            app.set_status_message(format!(
+                                "Web search {}",
+                                if enabled { "enabled" } else { "disabled" }
+                            ));
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('k') => {
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            if !chat_state.input.is_empty() {
+                                app.cut_buffer = chat_state.input.clone();
+                                chat_state.input.clear();
+                                chat_state.reset_completion();
+                                app.set_status_message("Text cut to buffer".to_string());
+                            }
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('u') => {
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            if !app.cut_buffer.is_empty() {
+                                chat_state.input.push_str(&app.cut_buffer);
+                                chat_state.reset_completion();
+                            }
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('t') => {
+                        return handle_enter(app, session_service);
+                    }
+                    KeyCode::Char('c') => {
+                        if let AppState::Chat(chat_state) = &app.state {
+                            app.set_info_message(format!("Session ID: {}", chat_state.session_id));
+                        } else {
+                            app.set_info_message("State: Menu".to_string());
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('j') => {
+                        handle_shell_commands(app);
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('y') => {
+                        app.previous();
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('v') => {
+                        app.next();
+                        return EventResult::Continue;
+                    }
+                    _ => {}
+                }
+            }
+
             // Normal state handling
             match key.code {
                 KeyCode::F(1) => {
@@ -135,16 +223,13 @@ pub fn handle_event(
                     handle_image_paste(app);
                 }
                 KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    return EventResult::Quit;
-                }
-                KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    if let AppState::Chat(chat_state) = &mut app.state {
-                        chat_state.web_search_enabled = !chat_state.web_search_enabled;
-                        let enabled = chat_state.web_search_enabled;
-                        app.set_status_message(format!(
-                            "Web search {}",
-                            if enabled { "enabled" } else { "disabled" }
-                        ));
+                    // Already handled above if we want specific behavior,
+                    // but default is often quit. The footer says Location,
+                    // but standard is Quit. I'll make it Location to follow the footer.
+                    if let AppState::Chat(chat_state) = &app.state {
+                        app.set_info_message(format!("Session ID: {}", chat_state.session_id));
+                    } else {
+                        app.set_info_message("State: Menu".to_string());
                     }
                 }
                 KeyCode::Esc => match &app.state {

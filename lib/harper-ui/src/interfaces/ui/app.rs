@@ -91,6 +91,7 @@ pub struct TuiApp {
     pub state: AppState,
     pub message: Option<UiMessage>,
     pub pending_approval: Option<ApprovalState>,
+    pub cut_buffer: String,
 }
 
 impl Default for TuiApp {
@@ -99,6 +100,7 @@ impl Default for TuiApp {
             state: AppState::Menu(0),
             message: None,
             pending_approval: None,
+            cut_buffer: String::new(),
         }
     }
 }
