@@ -511,6 +511,12 @@ impl<'a> ToolService<'a> {
                         ContentBlock::Resource { .. } => {
                             result_parts.push("[Resource content]".to_string());
                         }
+                        ContentBlock::ToolUse { .. } => {
+                            result_parts.push("[Tool use]".to_string());
+                        }
+                        ContentBlock::ToolResult { .. } => {
+                            result_parts.push("[Tool result]".to_string());
+                        }
                     }
                 }
 
