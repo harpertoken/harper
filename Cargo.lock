@@ -1664,7 +1664,6 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bitflags 2.11.0",
- "block-padding",
  "cbc",
  "chrono",
  "colored",
