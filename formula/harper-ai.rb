@@ -17,7 +17,7 @@ class HarperAi < Formula
   depends_on "rust" => :build
 
   def install
-    system "cargo", "build", "--release", "--manifest-path=Cargo.toml"
+    system "cargo", "build", "--release", "-p", "harper-ui", "--bin", "harper", "--bin", "harper-batch", "--manifest-path=Cargo.toml"
 
     # Check both possible locations for binaries
     if File.exist?("bin/harper")
@@ -27,7 +27,7 @@ class HarperAi < Formula
       bin.install "target/release/harper" => "harper"
       bin.install "target/release/harper-batch" => "harper-batch" if File.exist?("target/release/harper-batch")
     else
-      raise "Binary not found in expected location"
+      raise "Binary not found in expected location. Contents of target/release: #{Dir.glob("target/release/*")}"
     end
   end
 
