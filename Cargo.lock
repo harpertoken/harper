@@ -1741,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "harper-core"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "aes",
  "arboard",
@@ -1800,7 +1800,7 @@ dependencies = [
 
 [[package]]
 name = "harper-ui"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "arboard",
  "async-trait",
@@ -1821,7 +1821,7 @@ dependencies = [
 
 [[package]]
 name = "harper-workspace"
-version = "0.3.4"
+version = "0.7.0"
 dependencies = [
  "criterion",
  "harper-core",
