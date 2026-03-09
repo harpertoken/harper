@@ -514,3 +514,80 @@ fn draw_message_overlay(frame: &mut Frame, message: &UiMessage, theme: &Theme) {
     frame.render_widget(Clear, overlay_area);
     frame.render_widget(overlay, overlay_area);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::style::Color;
+
+    fn setup() -> (SyntaxSet, ThemeSet) {
+        (
+            SyntaxSet::load_defaults_newlines(),
+            ThemeSet::load_defaults(),
+        )
+    }
+
+    #[test]
+    fn test_parse_content_with_code_no_code() {
+        let (syntax_set, theme_set) = setup();
+        let content = "Hello world";
+        let spans = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content,
+            Color::White,
+            "base16-ocean.dark",
+        );
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].content, "Hello world");
+    }
+
+    #[test]
+    fn test_parse_content_with_code_with_code_block() {
+        let (syntax_set, theme_set) = setup();
+        let content = "Before ```rust\nfn main() {}\n``` After";
+        let spans = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content,
+            Color::White,
+            "base16-ocean.dark",
+        );
+        // Should have spans for "Before ", highlighted code, " After"
+        assert!(spans.len() > 1);
+        // First span plain
+        assert_eq!(spans[0].content, "Before ");
+        // Then highlighted spans
+    }
+
+    #[test]
+    fn test_parse_content_with_code_unclosed_code_block() {
+        let (syntax_set, theme_set) = setup();
+        let content = "Text ```code";
+        let spans = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content,
+            Color::White,
+            "base16-ocean.dark",
+        );
+        // Should treat as plain text before and the unclosed block as plain
+        assert_eq!(spans.len(), 2, "Should have two spans for unclosed block");
+        assert_eq!(spans[0].content, "Text ");
+        assert_eq!(spans[1].content, "```code");
+    }
+
+    #[test]
+    fn test_parse_content_with_code_multiple_blocks() {
+        let (syntax_set, theme_set) = setup();
+        let content = "```js\nconsole.log()\n``` and ```python\nprint()\n```";
+        let spans = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            content,
+            Color::White,
+            "base16-ocean.dark",
+        );
+        assert!(spans.len() > 2);
+    }
+}

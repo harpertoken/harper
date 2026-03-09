@@ -222,16 +222,6 @@ pub fn handle_event(
                 {
                     handle_image_paste(app);
                 }
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    // Already handled above if we want specific behavior,
-                    // but default is often quit. The footer says Location,
-                    // but standard is Quit. I'll make it Location to follow the footer.
-                    if let AppState::Chat(chat_state) = &app.state {
-                        app.set_info_message(format!("Session ID: {}", chat_state.session_id));
-                    } else {
-                        app.set_info_message("State: Menu".to_string());
-                    }
-                }
                 KeyCode::Esc => match &app.state {
                     AppState::Menu(_) => {}
                     AppState::Chat(_) => app.state = AppState::Menu(0),
@@ -353,38 +343,16 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 app.state = AppState::Menu(0);
             }
         }
-        AppState::Tools(selected) => {
-            match *selected {
-                0 => handle_file_operations(app),
-                1 => handle_git_commands(app),
-                2 => handle_web_search(app),
-                3 => handle_shell_commands(app),
-                4 => app.state = AppState::Menu(0), // Back to Menu
-                _ => {}
-            }
-        }
+        AppState::Tools(selected) => match *selected {
+            0 => handle_web_search(app),
+            1 => handle_system_info(app),
+            2 => handle_process_list(app),
+            3 => handle_git_commands(app),
+            _ => {}
+        },
         _ => {}
     }
     EventResult::Continue
-}
-
-// Helper functions for tool operations
-fn handle_file_operations(app: &mut TuiApp) {
-    let result: std::io::Result<Vec<String>> = std::fs::read_dir(".").and_then(|entries| {
-        entries
-            .map(|entry_result| {
-                entry_result.map(|entry| entry.file_name().to_string_lossy().into_owned())
-            })
-            .collect()
-    });
-
-    match result {
-        Ok(file_list) => app.set_info_message(format!(
-            "Files in current directory:\n{}",
-            file_list.join("\n")
-        )),
-        Err(e) => app.set_error_message(format!("File error: {}", e)),
-    }
 }
 
 fn handle_git_commands(app: &mut TuiApp) {
@@ -433,6 +401,78 @@ fn handle_shell_commands(app: &mut TuiApp) {
             }
         }
         Err(e) => app.set_error_message(format!("Shell error: {}", e)),
+    }
+}
+
+fn handle_system_info(app: &mut TuiApp) {
+    let info = {
+        #[cfg(unix)]
+        {
+            std::process::Command::new("uname").arg("-a").output()
+        }
+        #[cfg(windows)]
+        {
+            std::process::Command::new("systeminfo").output()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "System info tool not supported on this OS.",
+            ))
+        }
+    };
+
+    match info {
+        Ok(output) => {
+            if output.status.success() {
+                app.set_info_message(format!(
+                    "System Information:\n{}",
+                    String::from_utf8_lossy(&output.stdout)
+                ));
+            } else {
+                app.set_error_message("Failed to retrieve system information".to_string());
+            }
+        }
+        Err(e) => app.set_error_message(format!("System info error: {}", e)),
+    }
+}
+
+fn handle_process_list(app: &mut TuiApp) {
+    let list = {
+        #[cfg(unix)]
+        {
+            std::process::Command::new("ps").arg("aux").output()
+        }
+        #[cfg(windows)]
+        {
+            std::process::Command::new("tasklist").output()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "Process list tool not supported on this OS.",
+            ))
+        }
+    };
+
+    match list {
+        Ok(output) => {
+            if output.status.success() {
+                app.set_info_message(format!(
+                    "Process List (partial):\n{}",
+                    String::from_utf8_lossy(&output.stdout)
+                        .lines()
+                        .take(20)
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ));
+            } else {
+                app.set_error_message("Failed to retrieve process list".to_string());
+            }
+        }
+        Err(e) => app.set_error_message(format!("Process list error: {}", e)),
     }
 }
 

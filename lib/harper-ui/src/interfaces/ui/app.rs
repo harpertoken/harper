@@ -159,7 +159,7 @@ impl TuiApp {
                     *sel = (*sel + 1) % sessions.len();
                 }
             }
-            AppState::Tools(sel) => *sel = (*sel + 1) % 5,
+            AppState::Tools(sel) => *sel = (*sel + 1) % 4,
             AppState::ExportSessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = (*sel + 1) % sessions.len();
@@ -193,7 +193,7 @@ impl TuiApp {
                     };
                 }
             }
-            AppState::Tools(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
+            AppState::Tools(sel) => *sel = if *sel == 0 { 3 } else { *sel - 1 },
             AppState::ExportSessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = if *sel == 0 {
