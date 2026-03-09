@@ -112,6 +112,94 @@ pub fn handle_event(
                 }
             }
 
+            // Handle Ctrl shortcuts first
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                match key.code {
+                    KeyCode::Char('g') => {
+                        app.set_help_message(HELP_MESSAGE.to_string());
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('x') => {
+                        return EventResult::Quit;
+                    }
+                    KeyCode::Char('o') => {
+                        match &app.state {
+                            AppState::Chat(chat_state) => {
+                                let session_id = chat_state.session_id.clone();
+                                match session_service.export_session_by_id(&session_id) {
+                                    Ok(path) => app
+                                        .set_info_message(format!("Session exported to {}", path)),
+                                    Err(e) => {
+                                        app.set_error_message(format!("Export failed: {}", e))
+                                    }
+                                }
+                            }
+                            _ => load_export_sessions_into_state(app, session_service),
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('r') => {
+                        load_sessions_into_state(app, session_service);
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('w') => {
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            chat_state.web_search_enabled = !chat_state.web_search_enabled;
+                            let enabled = chat_state.web_search_enabled;
+                            app.set_status_message(format!(
+                                "Web search {}",
+                                if enabled { "enabled" } else { "disabled" }
+                            ));
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('k') => {
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            if !chat_state.input.is_empty() {
+                                app.cut_buffer = chat_state.input.clone();
+                                chat_state.input.clear();
+                                chat_state.reset_completion();
+                                app.set_status_message("Text cut to buffer".to_string());
+                            }
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('u') => {
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            if !app.cut_buffer.is_empty() {
+                                chat_state.input.push_str(&app.cut_buffer);
+                                chat_state.reset_completion();
+                            }
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('t') => {
+                        return handle_enter(app, session_service);
+                    }
+                    KeyCode::Char('c') => {
+                        if let AppState::Chat(chat_state) = &app.state {
+                            app.set_info_message(format!("Session ID: {}", chat_state.session_id));
+                        } else {
+                            app.set_info_message("State: Menu".to_string());
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('j') => {
+                        handle_shell_commands(app);
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('y') => {
+                        app.previous();
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('v') => {
+                        app.next();
+                        return EventResult::Continue;
+                    }
+                    _ => {}
+                }
+            }
+
             // Normal state handling
             match key.code {
                 KeyCode::F(1) => {
@@ -133,19 +221,6 @@ pub fn handle_event(
                         && key.modifiers.contains(KeyModifiers::SHIFT) =>
                 {
                     handle_image_paste(app);
-                }
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    return EventResult::Quit;
-                }
-                KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    if let AppState::Chat(chat_state) = &mut app.state {
-                        chat_state.web_search_enabled = !chat_state.web_search_enabled;
-                        let enabled = chat_state.web_search_enabled;
-                        app.set_status_message(format!(
-                            "Web search {}",
-                            if enabled { "enabled" } else { "disabled" }
-                        ));
-                    }
                 }
                 KeyCode::Esc => match &app.state {
                     AppState::Menu(_) => {}
@@ -268,38 +343,16 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 app.state = AppState::Menu(0);
             }
         }
-        AppState::Tools(selected) => {
-            match *selected {
-                0 => handle_file_operations(app),
-                1 => handle_git_commands(app),
-                2 => handle_web_search(app),
-                3 => handle_shell_commands(app),
-                4 => app.state = AppState::Menu(0), // Back to Menu
-                _ => {}
-            }
-        }
+        AppState::Tools(selected) => match *selected {
+            0 => handle_web_search(app),
+            1 => handle_system_info(app),
+            2 => handle_process_list(app),
+            3 => handle_git_commands(app),
+            _ => {}
+        },
         _ => {}
     }
     EventResult::Continue
-}
-
-// Helper functions for tool operations
-fn handle_file_operations(app: &mut TuiApp) {
-    let result: std::io::Result<Vec<String>> = std::fs::read_dir(".").and_then(|entries| {
-        entries
-            .map(|entry_result| {
-                entry_result.map(|entry| entry.file_name().to_string_lossy().into_owned())
-            })
-            .collect()
-    });
-
-    match result {
-        Ok(file_list) => app.set_info_message(format!(
-            "Files in current directory:\n{}",
-            file_list.join("\n")
-        )),
-        Err(e) => app.set_error_message(format!("File error: {}", e)),
-    }
 }
 
 fn handle_git_commands(app: &mut TuiApp) {
@@ -348,6 +401,78 @@ fn handle_shell_commands(app: &mut TuiApp) {
             }
         }
         Err(e) => app.set_error_message(format!("Shell error: {}", e)),
+    }
+}
+
+fn handle_system_info(app: &mut TuiApp) {
+    let info = {
+        #[cfg(unix)]
+        {
+            std::process::Command::new("uname").arg("-a").output()
+        }
+        #[cfg(windows)]
+        {
+            std::process::Command::new("systeminfo").output()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "System info tool not supported on this OS.",
+            ))
+        }
+    };
+
+    match info {
+        Ok(output) => {
+            if output.status.success() {
+                app.set_info_message(format!(
+                    "System Information:\n{}",
+                    String::from_utf8_lossy(&output.stdout)
+                ));
+            } else {
+                app.set_error_message("Failed to retrieve system information".to_string());
+            }
+        }
+        Err(e) => app.set_error_message(format!("System info error: {}", e)),
+    }
+}
+
+fn handle_process_list(app: &mut TuiApp) {
+    let list = {
+        #[cfg(unix)]
+        {
+            std::process::Command::new("ps").arg("aux").output()
+        }
+        #[cfg(windows)]
+        {
+            std::process::Command::new("tasklist").output()
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "Process list tool not supported on this OS.",
+            ))
+        }
+    };
+
+    match list {
+        Ok(output) => {
+            if output.status.success() {
+                app.set_info_message(format!(
+                    "Process List (partial):\n{}",
+                    String::from_utf8_lossy(&output.stdout)
+                        .lines()
+                        .take(20)
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ));
+            } else {
+                app.set_error_message("Failed to retrieve process list".to_string());
+            }
+        }
+        Err(e) => app.set_error_message(format!("Process list error: {}", e)),
     }
 }
 

@@ -91,6 +91,7 @@ pub struct TuiApp {
     pub state: AppState,
     pub message: Option<UiMessage>,
     pub pending_approval: Option<ApprovalState>,
+    pub cut_buffer: String,
 }
 
 impl Default for TuiApp {
@@ -99,6 +100,7 @@ impl Default for TuiApp {
             state: AppState::Menu(0),
             message: None,
             pending_approval: None,
+            cut_buffer: String::new(),
         }
     }
 }
@@ -157,7 +159,7 @@ impl TuiApp {
                     *sel = (*sel + 1) % sessions.len();
                 }
             }
-            AppState::Tools(sel) => *sel = (*sel + 1) % 5,
+            AppState::Tools(sel) => *sel = (*sel + 1) % 4,
             AppState::ExportSessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = (*sel + 1) % sessions.len();
@@ -191,7 +193,7 @@ impl TuiApp {
                     };
                 }
             }
-            AppState::Tools(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
+            AppState::Tools(sel) => *sel = if *sel == 0 { 3 } else { *sel - 1 },
             AppState::ExportSessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = if *sel == 0 {
