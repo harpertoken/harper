@@ -6,11 +6,11 @@ class HarperAi < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/harpertoken/harper/archive/refs/tags/0.7.0.tar.gz"
-      sha256 "TODO: update after creating tag"
+      url "https://github.com/harpertoken/harper/archive/refs/tags/v0.7.0.tar.gz"
+      sha256 "d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
     else
-      url "https://github.com/harpertoken/harper/archive/refs/tags/0.7.0.tar.gz"
-      sha256 "TODO: update after creating tag"
+      url "https://github.com/harpertoken/harper/archive/refs/tags/v0.7.0.tar.gz"
+      sha256 "d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
     end
   end
 
