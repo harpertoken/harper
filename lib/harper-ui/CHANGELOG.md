@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/harpertoken/harper/compare/harper-ui-0.5.0...harper-ui-0.6.0) (2026-03-09)
+
+
+### Features
+
+* add themes, system intent routing, and git tools ([#162](https://github.com/harpertoken/harper/issues/162)) ([3e91953](https://github.com/harpertoken/harper/commit/3e919531d979377b15ffe18cfc393934612a88fb))
+* nano-style footer and oled dark theme ([#164](https://github.com/harpertoken/harper/issues/164)) ([7e25fc8](https://github.com/harpertoken/harper/commit/7e25fc8a8d21c1a71ab4e0e057c46e6d3c6859ad))
+
 ## [0.5.0](https://github.com/harpertoken/harper/compare/harper-ui-0.4.0...harper-ui-0.5.0) (2026-03-08)
 
 
