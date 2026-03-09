@@ -1828,7 +1828,7 @@ dependencies = [
  "harper-ui",
  "lazy_static",
  "num_cpus",
- "rand 0.8.5",
+ "rand 0.9.2",
  "ratatui",
  "regex",
  "rusqlite",
