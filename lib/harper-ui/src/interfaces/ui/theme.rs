@@ -64,9 +64,23 @@ impl Default for Theme {
 impl Theme {
     pub fn dark() -> Self {
         Self {
+            background: Color::Rgb(0, 0, 0),       // True black
+            foreground: Color::Rgb(229, 229, 231), // Zinc-200
+            accent: Color::Rgb(59, 130, 246),      // Blue-500
+            border: Color::Rgb(39, 39, 42),        // Zinc-800
+            title: Color::Rgb(161, 161, 170),      // Zinc-400
+            input: Color::Rgb(96, 165, 250),       // Blue-400
+            output: Color::Rgb(16, 185, 129),      // Emerald-500
+            error: Color::Rgb(239, 68, 68),        // Red-500
+            success: Color::Rgb(34, 197, 94),      // Green-500
+            warning: Color::Rgb(245, 158, 11),     // Amber-500
+            info: Color::Rgb(6, 182, 212),         // Cyan-500
+            muted: Color::Rgb(82, 82, 91),         // Zinc-600
+            highlight: Color::Rgb(250, 204, 21),   // Yellow-400
+            selection: Color::Rgb(30, 58, 138),    // Blue-900
+            syntax_theme: "base16-ocean.dark".to_string(),
             syntax_set: SyntaxSet::load_defaults_newlines(),
             theme_set: ThemeSet::load_defaults(),
-            ..Self::default()
         }
     }
 
