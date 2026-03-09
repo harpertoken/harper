@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/harpertoken/harper/compare/harper-core-0.6.0...harper-core-0.7.0) (2026-03-09)
+
+
+### Features
+
+* add themes, system intent routing, and git tools ([#162](https://github.com/harpertoken/harper/issues/162)) ([3e91953](https://github.com/harpertoken/harper/commit/3e919531d979377b15ffe18cfc393934612a88fb))
+
 ## [0.6.0](https://github.com/harpertoken/harper/compare/harper-core-0.5.0...harper-core-0.6.0) (2026-03-08)
 
 
