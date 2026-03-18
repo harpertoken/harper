@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.1](https://github.com/harpertoken/harper/compare/harper-ui-0.6.0...harper-ui-0.6.1) (2026-03-18)
+
+
+### Refactors
+
+* make sidebar gathering async ([#182](https://github.com/harpertoken/harper/issues/182)) ([3374a4d](https://github.com/harpertoken/harper/commit/3374a4dfad1bc7135269fa05a0f192c3cac98b6c))
+
+
+### Documentation
+
+* update docs, config, and ui ([#179](https://github.com/harpertoken/harper/issues/179)) ([4718cb2](https://github.com/harpertoken/harper/commit/4718cb2623b051cde177ba83d372ab32df10a074))
+
 ## [0.6.0](https://github.com/harpertoken/harper/compare/harper-ui-0.5.0...harper-ui-0.6.0) (2026-03-09)
 
 
