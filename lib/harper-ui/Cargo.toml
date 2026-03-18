@@ -23,7 +23,7 @@ keyring = "2.3"
 ratatui = "0.30"
 syntect = { version = "5.3", features = ["parsing", "html"] }
 image = "0.25.6"
-rustyline = "14.0"
+rustyline = "17.0"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
 turul-mcp-client = "0.3.11"
