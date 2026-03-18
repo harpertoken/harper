@@ -14,7 +14,7 @@
 
 //! AI provider integrations and cryptographic utilities
 //!
-//! This module handles communication with different AI providers (OpenAI, Sambanova, Gemini)
+//! This module handles communication with different AI providers (OpenAI, Sambanova, Gemini, Ollama)
 //! and provides cryptographic functions for secure data handling.
 
 use crate::core::constants::crypto::*;
@@ -277,6 +277,25 @@ pub async fn call_llm(
                 .send()
                 .await?
         }
+        ApiProvider::Ollama => {
+            let messages_json: Vec<_> = history
+                .iter()
+                .map(|m| json!({"role": m.role, "content": m.content}))
+                .collect();
+
+            let body = json!({
+                "model": config.model_name,
+                "messages": messages_json,
+                "stream": false,
+            });
+
+            client
+                .post(&config.base_url)
+                .header(CONTENT_TYPE, "application/json")
+                .json(&body)
+                .send()
+                .await?
+        }
     };
 
     if !res.status().is_success() {
@@ -316,6 +335,18 @@ pub async fn call_llm(
                     .to_string()
             }
         }
+        ApiProvider::Ollama => resp_json
+            .get("message")
+            .and_then(|msg| msg.get("content"))
+            .and_then(|content| content.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                resp_json
+                    .get("response")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "[No response]".to_string()),
     };
 
     Ok(assistant_reply)

@@ -1,80 +1,57 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blog - Harper</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harper · Blog</title>
+    <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div class="bg"></div>
-    <div class="scanlines"></div>
+    <div class="page">
+        <header class="site-header">
+            <div class="brand">HARPER<span>·AI</span></div>
+            <nav class="nav">
+                <a href="index.html">Home</a>
+                <a href="blog.html" aria-current="page">Blog</a>
+                <a href="changelog.html">Changelog</a>
+                <a href="terms.html">Terms</a>
+                <a href="privacy.html">Privacy</a>
+            </nav>
+        </header>
 
-    <div class="container">
-        <div class="terminal">
-            <div class="terminal-header">
-                <div class="window-controls">
-                    <span class="control close"></span>
-                    <span class="control minimize"></span>
-                    <span class="control maximize"></span>
-                </div>
-                <span class="header-title">HARPER-AI — BLOG</span>
-                <div class="header-spacer"></div>
-            </div>
+        <main class="surface">
+            <section>
+                <h1 class="hero-title">Notes from the console.</h1>
+                <p class="hero-lede">Release commentary, security updates, and design discussions.</p>
+            </section>
 
-            <div class="info-bar">
-                <div class="info-item">
-                    <span class="info-label">SYSTEM:</span>
-                    <span class="info-value">HARPER</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">KERNEL:</span>
-                    <span class="info-value">RUST</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">STATUS:</span>
-                    <span class="info-value status-online">ONLINE</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">SECTION:</span>
-                    <span class="info-value">BLOG</span>
-                </div>
-            </div>
+            <section class="list" style="margin-top: 2rem;">
+                <article class="list-item">
+                    <div class="list-meta">26 Feb 2026 · v2.0.0</div>
+                    <div class="list-title">Release recap</div>
+                    <p class="list-desc">Shipped the Ollama offline path, deterministic list-changed-files intent, and the quiet UI you see above.</p>
+                </article>
+                <article class="list-item">
+                    <div class="list-meta">15 Jan 2026 · v1.5.0</div>
+                    <div class="list-title">Provider swap layer</div>
+                    <p class="list-desc">Documenting how Harper now flips between OpenAI, SambaNova, Gemini, or any REST-compatible endpoint without UI changes.</p>
+                </article>
+                <article class="list-item">
+                    <div class="list-meta">1 Dec 2025 · v1.0.0</div>
+                    <div class="list-title">Launch notes</div>
+                    <p class="list-desc">Initial release: approvals, audit logs, persistent sessions, and the first iteration of the TUI.</p>
+                </article>
+                <article class="list-item">
+                    <div class="list-meta">10 Nov 2025</div>
+                    <div class="list-title">Setup checklist</div>
+                    <p class="list-desc">Step-by-step instructions that became today’s Quick Start: clone, copy `.env`, run the UI.</p>
+                </article>
+            </section>
+        </main>
 
-            <div class="terminal-body">
-                <h1 class="page-title">BLOG POSTS</h1>
-
-                <div class="posts">
-                    <article class="post">
-                        <div class="post-date">2026-02-26</div>
-                        <div class="post-title">Introducing Harper v2.0</div>
-                        <div class="post-excerpt">We're excited to announce the release of Harper 2.0 with improved AI capabilities and a completely redesigned terminal interface.</div>
-                    </article>
-
-                    <div class="post">
-                        <div class="post-date">2026-01-15</div>
-                        <div class="post-title">The Future of AI Terminal Assistants</div>
-                        <div class="post-excerpt">Exploring how natural language processing is revolutionizing the way developers interact with their terminals.</div>
-                    </div>
-
-                    <div class="post">
-                        <div class="post-date">2025-12-01</div>
-                        <div class="post-title">Security Best Practices</div>
-                        <div class="post-excerpt">Understanding how Harper keeps your system safe with explicit execution approval and comprehensive audit trails.</div>
-                    </div>
-
-                    <div class="post">
-                        <div class="post-date">2025-11-10</div>
-                        <div class="post-title">Getting Started with Harper</div>
-                        <div class="post-excerpt">A comprehensive guide to setting up Harper and configuring your preferred AI provider.</div>
-                    </div>
-                </div>
-
-                <a href="index.html" class="back-link">
-                    <span>←</span> BACK TO HOME
-                </a>
-            </div>
-        </div>
+        <footer class="footnote">
+            <a class="button secondary" href="index.html" style="text-decoration:none;">← Back to Harper</a>
+        </footer>
     </div>
 </body>
 </html>
