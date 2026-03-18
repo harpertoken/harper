@@ -743,7 +743,7 @@ mod tests {
 
         // Menu at 0 (Start Chat)
         let result = handle_enter(&mut app, &session_service);
-        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(result, EventResult::GatherSidebarEntries));
         assert!(matches!(app.state, AppState::Chat(_)));
     }
 
