@@ -35,7 +35,7 @@ pub enum EventResult {
 }
 
 fn create_chat_state(session_id: String, messages: Vec<harper_core::core::Message>) -> ChatState {
-    let state = ChatState {
+    ChatState {
         session_id,
         messages,
         input: String::new(),
@@ -47,8 +47,7 @@ fn create_chat_state(session_id: String, messages: Vec<harper_core::core::Messag
         completion_prefix: None,
         sidebar_visible: false,
         sidebar_entries: Vec::new(),
-    };
-    state
+    }
 }
 
 fn record_approval_history(app: &mut TuiApp, command: &str, approved: bool) {
