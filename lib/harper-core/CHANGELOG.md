@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.0](https://github.com/harpertoken/harper/compare/harper-core-0.7.0...harper-core-0.8.0) (2026-03-18)
+
+
+### Features
+
+* add async git status helper ([#181](https://github.com/harpertoken/harper/issues/181)) ([7a89f7a](https://github.com/harpertoken/harper/commit/7a89f7ae5879258805e118bd51567dd40a4664d7))
+
+
+### Refactors
+
+* make sidebar gathering async ([#182](https://github.com/harpertoken/harper/issues/182)) ([3374a4d](https://github.com/harpertoken/harper/commit/3374a4dfad1bc7135269fa05a0f192c3cac98b6c))
+
+
+### Documentation
+
+* update docs, config, and ui ([#179](https://github.com/harpertoken/harper/issues/179)) ([4718cb2](https://github.com/harpertoken/harper/commit/4718cb2623b051cde177ba83d372ab32df10a074))
+
 ## [0.7.0](https://github.com/harpertoken/harper/compare/harper-core-0.6.0...harper-core-0.7.0) (2026-03-09)
 
 
