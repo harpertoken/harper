@@ -55,6 +55,33 @@ pub fn git_status() -> crate::core::error::HarperResult<String> {
     Ok(result)
 }
 
+/// Get git status asynchronously
+pub async fn git_status_async() -> crate::core::error::HarperResult<String> {
+    let output = tokio::process::Command::new("git")
+        .arg("status")
+        .arg("--porcelain")
+        .output()
+        .await
+        .map_err(|e| HarperError::Command(format!("Failed to run git status: {}", e)))?;
+
+    let result = if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if stdout.trim().is_empty() {
+            "Git working directory is clean".to_string()
+        } else {
+            format!(
+                "Git status:
+{}",
+                stdout
+            )
+        }
+    } else {
+        String::from_utf8_lossy(&output.stderr).to_string()
+    };
+
+    Ok(result)
+}
+
 /// Show git diff
 pub fn git_diff() -> crate::core::error::HarperResult<String> {
     let output = std::process::Command::new("git")
