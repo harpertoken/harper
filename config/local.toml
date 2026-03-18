@@ -12,11 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# [api]
+# provider = "Gemini"
+# api_key = "your_gemini_api_key_here"
+# base_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+# model_name = "gemini-2.5-flash"
+
+# Offline option (comment the block above and use this one instead to target a local Ollama daemon)
 [api]
-provider = "Gemini"
-api_key = "your_gemini_api_key_here"
-base_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-model_name = "gemini-2.5-flash"
+provider = "Ollama"
+api_key = ""
+base_url = "http://localhost:11434/api/chat"
+model_name = "llama3"
 
 [database]
 path = ".harper/sessions.db"
@@ -26,4 +33,4 @@ enabled = true
 server_url = "http://localhost:5001"
 
 [ui]
-theme = "default"
+theme = "light"

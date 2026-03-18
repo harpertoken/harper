@@ -34,4 +34,9 @@ impl ProviderModels {
         base_url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
         default_model: "gemini-2.5-flash",
     };
+
+    pub const OLLAMA: ProviderModels = ProviderModels {
+        base_url: "http://localhost:11434/api/chat",
+        default_model: "llama3",
+    };
 }

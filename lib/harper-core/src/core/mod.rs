@@ -29,6 +29,7 @@ pub enum ApiProvider {
     OpenAI,
     Sambanova,
     Gemini,
+    Ollama,
 }
 
 impl std::fmt::Display for ApiProvider {
@@ -37,6 +38,7 @@ impl std::fmt::Display for ApiProvider {
             ApiProvider::OpenAI => write!(f, "OpenAI"),
             ApiProvider::Sambanova => write!(f, "Sambanova"),
             ApiProvider::Gemini => write!(f, "Gemini"),
+            ApiProvider::Ollama => write!(f, "Ollama"),
         }
     }
 }
