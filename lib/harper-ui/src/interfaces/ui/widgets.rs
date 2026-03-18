@@ -173,8 +173,23 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
 
             frame.render_widget(messages_widget, chunks[0]);
 
-            // Input area
-            let input_widget = Paragraph::new(format!("> {}", chat_state.input))
+            // Input area with contextual hint while idle
+            let mut input_lines = vec![Line::from(Span::styled(
+                format!("> {}", chat_state.input),
+                Style::default().fg(theme.input),
+            ))];
+            if chat_state.input.trim().is_empty() {
+                let hint_style = theme
+                    .muted_style()
+                    .add_modifier(Modifier::ITALIC)
+                    .add_modifier(Modifier::DIM);
+                input_lines.push(Line::from(Span::styled(
+                    "Hint: Press @ + Tab for file paths • Ask \"shell where am I\" for offline probes",
+                    hint_style,
+                )));
+            }
+
+            let input_widget = Paragraph::new(input_lines)
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
@@ -182,7 +197,8 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                         .border_style(theme.border_style())
                         .title_style(theme.title_style()),
                 )
-                .style(Style::default().bg(theme.background).fg(theme.input));
+                .style(Style::default().bg(theme.background).fg(theme.input))
+                .wrap(Wrap { trim: false });
 
             frame.render_widget(input_widget, chunks[1]);
         }

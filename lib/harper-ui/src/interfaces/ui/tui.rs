@@ -31,7 +31,7 @@ use harper_core::runtime::config::ExecPolicyConfig;
 use rusqlite::Connection;
 use turul_mcp_client::McpClient;
 
-use super::app::{AppState, ApprovalState, TuiApp};
+use super::app::{gather_sidebar_entries, AppState, ApprovalState, TuiApp};
 use super::events::{self, EventResult};
 use super::theme::Theme;
 use super::widgets;
@@ -242,6 +242,10 @@ pub async fn run_tui(
                             if let AppState::Chat(chat_state) = &mut app.state {
                                 if chat_state.session_id == session_id {
                                     chat_state.messages = messages;
+                                    if chat_state.sidebar_visible {
+                                        chat_state.sidebar_entries =
+                                            gather_sidebar_entries(Some(chat_state));
+                                    }
                                 }
                             }
                         }

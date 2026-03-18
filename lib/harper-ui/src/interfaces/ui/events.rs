@@ -24,13 +24,40 @@ use uuid::Uuid;
 const HELP_MESSAGE: &str =
     "Ctrl+H:Help | @+Tab:File Complete | Esc:Back | ↑↓:Navigate | Enter:Select | Ctrl+C:Quit | Ctrl+W:Toggle Web Search";
 
-use super::app::{AppState, ChatState, SessionInfo, TuiApp};
+use super::app::{gather_sidebar_entries, AppState, ChatState, SessionInfo, TuiApp};
 use harper_core::memory::session_service::SessionService;
 
 pub enum EventResult {
     Continue,
     SendMessage(String),
     Quit,
+}
+
+fn create_chat_state(session_id: String, messages: Vec<harper_core::core::Message>) -> ChatState {
+    let mut state = ChatState {
+        session_id,
+        messages,
+        input: String::new(),
+        web_search: false,
+        web_search_enabled: false,
+        completion_candidates: vec![],
+        completion_index: 0,
+        scroll_offset: 0,
+        completion_prefix: None,
+        sidebar_visible: false,
+        sidebar_entries: Vec::new(),
+    };
+    state.sidebar_entries = gather_sidebar_entries(Some(&state));
+    state
+}
+
+fn record_approval_history(app: &mut TuiApp, command: &str, approved: bool) {
+    let marker = if approved { "[Y]" } else { "[N]" };
+    app.approval_history.push(format!("{} {}", marker, command));
+    if app.approval_history.len() > 6 {
+        let excess = app.approval_history.len() - 6;
+        app.approval_history.drain(0..excess);
+    }
 }
 
 fn load_sessions_into_state(app: &mut TuiApp, session_service: &SessionService) {
@@ -87,17 +114,21 @@ pub fn handle_event(
             if let Some(approval) = &mut app.pending_approval {
                 match key.code {
                     KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        let command = approval.command.clone();
                         if let Some(tx) = approval.tx.lock().unwrap().take() {
                             let _ = tx.send(true);
                         }
                         app.pending_approval = None;
+                        record_approval_history(app, &command, true);
                         return EventResult::Continue;
                     }
                     KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                        let command = approval.command.clone();
                         if let Some(tx) = approval.tx.lock().unwrap().take() {
                             let _ = tx.send(false);
                         }
                         app.pending_approval = None;
+                        record_approval_history(app, &command, false);
                         return EventResult::Continue;
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
@@ -186,6 +217,19 @@ pub fn handle_event(
                     }
                     KeyCode::Char('j') => {
                         handle_shell_commands(app);
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('b') => {
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            chat_state.sidebar_visible = !chat_state.sidebar_visible;
+                            if chat_state.sidebar_visible {
+                                chat_state.sidebar_entries =
+                                    gather_sidebar_entries(Some(chat_state));
+                                app.set_status_message("Harvest navigator pinned".to_string());
+                            } else {
+                                app.set_status_message("Harvest navigator hidden".to_string());
+                            }
+                        }
                         return EventResult::Continue;
                     }
                     KeyCode::Char('y') => {
@@ -283,17 +327,8 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
         AppState::Menu(selected) => {
             match *selected {
                 0 => {
-                    app.state = AppState::Chat(ChatState {
-                        session_id: Uuid::new_v4().to_string(),
-                        messages: vec![],
-                        input: String::new(),
-                        web_search: false,
-                        web_search_enabled: false,
-                        completion_candidates: vec![],
-                        completion_index: 0,
-                        scroll_offset: 0,
-                        completion_prefix: None,
-                    })
+                    app.state =
+                        AppState::Chat(create_chat_state(Uuid::new_v4().to_string(), vec![]))
                 } // Start Chat
                 1 => load_sessions_into_state(app, session_service),
                 2 => load_export_sessions_into_state(app, session_service),
@@ -315,17 +350,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 let session = &sessions[*selected];
                 match session_service.view_session_data(&session.id) {
                     Ok(messages) => {
-                        app.state = AppState::Chat(ChatState {
-                            session_id: session.id.clone(),
-                            messages,
-                            input: String::new(),
-                            web_search: false,
-                            web_search_enabled: false,
-                            completion_candidates: vec![],
-                            completion_index: 0,
-                            scroll_offset: 0,
-                            completion_prefix: None,
-                        });
+                        app.state = AppState::Chat(create_chat_state(session.id.clone(), messages));
                     }
                     Err(e) => {
                         app.set_error_message(format!("Error loading session: {}", e));

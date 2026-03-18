@@ -1,107 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Changelog - Harper</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harper · Changelog</title>
+    <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div class="bg"></div>
-    <div class="scanlines"></div>
+    <div class="page">
+        <header class="site-header">
+            <div class="brand">HARPER<span>·AI</span></div>
+            <nav class="nav">
+                <a href="index.html">Home</a>
+                <a href="blog.html">Blog</a>
+                <a href="changelog.html" aria-current="page">Changelog</a>
+                <a href="terms.html">Terms</a>
+                <a href="privacy.html">Privacy</a>
+            </nav>
+        </header>
 
-    <div class="container">
-        <div class="terminal">
-            <div class="terminal-header">
-                <div class="window-controls">
-                    <span class="control close"></span>
-                    <span class="control minimize"></span>
-                    <span class="control maximize"></span>
-                </div>
-                <span class="header-title">HARPER-AI — CHANGELOG</span>
-                <div class="header-spacer"></div>
-            </div>
+        <main class="surface">
+            <section>
+                <h1 class="hero-title">Version history</h1>
+                <p class="hero-lede">Every release is tracked here. No vague marketing prose.</p>
+            </section>
 
-            <div class="info-bar">
-                <div class="info-item">
-                    <span class="info-label">SYSTEM:</span>
-                    <span class="info-value">HARPER</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">KERNEL:</span>
-                    <span class="info-value">RUST</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">STATUS:</span>
-                    <span class="info-value status-online">ONLINE</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">SECTION:</span>
-                    <span class="info-value">CHANGELOG</span>
-                </div>
-            </div>
+            <section class="list" style="margin-top: 2rem;">
+                <article class="list-item">
+                    <div class="list-meta">v2.0.0 · 26 Feb 2026</div>
+                    <div class="list-title">Calm UI + offline intent routing</div>
+                    <p class="list-desc">New minimal surfaces, sidebar intent insights, deterministic list-changed-files tool, and Ollama support.</p>
+                </article>
+                <article class="list-item">
+                    <div class="list-meta">v1.5.0 · 15 Jan 2026</div>
+                    <div class="list-title">Provider swap layer</div>
+                    <p class="list-desc">Unified configuration for OpenAI, SambaNova, Gemini, and any REST-compatible endpoint.</p>
+                </article>
+                <article class="list-item">
+                    <div class="list-meta">v1.0.0 · 1 Dec 2025</div>
+                    <div class="list-title">Initial release</div>
+                    <p class="list-desc">Approvals, audit trail, memory-backed chat, and the first version of the TUI.</p>
+                </article>
+            </section>
+        </main>
 
-            <div class="terminal-body">
-                <h1 class="page-title">VERSION HISTORY</h1>
-
-                <div class="changelog">
-                    <section class="version">
-                        <div class="version-header">
-                            <span class="version-number">v2.0.0</span>
-                            <span class="version-type type-major">Major</span>
-                            <span class="version-date">2026-02-26</span>
-                        </div>
-                        <div class="version-body">
-                            <ul class="changes">
-                                <li class="change-added">Complete UI redesign with terminal aesthetic</li>
-                                <li class="change-added">New matrix rain background effect</li>
-                                <li class="change-added">Enhanced boot sequence animation</li>
-                                <li class="change-added">Added blog and changelog pages</li>
-                                <li class="change-improved">Improved performance and responsiveness</li>
-                                <li class="change-fixed">Fixed various UI bugs</li>
-                            </ul>
-                        </div>
-                    </section>
-
-                    <div class="version">
-                        <div class="version-header">
-                            <span class="version-number">v1.5.0</span>
-                            <span class="version-type type-minor">Minor</span>
-                            <span class="version-date">2026-01-15</span>
-                        </div>
-                        <div class="version-body">
-                            <ul class="changes">
-                                <li class="change-added">Added multiple AI provider support</li>
-                                <li class="change-added">New command audit trail feature</li>
-                                <li class="change-improved">Improved natural language parsing</li>
-                                <li class="change-fixed">Fixed session persistence issues</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div class="version">
-                        <div class="version-header">
-                            <span class="version-number">v1.0.0</span>
-                            <span class="version-type type-major">Major</span>
-                            <span class="version-date">2025-12-01</span>
-                        </div>
-                        <div class="version-body">
-                            <ul class="changes">
-                                <li class="change-added">Initial release</li>
-                                <li class="change-added">Natural language to shell command translation</li>
-                                <li class="change-added">Interactive TUI interface</li>
-                                <li class="change-added">Persistent conversation context</li>
-                                <li class="change-added">Explicit execution approval</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <a href="index.html" class="back-link">
-                    <span>←</span> BACK TO HOME
-                </a>
-            </div>
-        </div>
+        <footer class="footnote">
+            <a class="button secondary" href="index.html" style="text-decoration:none;">← Back to Harper</a>
+        </footer>
     </div>
 </body>
 </html>
