@@ -92,6 +92,76 @@ pub fn gather_sidebar_entries(chat_state: Option<&ChatState>) -> Vec<String> {
     entries
 }
 
+/// Gather sidebar entries asynchronously
+pub async fn gather_sidebar_entries_async(chat_state: Option<&ChatState>) -> Vec<String> {
+    let mut entries = Vec::new();
+    if let Some(chat) = chat_state {
+        for msg in chat.messages.iter().rev() {
+            for line in msg.content.lines().rev() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("$ ") {
+                    entries.push(format!("[probe] {}", trimmed.trim_start_matches("$ ")));
+                }
+                if entries.len() >= 5 {
+                    break;
+                }
+            }
+            if entries.len() >= 5 {
+                break;
+            }
+        }
+    }
+
+    if let Ok(status) = harper_core::tools::git::git_status_async().await {
+        for line in status.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty()
+                || trimmed.starts_with("Git status")
+                || trimmed.starts_with("Git working")
+            {
+                continue;
+            }
+            entries.push(format!("[git] {}", trimmed));
+            if entries.len() >= 10 {
+                break;
+            }
+        }
+    }
+
+    if entries.len() < 10 {
+        let mut dir = match tokio::fs::read_dir(".").await {
+            Ok(dir) => dir,
+            Err(_) => {
+                // If we can't read the directory, just skip it
+                if entries.is_empty() {
+                    entries.push("No harvest context yet".to_string());
+                }
+                return entries;
+            }
+        };
+        while let Ok(Some(entry)) = dir.next_entry().await {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                continue;
+            }
+            let kind = entry
+                .file_type()
+                .await
+                .map(|ft| if ft.is_dir() { "dir" } else { "file" })
+                .unwrap_or("item");
+            entries.push(format!("[{}] {}", kind, name));
+            if entries.len() >= 12 {
+                break;
+            }
+        }
+    }
+
+    if entries.is_empty() {
+        entries.push("No harvest context yet".to_string());
+    }
+    entries
+}
+
 impl ChatState {
     pub fn reset_completion(&mut self) {
         self.completion_candidates.clear();

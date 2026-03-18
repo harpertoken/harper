@@ -31,7 +31,7 @@ use harper_core::runtime::config::ExecPolicyConfig;
 use rusqlite::Connection;
 use turul_mcp_client::McpClient;
 
-use super::app::{gather_sidebar_entries, AppState, ApprovalState, TuiApp};
+use super::app::{AppState, ApprovalState, TuiApp};
 use super::events::{self, EventResult};
 use super::theme::Theme;
 use super::widgets;
@@ -87,6 +87,9 @@ enum UiUpdate {
     MessageProcessed {
         session_id: String,
         messages: Vec<harper_core::core::Message>,
+    },
+    SidebarEntries {
+        entries: Vec<String>,
     },
     Error(String),
 }
@@ -230,6 +233,16 @@ pub async fn run_tui(
                             }
                         }
                         EventResult::Continue => {}
+                        EventResult::GatherSidebarEntries => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                let chat_state_clone = chat_state.clone();
+                                let ui_tx_clone = ui_tx.clone();
+                                tokio::spawn(async move {
+                                    let entries = super::app::gather_sidebar_entries_async(Some(&chat_state_clone)).await;
+                                    let _ = ui_tx_clone.send(UiUpdate::SidebarEntries { entries }).await;
+                                });
+                            }
+                        }
                     }
                 }
             }
@@ -243,10 +256,20 @@ pub async fn run_tui(
                                 if chat_state.session_id == session_id {
                                     chat_state.messages = messages;
                                     if chat_state.sidebar_visible {
-                                        chat_state.sidebar_entries =
-                                            gather_sidebar_entries(Some(chat_state));
+                                        // Spawn async task to gather sidebar entries
+                                        let chat_state_clone = chat_state.clone();
+                                        let ui_tx_clone = ui_tx.clone();
+                                        tokio::spawn(async move {
+                                            let entries = super::app::gather_sidebar_entries_async(Some(&chat_state_clone)).await;
+                                            let _ = ui_tx_clone.send(UiUpdate::SidebarEntries { entries }).await;
+                                        });
                                     }
                                 }
+                            }
+                        }
+                        UiUpdate::SidebarEntries { entries } => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                chat_state.sidebar_entries = entries;
                             }
                         }
                         UiUpdate::Error(err) => {
