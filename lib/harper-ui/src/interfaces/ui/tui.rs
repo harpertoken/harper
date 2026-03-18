@@ -31,7 +31,7 @@ use harper_core::runtime::config::ExecPolicyConfig;
 use rusqlite::Connection;
 use turul_mcp_client::McpClient;
 
-use super::app::{gather_sidebar_entries, AppState, ApprovalState, TuiApp};
+use super::app::{AppState, ApprovalState, ChatState, TuiApp};
 use super::events::{self, EventResult};
 use super::theme::Theme;
 use super::widgets;
@@ -88,7 +88,20 @@ enum UiUpdate {
         session_id: String,
         messages: Vec<harper_core::core::Message>,
     },
+    SidebarEntries {
+        entries: Vec<String>,
+    },
     Error(String),
+}
+
+/// Helper function to spawn async sidebar gathering task
+fn spawn_sidebar_gathering(chat_state: &ChatState, ui_tx: &mpsc::Sender<UiUpdate>) {
+    let messages = chat_state.messages.clone();
+    let ui_tx_clone = ui_tx.clone();
+    tokio::spawn(async move {
+        let entries = super::app::gather_sidebar_entries_async(&messages).await;
+        let _ = ui_tx_clone.send(UiUpdate::SidebarEntries { entries }).await;
+    });
 }
 
 pub async fn run_tui(
@@ -230,6 +243,11 @@ pub async fn run_tui(
                             }
                         }
                         EventResult::Continue => {}
+                        EventResult::GatherSidebarEntries => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                spawn_sidebar_gathering(chat_state, &ui_tx);
+                            }
+                        }
                     }
                 }
             }
@@ -243,10 +261,14 @@ pub async fn run_tui(
                                 if chat_state.session_id == session_id {
                                     chat_state.messages = messages;
                                     if chat_state.sidebar_visible {
-                                        chat_state.sidebar_entries =
-                                            gather_sidebar_entries(Some(chat_state));
+                                        spawn_sidebar_gathering(chat_state, &ui_tx);
                                     }
                                 }
+                            }
+                        }
+                        UiUpdate::SidebarEntries { entries } => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                chat_state.sidebar_entries = entries;
                             }
                         }
                         UiUpdate::Error(err) => {
