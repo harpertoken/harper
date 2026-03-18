@@ -40,7 +40,7 @@ tempfile = "3.3.0"
 lazy_static = "1.4"
 regex = "1.10"
 criterion = "0.5"
-rusqlite = { version = "0.37.0", features = ["bundled"] }
+rusqlite = { version = "0.39.0", features = ["bundled"] }
 rand = "0.9"
 ratatui = "0.30"
 syntect = { version = "5.3", features = ["parsing", "html"] }
