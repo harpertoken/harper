@@ -39,7 +39,7 @@ harper-ui = { path = "lib/harper-ui" }
 tempfile = "3.3.0"
 lazy_static = "1.4"
 regex = "1.10"
-criterion = "0.5"
+criterion = "0.8"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 rand = "0.9"
 ratatui = "0.30"
