@@ -27,6 +27,9 @@ const HELP_MESSAGE: &str =
 use super::app::{AppState, ChatState, SessionInfo, TuiApp};
 use harper_core::memory::session_service::SessionService;
 
+// Constants
+const MAX_APPROVAL_HISTORY: usize = 6;
+
 pub enum EventResult {
     Continue,
     SendMessage(String),
@@ -53,8 +56,8 @@ fn create_chat_state(session_id: String, messages: Vec<harper_core::core::Messag
 fn record_approval_history(app: &mut TuiApp, command: &str, approved: bool) {
     let marker = if approved { "[Y]" } else { "[N]" };
     app.approval_history.push(format!("{} {}", marker, command));
-    if app.approval_history.len() > 6 {
-        let excess = app.approval_history.len() - 6;
+    if app.approval_history.len() > MAX_APPROVAL_HISTORY {
+        let excess = app.approval_history.len() - MAX_APPROVAL_HISTORY;
         app.approval_history.drain(0..excess);
     }
 }

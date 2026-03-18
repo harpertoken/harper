@@ -17,6 +17,11 @@ use std::fs;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 
+// Constants for sidebar entry limits
+const MAX_SIDEBAR_PROBE_ENTRIES: usize = 5;
+const MAX_SIDEBAR_GIT_ENTRIES: usize = 10;
+const MAX_SIDEBAR_FILE_ENTRIES: usize = 12;
+
 #[derive(Clone)]
 pub struct ChatState {
     pub session_id: String,
@@ -93,22 +98,20 @@ pub fn gather_sidebar_entries(chat_state: Option<&ChatState>) -> Vec<String> {
 }
 
 /// Gather sidebar entries asynchronously
-pub async fn gather_sidebar_entries_async(chat_state: Option<&ChatState>) -> Vec<String> {
+pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<String> {
     let mut entries = Vec::new();
-    if let Some(chat) = chat_state {
-        for msg in chat.messages.iter().rev() {
-            for line in msg.content.lines().rev() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("$ ") {
-                    entries.push(format!("[probe] {}", trimmed.trim_start_matches("$ ")));
-                }
-                if entries.len() >= 5 {
-                    break;
-                }
+    for msg in messages.iter().rev() {
+        for line in msg.content.lines().rev() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("$ ") {
+                entries.push(format!("[probe] {}", trimmed.trim_start_matches("$ ")));
             }
-            if entries.len() >= 5 {
+            if entries.len() >= MAX_SIDEBAR_PROBE_ENTRIES {
                 break;
             }
+        }
+        if entries.len() >= MAX_SIDEBAR_PROBE_ENTRIES {
+            break;
         }
     }
 
@@ -122,13 +125,13 @@ pub async fn gather_sidebar_entries_async(chat_state: Option<&ChatState>) -> Vec
                 continue;
             }
             entries.push(format!("[git] {}", trimmed));
-            if entries.len() >= 10 {
+            if entries.len() >= MAX_SIDEBAR_GIT_ENTRIES {
                 break;
             }
         }
     }
 
-    if entries.len() < 10 {
+    if entries.len() < MAX_SIDEBAR_GIT_ENTRIES {
         let mut dir = match tokio::fs::read_dir(".").await {
             Ok(dir) => dir,
             Err(_) => {
@@ -150,7 +153,7 @@ pub async fn gather_sidebar_entries_async(chat_state: Option<&ChatState>) -> Vec
                 .map(|ft| if ft.is_dir() { "dir" } else { "file" })
                 .unwrap_or("item");
             entries.push(format!("[{}] {}", kind, name));
-            if entries.len() >= 12 {
+            if entries.len() >= MAX_SIDEBAR_FILE_ENTRIES {
                 break;
             }
         }
