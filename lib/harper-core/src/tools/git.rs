@@ -29,15 +29,9 @@ use std::io;
 use crate::core::io_traits::UserApproval;
 use std::sync::Arc;
 
-/// Get git status
-pub fn git_status() -> crate::core::error::HarperResult<String> {
-    let output = std::process::Command::new("git")
-        .arg("status")
-        .arg("--porcelain")
-        .output()
-        .map_err(|e| HarperError::Command(format!("Failed to run git status: {}", e)))?;
-
-    let result = if output.status.success() {
+/// Process git status output and format it for display
+fn process_git_status_output(output: std::process::Output) -> String {
+    if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         if stdout.trim().is_empty() {
             "Git working directory is clean".to_string()
@@ -50,9 +44,18 @@ pub fn git_status() -> crate::core::error::HarperResult<String> {
         }
     } else {
         String::from_utf8_lossy(&output.stderr).to_string()
-    };
+    }
+}
 
-    Ok(result)
+/// Get git status
+pub fn git_status() -> crate::core::error::HarperResult<String> {
+    let output = std::process::Command::new("git")
+        .arg("status")
+        .arg("--porcelain")
+        .output()
+        .map_err(|e| HarperError::Command(format!("Failed to run git status: {}", e)))?;
+
+    Ok(process_git_status_output(output))
 }
 
 /// Get git status asynchronously
@@ -64,22 +67,7 @@ pub async fn git_status_async() -> crate::core::error::HarperResult<String> {
         .await
         .map_err(|e| HarperError::Command(format!("Failed to run git status: {}", e)))?;
 
-    let result = if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if stdout.trim().is_empty() {
-            "Git working directory is clean".to_string()
-        } else {
-            format!(
-                "Git status:
-{}",
-                stdout
-            )
-        }
-    } else {
-        String::from_utf8_lossy(&output.stderr).to_string()
-    };
-
-    Ok(result)
+    Ok(process_git_status_output(output))
 }
 
 /// Show git diff

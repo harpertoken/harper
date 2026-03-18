@@ -24,17 +24,21 @@ use uuid::Uuid;
 const HELP_MESSAGE: &str =
     "Ctrl+H:Help | @+Tab:File Complete | Esc:Back | ↑↓:Navigate | Enter:Select | Ctrl+C:Quit | Ctrl+W:Toggle Web Search";
 
-use super::app::{gather_sidebar_entries, AppState, ChatState, SessionInfo, TuiApp};
+use super::app::{AppState, ChatState, SessionInfo, TuiApp};
 use harper_core::memory::session_service::SessionService;
+
+// Constants
+const MAX_APPROVAL_HISTORY: usize = 6;
 
 pub enum EventResult {
     Continue,
     SendMessage(String),
+    GatherSidebarEntries,
     Quit,
 }
 
 fn create_chat_state(session_id: String, messages: Vec<harper_core::core::Message>) -> ChatState {
-    let mut state = ChatState {
+    ChatState {
         session_id,
         messages,
         input: String::new(),
@@ -46,16 +50,14 @@ fn create_chat_state(session_id: String, messages: Vec<harper_core::core::Messag
         completion_prefix: None,
         sidebar_visible: false,
         sidebar_entries: Vec::new(),
-    };
-    state.sidebar_entries = gather_sidebar_entries(Some(&state));
-    state
+    }
 }
 
 fn record_approval_history(app: &mut TuiApp, command: &str, approved: bool) {
     let marker = if approved { "[Y]" } else { "[N]" };
     app.approval_history.push(format!("{} {}", marker, command));
-    if app.approval_history.len() > 6 {
-        let excess = app.approval_history.len() - 6;
+    if app.approval_history.len() > MAX_APPROVAL_HISTORY {
+        let excess = app.approval_history.len() - MAX_APPROVAL_HISTORY;
         app.approval_history.drain(0..excess);
     }
 }
@@ -223,9 +225,8 @@ pub fn handle_event(
                         if let AppState::Chat(chat_state) = &mut app.state {
                             chat_state.sidebar_visible = !chat_state.sidebar_visible;
                             if chat_state.sidebar_visible {
-                                chat_state.sidebar_entries =
-                                    gather_sidebar_entries(Some(chat_state));
                                 app.set_status_message("Harvest navigator pinned".to_string());
+                                return EventResult::GatherSidebarEntries;
                             } else {
                                 app.set_status_message("Harvest navigator hidden".to_string());
                             }
@@ -328,7 +329,8 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             match *selected {
                 0 => {
                     app.state =
-                        AppState::Chat(create_chat_state(Uuid::new_v4().to_string(), vec![]))
+                        AppState::Chat(create_chat_state(Uuid::new_v4().to_string(), vec![]));
+                    return EventResult::GatherSidebarEntries;
                 } // Start Chat
                 1 => load_sessions_into_state(app, session_service),
                 2 => load_export_sessions_into_state(app, session_service),
@@ -351,6 +353,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 match session_service.view_session_data(&session.id) {
                     Ok(messages) => {
                         app.state = AppState::Chat(create_chat_state(session.id.clone(), messages));
+                        return EventResult::GatherSidebarEntries;
                     }
                     Err(e) => {
                         app.set_error_message(format!("Error loading session: {}", e));
@@ -743,7 +746,7 @@ mod tests {
 
         // Menu at 0 (Start Chat)
         let result = handle_enter(&mut app, &session_service);
-        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(result, EventResult::GatherSidebarEntries));
         assert!(matches!(app.state, AppState::Chat(_)));
     }
 
