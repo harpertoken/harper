@@ -1,79 +1,79 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HARPER | AI Terminal Assistant</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harper · Terminal AI</title>
+    <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div class="bg"></div>
+    <div class="page">
+        <header class="site-header">
+            <div class="brand">HARPER<span>·AI</span></div>
+            <nav class="nav">
+                <a href="index.html" aria-current="page">Home</a>
+                <a href="blog.html">Blog</a>
+                <a href="changelog.html">Changelog</a>
+                <a href="terms.html">Terms</a>
+                <a href="privacy.html">Privacy</a>
+            </nav>
+        </header>
 
-    <div class="container">
-        <div class="logo">
-            <pre>
- ██████╗██████╗ ██╗   ██╗██████╗ ████████╗████████╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗ █████╗ ██╗
-██╔════╝██╔══██╗╚██╗ ██╔╝██╔══██╗╚══██╔══╝╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗██║
-██║     ██████╔╝ ╚████╔╝ ██████╔╝   ██║      ██║   █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║███████║██║
-██║     ██╔══██╗  ╚██╔╝  ██╔═══╝    ██║      ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██╔══██║██║
-╚██████╗██║  ██║   ██║   ██║        ██║      ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██║  ██║███████╗
- ╚═════╝╚═╝  ╚═╝   ╚═╝   ╚═╝        ╚═╝      ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝
-            </pre>
-            <div class="tagline">AI Terminal Assistant</div>
-        </div>
+        <main class="surface">
+            <section class="hero">
+                <div>
+                    <h1 class="hero-title">Terminal workflows without ceremony.</h1>
+                    <p class="hero-lede">
+                        Harper translates natural language into safe shell commands, prompts for approval before execution,
+                        and keeps an audit trail for every session. Swap between OpenAI, Gemini, SambaNova, or run fully offline via Ollama.
+                    </p>
+                    <div class="actions">
+                        <a class="button primary" href="https://github.com/harpertoken/harper">View on GitHub</a>
+                        <a class="button secondary" href="https://harpertoken.github.io/harper/">Documentation</a>
+                    </div>
+                </div>
+                <img src="harper.png" alt="Harper terminal screenshot" class="hero-image" />
+            </section>
 
-        <div class="menu">
-            <a href="https://github.com/harpertoken/harper" class="menu-item">
-                <span class="menu-icon">⬡</span> GitHub
-            </a>
-            <a href="https://harpertoken.github.io/harper/" class="menu-item">
-                <span class="menu-icon">⌘</span> Docs
-            </a>
-            <a href="blog.html" class="menu-item">
-                <span class="menu-icon">✎</span> Blog
-            </a>
-            <a href="changelog.html" class="menu-item">
-                <span class="menu-icon">📋</span> Changelog
-            </a>
-        </div>
+            <section class="grid" style="margin-top: 2.5rem;">
+                <div class="card">
+                    <h3>Deterministic command flow</h3>
+                    <p>Natural-language requests resolve into explicit shell commands with previews and approvals.</p>
+                </div>
+                <div class="card">
+                    <h3>Provider flexibility</h3>
+                    <p>Switch providers by editing `config/local.toml` or environment variables—no UI changes required.</p>
+                </div>
+                <div class="card">
+                    <h3>Session memory</h3>
+                    <p>Conversations, tool calls, and outputs persist locally for later replay and compliance.</p>
+                </div>
+                <div class="card">
+                    <h3>Minimal surfaces</h3>
+                    <p>Both the TUI and docs focus on command loops—no gradients, mascots, or confetti.</p>
+                </div>
+            </section>
 
-        <p class="description">
-            Harper translates natural language into shell commands.
-            No more memorizing complex CLI syntax — just describe what you need.
-        </p>
+            <section class="grid" style="margin-top: 1.5rem;">
+                <div class="card">
+                    <h3>Install</h3>
+                    <pre class="code-block">git clone https://github.com/harpertoken/harper
+cd harper && cp .env.example .env</pre>
+                </div>
+                <div class="card">
+                    <h3>Run UI</h3>
+                    <pre class="code-block">cargo run -p harper-ui --bin harper</pre>
+                </div>
+                <div class="card">
+                    <h3>Offline mode</h3>
+                    <pre class="code-block">ollama serve
+ollama pull llama3
+export OLLAMA_HOST=http://localhost:11434</pre>
+                </div>
+            </section>
+        </main>
 
-        <div class="cards">
-            <div class="card">
-                <div class="card-number">01</div>
-                <div class="card-title">Describe What You Need</div>
-                <div class="card-text">Tell Harper what you want to do in plain English. "Find all Rust files modified today"</div>
-            </div>
-            <div class="card">
-                <div class="card-number">02</div>
-                <div class="card-title">Review the Command</div>
-                <div class="card-text">Harper shows you the exact shell command. Approve or modify before execution.</div>
-            </div>
-            <div class="card">
-                <div class="card-number">03</div>
-                <div class="card-title">Execute with Control</div>
-                <div class="card-text">Run commands with explicit approval. Stay in complete control of your system.</div>
-            </div>
-        </div>
-
-        <div class="cta">
-            <a href="https://github.com/harpertoken/harper" class="cta-button">
-                <span>⬡</span> Get Started
-            </a>
-        </div>
-
-        <div class="footer">
-            <div class="footer-links">
-                <a href="privacy.html" class="footer-link">Privacy</a>
-                <a href="terms.html" class="footer-link">Terms</a>
-                <a href="https://github.com/harpertoken/harper" class="footer-link">GitHub</a>
-            </div>
-            <div class="copyright">© 2026 HarperToken. All rights reserved.</div>
-        </div>
+        <footer class="footnote">Harper · Terminal autonomy without theatrics.</footer>
     </div>
 </body>
 </html>

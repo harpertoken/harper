@@ -51,6 +51,7 @@ mod tests {
             ApiProvider::OpenAI,
             ApiProvider::Sambanova,
             ApiProvider::Gemini,
+            ApiProvider::Ollama,
         ];
 
         for provider in providers {

@@ -1,72 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy - Harper</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harper · Privacy</title>
+    <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div class="bg"></div>
-    <div class="scanlines"></div>
+    <div class="page">
+        <header class="site-header">
+            <div class="brand">HARPER<span>·AI</span></div>
+            <nav class="nav">
+                <a href="index.html">Home</a>
+                <a href="blog.html">Blog</a>
+                <a href="changelog.html">Changelog</a>
+                <a href="terms.html">Terms</a>
+                <a href="privacy.html" aria-current="page">Privacy</a>
+            </nav>
+        </header>
 
-    <div class="container">
-        <div class="terminal">
-            <div class="terminal-header">
-                <div class="window-controls">
-                    <span class="control close"></span>
-                    <span class="control minimize"></span>
-                    <span class="control maximize"></span>
-                </div>
-                <span class="header-title">HARPER-AI — PRIVACY</span>
-                <div class="header-spacer"></div>
-            </div>
+        <main class="surface">
+            <section>
+                <h1 class="hero-title">Privacy</h1>
+                <p class="hero-lede">Everything stays on your machine unless you point Harper at an API endpoint.</p>
+            </section>
 
-            <div class="info-bar">
-                <div class="info-item">
-                    <span class="info-label">SYSTEM:</span>
-                    <span class="info-value">HARPER</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">KERNEL:</span>
-                    <span class="info-value">RUST</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">STATUS:</span>
-                    <span class="info-value status-online">ONLINE</span>
-                </div>
-            </div>
+            <section class="list" style="margin-top: 2rem;">
+                <article class="list-item">
+                    <div class="list-title">Local-first</div>
+                    <p class="list-desc">Session history, approvals, and audit logs live in your workspace. We operate no telemetry pipeline.</p>
+                </article>
+                <article class="list-item">
+                    <div class="list-title">Provider traffic</div>
+                    <p class="list-desc">When you choose OpenAI/SambaNova/Gemini, calls go directly from your machine to their APIs. Review their policies separately.</p>
+                </article>
+                <article class="list-item">
+                    <div class="list-title">Offline mode</div>
+                    <p class="list-desc">Running Ollama keeps prompts entirely on-device. No network requests occur.</p>
+                </article>
+                <article class="list-item">
+                    <div class="list-title">Contact</div>
+                    <p class="list-desc">Questions? security@harpertoken.com.</p>
+                </article>
+            </section>
+        </main>
 
-            <div class="terminal-body">
-                <h1 class="page-title">PRIVACY POLICY</h1>
-
-                <div class="posts">
-                    <section class="post">
-                        <h2 class="post-title">Data Collection</h2>
-                        <p class="post-excerpt">Harper processes your commands locally and communicates with AI providers. We do not collect or store your personal data on our servers.</p>
-                    </section>
-
-                    <div class="post">
-                        <div class="post-title">AI Providers</div>
-                        <div class="post-excerpt">Commands are sent to your chosen AI provider (OpenAI, Sambanova, or Gemini). Review their respective privacy policies for data handling.</div>
-                    </div>
-
-                    <div class="post">
-                        <div class="post-title">Local Storage</div>
-                        <div class="post-excerpt">Harper stores conversation history and settings locally on your device. This data is never transmitted to our servers.</div>
-                    </div>
-
-                    <div class="post">
-                        <div class="post-title">Contact</div>
-                        <div class="post-excerpt">For privacy concerns, contact us at harpertoken@icloud.com</div>
-                    </div>
-                </div>
-
-                <a href="index.html" class="back-link">
-                    <span>←</span> BACK TO HOME
-                </a>
-            </div>
-        </div>
+        <footer class="footnote">
+            <a class="button secondary" href="index.html" style="text-decoration:none;">← Back to Harper</a>
+        </footer>
     </div>
 </body>
 </html>

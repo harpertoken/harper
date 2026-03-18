@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use harper_core::core::Message;
+use std::fs;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 
@@ -27,6 +28,68 @@ pub struct ChatState {
     pub completion_index: usize,
     pub scroll_offset: usize,
     pub completion_prefix: Option<String>,
+    pub sidebar_visible: bool,
+    pub sidebar_entries: Vec<String>,
+}
+
+pub fn gather_sidebar_entries(chat_state: Option<&ChatState>) -> Vec<String> {
+    let mut entries = Vec::new();
+    if let Some(chat) = chat_state {
+        for msg in chat.messages.iter().rev() {
+            for line in msg.content.lines().rev() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("$ ") {
+                    entries.push(format!("[probe] {}", trimmed.trim_start_matches("$ ")));
+                }
+                if entries.len() >= 5 {
+                    break;
+                }
+            }
+            if entries.len() >= 5 {
+                break;
+            }
+        }
+    }
+
+    if let Ok(status) = harper_core::tools::git::git_status() {
+        for line in status.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty()
+                || trimmed.starts_with("Git status")
+                || trimmed.starts_with("Git working")
+            {
+                continue;
+            }
+            entries.push(format!("[git] {}", trimmed));
+            if entries.len() >= 10 {
+                break;
+            }
+        }
+    }
+
+    if entries.len() < 10 {
+        if let Ok(dir) = fs::read_dir(".") {
+            for entry in dir.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.starts_with('.') {
+                    continue;
+                }
+                let kind = entry
+                    .file_type()
+                    .map(|ft| if ft.is_dir() { "dir" } else { "file" })
+                    .unwrap_or("item");
+                entries.push(format!("[{}] {}", kind, name));
+                if entries.len() >= 12 {
+                    break;
+                }
+            }
+        }
+    }
+
+    if entries.is_empty() {
+        entries.push("No harvest context yet".to_string());
+    }
+    entries
 }
 
 impl ChatState {
@@ -92,6 +155,7 @@ pub struct TuiApp {
     pub message: Option<UiMessage>,
     pub pending_approval: Option<ApprovalState>,
     pub cut_buffer: String,
+    pub approval_history: Vec<String>,
 }
 
 impl Default for TuiApp {
@@ -101,6 +165,7 @@ impl Default for TuiApp {
             message: None,
             pending_approval: None,
             cut_buffer: String::new(),
+            approval_history: Vec::new(),
         }
     }
 }

@@ -159,6 +159,29 @@ impl HarperConfig {
             }
         }
 
+        // Map OLLAMA_HOST/OLLAMA_BASE_URL
+        let ollama_host = env::var("OLLAMA_HOST").or_else(|_| env::var("OLLAMA_BASE_URL"));
+        if let Ok(host) = ollama_host {
+            if !host.trim().is_empty() {
+                let mut normalized = host.trim().trim_end_matches('/').to_string();
+                if !normalized.starts_with("http://") && !normalized.starts_with("https://") {
+                    normalized = format!("http://{}", normalized);
+                }
+                let base_url = if normalized.ends_with("/api/chat") {
+                    normalized
+                } else {
+                    format!("{}/api/chat", normalized)
+                };
+                let model = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama3".to_string());
+                temp_builder = temp_builder.set_override("api.provider", "Ollama")?;
+                temp_builder = temp_builder.set_override("api.base_url", base_url)?;
+                temp_builder = temp_builder.set_override("api.model_name", model)?;
+                temp_builder = temp_builder.set_override("api.api_key", "")?;
+                *builder = temp_builder;
+                return Ok(());
+            }
+        }
+
         // Map DATABASE_PATH
         if let Ok(path) = env::var("DATABASE_PATH") {
             if !path.trim().is_empty() {
@@ -187,18 +210,19 @@ impl ApiConfig {
     /// Validate API configuration
     fn validate(&self) -> HarperResult<()> {
         // Validate provider
-        match self.provider.as_str() {
-            "OpenAI" | "Sambanova" | "Gemini" => {}
+        let requires_api_key = match self.provider.as_str() {
+            "OpenAI" | "Sambanova" | "Gemini" => true,
+            "Ollama" => false,
             _ => {
                 return Err(HarperError::Config(format!(
-                    "Invalid API provider: {}. Supported providers: OpenAI, Sambanova, Gemini",
-                    self.provider
-                )))
+                "Invalid API provider: {}. Supported providers: OpenAI, Sambanova, Gemini, Ollama",
+                self.provider
+            )))
             }
-        }
+        };
 
         // Validate API key
-        if self.api_key.trim().is_empty() {
+        if requires_api_key && self.api_key.trim().is_empty() {
             return Err(HarperError::Config("API key cannot be empty".to_string()));
         }
 
@@ -229,6 +253,7 @@ impl ApiConfig {
             "OpenAI" => Ok(ApiProvider::OpenAI),
             "Sambanova" => Ok(ApiProvider::Sambanova),
             "Gemini" => Ok(ApiProvider::Gemini),
+            "Ollama" => Ok(ApiProvider::Ollama),
             _ => Err(HarperError::Config(format!(
                 "Unsupported provider: {}",
                 self.provider
