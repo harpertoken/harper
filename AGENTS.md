@@ -25,8 +25,9 @@ This document outlines the policies and guidelines for AI agents (including Harp
 - [Security Guidelines](#security-guidelines)
 - [Validation Rules](#validation-rules)
 - [Error Handling](#error-handling)
-- [Audit Trail](#audit-trail)
+- [Audit Trail](#audit-tr)
 - [User Consent](#user-consent)
+- [Pull Request Guidelines](#pull-request-guidelines)
 
 ## Core Principles
 
@@ -433,3 +434,28 @@ Follow these patterns for comprehensive testing:
 - **Technical Accuracy**: Base all docs on actual code behavior.
 
 **Remember**: AI agents should enhance human productivity while maintaining strict safety boundaries. When in doubt, require explicit user approval for any file operation.
+
+## Pull Request Guidelines
+
+When creating pull requests, follow these steps:
+
+1. **Analyze Changes**: Review all changes to be included in the PR with `git diff` and `git log`
+2. **Draft Summary**: Create a summary with 1-3 bullet points describing the changes
+3. **Create PR**: Use `gh pr create` with the following format:
+
+```bash
+gh pr create --title "<title>" --body "$(cat <<'EOF'
+## Summary
+- <bullet point 1>
+- <bullet point 2>
+- <bullet point 3>
+EOF
+)"
+```
+
+4. **Push Branch**: If needed, push with `git push -u origin <branch-name>`
+
+### PR Title Convention
+- Use the format `[scope] description`
+- Example: `[feat] add async git status helper`
+- Scopes: `feat`, `fix`, `docs`, `chore`, `deps`, `refactor`, `test`
