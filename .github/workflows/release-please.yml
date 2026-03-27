@@ -15,18 +15,3 @@ jobs:
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
-      - name: Fix PR title format
-        if: steps.release.outputs.pr != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_URL="${{ steps.release.outputs.pr }}"
-          PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
-
-          PR_TITLE=$(gh pr view "$PR_NUMBER" --json title -q '.title')
-
-          if [[ "$PR_TITLE" =~ ^chore\(release\):\  ]]; then
-            NEW_TITLE="[chore] ${PR_TITLE#chore\(release\): }"
-            gh pr edit "$PR_NUMBER" --title "$NEW_TITLE"
-            echo "Fixed PR title: $NEW_TITLE"
-          fi
