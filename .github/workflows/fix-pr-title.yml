@@ -33,9 +33,6 @@ jobs:
             # Convert to [type] message format
             NEW_TITLE="[$TYPE] $MSG"
             
-            # Truncate to 60 chars
-            NEW_TITLE="${NEW_TITLE:0:60}"
-            
             echo "Original: $PR_TITLE"
             echo "New: $NEW_TITLE"
             
