@@ -1,0 +1,46 @@
+name: Fix PR Title
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+    branches:
+      - main
+
+jobs:
+  fix-pr-title:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Fix PR title format
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_TITLE=$(gh pr view ${{ github.event.pull_request.number }} --json title -q '.title')
+          
+          # Check if title already has the format [scope]
+          if [[ "$PR_TITLE" =~ ^\[.*\]\  ]]; then
+            echo "PR title already formatted: $PR_TITLE"
+            exit 0
+          fi
+          
+          # Extract scope (type) from title - handle both "type:" and "type(scope):" formats
+          if [[ "$PR_TITLE" =~ ^([a-zA-Z]+)(?:\([a-zA-Z]+\))?:?\ ?(.*) ]]; then
+            TYPE="${BASH_REMATCH[1]}"
+            MSG="${BASH_REMATCH[2]}"
+            
+            # Convert to [type] message format
+            NEW_TITLE="[$TYPE] $MSG"
+            
+            # Truncate to 60 chars
+            NEW_TITLE="${NEW_TITLE:0:60}"
+            
+            echo "Original: $PR_TITLE"
+            echo "New: $NEW_TITLE"
+            
+            gh pr edit ${{ github.event.pull_request.number }} --title "$NEW_TITLE"
+            echo "PR title updated"
+          else
+            echo "Could not parse PR title: $PR_TITLE"
+            exit 1
+          fi
