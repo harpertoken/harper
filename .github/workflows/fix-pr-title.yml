@@ -26,7 +26,7 @@ jobs:
           fi
           
           # Extract scope (type) from title - handle both "type:" and "type(scope):" formats
-          if [[ "$PR_TITLE" =~ ^([a-zA-Z]+)(?:\([a-zA-Z]+\))?:?\ ?(.*) ]]; then
+          if [[ "$PR_TITLE" =~ ^([a-zA-Z]+):[[:space:]]+(.*) ]]; then
             TYPE="${BASH_REMATCH[1]}"
             MSG="${BASH_REMATCH[2]}"
             
