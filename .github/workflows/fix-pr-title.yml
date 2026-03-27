@@ -25,19 +25,8 @@ jobs:
             echo "PR title already formatted: $PR_TITLE"
             exit 0
           fi
-          
-          # Handle release-please PRs: chore(release): or chore: release
-          if [[ "$PR_TITLE" == "chore(release):"* ]]; then
-            MSG="${PR_TITLE#chore\(release\): }"
-            NEW_TITLE="[chore] release $MSG"
-            echo "Original: $PR_TITLE"
-            echo "New: $NEW_TITLE"
-            gh pr edit ${{ github.event.pull_request.number }} --title "$NEW_TITLE"
-            echo "Release PR title updated"
-            exit 0
-          fi
-          
-          # Handle other "type: message" formats
+
+          # Handle "type: message" formats
           if [[ "$PR_TITLE" =~ ^([a-zA-Z]+):[[:space:]]+(.*) ]]; then
             TYPE="${BASH_REMATCH[1]}"
             MSG="${BASH_REMATCH[2]}"
