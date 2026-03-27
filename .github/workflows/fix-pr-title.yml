@@ -29,7 +29,6 @@ jobs:
             TYPE="${BASH_REMATCH[1]}"
             MSG="${BASH_REMATCH[2]}"
 
-            # Convert to [type] message format
             NEW_TITLE="[$TYPE] $MSG"
 
             echo "Original: $PR_TITLE"
