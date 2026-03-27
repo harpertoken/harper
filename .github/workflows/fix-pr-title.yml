@@ -25,7 +25,6 @@ jobs:
             exit 0
           fi
 
-          # Handle "type: message" formats
           if [[ "$PR_TITLE" =~ ^([a-zA-Z]+):[[:space:]]+(.*) ]]; then
             TYPE="${BASH_REMATCH[1]}"
             MSG="${BASH_REMATCH[2]}"
