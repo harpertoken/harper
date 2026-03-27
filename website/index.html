@@ -12,6 +12,8 @@
             <div class="brand">HARPER<span>·AI</span></div>
             <nav class="nav">
                 <a href="index.html" aria-current="page">Home</a>
+                <a href="installation.html">Install</a>
+                <a href="troubleshooting.html">Troubleshooting</a>
                 <a href="blog.html">Blog</a>
                 <a href="changelog.html">Changelog</a>
                 <a href="terms.html">Terms</a>
@@ -29,7 +31,7 @@
                     </p>
                     <div class="actions">
                         <a class="button primary" href="https://github.com/harpertoken/harper">View on GitHub</a>
-                        <a class="button secondary" href="https://harpertoken.github.io/harper/">Documentation</a>
+                        <a class="button secondary" href="installation.html">Documentation</a>
                     </div>
                 </div>
                 <img src="harper.png" alt="Harper terminal screenshot" class="hero-image" />
@@ -54,23 +56,6 @@
                 </div>
             </section>
 
-            <section class="grid" style="margin-top: 1.5rem;">
-                <div class="card">
-                    <h3>Install</h3>
-                    <pre class="code-block">git clone https://github.com/harpertoken/harper
-cd harper && cp .env.example .env</pre>
-                </div>
-                <div class="card">
-                    <h3>Run UI</h3>
-                    <pre class="code-block">cargo run -p harper-ui --bin harper</pre>
-                </div>
-                <div class="card">
-                    <h3>Offline mode</h3>
-                    <pre class="code-block">ollama serve
-ollama pull llama3
-export OLLAMA_HOST=http://localhost:11434</pre>
-                </div>
-            </section>
         </main>
 
         <footer class="footnote">Harper · Terminal autonomy without theatrics.</footer>
