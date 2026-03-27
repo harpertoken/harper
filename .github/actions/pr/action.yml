@@ -15,6 +15,11 @@ runs:
 
         echo "PR title: $TITLE"
 
+        if [[ "$TITLE" == *"release"* ]]; then
+          echo "Release PR, skipping validation."
+          exit 0
+        fi
+
         REGEX='^\[(build|chore|ci|deps|docs|feat|fix|perf|refactor|revert|style|test)\][[:space:]].+'
         if ! printf '%s\n' "$TITLE" | grep -E -q "$REGEX"; then
           echo "::error::PR title must follow Conventional Commits (e.g. [fix] handle dt=0)"
