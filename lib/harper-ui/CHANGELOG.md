@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/harpertoken/harper/compare/harper-ui-0.6.0...harper-ui-0.7.0) (2026-03-26)
+
+
+### Features
+
+* **ui:** add message types and improve status bar display ( ([5017b29](https://github.com/harpertoken/harper/commit/5017b29a6c744b567d8914d6893e0e6de6dc4ea6))
+* **ui:** implement [tui ops] ([#104](https://github.com/harpertoken/harper/issues/104)) ([aa810ed](https://github.com/harpertoken/harper/commit/aa810ed7df64e0fdc78ffcd135036c04516601b1))
+
+
+### Chores
+
+* **deps:** update cargo.lock ([#159](https://github.com/harpertoken/harper/issues/159)) ([7e42b04](https://github.com/harpertoken/harper/commit/7e42b04f128253512c415a8e98d820e3c19c0ff3))
+
 ## [0.6.0](https://github.com/harpertoken/harper/compare/harper-ui-0.5.0...harper-ui-0.6.0) (2026-03-09)
 
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.1](https://github.com/harpertoken/harper/compare/harper-core-0.7.0...harper-core-0.7.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* **gemini:** update authentication header to x-goog-api-key ([832c962](https://github.com/harpertoken/harper/commit/832c9620a0d55317f0e79614b790f4f19ca8cd9a))
+
+
+### Chores
+
+* **deps:** update cargo.lock ([#159](https://github.com/harpertoken/harper/issues/159)) ([7e42b04](https://github.com/harpertoken/harper/commit/7e42b04f128253512c415a8e98d820e3c19c0ff3))
+
 ## [0.7.0](https://github.com/harpertoken/harper/compare/harper-core-0.6.0...harper-core-0.7.0) (2026-03-09)
 
 
