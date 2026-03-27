@@ -19,7 +19,6 @@ jobs:
         run: |
           PR_TITLE=$(gh pr view ${{ github.event.pull_request.number }} --json title -q '.title')
 
-          # Check if title already has the format [scope]
           if [[ "$PR_TITLE" =~ ^\[.*\]\  ]]; then
             echo "PR title already formatted: $PR_TITLE"
             exit 0
