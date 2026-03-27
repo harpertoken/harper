@@ -22,9 +22,9 @@ jobs:
         run: |
           PR_URL="${{ steps.release.outputs.pr }}"
           PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
-          
+
           PR_TITLE=$(gh pr view "$PR_NUMBER" --json title -q '.title')
-          
+
           if [[ "$PR_TITLE" =~ ^chore\(release\):\  ]]; then
             NEW_TITLE="[chore] ${PR_TITLE#chore\(release\): }"
             gh pr edit "$PR_NUMBER" --title "$NEW_TITLE"
