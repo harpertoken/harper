@@ -12,6 +12,7 @@ jobs:
     permissions:
       pull-requests: write
     steps:
+      - uses: actions/checkout@v4
       - name: Fix PR title format
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
