@@ -29,17 +29,6 @@ jobs:
       - name: Set up Bazel
         uses: bazelbuild/setup-bazelisk@v3
       - name: Build with Bazel
-        run: |
-          set -euo pipefail
-
-          if bazel build :harper_bin; then
-            exit 0
-          fi
-
-          echo "Bazel build failed, attempting to repin crate_universe lockfiles..."
-          bazel shutdown
-          CARGO_BAZEL_REPIN=1 bazel sync --only=crates
-          bazel shutdown
-          bazel build :harper_bin
+        run: bazel build :harper_bin --repo_env=CARGO_BAZEL_REPIN=1
       - name: Test Bazel build
         run: bazel run :harper_bin -- --version
