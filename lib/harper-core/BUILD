@@ -6,5 +6,8 @@ rust_library(
     srcs = glob(["src/**/*.rs"]),
     deps = all_crate_deps(normal = True),
     proc_macro_deps = ["@crates//:async-trait"],
+    rustc_env = {
+        "HARPER_VERSION": "0.7.1",
+    },
     visibility = ["//visibility:public"],
 )

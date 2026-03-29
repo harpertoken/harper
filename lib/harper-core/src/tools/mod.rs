@@ -484,12 +484,12 @@ impl<'a> ToolService<'a> {
         };
 
         match mcp_client.call_tool(tool_name, args.clone()).await {
-            Ok(results) => {
+            Ok(result) => {
                 // Format the response for the LLM
                 let mut result_parts = Vec::new();
 
-                for result in &results {
-                    match result {
+                for content in result.content {
+                    match content {
                         ContentBlock::Text { text, .. } => {
                             result_parts.push(text.clone());
                         }
