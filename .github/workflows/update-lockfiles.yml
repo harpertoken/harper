@@ -1,0 +1,44 @@
+name: Update Rust lockfiles
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+  workflow_dispatch:
+
+jobs:
+  update-lockfile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Bazel
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Update Cargo.lock
+        run: cargo update
+
+      - name: Update cargo-bazel-lock.json
+        run: |
+          set -euo pipefail
+          bazel shutdown
+          CARGO_BAZEL_REPIN=1 bazel sync --only=crates
+          bazel shutdown
+
+      - name: Create PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: 'chore(deps): update Rust lockfiles'
+          title: 'chore(deps): update Rust lockfiles'
+          body: |
+            ## Summary
+            - update `Cargo.lock`
+            - repin `cargo-bazel-lock.json` to keep Bazel dependencies in sync
+          branch: cargo-lock-update
+          delete-branch: true
