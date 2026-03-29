@@ -5,7 +5,7 @@
 # For more details, please check https://github.com/bazelbuild/bazel/issues/18958
 ###############################################################################
 
-bazel_dep(name = "rules_rust", version = "0.68.1")
+bazel_dep(name = "rules_rust", version = "0.69.0")
 
 crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
 crate.from_cargo(
@@ -13,12 +13,6 @@ crate.from_cargo(
     cargo_lockfile = "//:Cargo.lock",
     lockfile = "//:cargo-bazel-lock.json",
     manifests = ["//:Cargo.toml"],
-)
-
-crate.annotation(
-    crate = "zune-jpeg",
-    version = "0.5.8",
-    patches = ["//patches:zune_jpeg_neon_allow_unsafe.patch", "//patches:zune_jpeg_avx2_unsafe.patch"],
 )
 
 crate.annotation(
@@ -34,4 +28,5 @@ crate.annotation(
         "CARGO_PKG_README": "README.md",
     },
 )
+
 use_repo(crate, "crates")
