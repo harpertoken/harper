@@ -42,4 +42,4 @@ jobs:
           bazel shutdown
           bazel build :harper_bin
       - name: Test Bazel build
-        run: ./bazel-bin/harper_bin --version
+        run: bazel run :harper_bin -- --version
