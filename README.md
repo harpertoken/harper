@@ -1,6 +1,6 @@
 # Harper
 
-Harper is a terminal-first assistant that turns natural-language requests into safe shell actions. It keeps a full command log, prompts for approval before executing anything, and can run with cloud LLMs or entirely offline via Ollama.
+Harper is a terminal-first assistant platform that turns natural-language requests into safe shell actions. It keeps a full command log, prompts for approval before executing anything, and can run with cloud LLMs or entirely offline via Ollama.
 
 ![Harper interface](https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png)
 
