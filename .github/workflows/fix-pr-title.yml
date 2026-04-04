@@ -20,7 +20,16 @@ jobs:
           PR_TITLE=$(gh pr view ${{ github.event.pull_request.number }} --json title -q '.title')
 
           if [[ "$PR_TITLE" =~ ^\[.*\]\  ]]; then
-            echo "PR title already formatted: $PR_TITLE"
+            SCOPE=$(echo "$PR_TITLE" | grep -oP '^\[.*?\]')
+            MSG="${PR_TITLE#"$SCOPE "}"
+            LOWER_MSG=$(echo "$MSG" | tr '[:upper:]' '[:lower:]')
+            NEW_TITLE="$SCOPE $LOWER_MSG"
+            if [[ "$NEW_TITLE" == "$PR_TITLE" ]]; then
+              echo "PR title already formatted: $PR_TITLE"
+              exit 0
+            fi
+            gh pr edit ${{ github.event.pull_request.number }} --title "$NEW_TITLE"
+            echo "PR title lowercased: $NEW_TITLE"
             exit 0
           fi
 
