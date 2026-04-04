@@ -18,6 +18,7 @@ on:
   push:
     branches: [main, develop]
     paths:
+      - '.github/workflows/**'
       - 'src/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
