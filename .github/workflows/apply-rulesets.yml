@@ -12,43 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Package Test
+name: Apply Rulesets
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    paths:
+      - .github/rulesets/*.json
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  package:
+  apply:
     runs-on: ubuntu-latest
     if: github.repository_owner == 'harpertoken'
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Build harper release binary
-        run: cargo build --release --locked -p harper-ui --bin harper
-
-      - name: Package artifacts
+      - name: Apply main-branch-protection ruleset
         run: |
-          mkdir -p dist
-          cp target/release/harper dist/harper-linux-amd64
-          tar -C dist -czf harper-linux-amd64.tar.gz harper-linux-amd64
-
-      - name: Smoke test binary
-        run: ./target/release/harper --version
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: harper-linux-amd64-${{ github.run_id }}
-          path: |
-            target/release/harper
-            harper-linux-amd64.tar.gz
+          RULESET_ID=11608827
+          gh api repos/${{ github.repository }}/rulesets/$RULESET_ID \
+            --method PUT \
+            --header "Accept: application/vnd.github+json" \
+            --input .github/rulesets/main-branch-protection.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.BYPASS_TOKEN || secrets.GITHUB_TOKEN }}

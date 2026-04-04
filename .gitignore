@@ -52,6 +52,7 @@ tarpaulin-report.html
 
 # Bazel build artifacts
 bazel-*
+!.github/workflows/bazel-*.yml
 bazel-bin/
 bazel-out/
 bazel-testlogs/

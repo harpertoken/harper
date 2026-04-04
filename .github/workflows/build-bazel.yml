@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: bazel ci
+name: Bazel CI
 
 on:
   push:
-    branches: [ main, add-bazel-support, "fix/**" ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 

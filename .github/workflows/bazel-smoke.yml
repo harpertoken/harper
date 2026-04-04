@@ -12,32 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Rust Benchmarks
+name: Bazel Smoke
 
 on:
   schedule:
-    - cron: '0 3 * * *' # Daily at 03:00 UTC
+    - cron: '0 2 * * *'  # Daily at 02:00 UTC
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  bench:
+  smoke:
     runs-on: ubuntu-latest
     if: github.repository_owner == 'harpertoken'
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Rust nightly (for unstable bench features)
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Set up Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
 
-      - name: Run cargo bench
-        run: |
-          cargo bench --all --profile release -- --warm-up-time 2 --measurement-time 10 | tee bench-output.txt
+      - name: Fetch external dependencies
+        run: bazel fetch //...
 
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-bench-${{ github.run_id }}
-          path: bench-output.txt
+      - name: Bazel test smoke suite
+        run: bazel test //... --build_tests_only --repo_env=CARGO_BAZEL_REPIN=1
