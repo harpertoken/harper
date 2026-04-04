@@ -52,7 +52,7 @@ version = "1.0"
 [dependencies.http-body]
 version = "1.0"
 [dependencies.hyper]
-version = "1.0"
+version = "1.9"
 [dependencies.socket2]
 version = "0.6"
 [dependencies.sync_wrapper]
