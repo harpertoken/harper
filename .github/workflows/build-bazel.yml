@@ -16,7 +16,7 @@ name: Bazel CI
 
 on:
   push:
-    branches: [ main, add-bazel-support, "fix/**" ]
+    branches: [ main, add-bazel-support ]
   pull_request:
     branches: [ main ]
 
