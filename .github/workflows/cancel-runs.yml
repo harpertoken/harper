@@ -22,12 +22,21 @@ jobs:
           echo "is_help=false" >> $GITHUB_OUTPUT
         fi
 
+    - name: Get PR branch name
+      id: get-branch
+      run: |
+        pr_number=${{ github.event.issue.number }}
+        branch=$(gh pr view "$pr_number" --json headRefName --jq '.headRefName')
+        echo "branch=$branch" >> $GITHUB_OUTPUT
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Cancel in-progress runs
       if: steps.check.outputs.is_help == 'false'
       id: cancel-in-progress
       run: |
-        # Get in-progress run IDs
-        in_progress_ids=$(gh run list --status in_progress --json databaseId --jq '.[].databaseId' || echo "")
+        # Get in-progress run IDs for this PR's branch
+        in_progress_ids=$(gh run list --status in_progress --branch "${{ steps.get-branch.outputs.branch }}" --json databaseId --jq '.[].databaseId' || echo "")
         if [ -n "$in_progress_ids" ]; then
           echo "Canceling in-progress runs: $in_progress_ids"
           echo "$in_progress_ids" | xargs -I{} gh run cancel {}
@@ -43,8 +52,8 @@ jobs:
       if: steps.check.outputs.is_help == 'false'
       id: cancel-queued
       run: |
-        # Get queued run IDs
-        queued_ids=$(gh run list --status queued --json databaseId --jq '.[].databaseId' || echo "")
+        # Get queued run IDs for this PR's branch
+        queued_ids=$(gh run list --status queued --branch "${{ steps.get-branch.outputs.branch }}" --json databaseId --jq '.[].databaseId' || echo "")
         if [ -n "$queued_ids" ]; then
           echo "Canceling queued runs: $queued_ids"
           echo "$queued_ids" | xargs -I{} gh run cancel {} 2>/dev/null || true
