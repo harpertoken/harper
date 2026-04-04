@@ -1,5 +1,5 @@
 {
-  "checksum": "fdc006a53f222c0de9af77c5aaf09398cd55ca092111f2751b5aba0377a87111",
+  "checksum": "e76a21620aa7a72d2a2c9145efa9fe3b4d17b0cb01ca95091a1d74408d174164",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -7184,14 +7184,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "endian-type 0.1.2": {
+    "endian-type 0.2.0": {
       "name": "endian-type",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "package_url": "https://github.com/Lolirofle/endian-type.git",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/endian-type/0.1.2/download",
-          "sha256": "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
+          "url": "https://static.crates.io/crates/endian-type/0.2.0/download",
+          "sha256": "869b0adbda23651a9c5c0c3d270aac9fcb52e8622a8f2b17e57802d7791962f2"
         }
       },
       "targets": [
@@ -7213,8 +7213,8 @@
         "compile_data_glob": [
           "**"
         ],
-        "edition": "2015",
-        "version": "0.1.2"
+        "edition": "2021",
+        "version": "0.2.0"
       },
       "license": "MIT",
       "license_ids": [
@@ -8376,67 +8376,6 @@
         "MIT"
       ],
       "license_file": null
-    },
-    "fd-lock 4.0.4": {
-      "name": "fd-lock",
-      "version": "4.0.4",
-      "package_url": "https://github.com/yoshuawuyts/fd-lock",
-      "repository": {
-        "Http": {
-          "url": "https://static.crates.io/crates/fd-lock/4.0.4/download",
-          "sha256": "0ce92ff622d6dadf7349484f42c93271a0d49b7cc4d466a936405bacbe10aa78"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "fd_lock",
-            "crate_root": "src/lib.rs",
-            "srcs": {
-              "allow_empty": true,
-              "include": [
-                "**/*.rs"
-              ]
-            }
-          }
-        }
-      ],
-      "library_target_name": "fd_lock",
-      "common_attrs": {
-        "compile_data_glob": [
-          "**"
-        ],
-        "deps": {
-          "common": [
-            {
-              "id": "cfg-if 1.0.4",
-              "target": "cfg_if"
-            }
-          ],
-          "selects": {
-            "cfg(unix)": [
-              {
-                "id": "rustix 1.1.4",
-                "target": "rustix"
-              }
-            ],
-            "cfg(windows)": [
-              {
-                "id": "windows-sys 0.59.0",
-                "target": "windows_sys"
-              }
-            ]
-          }
-        },
-        "edition": "2021",
-        "version": "4.0.4"
-      },
-      "license": "MIT OR Apache-2.0",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "license_file": "LICENSE-APACHE"
     },
     "fdeflate 0.3.7": {
       "name": "fdeflate",
@@ -10587,7 +10526,7 @@
               "target": "rusqlite"
             },
             {
-              "id": "rustyline 17.0.2",
+              "id": "rustyline 18.0.0",
               "target": "rustyline"
             },
             {
@@ -10790,7 +10729,7 @@
               "target": "rusqlite"
             },
             {
-              "id": "rustyline 17.0.2",
+              "id": "rustyline 18.0.0",
               "target": "rustyline"
             },
             {
@@ -16791,14 +16730,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "nix 0.30.1": {
+    "nix 0.31.2": {
       "name": "nix",
-      "version": "0.30.1",
+      "version": "0.31.2",
       "package_url": "https://github.com/nix-rust/nix",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/nix/0.30.1/download",
-          "sha256": "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+          "url": "https://static.crates.io/crates/nix/0.31.2/download",
+          "sha256": "5d6d0705320c1e6ba1d912b5e37cf18071b6c2e9b7fa8215a1e8a7651966f5d3"
         }
       },
       "targets": [
@@ -16858,14 +16797,14 @@
               "target": "libc"
             },
             {
-              "id": "nix 0.30.1",
+              "id": "nix 0.31.2",
               "target": "build_script_build"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.30.1"
+        "version": "0.31.2"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -21569,14 +21508,14 @@
       ],
       "license_file": null
     },
-    "radix_trie 0.2.1": {
+    "radix_trie 0.3.0": {
       "name": "radix_trie",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "package_url": "https://github.com/michaelsproul/rust_radix_trie",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/radix_trie/0.2.1/download",
-          "sha256": "c069c179fcdc6a2fe24d8d18305cf085fdbd4f922c041943e203685d6a1c58fd"
+          "url": "https://static.crates.io/crates/radix_trie/0.3.0/download",
+          "sha256": "3b4431027dcd37fc2a73ef740b5f233aa805897935b8bce0195e41bbf9a3289a"
         }
       },
       "targets": [
@@ -21601,7 +21540,7 @@
         "deps": {
           "common": [
             {
-              "id": "endian-type 0.1.2",
+              "id": "endian-type 0.2.0",
               "target": "endian_type"
             },
             {
@@ -21611,8 +21550,8 @@
           ],
           "selects": {}
         },
-        "edition": "2018",
-        "version": "0.2.1"
+        "edition": "2024",
+        "version": "0.3.0"
       },
       "license": "MIT",
       "license_ids": [
@@ -24955,14 +24894,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "rustyline 17.0.2": {
+    "rustyline 18.0.0": {
       "name": "rustyline",
-      "version": "17.0.2",
+      "version": "18.0.0",
       "package_url": "https://github.com/kkawakam/rustyline",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/rustyline/17.0.2/download",
-          "sha256": "e902948a25149d50edc1a8e0141aad50f54e22ba83ff988cf8f7c9ef07f50564"
+          "url": "https://static.crates.io/crates/rustyline/18.0.0/download",
+          "sha256": "4a990b25f351b25139ddc7f21ee3f6f56f86d6846b74ac8fad3a719a287cd4a0"
         }
       },
       "targets": [
@@ -24988,7 +24927,6 @@
           "common": [
             "custom-bindings",
             "default",
-            "fd-lock",
             "home",
             "radix_trie",
             "with-dirs",
@@ -25007,10 +24945,6 @@
               "target": "cfg_if"
             },
             {
-              "id": "fd-lock 4.0.4",
-              "target": "fd_lock"
-            },
-            {
               "id": "home 0.5.12",
               "target": "home"
             },
@@ -25027,7 +24961,7 @@
               "target": "memchr"
             },
             {
-              "id": "radix_trie 0.2.1",
+              "id": "radix_trie 0.3.0",
               "target": "radix_trie"
             },
             {
@@ -25042,7 +24976,7 @@
           "selects": {
             "cfg(unix)": [
               {
-                "id": "nix 0.30.1",
+                "id": "nix 0.31.2",
                 "target": "nix"
               },
               {
@@ -25056,14 +24990,14 @@
                 "target": "clipboard_win"
               },
               {
-                "id": "windows-sys 0.60.2",
+                "id": "windows-sys 0.61.2",
                 "target": "windows_sys"
               }
             ]
           }
         },
         "edition": "2021",
-        "version": "17.0.2"
+        "version": "18.0.0"
       },
       "license": "MIT",
       "license_ids": [
@@ -33905,18 +33839,6 @@
         "compile_data_glob": [
           "**"
         ],
-        "crate_features": {
-          "common": [
-            "Win32",
-            "Win32_Foundation",
-            "Win32_Storage",
-            "Win32_Storage_FileSystem",
-            "Win32_System",
-            "Win32_System_IO",
-            "default"
-          ],
-          "selects": {}
-        },
         "deps": {
           "common": [
             {
@@ -33971,18 +33893,13 @@
             "Win32_Foundation",
             "Win32_Graphics",
             "Win32_Graphics_Gdi",
-            "Win32_Security",
             "Win32_Storage",
             "Win32_Storage_FileSystem",
             "Win32_System",
-            "Win32_System_Console",
             "Win32_System_DataExchange",
             "Win32_System_Memory",
             "Win32_System_Ole",
-            "Win32_System_Threading",
             "Win32_UI",
-            "Win32_UI_Input",
-            "Win32_UI_Input_KeyboardAndMouse",
             "Win32_UI_Shell",
             "default"
           ],
@@ -34072,6 +33989,8 @@
               "Win32_System_Threading",
               "Win32_System_WindowsProgramming",
               "Win32_UI",
+              "Win32_UI_Input",
+              "Win32_UI_Input_KeyboardAndMouse",
               "Win32_UI_Shell"
             ]
           }
@@ -38605,7 +38524,7 @@
     "reqwest 0.12.28",
     "ring 0.17.14",
     "rusqlite 0.37.0",
-    "rustyline 17.0.2",
+    "rustyline 18.0.0",
     "serde 1.0.228",
     "serde_json 1.0.149",
     "socket2 0.6.3",
