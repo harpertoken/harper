@@ -22,7 +22,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   post-merge-ci:
@@ -69,6 +69,7 @@ jobs:
               if (data.merged) {
                 core.info(`PR #${prNumber} merged as ${data.merge_commit_sha}`);
                 core.setOutput('skip', 'false');
+                core.setOutput('pr_number', prNumber);
                 core.setOutput('merge_sha', data.merge_commit_sha);
                 return;
               }
@@ -76,6 +77,12 @@ jobs:
               await new Promise((resolve) => setTimeout(resolve, 15000));
             }
             core.setFailed(`PR #${prNumber} was not merged within the wait window.`);
+      - name: Lock merged PR
+        if: steps.pr.outputs.skip != 'true'
+        run: gh pr lock ${{ steps.pr.outputs.pr_number }} --repo ${{ github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Checkout merged commit
         if: steps.pr.outputs.skip != 'true'
         uses: actions/checkout@v6
