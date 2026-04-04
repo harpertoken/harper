@@ -25,7 +25,23 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Merges immediately without waiting for checks
+  # Cancels auto-merge when the auto-merge label is removed
+  cancel-auto-merge:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.action == 'unlabeled' &&
+      github.event.label.name == 'auto-merge' &&
+      github.event.pull_request.draft == false &&
+      github.repository_owner == 'harpertoken'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Disable auto-merge
+        run: gh pr merge --disable-auto "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   auto-merge-now:
     runs-on: ubuntu-latest
     if: >
