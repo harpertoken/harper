@@ -1,0 +1,83 @@
+# Copyright 2026 harpertoken
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Normalize PR Description
+
+on:
+  pull_request_target:
+    types: [opened, edited, ready_for_review]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  normalize:
+    # Only run for PRs from within the org (not forks, not dependabot)
+    if: |
+      github.repository_owner == 'harpertoken' &&
+      github.event.pull_request.head.repo.fork == false &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.user.login != 'app/dependabot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Normalize description to paragraph style
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+
+            // Already paragraph style: no ## headers at the start
+            if (!body.trimStart().startsWith('##')) {
+              core.info('PR description already in paragraph style. Skipping.');
+              return;
+            }
+
+            // Parse ## Summary bullets and ## Testing line into a paragraph
+            const summaryMatch = body.match(/##\s*Summary\s*\n([\s\S]*?)(?=\n##|$)/i);
+            const testingMatch = body.match(/##\s*Testing\s*\n([\s\S]*?)(?=\n##|$)/i);
+
+            if (!summaryMatch) {
+              core.info('No ## Summary section found. Skipping.');
+              return;
+            }
+
+            // Convert bullet list to sentences
+            const bullets = summaryMatch[1]
+              .split('\n')
+              .map(l => l.replace(/^[-*]\s*/, '').trim())
+              .filter(Boolean);
+
+            const summarySentence = bullets
+              .map(b => b.endsWith('.') ? b : b + '.')
+              .join(' ');
+
+            // Extract testing sentence if present
+            const testingLines = testingMatch
+              ? testingMatch[1].split('\n').map(l => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean)
+              : [];
+            const testingSentence = testingLines.length
+              ? (testingLines[0].endsWith('.') ? testingLines[0] : testingLines[0] + '.')
+              : 'Pre-commit (fmt/clippy/check/yaml) covered the changes.';
+
+            const newBody = `${summarySentence} ${testingSentence}\n`;
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              body: newBody,
+            });
+
+            core.info(`PR #${pr.number} description normalized to paragraph style.`);
