@@ -53,10 +53,10 @@ jobs:
               return;
             }
 
-            // Convert bullet list to sentences
+            // Convert bullet list to sentences, stripping any stray markdown headers
             const bullets = summaryMatch[1]
               .split('\n')
-              .map(l => l.replace(/^[-*]\s*/, '').trim())
+              .map(l => l.replace(/^[-*]\s*/, '').replace(/^#+\s*/, '').trim())
               .filter(Boolean);
 
             const summarySentence = bullets
@@ -65,7 +65,7 @@ jobs:
 
             // Extract testing sentence if present
             const testingLines = testingMatch
-              ? testingMatch[1].split('\n').map(l => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean)
+              ? testingMatch[1].split('\n').map(l => l.replace(/^[-*]\s*/, '').replace(/^#+\s*/, '').trim()).filter(Boolean)
               : [];
             const testingSentence = testingLines.length
               ? (testingLines[0].endsWith('.') ? testingLines[0] : testingLines[0] + '.')
