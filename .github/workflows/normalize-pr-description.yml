@@ -59,12 +59,19 @@ jobs:
               .map(l => l.replace(/^[-*]\s*/, '').replace(/^#+\s*/, '').trim())
               .filter(Boolean);
 
-            // Wrap technical tokens (filenames, CLI flags, workflow names, paths) in backticks
-            // if not already wrapped
+            // Wrap technical tokens in backticks if not already wrapped:
+            // filenames with extensions, --flags, and tokens inside parens like (fmt/clippy/...)
             function wrapTech(text) {
-              return text.replace(/(?<!`)(\b[\w.-]+\.(yml|rs|toml|md|json|sh|ts|js|py)\b|--[\w-]+|`[^`]+`)/g, (m) => {
-                return m.startsWith('`') ? m : '`' + m + '`';
+              // Wrap filenames with known extensions
+              text = text.replace(/(?<!`)(\b[\w.-]+\.(yml|rs|toml|md|json|sh|ts|js|py)\b)/g, '`$1`');
+              // Wrap --flags
+              text = text.replace(/(?<!`)(\-\-[\w-]+)/g, '`$1`');
+              // Wrap slash-separated tokens inside parens e.g. (fmt/clippy/check/yaml)
+              text = text.replace(/\(([^)]+\/[^)]+)\)/g, (_, inner) => {
+                const wrapped = inner.split('/').map(t => t.trim()).map(t => t.startsWith('`') ? t : '`' + t + '`').join('/');
+                return '(' + wrapped + ')';
               });
+              return text;
             }
 
             const summarySentence = bullets
