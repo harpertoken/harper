@@ -59,8 +59,16 @@ jobs:
               .map(l => l.replace(/^[-*]\s*/, '').replace(/^#+\s*/, '').trim())
               .filter(Boolean);
 
+            // Wrap technical tokens (filenames, CLI flags, workflow names, paths) in backticks
+            // if not already wrapped
+            function wrapTech(text) {
+              return text.replace(/(?<!`)(\b[\w.-]+\.(yml|rs|toml|md|json|sh|ts|js|py)\b|--[\w-]+|`[^`]+`)/g, (m) => {
+                return m.startsWith('`') ? m : '`' + m + '`';
+              });
+            }
+
             const summarySentence = bullets
-              .map(b => b.endsWith('.') ? b : b + '.')
+              .map(b => wrapTech(b.endsWith('.') ? b : b + '.'))
               .join(' ');
 
             // Extract testing sentence if present
@@ -68,8 +76,8 @@ jobs:
               ? testingMatch[1].split('\n').map(l => l.replace(/^[-*]\s*/, '').replace(/^#+\s*/, '').trim()).filter(Boolean)
               : [];
             const testingSentence = testingLines.length
-              ? (testingLines[0].endsWith('.') ? testingLines[0] : testingLines[0] + '.')
-              : 'Pre-commit (fmt/clippy/check/yaml) covered the changes.';
+              ? wrapTech(testingLines[0].endsWith('.') ? testingLines[0] : testingLines[0] + '.')
+              : 'Pre-commit (`fmt`/`clippy`/`check`/`yaml`) covered the changes.';
 
             const newBody = `${summarySentence} ${testingSentence}\n`;
 
