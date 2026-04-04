@@ -12,6 +12,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Rust Benchmarks | `benchmarks.yml` | Runs `cargo bench` nightly and stores results as artifacts. | Daily cron, manual dispatch |
 | Integration Tests | `integration.yml` | Executes `cargo test -- --ignored` against real services (requires secrets). | PRs touching app code, manual dispatch |
 | Package Test | `package-test.yml` | Builds release binaries and packages them for smoke testing. | Tag push (`v*`), manual dispatch |
+| Post Auto Merge CI | `post-auto-merge-ci.yml` | Re-runs fmt/clippy/tests on `main` after Auto Merge completes to spot issues reusing PR commits. | Completion of Auto Merge workflow |
 | Build | `build.yml` | Runs the canonical `cargo fmt`, `cargo clippy`, and test matrix. | Push/PR to `main` |
 | CI | `ci.yml` | Lightweight checks (lint, formatting, unit tests) for fast feedback. | Push/PR to `main` |
 | CLA | `cla.yml` | Enforces the Contributor License Agreement via comment status. | PR opened/synchronized |
