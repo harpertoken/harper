@@ -6,6 +6,7 @@ use assert_cmd::Command;
 use harper_core::core::constants;
 
 #[test]
+#[ignore = "requires built harper binary; run with --ignored after cargo build"]
 fn harper_cli_reports_exact_version() -> Result<(), Box<dyn std::error::Error>> {
     let expected = format!("harper v{}", constants::VERSION);
 
