@@ -13,7 +13,17 @@ jobs:
       actions: write
       pull-requests: write
     steps:
+    - name: Check if help request
+      id: check
+      run: |
+        if [[ "${{ github.event.comment.body }}" == *help* ]]; then
+          echo "is_help=true" >> $GITHUB_OUTPUT
+        else
+          echo "is_help=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Cancel in-progress runs
+      if: steps.check.outputs.is_help == 'false'
       id: cancel-in-progress
       run: |
         # Get in-progress run IDs
@@ -30,6 +40,7 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Cancel queued runs
+      if: steps.check.outputs.is_help == 'false'
       id: cancel-queued
       run: |
         # Get queued run IDs
@@ -49,22 +60,28 @@ jobs:
       uses: actions/github-script@v7
       with:
         script: |
+          const isHelp = process.env.IS_HELP === 'true';
           const inProgressRuns = process.env.IN_PROGRESS_RUNS || '';
           const queuedRuns = process.env.QUEUED_RUNS || '';
 
-          let whatItDid = '';
-          if (inProgressRuns) {
-            whatItDid += 'Canceled in-progress runs: ' + inProgressRuns + '\n\n';
+          let body;
+          if (isHelp) {
+            body = '<details>\n<summary>What it can do and how to use</summary>\n\nThis bot cancels in-progress and queued GitHub Actions runs.\n\n**Commands:**\n- `/cancel-runs` - Cancels all in-progress and queued workflow runs\n- `/cancel-runs help` - Shows this help message\n\n**Note:** Cancellation cannot be undone. Use with caution.\n</details>';
           } else {
-            whatItDid += 'No in-progress runs found\n\n';
-          }
-          if (queuedRuns) {
-            whatItDid += 'Canceled queued runs: ' + queuedRuns;
-          } else {
-            whatItDid += 'No queued runs found';
-          }
+            let whatItDid = '';
+            if (inProgressRuns) {
+              whatItDid += 'Canceled in-progress runs: ' + inProgressRuns + '\n\n';
+            } else {
+              whatItDid += 'No in-progress runs found\n\n';
+            }
+            if (queuedRuns) {
+              whatItDid += 'Canceled queued runs: ' + queuedRuns;
+            } else {
+              whatItDid += 'No queued runs found';
+            }
 
-          const body = 'done\n\n<details>\n<summary>What it did</summary>\n\n' + whatItDid + '\n\n</details>\n\n<details>\n<summary>What it can do and how to use</summary>\n\nThis bot cancels in-progress and queued GitHub Actions runs.\n\n**Commands:**\n- `/cancel-runs` - Cancels all in-progress and queued workflow runs\n\n**Note:** This action cannot be undone. Use with caution.\n</details>';
+            body = 'done\n\n<details>\n<summary>What it did</summary>\n\n' + whatItDid + '\n\n</details>\n\n<details>\n<summary>What it can do and how to use</summary>\n\nThis bot cancels in-progress and queued GitHub Actions runs.\n\n**Commands:**\n- `/cancel-runs` - Cancels all in-progress and queued workflow runs\n- `/cancel-runs help` - Shows this help message\n\n**Note:** This action cannot be undone. Use with caution.\n</details>';
+          }
 
           await github.rest.issues.createComment({
             issue_number: context.issue.number,
@@ -73,5 +90,6 @@ jobs:
             body: body
           });
       env:
+        IS_HELP: ${{ steps.check.outputs.is_help }}
         IN_PROGRESS_RUNS: ${{ steps.cancel-in-progress.outputs.canceled_runs }}
         QUEUED_RUNS: ${{ steps.cancel-queued.outputs.canceled_runs }}
