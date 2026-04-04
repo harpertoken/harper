@@ -3,6 +3,8 @@ name: Lock Merged PRs
 on:
   pull_request:
     types: [closed]
+  pull_request_target:
+    types: [closed]
 
 jobs:
   lock:
