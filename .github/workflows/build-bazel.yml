@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Set up Bazel
-        uses: bazelbuild/setup-bazel@v4
+        uses: bazel-contrib/setup-bazel@v0.15.0
       - name: Build with Bazel
         run: bazel build :harper_bin --repo_env=CARGO_BAZEL_REPIN=1
       - name: Test Bazel build
