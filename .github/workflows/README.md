@@ -35,6 +35,8 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 
 > **Tip:** Run `rg -n '^name:' .github/workflows` to see the canonical name shown in the Actions UI.
 
+> **Naming convention:** Workflow `name:` fields describe *what* the workflow does (`CI`, `Build`, `Rust Benchmarks`). Platform/architecture granularity (`ubuntu-latest`, `macos-latest`, `windows-latest`, `aarch64`, `x86_64`) belongs in job or matrix names inside the workflow — e.g. `CI (ubuntu-latest)` — not in the top-level workflow name.
+
 ## Labels
 
 | Label | Color | Purpose |
