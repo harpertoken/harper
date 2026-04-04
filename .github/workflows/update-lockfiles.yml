@@ -19,7 +19,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Set up Bazel
-        uses: bazel-contrib/setup-bazel@v0.15.0
+        uses: bazel-contrib/setup-bazel@0.15.0
 
       - name: Update Cargo.lock
         run: cargo update
