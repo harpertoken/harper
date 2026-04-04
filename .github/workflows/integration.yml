@@ -47,8 +47,8 @@ jobs:
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Run integration tests (ignored set)
+      - name: Run integration tests (include ignored)
         run: |
           set -euo pipefail
           export HARPER_ENVIRONMENT="$HARPER_ENV"
-          cargo test --all -- --ignored --test-threads=1
+          cargo test --all -- --include-ignored --test-threads=1

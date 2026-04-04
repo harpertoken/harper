@@ -33,8 +33,8 @@ jobs:
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build release binaries
-        run: cargo build --release --locked
+      - name: Build harper release binary
+        run: cargo build --release --locked -p harper-ui --bin harper
 
       - name: Package artifacts
         run: |
