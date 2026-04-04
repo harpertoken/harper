@@ -30,6 +30,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Release | `release.yml` | Builds release artifacts (binaries, packages). | Manual dispatch / tag push |
 | Release Please | `release-please.yml` | Uses release-please to cut versions and changelog PRs. | Push to `main` |
 | Rust Auto-Fix Bot | `rust-auto-fix.yml` | Applies automated `cargo fmt`/`clippy --fix` patches via bot PRs. | Issue comment / workflow_dispatch |
+| Cancel Runs Bot | `cancel-runs.yml` | Cancels in-progress and queued GitHub Actions runs when `/cancel-runs` is commented on PRs, then posts completion details with collapsible sections. | Issue comment on PRs |
 | Update Rust lockfiles | `update-lockfiles.yml` | Weekly `cargo update` + `bazel sync --only=crates`, opens PR. | Weekly cron + manual dispatch |
 | Deploy Website | `website.yml` | Builds and deploys the docs/website bundle to GitHub Pages. | Push to `main` / workflow_dispatch |
 
