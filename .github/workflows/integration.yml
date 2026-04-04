@@ -1,0 +1,54 @@
+# Copyright 2026 harpertoken
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: integration tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Integration environment (dev/staging)"
+        required: false
+        default: "dev"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'lib/**'
+      - 'tests/**'
+      - '.github/workflows/integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'harpertoken'
+    env:
+      HARPER_ENV: ${{ inputs.environment || 'dev' }}
+      # Secrets (API keys, etc.) should be configured in repo settings
+      MCP_SERVER_URL: ${{ secrets.MCP_SERVER_URL }}
+      HARPER_API_KEY: ${{ secrets.HARPER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run integration tests (include ignored)
+        run: |
+          set -euo pipefail
+          export HARPER_ENVIRONMENT="$HARPER_ENV"
+          cargo test --all -- --include-ignored --test-threads=1
