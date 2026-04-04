@@ -9,14 +9,14 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Apply Rulesets | `apply-rulesets.yml` | Applies branch ruleset definitions from `.github/rulesets/*.json` to GitHub. Edit `main-branch-protection.json` to change rules; the workflow syncs them on push. | Push to `main` touching rulesets, manual dispatch |
 | Auto Merge | `auto-merge.yml` | Three jobs: `auto-merge` enables GitHub's built-in auto-merge (waits for `CI (ubuntu-latest)` + 1 review); `auto-merge-now` merges immediately via `BYPASS_TOKEN` bypassing ruleset checks; `cancel-auto-merge` disables queued auto-merge when the `auto-merge` label is removed. | `labeled`/`unlabeled`/PR events |
 | Bazel CI | `build-bazel.yml` | Builds `:harper_bin` with Bazel (including lockfile repinning fallback). | Push/PR to `main`, Bazel branches |
-| Bazel Smoke | `bazel-smoke.yml` | Daily fetch + `bazel test //...` to catch dependency drift outside PRs. | Daily cron, manual dispatch |
+| Bazel Smoke | `bazel-smoke.yml` | Daily `bazel test //...` to catch dependency drift outside PRs. | Daily cron, manual dispatch |
 | Rust Benchmarks | `benchmarks.yml` | Runs `cargo bench` nightly and stores results as artifacts. | Daily cron, manual dispatch |
 | Integration Tests | `integration.yml` | Executes `cargo test -- --ignored` against real services (requires secrets). | PRs touching app code, manual dispatch |
 | Package Test | `package-test.yml` | Builds release binaries and packages them for smoke testing. | Tag push (`v*`), manual dispatch |
 | Post Auto Merge CI | `post-auto-merge-ci.yml` | Re-runs fmt/clippy/tests on `main` after Auto Merge completes; also locks the merged PR via `gh pr lock`. | Completion of Auto Merge workflow |
 | Normalize PR Description | `normalize-pr-description.yml` | Rewrites `## Summary`/`## Testing` bullet-style PR bodies into a single paragraph with backtick-wrapped technical terms. Skips forks and dependabot. | PR opened/edited/ready_for_review |
 | Build | `build.yml` | Runs the canonical `cargo fmt`, `cargo clippy`, and test matrix. | Push/PR to `main` |
-| CI | `ci.yml` | Lightweight checks (lint, formatting, unit tests) for fast feedback. | Push/PR to `main` |
+| CI | `ci.yml` | Lint, formatting, unit tests, and integration tests (builds binary first). | Push/PR to `main` |
 | CLA | `cla.yml` | Enforces the Contributor License Agreement via comment status. | PR opened/synchronized |
 | CodeQL | `codeql.yml` | Performs CodeQL static analysis on Rust (security scanning). | Push/PR to `main`, weekly cron |
 | Dependency Review | `dependency-review.yml` | Uses GitHub's dependency-review action on PRs. | PR events |
