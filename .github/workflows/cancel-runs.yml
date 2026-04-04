@@ -26,7 +26,7 @@ jobs:
       id: get-branch
       run: |
         pr_number=${{ github.event.issue.number }}
-        branch=$(gh pr view "$pr_number" --json headRefName --jq '.headRefName')
+        branch=$(gh pr view "$pr_number" --repo harpertoken/harper --json headRefName --jq '.headRefName')
         echo "branch=$branch" >> $GITHUB_OUTPUT
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,10 +36,10 @@ jobs:
       id: cancel-in-progress
       run: |
         # Get in-progress run IDs for this PR's branch
-        in_progress_ids=$(gh run list --status in_progress --branch "${{ steps.get-branch.outputs.branch }}" --json databaseId --jq '.[].databaseId' || echo "")
+        in_progress_ids=$(gh run list --status in_progress --branch "${{ steps.get-branch.outputs.branch }}" --repo harpertoken/harper --json databaseId --jq '.[].databaseId' || echo "")
         if [ -n "$in_progress_ids" ]; then
           echo "Canceling in-progress runs: $in_progress_ids"
-          echo "$in_progress_ids" | xargs -I{} gh run cancel {}
+          echo "$in_progress_ids" | xargs -I{} gh run cancel {} --repo harpertoken/harper
           echo "canceled_runs=$in_progress_ids" >> $GITHUB_OUTPUT
         else
           echo "No in-progress runs found"
@@ -53,10 +53,10 @@ jobs:
       id: cancel-queued
       run: |
         # Get queued run IDs for this PR's branch
-        queued_ids=$(gh run list --status queued --branch "${{ steps.get-branch.outputs.branch }}" --json databaseId --jq '.[].databaseId' || echo "")
+        queued_ids=$(gh run list --status queued --branch "${{ steps.get-branch.outputs.branch }}" --repo harpertoken/harper --json databaseId --jq '.[].databaseId' || echo "")
         if [ -n "$queued_ids" ]; then
           echo "Canceling queued runs: $queued_ids"
-          echo "$queued_ids" | xargs -I{} gh run cancel {} 2>/dev/null || true
+          echo "$queued_ids" | xargs -I{} gh run cancel {} --repo harpertoken/harper 2>/dev/null || true
           echo "canceled_runs=$queued_ids" >> $GITHUB_OUTPUT
         else
           echo "No queued runs found"
