@@ -18,6 +18,7 @@
 //! searching files with user approval.
 
 use crate::core::error::{HarperError, HarperResult};
+use crate::memory::cache::CacheAlignedBuffer;
 use crate::tools::parsing;
 use colored::*;
 use std::io::{self, Write};
@@ -90,7 +91,7 @@ pub async fn write_file(
         path.magenta()
     );
 
-    std::fs::write(path, content)
+    write_cache_aligned(path, content.as_bytes())
         .map_err(|e| HarperError::Command(format!("Failed to write file {}: {}", path, e)))?;
 
     Ok(format!(
@@ -149,8 +150,14 @@ pub async fn search_replace(
     let new_content = content.replace(old_string, new_string);
     let replacements = content.matches(old_string).count();
 
-    std::fs::write(path, &new_content)
+    write_cache_aligned(path, new_content.as_bytes())
         .map_err(|e| HarperError::Command(format!("Failed to write file {}: {}", path, e)))?;
 
     Ok(format!("Replaced {} occurrences in {}", replacements, path))
+}
+
+fn write_cache_aligned(path: &str, bytes: &[u8]) -> std::io::Result<()> {
+    let mut buffer = CacheAlignedBuffer::with_capacity(bytes.len());
+    buffer.write_bytes(bytes);
+    std::fs::write(path, buffer.as_slice())
 }

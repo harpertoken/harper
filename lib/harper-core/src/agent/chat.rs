@@ -20,10 +20,11 @@ use crate::agent::intent::{route_intent, DeterministicIntent};
 use crate::agent::offline_shell::plan_offline_shell_commands;
 use crate::agent::prompt::PromptBuilder;
 use crate::core::cache::{ApiCacheKey, ApiResponseCache};
-use crate::core::error::HarperError;
+use crate::core::error::{HarperError, HarperResult};
 use crate::core::{ApiConfig, Message};
 use crate::memory::storage::CommandLogEntry;
 use crate::runtime::config::ExecPolicyConfig;
+use crate::runtime::scheduler::{TaskPriority, TaskScheduler};
 use crate::tools::shell::CommandAuditContext;
 use crate::tools::ToolService;
 
@@ -41,6 +42,7 @@ use rustyline::Helper;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
+use std::time::{Duration, Instant};
 use turul_mcp_client::{McpClient, ResourceContent};
 
 #[derive(Debug)]
@@ -50,6 +52,12 @@ enum CommandAction {
     Audit(AuditParams),
     Custom(String),
     Unknown(String),
+}
+
+#[derive(Debug, Clone)]
+enum ChatBackgroundTask {
+    TodoReminder,
+    AuditRefresh { session_id: String },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -181,11 +189,15 @@ pub struct ChatService<'a> {
     custom_commands: HashMap<String, String>,
     exec_policy: ExecPolicyConfig,
     approver: Option<Arc<dyn UserApproval>>,
+    background_tasks: TaskScheduler<ChatBackgroundTask>,
+    todo_reminder_armed: bool,
+    last_audit_refresh: Option<Instant>,
 }
 
 #[allow(dead_code)]
 impl<'a> ChatService<'a> {
     const AUDIT_LOG_LIMIT: usize = 10;
+    const AUDIT_REFRESH_DEBOUNCE: Duration = Duration::from_secs(3);
 
     /// Create a new chat service
     pub fn new(
@@ -207,6 +219,9 @@ impl<'a> ChatService<'a> {
             custom_commands,
             exec_policy,
             approver: None,
+            background_tasks: TaskScheduler::new(),
+            todo_reminder_armed: false,
+            last_audit_refresh: None,
         }
     }
 
@@ -233,6 +248,9 @@ impl<'a> ChatService<'a> {
                 blocked_commands: None,
             },
             approver: None,
+            background_tasks: TaskScheduler::new(),
+            todo_reminder_armed: false,
+            last_audit_refresh: None,
         }
     }
 
@@ -262,6 +280,8 @@ impl<'a> ChatService<'a> {
         web_search_enabled: bool,
         session_id: &str,
     ) -> Result<(), HarperError> {
+        self.schedule_todo_reminder();
+        self.poll_background_tasks(session_id);
         // Handle slash commands locally
         if let Some(command) = user_msg.strip_prefix('/') {
             let response = match command {
@@ -304,6 +324,7 @@ impl<'a> ChatService<'a> {
             .try_handle_deterministic_intent(&processed_msg, session_id)
             .await?
         {
+            self.notify_command_activity(session_id);
             self.add_assistant_message(history, session_id, &local_response)?;
             self.trim_history(history);
             return Ok(());
@@ -321,6 +342,7 @@ impl<'a> ChatService<'a> {
             .await?;
         self.add_assistant_message(history, session_id, &response)?;
         self.trim_history(history);
+        self.poll_background_tasks(session_id);
         Ok(())
     }
 
@@ -509,6 +531,7 @@ impl<'a> ChatService<'a> {
         let (mut history, session_id) = self.create_session(web_search_enabled).await?;
 
         self.display_session_start();
+        self.schedule_todo_reminder();
 
         self.run_chat_loop(&session_id, &mut history, web_search_enabled)
             .await
@@ -536,6 +559,108 @@ impl<'a> ChatService<'a> {
         );
     }
 
+    fn schedule_todo_reminder(&mut self) {
+        if self.todo_reminder_armed {
+            return;
+        }
+        self.todo_reminder_armed = true;
+        self.background_tasks.schedule_in(
+            ChatBackgroundTask::TodoReminder,
+            Duration::from_secs(45),
+            TaskPriority::LOW,
+        );
+    }
+
+    fn notify_command_activity(&mut self, session_id: &str) {
+        let now = Instant::now();
+        if let Some(last) = self.last_audit_refresh {
+            if now.duration_since(last) < Self::AUDIT_REFRESH_DEBOUNCE {
+                return;
+            }
+        }
+        self.last_audit_refresh = Some(now);
+        self.background_tasks.schedule_in(
+            ChatBackgroundTask::AuditRefresh {
+                session_id: session_id.to_string(),
+            },
+            Duration::from_millis(1200),
+            TaskPriority::HIGH,
+        );
+    }
+
+    fn poll_background_tasks(&mut self, default_session_id: &str) {
+        let ready = self.background_tasks.drain_ready(Instant::now());
+        for item in ready {
+            match item.payload {
+                ChatBackgroundTask::TodoReminder => {
+                    self.todo_reminder_armed = false;
+                    if let Err(err) = self.emit_todo_reminder() {
+                        eprintln!("Warning: failed to load todos for reminder: {}", err);
+                    }
+                    self.schedule_todo_reminder();
+                }
+                ChatBackgroundTask::AuditRefresh { session_id } => {
+                    let target = if session_id.is_empty() {
+                        default_session_id.to_string()
+                    } else {
+                        session_id
+                    };
+                    self.emit_quick_audit_refresh(&target);
+                }
+            }
+        }
+    }
+
+    fn emit_todo_reminder(&self) -> HarperResult<()> {
+        let todos = crate::memory::storage::load_todos(self.conn)?;
+        if todos.is_empty() {
+            return Ok(());
+        }
+
+        println!(
+            "
+{} Pending todos ({} total):",
+            "Reminder:".bold().cyan(),
+            todos.len()
+        );
+        for (_, desc) in todos.iter().take(3) {
+            println!("  - {}", desc);
+        }
+        if todos.len() > 3 {
+            println!("  …and {} more", todos.len() - 3);
+        }
+        Ok(())
+    }
+
+    fn emit_quick_audit_refresh(&self, session_id: &str) {
+        match self.fetch_command_logs(session_id, 3) {
+            Ok(entries) if !entries.is_empty() => {
+                println!(
+                    "
+{} Latest commands:",
+                    "Audit:".bold().cyan()
+                );
+                for entry in entries {
+                    let approval_state = if entry.requires_approval {
+                        if entry.approved {
+                            "approved"
+                        } else {
+                            "rejected"
+                        }
+                    } else {
+                        "auto"
+                    };
+                    println!(
+                        "  [{} | {} | {:?}] {}",
+                        entry.status, approval_state, entry.exit_code, entry.command
+                    );
+                }
+            }
+            Ok(_) => {}
+            Err(err) => eprintln!("Warning: failed to refresh audit summary: {}", err),
+        }
+    }
+
     /// Run the chat loop
     async fn run_chat_loop(
         &mut self,
@@ -544,6 +669,7 @@ impl<'a> ChatService<'a> {
         web_search_enabled: bool,
     ) -> Result<(), HarperError> {
         loop {
+            self.poll_background_tasks(session_id);
             let user_input = self.get_user_input()?;
             if self.should_exit(&user_input) {
                 self.display_session_end();
@@ -569,6 +695,7 @@ impl<'a> ChatService<'a> {
                     Ok(result) => println!("{} {}", "Shell:".bold().cyan(), result.cyan()),
                     Err(e) => println!("{} {}", "Error:".bold().red(), e),
                 }
+                self.notify_command_activity(session_id);
                 continue;
             }
 
@@ -686,17 +813,6 @@ impl<'a> ChatService<'a> {
         let mut executed_tool_calls: HashSet<String> = HashSet::new();
         let mut last_tool_content: Option<String> = None;
 
-        let mut tool_service = ToolService::new(
-            self.conn,
-            self.config,
-            &self.exec_policy,
-            self.mcp_client,
-            Some(session_id),
-        );
-        if let Some(approver) = &self.approver {
-            tool_service = tool_service.with_approver(approver.clone());
-        }
-
         for _ in 0..MAX_TOOL_ROUNDS {
             let clean_response = Self::sanitize_model_response(&response);
             let tool_signature = Self::tool_call_signature(&clean_response);
@@ -707,16 +823,29 @@ impl<'a> ChatService<'a> {
                 }
                 break;
             }
-            let tool_option = tool_service
-                .handle_tool_use(
-                    &client,
-                    &history_for_llm,
-                    &clean_response,
-                    web_search_enabled,
-                )
-                .await?;
+            let tool_option = {
+                let mut tool_service = ToolService::new(
+                    self.conn,
+                    self.config,
+                    &self.exec_policy,
+                    self.mcp_client,
+                    Some(session_id),
+                );
+                if let Some(approver) = &self.approver {
+                    tool_service = tool_service.with_approver(approver.clone());
+                }
+                tool_service
+                    .handle_tool_use(
+                        &client,
+                        &history_for_llm,
+                        &clean_response,
+                        web_search_enabled,
+                    )
+                    .await?
+            };
 
             if let Some((tool_result, tool_content)) = tool_option {
+                self.notify_command_activity(session_id);
                 executed_tool_calls.insert(dedupe_key);
                 last_tool_content = Some(tool_content.clone());
                 let tool_message = Message {
@@ -835,7 +964,7 @@ impl<'a> ChatService<'a> {
     }
 
     async fn try_handle_offline_shell_proxy(
-        &self,
+        &mut self,
         user_msg: &str,
         session_id: &str,
     ) -> Result<Option<String>, HarperError> {
@@ -866,6 +995,7 @@ impl<'a> ChatService<'a> {
                 sections.push(format!("$ {}\n{}", command, output.trim_end()));
             }
         }
+        self.notify_command_activity(session_id);
         Ok(Some(sections.join("\n\n")))
     }
 
