@@ -1,5 +1,5 @@
 {
-  "checksum": "fdc006a53f222c0de9af77c5aaf09398cd55ca092111f2751b5aba0377a87111",
+  "checksum": "d284e1dd0bc22abb53ae3bfd65bb242ebc613cf6aaae3e4d29bc8c0cf153d08e",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -334,7 +334,7 @@
         "deps": {
           "common": [
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             }
           ],
@@ -966,7 +966,7 @@
           "selects": {
             "cfg(any())": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -1152,7 +1152,7 @@
               "target": "concurrent_queue"
             },
             {
-              "id": "fastrand 2.3.0",
+              "id": "fastrand 2.4.0",
               "target": "fastrand"
             },
             {
@@ -2402,7 +2402,7 @@
               "target": "http_body_util"
             },
             {
-              "id": "hyper 1.8.1",
+              "id": "hyper 1.9.0",
               "target": "hyper"
             },
             {
@@ -2454,7 +2454,7 @@
               "target": "sync_wrapper"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -3614,14 +3614,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "cc 1.2.58": {
+    "cc 1.2.59": {
       "name": "cc",
-      "version": "1.2.58",
+      "version": "1.2.59",
       "package_url": "https://github.com/rust-lang/cc-rs",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/cc/1.2.58/download",
-          "sha256": "e1e928d4b69e3077709075a938a05ffbedfa53a84c8f766efbf8220bb1ff60e1"
+          "url": "https://static.crates.io/crates/cc/1.2.59/download",
+          "sha256": "b7a4d3ec6524d28a329fc53654bbadc9bdd7b0431f5d65f1a56ffb28a1ee5283"
         }
       },
       "targets": [
@@ -3657,7 +3657,7 @@
           "selects": {}
         },
         "edition": "2018",
-        "version": "1.2.58"
+        "version": "1.2.59"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -3881,11 +3881,11 @@
             ],
             "wasm32-unknown-unknown": [
               {
-                "id": "js-sys 0.3.92",
+                "id": "js-sys 0.3.94",
                 "target": "js_sys"
               },
               {
-                "id": "wasm-bindgen 0.2.115",
+                "id": "wasm-bindgen 0.2.117",
                 "target": "wasm_bindgen"
               }
             ],
@@ -4634,7 +4634,7 @@
               "target": "pathdiff"
             },
             {
-              "id": "ron 0.12.0",
+              "id": "ron 0.12.1",
               "target": "ron"
             },
             {
@@ -4654,11 +4654,11 @@
               "target": "serde_json"
             },
             {
-              "id": "toml 1.1.0+spec-1.1.0",
+              "id": "toml 1.1.2+spec-1.1.0",
               "target": "toml"
             },
             {
-              "id": "winnow 1.0.0",
+              "id": "winnow 1.0.1",
               "target": "winnow"
             },
             {
@@ -4928,7 +4928,7 @@
               "target": "core_foundation_sys"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             }
           ],
@@ -4987,7 +4987,7 @@
               "target": "core_foundation_sys"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             }
           ],
@@ -5138,25 +5138,25 @@
           "selects": {
             "aarch64-linux-android": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(all(target_arch = \"aarch64\", target_os = \"linux\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(all(target_arch = \"aarch64\", target_vendor = \"apple\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -5206,25 +5206,25 @@
           "selects": {
             "cfg(all(target_arch = \"aarch64\", target_os = \"android\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(all(target_arch = \"aarch64\", target_os = \"linux\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(all(target_arch = \"aarch64\", target_vendor = \"apple\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -6809,7 +6809,7 @@
             ],
             "cfg(unix)": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -7627,19 +7627,19 @@
           "selects": {
             "cfg(target_os = \"hermit\")": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(target_os = \"wasi\")": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(unix)": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -8228,14 +8228,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "fastrand 2.3.0": {
+    "fastrand 2.4.0": {
       "name": "fastrand",
-      "version": "2.3.0",
+      "version": "2.4.0",
       "package_url": "https://github.com/smol-rs/fastrand",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/fastrand/2.3.0/download",
-          "sha256": "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+          "url": "https://static.crates.io/crates/fastrand/2.4.0/download",
+          "sha256": "a043dc74da1e37d6afe657061213aa6f425f855399a11d3463c6ecccc4dfda1f"
         }
       },
       "targets": [
@@ -8266,7 +8266,7 @@
           "selects": {}
         },
         "edition": "2018",
-        "version": "2.3.0"
+        "version": "2.4.0"
       },
       "license": "Apache-2.0 OR MIT",
       "license_ids": [
@@ -8518,7 +8518,7 @@
         "deps": {
           "common": [
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -9936,7 +9936,7 @@
             ],
             "cfg(unix)": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -10013,7 +10013,7 @@
           "selects": {
             "cfg(all(any(target_os = \"linux\", target_os = \"android\"), not(any(all(target_os = \"linux\", target_env = \"\"), getrandom_backend = \"custom\", getrandom_backend = \"linux_raw\", getrandom_backend = \"rdrand\", getrandom_backend = \"rndr\"))))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -10031,43 +10031,43 @@
             ],
             "cfg(any(target_os = \"dragonfly\", target_os = \"freebsd\", target_os = \"hurd\", target_os = \"illumos\", target_os = \"cygwin\", all(target_os = \"horizon\", target_arch = \"arm\")))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(any(target_os = \"haiku\", target_os = \"redox\", target_os = \"nto\", target_os = \"aix\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(any(target_os = \"ios\", target_os = \"visionos\", target_os = \"watchos\", target_os = \"tvos\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(any(target_os = \"macos\", target_os = \"openbsd\", target_os = \"vita\", target_os = \"emscripten\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(target_os = \"netbsd\")": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(target_os = \"solaris\")": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(target_os = \"vxworks\")": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -10160,7 +10160,7 @@
           "selects": {
             "cfg(all(any(target_os = \"linux\", target_os = \"android\"), not(any(all(target_os = \"linux\", target_env = \"\"), getrandom_backend = \"custom\", getrandom_backend = \"linux_raw\", getrandom_backend = \"rdrand\", getrandom_backend = \"rndr\"))))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -10184,43 +10184,43 @@
             ],
             "cfg(any(target_os = \"dragonfly\", target_os = \"freebsd\", target_os = \"hurd\", target_os = \"illumos\", target_os = \"cygwin\", all(target_os = \"horizon\", target_arch = \"arm\")))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(any(target_os = \"haiku\", target_os = \"redox\", target_os = \"nto\", target_os = \"aix\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(any(target_os = \"ios\", target_os = \"visionos\", target_os = \"watchos\", target_os = \"tvos\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(any(target_os = \"macos\", target_os = \"openbsd\", target_os = \"vita\", target_os = \"emscripten\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(target_os = \"netbsd\")": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(target_os = \"solaris\")": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(target_os = \"vxworks\")": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -10364,7 +10364,7 @@
               "target": "http"
             },
             {
-              "id": "indexmap 2.13.0",
+              "id": "indexmap 2.13.1",
               "target": "indexmap"
             },
             {
@@ -10372,7 +10372,7 @@
               "target": "slab"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -10567,7 +10567,7 @@
               "target": "http_body"
             },
             {
-              "id": "hyper 1.8.1",
+              "id": "hyper 1.9.0",
               "target": "hyper"
             },
             {
@@ -10611,7 +10611,7 @@
               "target": "thiserror"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -10619,7 +10619,7 @@
               "target": "tower"
             },
             {
-              "id": "turul-mcp-client 0.3.27",
+              "id": "turul-mcp-client 0.3.31",
               "target": "turul_mcp_client"
             },
             {
@@ -10707,7 +10707,7 @@
               "target": "serde_json"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -10798,11 +10798,11 @@
               "target": "syntect"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
-              "id": "turul-mcp-client 0.3.27",
+              "id": "turul-mcp-client 0.3.31",
               "target": "turul_mcp_client"
             },
             {
@@ -10906,7 +10906,7 @@
               "target": "tempfile"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -11825,14 +11825,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "hyper 1.8.1": {
+    "hyper 1.9.0": {
       "name": "hyper",
-      "version": "1.8.1",
+      "version": "1.9.0",
       "package_url": "https://github.com/hyperium/hyper",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/hyper/1.8.1/download",
-          "sha256": "2ab2d4f250c3d7b1c9fcdff1cece94ea4e2dfbec68614f7b87cb205f24ca9d11"
+          "url": "https://static.crates.io/crates/hyper/1.9.0/download",
+          "sha256": "6299f016b246a94207e63da54dbe807655bf9e00044f73ded42c3ac5305fbcca"
         }
       },
       "targets": [
@@ -11912,15 +11912,11 @@
               "target": "pin_project_lite"
             },
             {
-              "id": "pin-utils 0.1.0",
-              "target": "pin_utils"
-            },
-            {
               "id": "smallvec 1.15.1",
               "target": "smallvec"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -11931,7 +11927,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "1.8.1"
+        "version": "1.9.0"
       },
       "license": "MIT",
       "license_ids": [
@@ -11975,7 +11971,7 @@
               "target": "http"
             },
             {
-              "id": "hyper 1.8.1",
+              "id": "hyper 1.9.0",
               "target": "hyper"
             },
             {
@@ -11992,7 +11988,7 @@
               "alias": "pki_types"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -12057,7 +12053,7 @@
               "target": "http_body_util"
             },
             {
-              "id": "hyper 1.8.1",
+              "id": "hyper 1.9.0",
               "target": "hyper"
             },
             {
@@ -12069,7 +12065,7 @@
               "target": "native_tls"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -12183,7 +12179,7 @@
               "target": "http_body"
             },
             {
-              "id": "hyper 1.8.1",
+              "id": "hyper 1.9.0",
               "target": "hyper"
             },
             {
@@ -12191,7 +12187,7 @@
               "target": "pin_project_lite"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -12218,7 +12214,7 @@
                 "target": "ipnet"
               },
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -12256,7 +12252,7 @@
                 "target": "ipnet"
               },
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -12290,7 +12286,7 @@
                 "target": "ipnet"
               },
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -12328,7 +12324,7 @@
                 "target": "ipnet"
               },
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -12362,7 +12358,7 @@
                 "target": "ipnet"
               },
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -12429,7 +12425,7 @@
           "selects": {
             "cfg(all(target_arch = \"wasm32\", target_os = \"unknown\"))": [
               {
-                "id": "js-sys 0.3.92",
+                "id": "js-sys 0.3.94",
                 "target": "js_sys"
               },
               {
@@ -12437,7 +12433,7 @@
                 "target": "log"
               },
               {
-                "id": "wasm-bindgen 0.2.115",
+                "id": "wasm-bindgen 0.2.117",
                 "target": "wasm_bindgen"
               }
             ],
@@ -12543,7 +12539,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.58",
+              "id": "cc 1.2.59",
               "target": "cc"
             }
           ],
@@ -12557,14 +12553,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "icu_collections 2.1.1": {
+    "icu_collections 2.2.0": {
       "name": "icu_collections",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/icu_collections/2.1.1/download",
-          "sha256": "4c6b649701667bbe825c3b7e6388cb521c23d88644678e83c0c4d0a621a34b43"
+          "url": "https://static.crates.io/crates/icu_collections/2.2.0/download",
+          "sha256": "2984d1cd16c883d7935b9e07e44071dca8d917fd52ecc02c04d5fa0b5a3f191c"
         }
       },
       "targets": [
@@ -12589,19 +12585,23 @@
         "deps": {
           "common": [
             {
-              "id": "potential_utf 0.1.4",
+              "id": "potential_utf 0.1.5",
               "target": "potential_utf"
             },
             {
-              "id": "yoke 0.8.1",
+              "id": "utf8_iter 1.0.4",
+              "target": "utf8_iter"
+            },
+            {
+              "id": "yoke 0.8.2",
               "target": "yoke"
             },
             {
-              "id": "zerofrom 0.1.6",
+              "id": "zerofrom 0.1.7",
               "target": "zerofrom"
             },
             {
-              "id": "zerovec 0.11.5",
+              "id": "zerovec 0.11.6",
               "target": "zerovec"
             }
           ],
@@ -12617,7 +12617,7 @@
           ],
           "selects": {}
         },
-        "version": "2.1.1"
+        "version": "2.2.0"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -12625,14 +12625,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "icu_locale_core 2.1.1": {
+    "icu_locale_core 2.2.0": {
       "name": "icu_locale_core",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/icu_locale_core/2.1.1/download",
-          "sha256": "edba7861004dd3714265b4db54a3c390e880ab658fec5f7db895fae2046b5bb6"
+          "url": "https://static.crates.io/crates/icu_locale_core/2.2.0/download",
+          "sha256": "92219b62b3e2b4d88ac5119f8904c10f8f61bf7e95b640d25ba3075e6cac2c29"
         }
       },
       "targets": [
@@ -12663,19 +12663,19 @@
         "deps": {
           "common": [
             {
-              "id": "litemap 0.8.1",
+              "id": "litemap 0.8.2",
               "target": "litemap"
             },
             {
-              "id": "tinystr 0.8.2",
+              "id": "tinystr 0.8.3",
               "target": "tinystr"
             },
             {
-              "id": "writeable 0.6.2",
+              "id": "writeable 0.6.3",
               "target": "writeable"
             },
             {
-              "id": "zerovec 0.11.5",
+              "id": "zerovec 0.11.6",
               "target": "zerovec"
             }
           ],
@@ -12691,7 +12691,7 @@
           ],
           "selects": {}
         },
-        "version": "2.1.1"
+        "version": "2.2.0"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -12699,14 +12699,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "icu_normalizer 2.1.1": {
+    "icu_normalizer 2.2.0": {
       "name": "icu_normalizer",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/icu_normalizer/2.1.1/download",
-          "sha256": "5f6c8828b67bf8908d82127b2054ea1b4427ff0230ee9141c54251934ab1b599"
+          "url": "https://static.crates.io/crates/icu_normalizer/2.2.0/download",
+          "sha256": "c56e5ee99d6e3d33bd91c5d85458b6005a22140021cc324cea84dd0e72cff3b4"
         }
       },
       "targets": [
@@ -12737,15 +12737,15 @@
         "deps": {
           "common": [
             {
-              "id": "icu_collections 2.1.1",
+              "id": "icu_collections 2.2.0",
               "target": "icu_collections"
             },
             {
-              "id": "icu_normalizer_data 2.1.1",
+              "id": "icu_normalizer_data 2.2.0",
               "target": "icu_normalizer_data"
             },
             {
-              "id": "icu_provider 2.1.1",
+              "id": "icu_provider 2.2.0",
               "target": "icu_provider"
             },
             {
@@ -12753,14 +12753,14 @@
               "target": "smallvec"
             },
             {
-              "id": "zerovec 0.11.5",
+              "id": "zerovec 0.11.6",
               "target": "zerovec"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "2.1.1"
+        "version": "2.2.0"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -12768,14 +12768,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "icu_normalizer_data 2.1.1": {
+    "icu_normalizer_data 2.2.0": {
       "name": "icu_normalizer_data",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/icu_normalizer_data/2.1.1/download",
-          "sha256": "7aedcccd01fc5fe81e6b489c15b247b8b0690feb23304303a9e560f37efc560a"
+          "url": "https://static.crates.io/crates/icu_normalizer_data/2.2.0/download",
+          "sha256": "da3be0ae77ea334f4da67c12f149704f19f81d1adf7c51cf482943e84a2bad38"
         }
       },
       "targets": [
@@ -12812,14 +12812,14 @@
         "deps": {
           "common": [
             {
-              "id": "icu_normalizer_data 2.1.1",
+              "id": "icu_normalizer_data 2.2.0",
               "target": "build_script_build"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "2.1.1"
+        "version": "2.2.0"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -12838,14 +12838,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "icu_properties 2.1.2": {
+    "icu_properties 2.2.0": {
       "name": "icu_properties",
-      "version": "2.1.2",
+      "version": "2.2.0",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/icu_properties/2.1.2/download",
-          "sha256": "020bfc02fe870ec3a66d93e677ccca0562506e5872c650f893269e08615d74ec"
+          "url": "https://static.crates.io/crates/icu_properties/2.2.0/download",
+          "sha256": "bee3b67d0ea5c2cca5003417989af8996f8604e34fb9ddf96208a033901e70de"
         }
       },
       "targets": [
@@ -12876,34 +12876,34 @@
         "deps": {
           "common": [
             {
-              "id": "icu_collections 2.1.1",
+              "id": "icu_collections 2.2.0",
               "target": "icu_collections"
             },
             {
-              "id": "icu_locale_core 2.1.1",
+              "id": "icu_locale_core 2.2.0",
               "target": "icu_locale_core"
             },
             {
-              "id": "icu_properties_data 2.1.2",
+              "id": "icu_properties_data 2.2.0",
               "target": "icu_properties_data"
             },
             {
-              "id": "icu_provider 2.1.1",
+              "id": "icu_provider 2.2.0",
               "target": "icu_provider"
             },
             {
-              "id": "zerotrie 0.2.3",
+              "id": "zerotrie 0.2.4",
               "target": "zerotrie"
             },
             {
-              "id": "zerovec 0.11.5",
+              "id": "zerovec 0.11.6",
               "target": "zerovec"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "2.1.2"
+        "version": "2.2.0"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -12911,14 +12911,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "icu_properties_data 2.1.2": {
+    "icu_properties_data 2.2.0": {
       "name": "icu_properties_data",
-      "version": "2.1.2",
+      "version": "2.2.0",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/icu_properties_data/2.1.2/download",
-          "sha256": "616c294cf8d725c6afcd8f55abc17c56464ef6211f9ed59cccffe534129c77af"
+          "url": "https://static.crates.io/crates/icu_properties_data/2.2.0/download",
+          "sha256": "8e2bbb201e0c04f7b4b3e14382af113e17ba4f63e2c9d2ee626b720cbce54a14"
         }
       },
       "targets": [
@@ -12955,14 +12955,14 @@
         "deps": {
           "common": [
             {
-              "id": "icu_properties_data 2.1.2",
+              "id": "icu_properties_data 2.2.0",
               "target": "build_script_build"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "2.1.2"
+        "version": "2.2.0"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -12981,14 +12981,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "icu_provider 2.1.1": {
+    "icu_provider 2.2.0": {
       "name": "icu_provider",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/icu_provider/2.1.1/download",
-          "sha256": "85962cf0ce02e1e0a629cc34e7ca3e373ce20dda4c4d7294bbd0bf1fdb59e614"
+          "url": "https://static.crates.io/crates/icu_provider/2.2.0/download",
+          "sha256": "139c4cf31c8b5f33d7e199446eff9c1e02decfc2f0eec2c8d71f65befa45b421"
         }
       },
       "targets": [
@@ -13019,27 +13019,27 @@
         "deps": {
           "common": [
             {
-              "id": "icu_locale_core 2.1.1",
+              "id": "icu_locale_core 2.2.0",
               "target": "icu_locale_core"
             },
             {
-              "id": "writeable 0.6.2",
+              "id": "writeable 0.6.3",
               "target": "writeable"
             },
             {
-              "id": "yoke 0.8.1",
+              "id": "yoke 0.8.2",
               "target": "yoke"
             },
             {
-              "id": "zerofrom 0.1.6",
+              "id": "zerofrom 0.1.7",
               "target": "zerofrom"
             },
             {
-              "id": "zerotrie 0.2.3",
+              "id": "zerotrie 0.2.4",
               "target": "zerotrie"
             },
             {
-              "id": "zerovec 0.11.5",
+              "id": "zerovec 0.11.6",
               "target": "zerovec"
             }
           ],
@@ -13055,7 +13055,7 @@
           ],
           "selects": {}
         },
-        "version": "2.1.1"
+        "version": "2.2.0"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -13250,11 +13250,11 @@
         "deps": {
           "common": [
             {
-              "id": "icu_normalizer 2.1.1",
+              "id": "icu_normalizer 2.2.0",
               "target": "icu_normalizer"
             },
             {
-              "id": "icu_properties 2.1.2",
+              "id": "icu_properties 2.2.0",
               "target": "icu_properties"
             }
           ],
@@ -13499,14 +13499,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "indexmap 2.13.0": {
+    "indexmap 2.13.1": {
       "name": "indexmap",
-      "version": "2.13.0",
+      "version": "2.13.1",
       "package_url": "https://github.com/indexmap-rs/indexmap",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/indexmap/2.13.0/download",
-          "sha256": "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017"
+          "url": "https://static.crates.io/crates/indexmap/2.13.1/download",
+          "sha256": "45a8a2b9cb3e0b0c1803dbb0758ffac5de2f425b23c28f518faabd9d805342ff"
         }
       },
       "targets": [
@@ -13596,7 +13596,7 @@
           }
         },
         "edition": "2021",
-        "version": "2.13.0"
+        "version": "2.13.1"
       },
       "license": "Apache-2.0 OR MIT",
       "license_ids": [
@@ -13956,7 +13956,7 @@
               "target": "build_script_build"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             }
           ],
@@ -14029,14 +14029,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "iri-string 0.7.11": {
+    "iri-string 0.7.12": {
       "name": "iri-string",
-      "version": "0.7.11",
+      "version": "0.7.12",
       "package_url": "https://github.com/lo48576/iri-string",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/iri-string/0.7.11/download",
-          "sha256": "d8e7418f59cc01c88316161279a7f665217ae316b388e58a0d10e29f54f1e5eb"
+          "url": "https://static.crates.io/crates/iri-string/0.7.12/download",
+          "sha256": "25e659a4bb38e810ebc252e53b5814ff908a8c58c2a9ce2fae1bbec24cbf4e20"
         }
       },
       "targets": [
@@ -14067,7 +14067,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.7.11"
+        "version": "0.7.12"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -14110,7 +14110,7 @@
           "selects": {
             "cfg(any(unix, target_os = \"wasi\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -14322,7 +14322,7 @@
           "selects": {
             "cfg(unix)": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -14344,14 +14344,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "js-sys 0.3.92": {
+    "js-sys 0.3.94": {
       "name": "js-sys",
-      "version": "0.3.92",
+      "version": "0.3.94",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/js-sys/0.3.92/download",
-          "sha256": "cc4c90f45aa2e6eacbe8645f77fdea542ac97a494bcd117a67df9ff4d611f995"
+          "url": "https://static.crates.io/crates/js-sys/0.3.94/download",
+          "sha256": "2e04e2ef80ce82e13552136fabeef8a5ed1f985a96805761cbb9a2c34e7664d9"
         }
       },
       "targets": [
@@ -14397,14 +14397,14 @@
               "target": "once_cell"
             },
             {
-              "id": "wasm-bindgen 0.2.115",
+              "id": "wasm-bindgen 0.2.117",
               "target": "wasm_bindgen"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.3.92"
+        "version": "0.3.94"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -14809,14 +14809,14 @@
       ],
       "license_file": "LICENSE-BSD-3-Clause"
     },
-    "libc 0.2.183": {
+    "libc 0.2.184": {
       "name": "libc",
-      "version": "0.2.183",
+      "version": "0.2.184",
       "package_url": "https://github.com/rust-lang/libc",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/libc/0.2.183/download",
-          "sha256": "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d"
+          "url": "https://static.crates.io/crates/libc/0.2.184/download",
+          "sha256": "48f5d2a454e16a5ea0f4ced81bd44e4cfc7bd3a507b61887c99fd3538b28e4af"
         }
       },
       "targets": [
@@ -14873,14 +14873,14 @@
         "deps": {
           "common": [
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "build_script_build"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.2.183"
+        "version": "0.2.184"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -14970,7 +14970,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.58",
+              "id": "cc 1.2.59",
               "target": "cc"
             }
           ],
@@ -15101,7 +15101,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.58",
+              "id": "cc 1.2.59",
               "target": "cc"
             },
             {
@@ -15253,7 +15253,7 @@
               "target": "bitflags"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             }
           ],
@@ -15411,14 +15411,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "litemap 0.8.1": {
+    "litemap 0.8.2": {
       "name": "litemap",
-      "version": "0.8.1",
+      "version": "0.8.2",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/litemap/0.8.1/download",
-          "sha256": "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
+          "url": "https://static.crates.io/crates/litemap/0.8.2/download",
+          "sha256": "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
         }
       },
       "targets": [
@@ -15441,7 +15441,7 @@
           "**"
         ],
         "edition": "2021",
-        "version": "0.8.1"
+        "version": "0.8.2"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -16303,7 +16303,7 @@
             ],
             "cfg(any(unix, target_os = \"hermit\", target_os = \"wasi\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -16500,7 +16500,7 @@
             ],
             "cfg(target_vendor = \"apple\")": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -16681,7 +16681,7 @@
               "target": "cfg_if"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -16752,7 +16752,7 @@
               "target": "cfg_if"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -16854,7 +16854,7 @@
               "target": "cfg_if"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -17668,7 +17668,7 @@
           "selects": {
             "cfg(not(windows))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -17724,7 +17724,7 @@
           "selects": {
             "cfg(any(target_os = \"macos\", target_os = \"ios\", target_os = \"freebsd\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -18309,7 +18309,7 @@
           "selects": {
             "cfg(windows)": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -18390,7 +18390,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.58",
+              "id": "cc 1.2.59",
               "target": "cc"
             },
             {
@@ -18508,7 +18508,7 @@
               "target": "foreign_types"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -18705,7 +18705,7 @@
         "deps": {
           "common": [
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -18731,7 +18731,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.58",
+              "id": "cc 1.2.59",
               "target": "cc"
             },
             {
@@ -19110,7 +19110,7 @@
             ],
             "cfg(unix)": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -19880,45 +19880,6 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "pin-utils 0.1.0": {
-      "name": "pin-utils",
-      "version": "0.1.0",
-      "package_url": "https://github.com/rust-lang-nursery/pin-utils",
-      "repository": {
-        "Http": {
-          "url": "https://static.crates.io/crates/pin-utils/0.1.0/download",
-          "sha256": "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
-        }
-      },
-      "targets": [
-        {
-          "Library": {
-            "crate_name": "pin_utils",
-            "crate_root": "src/lib.rs",
-            "srcs": {
-              "allow_empty": true,
-              "include": [
-                "**/*.rs"
-              ]
-            }
-          }
-        }
-      ],
-      "library_target_name": "pin_utils",
-      "common_attrs": {
-        "compile_data_glob": [
-          "**"
-        ],
-        "edition": "2018",
-        "version": "0.1.0"
-      },
-      "license": "MIT OR Apache-2.0",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "license_file": "LICENSE-APACHE"
-    },
     "piper 0.2.5": {
       "name": "piper",
       "version": "0.2.5",
@@ -19963,7 +19924,7 @@
               "target": "atomic_waker"
             },
             {
-              "id": "fastrand 2.3.0",
+              "id": "fastrand 2.4.0",
               "target": "fastrand"
             },
             {
@@ -20065,7 +20026,7 @@
               "target": "base64"
             },
             {
-              "id": "indexmap 2.13.0",
+              "id": "indexmap 2.13.1",
               "target": "indexmap"
             },
             {
@@ -20148,11 +20109,11 @@
           "selects": {
             "cfg(all(target_arch = \"wasm32\", not(target_os = \"wasi\")))": [
               {
-                "id": "wasm-bindgen 0.2.115",
+                "id": "wasm-bindgen 0.2.117",
                 "target": "wasm_bindgen"
               },
               {
-                "id": "web-sys 0.3.92",
+                "id": "web-sys 0.3.94",
                 "target": "web_sys"
               }
             ]
@@ -20382,7 +20343,7 @@
           "selects": {
             "cfg(any(unix, target_os = \"fuchsia\", target_os = \"vxworks\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -20582,14 +20543,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "potential_utf 0.1.4": {
+    "potential_utf 0.1.5": {
       "name": "potential_utf",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/potential_utf/0.1.4/download",
-          "sha256": "b73949432f5e2a09657003c25bca5e19a0e9c84f8058ca374f49e0ebe605af77"
+          "url": "https://static.crates.io/crates/potential_utf/0.1.5/download",
+          "sha256": "0103b1cef7ec0cf76490e969665504990193874ea05c85ff9bab8b911d0a0564"
         }
       },
       "targets": [
@@ -20620,14 +20581,14 @@
         "deps": {
           "common": [
             {
-              "id": "zerovec 0.11.5",
+              "id": "zerovec 0.11.6",
               "target": "zerovec"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.1.4"
+        "version": "0.1.5"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -21693,7 +21654,7 @@
           "selects": {
             "aarch64-unknown-linux-gnu": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -21703,7 +21664,7 @@
             ],
             "x86_64-unknown-linux-gnu": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -21713,7 +21674,7 @@
             ],
             "x86_64-unknown-nixos-gnu": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -22696,7 +22657,7 @@
               "target": "itertools"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -23514,7 +23475,7 @@
                 "target": "http_body_util"
               },
               {
-                "id": "hyper 1.8.1",
+                "id": "hyper 1.9.0",
                 "target": "hyper"
               },
               {
@@ -23534,7 +23495,7 @@
                 "target": "pin_project_lite"
               },
               {
-                "id": "tokio 1.50.0",
+                "id": "tokio 1.51.0",
                 "target": "tokio"
               },
               {
@@ -23552,19 +23513,19 @@
             ],
             "cfg(target_arch = \"wasm32\")": [
               {
-                "id": "js-sys 0.3.92",
+                "id": "js-sys 0.3.94",
                 "target": "js_sys"
               },
               {
-                "id": "wasm-bindgen 0.2.115",
+                "id": "wasm-bindgen 0.2.117",
                 "target": "wasm_bindgen"
               },
               {
-                "id": "wasm-bindgen-futures 0.4.65",
+                "id": "wasm-bindgen-futures 0.4.67",
                 "target": "wasm_bindgen_futures"
               },
               {
-                "id": "web-sys 0.3.92",
+                "id": "web-sys 0.3.94",
                 "target": "web_sys"
               }
             ],
@@ -23771,7 +23732,7 @@
                 "target": "http_body_util"
               },
               {
-                "id": "hyper 1.8.1",
+                "id": "hyper 1.9.0",
                 "target": "hyper"
               },
               {
@@ -23791,7 +23752,7 @@
                 "target": "pin_project_lite"
               },
               {
-                "id": "tokio 1.50.0",
+                "id": "tokio 1.51.0",
                 "target": "tokio"
               },
               {
@@ -23809,19 +23770,19 @@
             ],
             "cfg(target_arch = \"wasm32\")": [
               {
-                "id": "js-sys 0.3.92",
+                "id": "js-sys 0.3.94",
                 "target": "js_sys"
               },
               {
-                "id": "wasm-bindgen 0.2.115",
+                "id": "wasm-bindgen 0.2.117",
                 "target": "wasm_bindgen"
               },
               {
-                "id": "wasm-bindgen-futures 0.4.65",
+                "id": "wasm-bindgen-futures 0.4.67",
                 "target": "wasm_bindgen_futures"
               },
               {
-                "id": "web-sys 0.3.92",
+                "id": "web-sys 0.3.94",
                 "target": "web_sys"
               }
             ],
@@ -23982,13 +23943,13 @@
             ],
             "cfg(all(all(target_arch = \"aarch64\", target_endian = \"little\"), target_vendor = \"apple\", any(target_os = \"ios\", target_os = \"macos\", target_os = \"tvos\", target_os = \"visionos\", target_os = \"watchos\")))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
             "cfg(all(any(all(target_arch = \"aarch64\", target_endian = \"little\"), all(target_arch = \"arm\", target_endian = \"little\")), any(target_os = \"android\", target_os = \"linux\")))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -24010,7 +23971,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.58",
+              "id": "cc 1.2.59",
               "target": "cc"
             }
           ],
@@ -24025,14 +23986,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "ron 0.12.0": {
+    "ron 0.12.1": {
       "name": "ron",
-      "version": "0.12.0",
+      "version": "0.12.1",
       "package_url": "https://github.com/ron-rs/ron",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/ron/0.12.0/download",
-          "sha256": "fd490c5b18261893f14449cbd28cb9c0b637aebf161cd77900bfdedaff21ec32"
+          "url": "https://static.crates.io/crates/ron/0.12.1/download",
+          "sha256": "4147b952f3f819eca0e99527022f7d6a8d05f111aeb0a62960c74eb283bec8fc"
         }
       },
       "targets": [
@@ -24096,7 +24057,7 @@
           ],
           "selects": {}
         },
-        "version": "0.12.0"
+        "version": "0.12.1"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -24268,7 +24229,7 @@
         "deps": {
           "common": [
             {
-              "id": "semver 1.0.27",
+              "id": "semver 1.0.28",
               "target": "semver"
             }
           ],
@@ -24368,7 +24329,7 @@
                 "alias": "libc_errno"
               },
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -24478,7 +24439,7 @@
                 "alias": "libc_errno"
               },
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -24611,7 +24572,7 @@
                 "alias": "libc_errno"
               },
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -24634,7 +24595,7 @@
                 "alias": "libc_errno"
               },
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -24656,7 +24617,7 @@
                 "alias": "libc_errno"
               },
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -25015,7 +24976,7 @@
               "target": "home"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -25395,7 +25356,7 @@
               "target": "core_foundation_sys"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -25468,7 +25429,7 @@
               "target": "core_foundation_sys"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -25535,7 +25496,7 @@
               "target": "core_foundation_sys"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             }
           ],
@@ -25551,14 +25512,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "semver 1.0.27": {
+    "semver 1.0.28": {
       "name": "semver",
-      "version": "1.0.27",
+      "version": "1.0.28",
       "package_url": "https://github.com/dtolnay/semver",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/semver/1.0.27/download",
-          "sha256": "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
+          "url": "https://static.crates.io/crates/semver/1.0.28/download",
+          "sha256": "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
         }
       },
       "targets": [
@@ -25587,8 +25548,8 @@
           ],
           "selects": {}
         },
-        "edition": "2018",
-        "version": "1.0.27"
+        "edition": "2021",
+        "version": "1.0.28"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -26124,14 +26085,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "serde_spanned 1.1.0": {
+    "serde_spanned 1.1.1": {
       "name": "serde_spanned",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "package_url": "https://github.com/toml-rs/toml",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/serde_spanned/1.1.0/download",
-          "sha256": "876ac351060d4f882bb1032b6369eb0aef79ad9df1ea8bc404874d8cc3d0cd98"
+          "url": "https://static.crates.io/crates/serde_spanned/1.1.1/download",
+          "sha256": "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
         }
       },
       "targets": [
@@ -26170,7 +26131,7 @@
           "selects": {}
         },
         "edition": "2024",
-        "version": "1.1.0"
+        "version": "1.1.1"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -26479,7 +26440,7 @@
         "deps": {
           "common": [
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -26553,7 +26514,7 @@
         "deps": {
           "common": [
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -26614,7 +26575,7 @@
               "target": "errno"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             }
           ],
@@ -26900,7 +26861,7 @@
           "selects": {
             "cfg(unix)": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -26976,7 +26937,7 @@
           "selects": {
             "cfg(any(unix, target_os = \"wasi\"))": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -27780,7 +27741,7 @@
               "target": "core_foundation_sys"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -27850,7 +27811,7 @@
         "deps": {
           "common": [
             {
-              "id": "fastrand 2.3.0",
+              "id": "fastrand 2.4.0",
               "target": "fastrand"
             },
             {
@@ -28042,7 +28003,7 @@
         "deps": {
           "common": [
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             }
           ],
@@ -28163,7 +28124,7 @@
               "target": "lazy_static"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -28707,7 +28668,7 @@
           "selects": {
             "aarch64-apple-darwin": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -28717,7 +28678,7 @@
             ],
             "aarch64-unknown-linux-gnu": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -28727,7 +28688,7 @@
             ],
             "x86_64-unknown-linux-gnu": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -28737,7 +28698,7 @@
             ],
             "x86_64-unknown-nixos-gnu": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -28929,14 +28890,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "tinystr 0.8.2": {
+    "tinystr 0.8.3": {
       "name": "tinystr",
-      "version": "0.8.2",
+      "version": "0.8.3",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/tinystr/0.8.2/download",
-          "sha256": "42d3e9c45c09de15d06dd8acf5f4e0e399e85927b7f00711024eb7ae10fa4869"
+          "url": "https://static.crates.io/crates/tinystr/0.8.3/download",
+          "sha256": "c8323304221c2a851516f22236c5722a72eaa19749016521d6dff0824447d96d"
         }
       },
       "targets": [
@@ -28967,7 +28928,7 @@
         "deps": {
           "common": [
             {
-              "id": "zerovec 0.11.5",
+              "id": "zerovec 0.11.6",
               "target": "zerovec"
             }
           ],
@@ -28983,7 +28944,7 @@
           ],
           "selects": {}
         },
-        "version": "0.8.2"
+        "version": "0.8.3"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -29043,14 +29004,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "tokio 1.50.0": {
+    "tokio 1.51.0": {
       "name": "tokio",
-      "version": "1.50.0",
+      "version": "1.51.0",
       "package_url": "https://github.com/tokio-rs/tokio",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/tokio/1.50.0/download",
-          "sha256": "27ad5e34374e03cfffefc301becb44e9dc3c17584f414349ebe29ed26661822d"
+          "url": "https://static.crates.io/crates/tokio/1.51.0/download",
+          "sha256": "2bd1c4c0fc4a7ab90fc15ef6daaa3ec3b893f004f915f2392557ed23237820cd"
         }
       },
       "targets": [
@@ -29123,7 +29084,7 @@
           "selects": {
             "aarch64-apple-darwin": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -29137,7 +29098,7 @@
             ],
             "aarch64-unknown-linux-gnu": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -29147,6 +29108,12 @@
               {
                 "id": "socket2 0.6.3",
                 "target": "socket2"
+              }
+            ],
+            "wasm32-wasip1": [
+              {
+                "id": "libc 0.2.184",
+                "target": "libc"
               }
             ],
             "x86_64-pc-windows-msvc": [
@@ -29161,7 +29128,7 @@
             ],
             "x86_64-unknown-linux-gnu": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -29175,7 +29142,7 @@
             ],
             "x86_64-unknown-nixos-gnu": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               },
               {
@@ -29193,13 +29160,13 @@
         "proc_macro_deps": {
           "common": [
             {
-              "id": "tokio-macros 2.6.1",
+              "id": "tokio-macros 2.7.0",
               "target": "tokio_macros"
             }
           ],
           "selects": {}
         },
-        "version": "1.50.0"
+        "version": "1.51.0"
       },
       "license": "MIT",
       "license_ids": [
@@ -29207,14 +29174,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "tokio-macros 2.6.1": {
+    "tokio-macros 2.7.0": {
       "name": "tokio-macros",
-      "version": "2.6.1",
+      "version": "2.7.0",
       "package_url": "https://github.com/tokio-rs/tokio",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/tokio-macros/2.6.1/download",
-          "sha256": "5c55a2eff8b69ce66c84f85e1da1c233edc36ceb85a2058d11b0d6a3c7e7569c"
+          "url": "https://static.crates.io/crates/tokio-macros/2.7.0/download",
+          "sha256": "385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496"
         }
       },
       "targets": [
@@ -29254,7 +29221,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "2.6.1"
+        "version": "2.7.0"
       },
       "license": "MIT",
       "license_ids": [
@@ -29298,7 +29265,7 @@
               "target": "native_tls"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             }
           ],
@@ -29349,7 +29316,7 @@
               "target": "rustls"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             }
           ],
@@ -29448,7 +29415,7 @@
               "target": "slab"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             }
           ],
@@ -29463,14 +29430,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "toml 1.1.0+spec-1.1.0": {
+    "toml 1.1.2+spec-1.1.0": {
       "name": "toml",
-      "version": "1.1.0+spec-1.1.0",
+      "version": "1.1.2+spec-1.1.0",
       "package_url": "https://github.com/toml-rs/toml",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/toml/1.1.0+spec-1.1.0/download",
-          "sha256": "f8195ca05e4eb728f4ba94f3e3291661320af739c4e43779cbdfae82ab239fcc"
+          "url": "https://static.crates.io/crates/toml/1.1.2+spec-1.1.0/download",
+          "sha256": "81f3d15e84cbcd896376e6730314d59fb5a87f31e4b038454184435cd57defee"
         }
       },
       "targets": [
@@ -29506,26 +29473,26 @@
               "target": "serde_core"
             },
             {
-              "id": "serde_spanned 1.1.0",
+              "id": "serde_spanned 1.1.1",
               "target": "serde_spanned"
             },
             {
-              "id": "toml_datetime 1.1.0+spec-1.1.0",
+              "id": "toml_datetime 1.1.1+spec-1.1.0",
               "target": "toml_datetime"
             },
             {
-              "id": "toml_parser 1.1.0+spec-1.1.0",
+              "id": "toml_parser 1.1.2+spec-1.1.0",
               "target": "toml_parser"
             },
             {
-              "id": "winnow 1.0.0",
+              "id": "winnow 1.0.1",
               "target": "winnow"
             }
           ],
           "selects": {}
         },
         "edition": "2024",
-        "version": "1.1.0+spec-1.1.0"
+        "version": "1.1.2+spec-1.1.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -29573,14 +29540,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "toml_datetime 1.1.0+spec-1.1.0": {
+    "toml_datetime 1.1.1+spec-1.1.0": {
       "name": "toml_datetime",
-      "version": "1.1.0+spec-1.1.0",
+      "version": "1.1.1+spec-1.1.0",
       "package_url": "https://github.com/toml-rs/toml",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/toml_datetime/1.1.0+spec-1.1.0/download",
-          "sha256": "97251a7c317e03ad83774a8752a7e81fb6067740609f75ea2b585b569a59198f"
+          "url": "https://static.crates.io/crates/toml_datetime/1.1.1+spec-1.1.0/download",
+          "sha256": "3165f65f62e28e0115a00b2ebdd37eb6f3b641855f9d636d3cd4103767159ad7"
         }
       },
       "targets": [
@@ -29619,7 +29586,7 @@
           "selects": {}
         },
         "edition": "2024",
-        "version": "1.1.0+spec-1.1.0"
+        "version": "1.1.1+spec-1.1.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -29666,7 +29633,7 @@
         "deps": {
           "common": [
             {
-              "id": "indexmap 2.13.0",
+              "id": "indexmap 2.13.1",
               "target": "indexmap"
             },
             {
@@ -29690,14 +29657,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "toml_parser 1.1.0+spec-1.1.0": {
+    "toml_parser 1.1.2+spec-1.1.0": {
       "name": "toml_parser",
-      "version": "1.1.0+spec-1.1.0",
+      "version": "1.1.2+spec-1.1.0",
       "package_url": "https://github.com/toml-rs/toml",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/toml_parser/1.1.0+spec-1.1.0/download",
-          "sha256": "2334f11ee363607eb04df9b8fc8a13ca1715a72ba8662a26ac285c98aabb4011"
+          "url": "https://static.crates.io/crates/toml_parser/1.1.2+spec-1.1.0/download",
+          "sha256": "a2abe9b86193656635d2411dc43050282ca48aa31c2451210f4202550afb7526"
         }
       },
       "targets": [
@@ -29728,14 +29695,14 @@
         "deps": {
           "common": [
             {
-              "id": "winnow 1.0.0",
+              "id": "winnow 1.0.1",
               "target": "winnow"
             }
           ],
           "selects": {}
         },
         "edition": "2024",
-        "version": "1.1.0+spec-1.1.0"
+        "version": "1.1.2+spec-1.1.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -29827,7 +29794,7 @@
               "target": "sync_wrapper"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -29915,7 +29882,7 @@
               "target": "http_body"
             },
             {
-              "id": "iri-string 0.7.11",
+              "id": "iri-string 0.7.12",
               "target": "iri_string"
             },
             {
@@ -30243,14 +30210,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "turul-mcp-client 0.3.27": {
+    "turul-mcp-client 0.3.31": {
       "name": "turul-mcp-client",
-      "version": "0.3.27",
+      "version": "0.3.31",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-client/0.3.27/download",
-          "sha256": "ee7a619124401e20797ad39961a295a9a0866077b8753511357fd07890d85beb"
+          "url": "https://static.crates.io/crates/turul-mcp-client/0.3.31/download",
+          "sha256": "986da0e962e5ba30b4fd050bde39f9b9b0989853d64574b5664ad02bc96fb2e1"
         }
       },
       "targets": [
@@ -30292,7 +30259,7 @@
               "target": "futures"
             },
             {
-              "id": "hyper 1.8.1",
+              "id": "hyper 1.9.0",
               "target": "hyper"
             },
             {
@@ -30320,7 +30287,7 @@
               "target": "thiserror"
             },
             {
-              "id": "tokio 1.50.0",
+              "id": "tokio 1.51.0",
               "target": "tokio"
             },
             {
@@ -30332,11 +30299,11 @@
               "target": "tracing"
             },
             {
-              "id": "turul-mcp-json-rpc-server 0.3.27",
+              "id": "turul-mcp-json-rpc-server 0.3.31",
               "target": "turul_mcp_json_rpc_server"
             },
             {
-              "id": "turul-mcp-protocol 0.3.27",
+              "id": "turul-mcp-protocol 0.3.31",
               "target": "turul_mcp_protocol"
             },
             {
@@ -30356,7 +30323,7 @@
           ],
           "selects": {}
         },
-        "version": "0.3.27"
+        "version": "0.3.31"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -30443,14 +30410,14 @@
       ],
       "license_file": null
     },
-    "turul-mcp-json-rpc-server 0.3.27": {
+    "turul-mcp-json-rpc-server 0.3.31": {
       "name": "turul-mcp-json-rpc-server",
-      "version": "0.3.27",
+      "version": "0.3.31",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-json-rpc-server/0.3.27/download",
-          "sha256": "86bd1d79361c0c0f6a8bb3c7ac630398dff04ebd242613d7d249da156d06cfd3"
+          "url": "https://static.crates.io/crates/turul-mcp-json-rpc-server/0.3.31/download",
+          "sha256": "429efd9effc97d7b4f6eaae34645265fcf3798901a57a9c810375706fe6d3f0f"
         }
       },
       "targets": [
@@ -30512,7 +30479,7 @@
           ],
           "selects": {}
         },
-        "version": "0.3.27"
+        "version": "0.3.31"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -30521,14 +30488,14 @@
       ],
       "license_file": null
     },
-    "turul-mcp-protocol 0.3.27": {
+    "turul-mcp-protocol 0.3.31": {
       "name": "turul-mcp-protocol",
-      "version": "0.3.27",
+      "version": "0.3.31",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-protocol/0.3.27/download",
-          "sha256": "ff7052c63fcbe77b78149960c1b807985678b69e5f85fd6c606fbc02107cd47a"
+          "url": "https://static.crates.io/crates/turul-mcp-protocol/0.3.31/download",
+          "sha256": "e757731abce7bccb36410f720876ebdcebe307f46a7198dc5269e2fe92af264a"
         }
       },
       "targets": [
@@ -30559,14 +30526,14 @@
         "deps": {
           "common": [
             {
-              "id": "turul-mcp-protocol-2025-11-25 0.3.27",
+              "id": "turul-mcp-protocol-2025-11-25 0.3.31",
               "target": "turul_mcp_protocol_2025_11_25"
             }
           ],
           "selects": {}
         },
         "edition": "2024",
-        "version": "0.3.27"
+        "version": "0.3.31"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -30575,14 +30542,14 @@
       ],
       "license_file": null
     },
-    "turul-mcp-protocol-2025-11-25 0.3.27": {
+    "turul-mcp-protocol-2025-11-25 0.3.31": {
       "name": "turul-mcp-protocol-2025-11-25",
-      "version": "0.3.27",
+      "version": "0.3.31",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-protocol-2025-11-25/0.3.27/download",
-          "sha256": "c77264a3124d38e60a64ff7143c745ce76fcb6367bf309a431d4794b37949625"
+          "url": "https://static.crates.io/crates/turul-mcp-protocol-2025-11-25/0.3.31/download",
+          "sha256": "de2c9400221c48c66e1f182e0bf1d1ce77fdd520e305e6f8f629b7e45ccd6922"
         }
       },
       "targets": [
@@ -30625,7 +30592,7 @@
               "target": "thiserror"
             },
             {
-              "id": "turul-mcp-json-rpc-server 0.3.27",
+              "id": "turul-mcp-json-rpc-server 0.3.31",
               "target": "turul_mcp_json_rpc_server"
             }
           ],
@@ -30641,7 +30608,7 @@
           ],
           "selects": {}
         },
-        "version": "0.3.27"
+        "version": "0.3.31"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -31482,7 +31449,7 @@
           "selects": {
             "wasm32-unknown-unknown": [
               {
-                "id": "wasm-bindgen 0.2.115",
+                "id": "wasm-bindgen 0.2.117",
                 "target": "wasm_bindgen"
               }
             ]
@@ -31656,7 +31623,7 @@
           "selects": {
             "cfg(unix)": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ]
@@ -31955,14 +31922,14 @@
       ],
       "license_file": null
     },
-    "wasm-bindgen 0.2.115": {
+    "wasm-bindgen 0.2.117": {
       "name": "wasm-bindgen",
-      "version": "0.2.115",
+      "version": "0.2.117",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasm-bindgen/0.2.115/download",
-          "sha256": "6523d69017b7633e396a89c5efab138161ed5aafcbc8d3e5c5a42ae38f50495a"
+          "url": "https://static.crates.io/crates/wasm-bindgen/0.2.117/download",
+          "sha256": "0551fc1bb415591e3372d0bc4780db7e587d84e2a7e79da121051c5c4b89d0b0"
         }
       },
       "targets": [
@@ -32014,11 +31981,11 @@
               "target": "once_cell"
             },
             {
-              "id": "wasm-bindgen 0.2.115",
+              "id": "wasm-bindgen 0.2.117",
               "target": "build_script_build"
             },
             {
-              "id": "wasm-bindgen-shared 0.2.115",
+              "id": "wasm-bindgen-shared 0.2.117",
               "target": "wasm_bindgen_shared"
             }
           ],
@@ -32028,13 +31995,13 @@
         "proc_macro_deps": {
           "common": [
             {
-              "id": "wasm-bindgen-macro 0.2.115",
+              "id": "wasm-bindgen-macro 0.2.117",
               "target": "wasm_bindgen_macro"
             }
           ],
           "selects": {}
         },
-        "version": "0.2.115"
+        "version": "0.2.117"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -32049,7 +32016,7 @@
         "link_deps": {
           "common": [
             {
-              "id": "wasm-bindgen-shared 0.2.115",
+              "id": "wasm-bindgen-shared 0.2.117",
               "target": "wasm_bindgen_shared"
             }
           ],
@@ -32073,14 +32040,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "wasm-bindgen-futures 0.4.65": {
+    "wasm-bindgen-futures 0.4.67": {
       "name": "wasm-bindgen-futures",
-      "version": "0.4.65",
+      "version": "0.4.67",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasm-bindgen-futures/0.4.65/download",
-          "sha256": "2d1faf851e778dfa54db7cd438b70758eba9755cb47403f3496edd7c8fc212f0"
+          "url": "https://static.crates.io/crates/wasm-bindgen-futures/0.4.67/download",
+          "sha256": "03623de6905b7206edd0a75f69f747f134b7f0a2323392d664448bf2d3c5d87e"
         }
       },
       "targets": [
@@ -32112,18 +32079,18 @@
         "deps": {
           "common": [
             {
-              "id": "js-sys 0.3.92",
+              "id": "js-sys 0.3.94",
               "target": "js_sys"
             },
             {
-              "id": "wasm-bindgen 0.2.115",
+              "id": "wasm-bindgen 0.2.117",
               "target": "wasm_bindgen"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.4.65"
+        "version": "0.4.67"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32132,14 +32099,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "wasm-bindgen-macro 0.2.115": {
+    "wasm-bindgen-macro 0.2.117": {
       "name": "wasm-bindgen-macro",
-      "version": "0.2.115",
+      "version": "0.2.117",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasm-bindgen-macro/0.2.115/download",
-          "sha256": "4e3a6c758eb2f701ed3d052ff5737f5bfe6614326ea7f3bbac7156192dc32e67"
+          "url": "https://static.crates.io/crates/wasm-bindgen-macro/0.2.117/download",
+          "sha256": "7fbdf9a35adf44786aecd5ff89b4563a90325f9da0923236f6104e603c7e86be"
         }
       },
       "targets": [
@@ -32168,14 +32135,14 @@
               "target": "quote"
             },
             {
-              "id": "wasm-bindgen-macro-support 0.2.115",
+              "id": "wasm-bindgen-macro-support 0.2.117",
               "target": "wasm_bindgen_macro_support"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.2.115"
+        "version": "0.2.117"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32184,14 +32151,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "wasm-bindgen-macro-support 0.2.115": {
+    "wasm-bindgen-macro-support 0.2.117": {
       "name": "wasm-bindgen-macro-support",
-      "version": "0.2.115",
+      "version": "0.2.117",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasm-bindgen-macro-support/0.2.115/download",
-          "sha256": "921de2737904886b52bcbb237301552d05969a6f9c40d261eb0533c8b055fedf"
+          "url": "https://static.crates.io/crates/wasm-bindgen-macro-support/0.2.117/download",
+          "sha256": "dca9693ef2bab6d4e6707234500350d8dad079eb508dca05530c85dc3a529ff2"
         }
       },
       "targets": [
@@ -32232,14 +32199,14 @@
               "target": "syn"
             },
             {
-              "id": "wasm-bindgen-shared 0.2.115",
+              "id": "wasm-bindgen-shared 0.2.117",
               "target": "wasm_bindgen_shared"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.2.115"
+        "version": "0.2.117"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32248,14 +32215,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "wasm-bindgen-shared 0.2.115": {
+    "wasm-bindgen-shared 0.2.117": {
       "name": "wasm-bindgen-shared",
-      "version": "0.2.115",
+      "version": "0.2.117",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasm-bindgen-shared/0.2.115/download",
-          "sha256": "a93e946af942b58934c604527337bad9ae33ba1d5c6900bbb41c2c07c2364a93"
+          "url": "https://static.crates.io/crates/wasm-bindgen-shared/0.2.117/download",
+          "sha256": "39129a682a6d2d841b6c429d0c51e5cb0ed1a03829d8b3d1e69a011e62cb3d3b"
         }
       },
       "targets": [
@@ -32296,14 +32263,14 @@
               "target": "unicode_ident"
             },
             {
-              "id": "wasm-bindgen-shared 0.2.115",
+              "id": "wasm-bindgen-shared 0.2.117",
               "target": "build_script_build"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.2.115"
+        "version": "0.2.117"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -32420,7 +32387,7 @@
               "target": "anyhow"
             },
             {
-              "id": "indexmap 2.13.0",
+              "id": "indexmap 2.13.1",
               "target": "indexmap"
             },
             {
@@ -32480,19 +32447,19 @@
               "target": "futures_util"
             },
             {
-              "id": "js-sys 0.3.92",
+              "id": "js-sys 0.3.94",
               "target": "js_sys"
             },
             {
-              "id": "wasm-bindgen 0.2.115",
+              "id": "wasm-bindgen 0.2.117",
               "target": "wasm_bindgen"
             },
             {
-              "id": "wasm-bindgen-futures 0.4.65",
+              "id": "wasm-bindgen-futures 0.4.67",
               "target": "wasm_bindgen_futures"
             },
             {
-              "id": "web-sys 0.3.92",
+              "id": "web-sys 0.3.94",
               "target": "web_sys"
             }
           ],
@@ -32559,11 +32526,11 @@
               "target": "hashbrown"
             },
             {
-              "id": "indexmap 2.13.0",
+              "id": "indexmap 2.13.1",
               "target": "indexmap"
             },
             {
-              "id": "semver 1.0.27",
+              "id": "semver 1.0.28",
               "target": "semver"
             }
           ],
@@ -32579,14 +32546,14 @@
       ],
       "license_file": null
     },
-    "web-sys 0.3.92": {
+    "web-sys 0.3.94": {
       "name": "web-sys",
-      "version": "0.3.92",
+      "version": "0.3.94",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/web-sys/0.3.92/download",
-          "sha256": "84cde8507f4d7cfcb1185b8cb5890c494ffea65edbe1ba82cfd63661c805ed94"
+          "url": "https://static.crates.io/crates/web-sys/0.3.94/download",
+          "sha256": "cd70027e39b12f0849461e08ffc50b9cd7688d942c1c8e3c7b22273236b4dd0a"
         }
       },
       "targets": [
@@ -32667,18 +32634,18 @@
         "deps": {
           "common": [
             {
-              "id": "js-sys 0.3.92",
+              "id": "js-sys 0.3.94",
               "target": "js_sys"
             },
             {
-              "id": "wasm-bindgen 0.2.115",
+              "id": "wasm-bindgen 0.2.117",
               "target": "wasm_bindgen"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.3.92"
+        "version": "0.3.94"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -36050,14 +36017,14 @@
       ],
       "license_file": "LICENSE-MIT"
     },
-    "winnow 1.0.0": {
+    "winnow 1.0.1": {
       "name": "winnow",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "package_url": "https://github.com/winnow-rs/winnow",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/winnow/1.0.0/download",
-          "sha256": "a90e88e4667264a994d34e6d1ab2d26d398dcdca8b7f52bec8668957517fc7d8"
+          "url": "https://static.crates.io/crates/winnow/1.0.1/download",
+          "sha256": "09dac053f1cd375980747450bfc7250c264eaae0583872e845c0c7cd578872b5"
         }
       },
       "targets": [
@@ -36091,7 +36058,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "1.0.0"
+        "version": "1.0.1"
       },
       "license": "MIT",
       "license_ids": [
@@ -36278,7 +36245,7 @@
               "target": "heck"
             },
             {
-              "id": "indexmap 2.13.0",
+              "id": "indexmap 2.13.1",
               "target": "indexmap"
             },
             {
@@ -36486,7 +36453,7 @@
               "target": "bitflags"
             },
             {
-              "id": "indexmap 2.13.0",
+              "id": "indexmap 2.13.1",
               "target": "indexmap"
             },
             {
@@ -36588,7 +36555,7 @@
               "target": "id_arena"
             },
             {
-              "id": "indexmap 2.13.0",
+              "id": "indexmap 2.13.1",
               "target": "indexmap"
             },
             {
@@ -36596,7 +36563,7 @@
               "target": "log"
             },
             {
-              "id": "semver 1.0.27",
+              "id": "semver 1.0.28",
               "target": "semver"
             },
             {
@@ -36637,14 +36604,14 @@
       ],
       "license_file": null
     },
-    "writeable 0.6.2": {
+    "writeable 0.6.3": {
       "name": "writeable",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/writeable/0.6.2/download",
-          "sha256": "9edde0db4769d2dc68579893f2306b26c6ecfbe0ef499b013d731b7b9247e0b9"
+          "url": "https://static.crates.io/crates/writeable/0.6.3/download",
+          "sha256": "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
         }
       },
       "targets": [
@@ -36667,7 +36634,7 @@
           "**"
         ],
         "edition": "2021",
-        "version": "0.6.2"
+        "version": "0.6.3"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -36810,7 +36777,7 @@
           "selects": {
             "cfg(unix)": [
               {
-                "id": "libc 0.2.183",
+                "id": "libc 0.2.184",
                 "target": "libc"
               }
             ],
@@ -36980,14 +36947,14 @@
       ],
       "license_file": null
     },
-    "yoke 0.8.1": {
+    "yoke 0.8.2": {
       "name": "yoke",
-      "version": "0.8.1",
+      "version": "0.8.2",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/yoke/0.8.1/download",
-          "sha256": "72d6e5c6afb84d73944e5cedb052c4680d5657337201555f9f2a16b7406d4954"
+          "url": "https://static.crates.io/crates/yoke/0.8.2/download",
+          "sha256": "abe8c5fda708d9ca3df187cae8bfb9ceda00dd96231bed36e445a1a48e66f9ca"
         }
       },
       "targets": [
@@ -37023,7 +36990,7 @@
               "target": "stable_deref_trait"
             },
             {
-              "id": "zerofrom 0.1.6",
+              "id": "zerofrom 0.1.7",
               "target": "zerofrom"
             }
           ],
@@ -37033,13 +37000,13 @@
         "proc_macro_deps": {
           "common": [
             {
-              "id": "yoke-derive 0.8.1",
+              "id": "yoke-derive 0.8.2",
               "target": "yoke_derive"
             }
           ],
           "selects": {}
         },
-        "version": "0.8.1"
+        "version": "0.8.2"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -37047,14 +37014,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "yoke-derive 0.8.1": {
+    "yoke-derive 0.8.2": {
       "name": "yoke-derive",
-      "version": "0.8.1",
+      "version": "0.8.2",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/yoke-derive/0.8.1/download",
-          "sha256": "b659052874eb698efe5b9e8cf382204678a0086ebf46982b79d6ca3182927e5d"
+          "url": "https://static.crates.io/crates/yoke-derive/0.8.2/download",
+          "sha256": "de844c262c8848816172cef550288e7dc6c7b7814b4ee56b3e1553f275f1858e"
         }
       },
       "targets": [
@@ -37098,7 +37065,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.8.1"
+        "version": "0.8.2"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -37572,14 +37539,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "zerofrom 0.1.6": {
+    "zerofrom 0.1.7": {
       "name": "zerofrom",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/zerofrom/0.1.6/download",
-          "sha256": "50cc42e0333e05660c3587f3bf9d0478688e15d870fab3346451ce7f8c9fbea5"
+          "url": "https://static.crates.io/crates/zerofrom/0.1.7/download",
+          "sha256": "69faa1f2a1ea75661980b013019ed6687ed0e83d069bc1114e2cc74c6c04c4df"
         }
       },
       "targets": [
@@ -37611,13 +37578,13 @@
         "proc_macro_deps": {
           "common": [
             {
-              "id": "zerofrom-derive 0.1.6",
+              "id": "zerofrom-derive 0.1.7",
               "target": "zerofrom_derive"
             }
           ],
           "selects": {}
         },
-        "version": "0.1.6"
+        "version": "0.1.7"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -37625,14 +37592,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "zerofrom-derive 0.1.6": {
+    "zerofrom-derive 0.1.7": {
       "name": "zerofrom-derive",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/zerofrom-derive/0.1.6/download",
-          "sha256": "d71e5d6e06ab090c67b5e44993ec16b72dcbaabc526db883a360057678b48502"
+          "url": "https://static.crates.io/crates/zerofrom-derive/0.1.7/download",
+          "sha256": "11532158c46691caf0f2593ea8358fed6bbf68a0315e80aae9bd41fbade684a1"
         }
       },
       "targets": [
@@ -37676,7 +37643,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.1.6"
+        "version": "0.1.7"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -37730,14 +37697,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "zerotrie 0.2.3": {
+    "zerotrie 0.2.4": {
       "name": "zerotrie",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/zerotrie/0.2.3/download",
-          "sha256": "2a59c17a5562d507e4b54960e8569ebee33bee890c70aa3fe7b97e85a9fd7851"
+          "url": "https://static.crates.io/crates/zerotrie/0.2.4/download",
+          "sha256": "0f9152d31db0792fa83f70fb2f83148effb5c1f5b8c7686c3459e361d9bc20bf"
         }
       },
       "targets": [
@@ -37769,11 +37736,11 @@
         "deps": {
           "common": [
             {
-              "id": "yoke 0.8.1",
+              "id": "yoke 0.8.2",
               "target": "yoke"
             },
             {
-              "id": "zerofrom 0.1.6",
+              "id": "zerofrom 0.1.7",
               "target": "zerofrom"
             }
           ],
@@ -37789,7 +37756,7 @@
           ],
           "selects": {}
         },
-        "version": "0.2.3"
+        "version": "0.2.4"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -37797,14 +37764,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "zerovec 0.11.5": {
+    "zerovec 0.11.6": {
       "name": "zerovec",
-      "version": "0.11.5",
+      "version": "0.11.6",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/zerovec/0.11.5/download",
-          "sha256": "6c28719294829477f525be0186d13efa9a3c602f7ec202ca9e353d310fb9a002"
+          "url": "https://static.crates.io/crates/zerovec/0.11.6/download",
+          "sha256": "90f911cbc359ab6af17377d242225f4d75119aec87ea711a880987b18cd7b239"
         }
       },
       "targets": [
@@ -37836,11 +37803,11 @@
         "deps": {
           "common": [
             {
-              "id": "yoke 0.8.1",
+              "id": "yoke 0.8.2",
               "target": "yoke"
             },
             {
-              "id": "zerofrom 0.1.6",
+              "id": "zerofrom 0.1.7",
               "target": "zerofrom"
             }
           ],
@@ -37850,13 +37817,13 @@
         "proc_macro_deps": {
           "common": [
             {
-              "id": "zerovec-derive 0.11.2",
+              "id": "zerovec-derive 0.11.3",
               "target": "zerovec_derive"
             }
           ],
           "selects": {}
         },
-        "version": "0.11.5"
+        "version": "0.11.6"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -37864,14 +37831,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "zerovec-derive 0.11.2": {
+    "zerovec-derive 0.11.3": {
       "name": "zerovec-derive",
-      "version": "0.11.2",
+      "version": "0.11.3",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/zerovec-derive/0.11.2/download",
-          "sha256": "eadce39539ca5cb3985590102671f2567e659fca9666581ad3411d59207951f3"
+          "url": "https://static.crates.io/crates/zerovec-derive/0.11.3/download",
+          "sha256": "625dc425cab0dca6dc3c3319506e6593dcb08a9f387ea3b284dbd52a92c40555"
         }
       },
       "targets": [
@@ -37911,7 +37878,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.11.2"
+        "version": "0.11.3"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -38195,7 +38162,7 @@
               "target": "enumflags2"
             },
             {
-              "id": "libc 0.2.183",
+              "id": "libc 0.2.184",
               "target": "libc"
             },
             {
@@ -38598,7 +38565,7 @@
     "hex-literal 1.1.0",
     "http 1.4.0",
     "http-body 1.0.1",
-    "hyper 1.8.1",
+    "hyper 1.9.0",
     "image 0.25.10",
     "keyring 2.3.3",
     "ratatui 0.30.0",
@@ -38613,10 +38580,10 @@
     "syntect 5.3.0",
     "thiserror 2.0.18",
     "thiserror-impl 2.0.18",
-    "tokio 1.50.0",
+    "tokio 1.51.0",
     "tower 0.5.3",
     "tracing 0.1.44",
-    "turul-mcp-client 0.3.27",
+    "turul-mcp-client 0.3.31",
     "turul-mcp-json-rpc-server 0.2.1",
     "urlencoding 2.1.3",
     "uuid 1.23.0",
