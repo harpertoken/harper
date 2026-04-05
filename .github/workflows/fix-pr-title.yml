@@ -37,8 +37,10 @@ jobs:
           if [[ "$PR_TITLE" =~ ^([a-zA-Z]+):[[:space:]]+(.*) ]]; then
             TYPE="${BASH_REMATCH[1]}"
             MSG="${BASH_REMATCH[2]}"
+            LOWER_MSG=$(echo "$MSG" | tr '[:upper:]' '[:lower:]')
+            LOWER_MSG=$(echo "$LOWER_MSG" | sed 's/^add //')
 
-            NEW_TITLE="[$TYPE] $MSG"
+            NEW_TITLE="[$TYPE] $LOWER_MSG"
 
             echo "Original: $PR_TITLE"
             echo "New: $NEW_TITLE"
