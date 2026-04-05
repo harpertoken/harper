@@ -19,6 +19,8 @@
 
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::io_traits::{Input, Output};
+use crate::core::Message;
+use crate::memory::cache::CacheAlignedBuffer;
 use crate::memory::storage::{
     load_command_logs_for_session, load_history, load_latest_command_log,
 };
@@ -26,7 +28,6 @@ use chrono::Local;
 use colored::*;
 use rusqlite::Connection;
 use serde_json;
-use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -221,17 +222,10 @@ impl<'a> SessionService<'a> {
             let json = serde_json::to_string_pretty(&history)?;
             std::fs::write(&output_path, json)?;
         } else {
-            let mut file = File::create(&output_path)?;
-            for msg in &history {
-                writeln!(
-                    &mut file,
-                    "[{}] {}: {}",
-                    Local::now().format("%Y-%m-%d %H:%M:%S"),
-                    msg.role,
-                    msg.content.replace('\n', "\n  ")
-                )?;
-            }
-            self.write_audit_section(&mut file, &session_id)?;
+            let mut buffer = CacheAlignedBuffer::with_capacity(history.len() * 128);
+            self.write_transcript(&mut buffer, &history)?;
+            self.write_audit_section(&mut buffer, &session_id)?;
+            std::fs::write(&output_path, buffer.as_slice())?;
         }
 
         self.output.println(&format!(
@@ -256,19 +250,25 @@ impl<'a> SessionService<'a> {
         let default_filename = format!("harper_export_{}", session_id);
         let output_path = format!("{}.txt", default_filename);
 
-        let mut file = File::create(&output_path)?;
-        for msg in &history {
+        let mut buffer = CacheAlignedBuffer::with_capacity(history.len() * 128);
+        self.write_transcript(&mut buffer, &history)?;
+        self.write_audit_section(&mut buffer, session_id)?;
+        std::fs::write(&output_path, buffer.as_slice())?;
+
+        Ok(output_path)
+    }
+
+    fn write_transcript<W: Write>(&self, writer: &mut W, history: &[Message]) -> HarperResult<()> {
+        for msg in history {
             writeln!(
-                &mut file,
+                writer,
                 "[{}] {}: {}",
                 Local::now().format("%Y-%m-%d %H:%M:%S"),
                 msg.role,
                 msg.content.replace('\n', "\n  ")
             )?;
         }
-        self.write_audit_section(&mut file, session_id)?;
-
-        Ok(output_path)
+        Ok(())
     }
 
     fn print_audit_summary(&self, session_id: &str, limit: usize) -> HarperResult<()> {
@@ -313,16 +313,16 @@ impl<'a> SessionService<'a> {
         Ok(())
     }
 
-    fn write_audit_section(&self, file: &mut File, session_id: &str) -> HarperResult<()> {
+    fn write_audit_section<W: Write>(&self, writer: &mut W, session_id: &str) -> HarperResult<()> {
         let entries =
             load_command_logs_for_session(self.conn, session_id, Self::AUDIT_EXPORT_LIMIT)?;
         writeln!(
-            file,
+            writer,
             "\n---\nCommand Audit (last {} commands):",
             Self::AUDIT_EXPORT_LIMIT
         )?;
         if entries.is_empty() {
-            writeln!(file, "No commands were recorded for this session.")?;
+            writeln!(writer, "No commands were recorded for this session.")?;
             return Ok(());
         }
 
@@ -345,7 +345,7 @@ impl<'a> SessionService<'a> {
                 .map(|ms| format!("{} ms", ms))
                 .unwrap_or_else(|| "-".to_string());
             writeln!(
-                file,
+                writer,
                 "[{}] {} [{} | {} | {}] {}",
                 Local::now().format("%Y-%m-%d %H:%M:%S"),
                 entry.command,

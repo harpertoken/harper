@@ -18,4 +18,5 @@
 //! and other runtime infrastructure.
 
 pub mod config;
+pub mod scheduler;
 pub mod utils;

@@ -29,7 +29,8 @@ pub use agent::chat::*;
 #[allow(unused_imports)]
 pub use tools::*;
 
-// Re-export memory functions
+// Re-export memory utilities
+pub use memory::cache::*;
 pub use memory::storage::*;
 
 // Re-export runtime
