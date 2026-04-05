@@ -28,9 +28,16 @@ jobs:
       - uses: actions/checkout@v6
       - name: Set up Bazel
         uses: bazel-contrib/setup-bazel@0.15.0
-      - name: Clear stale Bazel cache
-        run: rm -rf ~/.cache/bazel ~/.bazel
+      - name: Clear stale Bazel cache and regenerate lock
+        run: |
+          bazel shutdown 2>/dev/null || true
+          rm -rf /home/runner/.cache/bazel /home/runner/.cache/bazelisk /home/runner/.bazel /home/runner/.bazelrc
+          rm -rf /home/runner/.cache/bazel-external /home/runner/.bazel/external
+          rm -rf .bazelrc .bazeliskrc "$HOME"/.bazel* 2>/dev/null || true
+          rm -rf /tmp/*bazel* 2>/dev/null || true
+          rm -f cargo-bazel-lock.json
+
       - name: Build with Bazel
-        run: bazel build :harper_bin --repo_env=CARGO_BAZEL_REPIN=1
+        run: CARGO_BAZEL_REPIN=1 bazel build :harper_bin
       - name: Test Bazel build
         run: bazel run :harper_bin -- --version

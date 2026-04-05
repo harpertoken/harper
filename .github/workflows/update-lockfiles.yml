@@ -21,6 +21,13 @@ jobs:
       - name: Set up Bazel
         uses: bazel-contrib/setup-bazel@0.15.0
 
+      - name: Clear stale Bazel cache
+        run: |
+          bazel shutdown 2>/dev/null || true
+          rm -rf /home/runner/.cache/bazel /home/runner/.cache/bazelisk /home/runner/.bazel /home/runner/.bazelrc
+          rm -rf /home/runner/.cache/bazel-external /home/runner/.bazel/external
+          rm -rf /tmp/*bazel* 2>/dev/null || true
+
       - name: Update Cargo.lock
         run: cargo update
 
@@ -28,7 +35,8 @@ jobs:
         run: |
           set -euo pipefail
           bazel shutdown
-          CARGO_BAZEL_REPIN=1 bazel sync --only=crates
+          rm -f cargo-bazel-lock.json
+          CARGO_BAZEL_REPIN=1 bazel build :harper_bin 2>/dev/null || true
           bazel shutdown
 
       - name: Create PR
