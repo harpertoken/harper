@@ -1793,7 +1793,7 @@ dependencies = [
  "lazy_static",
  "num_cpus",
  "predicates",
- "rand 0.9.2",
+ "rand 0.10.0",
  "ratatui",
  "regex",
  "rusqlite",
