@@ -1,5 +1,5 @@
 {
-  "checksum": "d284e1dd0bc22abb53ae3bfd65bb242ebc613cf6aaae3e4d29bc8c0cf153d08e",
+  "checksum": "ca6799dd2adb9c7c95bc12ea87e155786865dbe37bd82f7c276b5c3b809635a4",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -1152,7 +1152,7 @@
               "target": "concurrent_queue"
             },
             {
-              "id": "fastrand 2.4.0",
+              "id": "fastrand 2.4.1",
               "target": "fastrand"
             },
             {
@@ -1674,7 +1674,7 @@
                 "target": "async_io"
               },
               {
-                "id": "async-signal 0.2.13",
+                "id": "async-signal 0.2.14",
                 "target": "async_signal"
               },
               {
@@ -1760,14 +1760,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "async-signal 0.2.13": {
+    "async-signal 0.2.14": {
       "name": "async-signal",
-      "version": "0.2.13",
+      "version": "0.2.14",
       "package_url": "https://github.com/smol-rs/async-signal",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/async-signal/0.2.13/download",
-          "sha256": "43c070bbf59cd3570b6b2dd54cd772527c7c3620fce8be898406dd3ed6adc64c"
+          "url": "https://static.crates.io/crates/async-signal/0.2.14/download",
+          "sha256": "52b5aaafa020cf5053a01f2a60e8ff5dccf550f0f77ec54a4e47285ac2bab485"
         }
       },
       "targets": [
@@ -1840,7 +1840,7 @@
           }
         },
         "edition": "2021",
-        "version": "0.2.13"
+        "version": "0.2.14"
       },
       "license": "Apache-2.0 OR MIT",
       "license_ids": [
@@ -2454,7 +2454,7 @@
               "target": "sync_wrapper"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -3614,14 +3614,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "cc 1.2.59": {
+    "cc 1.2.60": {
       "name": "cc",
-      "version": "1.2.59",
+      "version": "1.2.60",
       "package_url": "https://github.com/rust-lang/cc-rs",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/cc/1.2.59/download",
-          "sha256": "b7a4d3ec6524d28a329fc53654bbadc9bdd7b0431f5d65f1a56ffb28a1ee5283"
+          "url": "https://static.crates.io/crates/cc/1.2.60/download",
+          "sha256": "43c5703da9466b66a946814e1adf53ea2c90f10063b86290cc9eb67ce3478a20"
         }
       },
       "targets": [
@@ -3657,7 +3657,7 @@
           "selects": {}
         },
         "edition": "2018",
-        "version": "1.2.59"
+        "version": "1.2.60"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -3881,11 +3881,11 @@
             ],
             "wasm32-unknown-unknown": [
               {
-                "id": "js-sys 0.3.94",
+                "id": "js-sys 0.3.95",
                 "target": "js_sys"
               },
               {
-                "id": "wasm-bindgen 0.2.117",
+                "id": "wasm-bindgen 0.2.118",
                 "target": "wasm_bindgen"
               }
             ],
@@ -8228,14 +8228,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "fastrand 2.4.0": {
+    "fastrand 2.4.1": {
       "name": "fastrand",
-      "version": "2.4.0",
+      "version": "2.4.1",
       "package_url": "https://github.com/smol-rs/fastrand",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/fastrand/2.4.0/download",
-          "sha256": "a043dc74da1e37d6afe657061213aa6f425f855399a11d3463c6ecccc4dfda1f"
+          "url": "https://static.crates.io/crates/fastrand/2.4.1/download",
+          "sha256": "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
         }
       },
       "targets": [
@@ -8266,7 +8266,7 @@
           "selects": {}
         },
         "edition": "2018",
-        "version": "2.4.0"
+        "version": "2.4.1"
       },
       "license": "Apache-2.0 OR MIT",
       "license_ids": [
@@ -9993,12 +9993,6 @@
         "compile_data_glob": [
           "**"
         ],
-        "crate_features": {
-          "common": [
-            "std"
-          ],
-          "selects": {}
-        },
         "deps": {
           "common": [
             {
@@ -10247,14 +10241,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "gif 0.14.1": {
+    "gif 0.14.2": {
       "name": "gif",
-      "version": "0.14.1",
+      "version": "0.14.2",
       "package_url": "https://github.com/image-rs/image-gif",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/gif/0.14.1/download",
-          "sha256": "f5df2ba84018d80c213569363bdcd0c64e6933c67fe4c1d60ecf822971a3c35e"
+          "url": "https://static.crates.io/crates/gif/0.14.2/download",
+          "sha256": "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
         }
       },
       "targets": [
@@ -10299,7 +10293,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.14.1"
+        "version": "0.14.2"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -10364,7 +10358,7 @@
               "target": "http"
             },
             {
-              "id": "indexmap 2.13.1",
+              "id": "indexmap 2.14.0",
               "target": "indexmap"
             },
             {
@@ -10372,7 +10366,7 @@
               "target": "slab"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -10611,7 +10605,7 @@
               "target": "thiserror"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -10707,7 +10701,7 @@
               "target": "serde_json"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -10798,7 +10792,7 @@
               "target": "syntect"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -10878,7 +10872,7 @@
               "target": "predicates"
             },
             {
-              "id": "rand 0.9.2",
+              "id": "rand 0.10.1",
               "target": "rand"
             },
             {
@@ -10906,7 +10900,7 @@
               "target": "tempfile"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -11076,6 +11070,45 @@
         },
         "edition": "2021",
         "version": "0.16.1"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
+    "hashbrown 0.17.0": {
+      "name": "hashbrown",
+      "version": "0.17.0",
+      "package_url": "https://github.com/rust-lang/hashbrown",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/hashbrown/0.17.0/download",
+          "sha256": "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "hashbrown",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "hashbrown",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "edition": "2024",
+        "version": "0.17.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11916,7 +11949,7 @@
               "target": "smallvec"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -11988,7 +12021,7 @@
               "alias": "pki_types"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -12065,7 +12098,7 @@
               "target": "native_tls"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -12187,7 +12220,7 @@
               "target": "pin_project_lite"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -12425,7 +12458,7 @@
           "selects": {
             "cfg(all(target_arch = \"wasm32\", target_os = \"unknown\"))": [
               {
-                "id": "js-sys 0.3.94",
+                "id": "js-sys 0.3.95",
                 "target": "js_sys"
               },
               {
@@ -12433,7 +12466,7 @@
                 "target": "log"
               },
               {
-                "id": "wasm-bindgen 0.2.117",
+                "id": "wasm-bindgen 0.2.118",
                 "target": "wasm_bindgen"
               }
             ],
@@ -12539,7 +12572,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.59",
+              "id": "cc 1.2.60",
               "target": "cc"
             }
           ],
@@ -13341,7 +13374,7 @@
               "target": "exr"
             },
             {
-              "id": "gif 0.14.1",
+              "id": "gif 0.14.2",
               "target": "gif"
             },
             {
@@ -13499,14 +13532,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "indexmap 2.13.1": {
+    "indexmap 2.14.0": {
       "name": "indexmap",
-      "version": "2.13.1",
+      "version": "2.14.0",
       "package_url": "https://github.com/indexmap-rs/indexmap",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/indexmap/2.13.1/download",
-          "sha256": "45a8a2b9cb3e0b0c1803dbb0758ffac5de2f425b23c28f518faabd9d805342ff"
+          "url": "https://static.crates.io/crates/indexmap/2.14.0/download",
+          "sha256": "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
         }
       },
       "targets": [
@@ -13558,7 +13591,7 @@
               "target": "equivalent"
             },
             {
-              "id": "hashbrown 0.16.1",
+              "id": "hashbrown 0.17.0",
               "target": "hashbrown"
             }
           ],
@@ -13595,8 +13628,8 @@
             ]
           }
         },
-        "edition": "2021",
-        "version": "2.13.1"
+        "edition": "2024",
+        "version": "2.14.0"
       },
       "license": "Apache-2.0 OR MIT",
       "license_ids": [
@@ -14344,14 +14377,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "js-sys 0.3.94": {
+    "js-sys 0.3.95": {
       "name": "js-sys",
-      "version": "0.3.94",
+      "version": "0.3.95",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/js-sys/0.3.94/download",
-          "sha256": "2e04e2ef80ce82e13552136fabeef8a5ed1f985a96805761cbb9a2c34e7664d9"
+          "url": "https://static.crates.io/crates/js-sys/0.3.95/download",
+          "sha256": "2964e92d1d9dc3364cae4d718d93f227e3abb088e747d92e0395bfdedf1c12ca"
         }
       },
       "targets": [
@@ -14397,14 +14430,14 @@
               "target": "once_cell"
             },
             {
-              "id": "wasm-bindgen 0.2.117",
+              "id": "wasm-bindgen 0.2.118",
               "target": "wasm_bindgen"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.3.94"
+        "version": "0.3.95"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -14970,7 +15003,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.59",
+              "id": "cc 1.2.60",
               "target": "cc"
             }
           ],
@@ -14985,14 +15018,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "libredox 0.1.15": {
+    "libredox 0.1.16": {
       "name": "libredox",
-      "version": "0.1.15",
+      "version": "0.1.16",
       "package_url": "https://gitlab.redox-os.org/redox-os/libredox.git",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/libredox/0.1.15/download",
-          "sha256": "7ddbf48fd451246b1f8c2610bd3b4ac0cc6e149d89832867093ab69a17194f08"
+          "url": "https://static.crates.io/crates/libredox/0.1.16/download",
+          "sha256": "e02f3bb43d335493c96bf3fd3a321600bf6bd07ed34bc64118e9293bdffea46c"
         }
       },
       "targets": [
@@ -15015,7 +15048,7 @@
           "**"
         ],
         "edition": "2021",
-        "version": "0.1.15"
+        "version": "0.1.16"
       },
       "license": "MIT",
       "license_ids": [
@@ -15101,7 +15134,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.59",
+              "id": "cc 1.2.60",
               "target": "cc"
             },
             {
@@ -18390,7 +18423,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.59",
+              "id": "cc 1.2.60",
               "target": "cc"
             },
             {
@@ -18731,7 +18764,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.59",
+              "id": "cc 1.2.60",
               "target": "cc"
             },
             {
@@ -19924,7 +19957,7 @@
               "target": "atomic_waker"
             },
             {
-              "id": "fastrand 2.4.0",
+              "id": "fastrand 2.4.1",
               "target": "fastrand"
             },
             {
@@ -20026,7 +20059,7 @@
               "target": "base64"
             },
             {
-              "id": "indexmap 2.13.1",
+              "id": "indexmap 2.14.0",
               "target": "indexmap"
             },
             {
@@ -20109,11 +20142,11 @@
           "selects": {
             "cfg(all(target_arch = \"wasm32\", not(target_os = \"wasi\")))": [
               {
-                "id": "wasm-bindgen 0.2.117",
+                "id": "wasm-bindgen 0.2.118",
                 "target": "wasm_bindgen"
               },
               {
-                "id": "web-sys 0.3.94",
+                "id": "web-sys 0.3.95",
                 "target": "web_sys"
               }
             ]
@@ -21694,14 +21727,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "rand 0.9.2": {
+    "rand 0.9.3": {
       "name": "rand",
-      "version": "0.9.2",
+      "version": "0.9.3",
       "package_url": "https://github.com/rust-random/rand",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/rand/0.9.2/download",
-          "sha256": "6db2770f06117d490610c7488547d543617b21bfa07796d7a12f6f1bd53850d1"
+          "url": "https://static.crates.io/crates/rand/0.9.3/download",
+          "sha256": "7ec095654a25171c2124e9e3393a930bddbffdc939556c914957a4c3e0a87166"
         }
       },
       "targets": [
@@ -21723,24 +21756,8 @@
         "compile_data_glob": [
           "**"
         ],
-        "crate_features": {
-          "common": [
-            "alloc",
-            "default",
-            "os_rng",
-            "small_rng",
-            "std",
-            "std_rng",
-            "thread_rng"
-          ],
-          "selects": {}
-        },
         "deps": {
           "common": [
-            {
-              "id": "rand_chacha 0.9.0",
-              "target": "rand_chacha"
-            },
             {
               "id": "rand_core 0.9.5",
               "target": "rand_core"
@@ -21749,7 +21766,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.9.2"
+        "version": "0.9.3"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -21758,14 +21775,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "rand 0.10.0": {
+    "rand 0.10.1": {
       "name": "rand",
-      "version": "0.10.0",
+      "version": "0.10.1",
       "package_url": "https://github.com/rust-random/rand",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/rand/0.10.0/download",
-          "sha256": "bc266eb313df6c5c09c1c7b1fbe2510961e5bcd3add930c1e31f7ed9da0feff8"
+          "url": "https://static.crates.io/crates/rand/0.10.1/download",
+          "sha256": "d2e8e8bcc7961af1fdac401278c6a831614941f6164ee3bf4ce61b7edb162207"
         }
       },
       "targets": [
@@ -21816,7 +21833,7 @@
           "selects": {}
         },
         "edition": "2024",
-        "version": "0.10.0"
+        "version": "0.10.1"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -21912,12 +21929,6 @@
         "compile_data_glob": [
           "**"
         ],
-        "crate_features": {
-          "common": [
-            "std"
-          ],
-          "selects": {}
-        },
         "deps": {
           "common": [
             {
@@ -22052,22 +22063,6 @@
         "compile_data_glob": [
           "**"
         ],
-        "crate_features": {
-          "common": [
-            "os_rng",
-            "std"
-          ],
-          "selects": {}
-        },
-        "deps": {
-          "common": [
-            {
-              "id": "getrandom 0.3.4",
-              "target": "getrandom"
-            }
-          ],
-          "selects": {}
-        },
         "edition": "2021",
         "version": "0.9.5"
       },
@@ -22705,7 +22700,7 @@
                 "target": "libfuzzer_sys"
               },
               {
-                "id": "rand 0.9.2",
+                "id": "rand 0.9.3",
                 "target": "rand"
               },
               {
@@ -23081,7 +23076,7 @@
               "target": "getrandom"
             },
             {
-              "id": "libredox 0.1.15",
+              "id": "libredox 0.1.16",
               "target": "libredox"
             },
             {
@@ -23495,7 +23490,7 @@
                 "target": "pin_project_lite"
               },
               {
-                "id": "tokio 1.51.0",
+                "id": "tokio 1.51.1",
                 "target": "tokio"
               },
               {
@@ -23513,19 +23508,19 @@
             ],
             "cfg(target_arch = \"wasm32\")": [
               {
-                "id": "js-sys 0.3.94",
+                "id": "js-sys 0.3.95",
                 "target": "js_sys"
               },
               {
-                "id": "wasm-bindgen 0.2.117",
+                "id": "wasm-bindgen 0.2.118",
                 "target": "wasm_bindgen"
               },
               {
-                "id": "wasm-bindgen-futures 0.4.67",
+                "id": "wasm-bindgen-futures 0.4.68",
                 "target": "wasm_bindgen_futures"
               },
               {
-                "id": "web-sys 0.3.94",
+                "id": "web-sys 0.3.95",
                 "target": "web_sys"
               }
             ],
@@ -23752,7 +23747,7 @@
                 "target": "pin_project_lite"
               },
               {
-                "id": "tokio 1.51.0",
+                "id": "tokio 1.51.1",
                 "target": "tokio"
               },
               {
@@ -23770,19 +23765,19 @@
             ],
             "cfg(target_arch = \"wasm32\")": [
               {
-                "id": "js-sys 0.3.94",
+                "id": "js-sys 0.3.95",
                 "target": "js_sys"
               },
               {
-                "id": "wasm-bindgen 0.2.117",
+                "id": "wasm-bindgen 0.2.118",
                 "target": "wasm_bindgen"
               },
               {
-                "id": "wasm-bindgen-futures 0.4.67",
+                "id": "wasm-bindgen-futures 0.4.68",
                 "target": "wasm_bindgen_futures"
               },
               {
-                "id": "web-sys 0.3.94",
+                "id": "web-sys 0.3.95",
                 "target": "web_sys"
               }
             ],
@@ -23971,7 +23966,7 @@
         "deps": {
           "common": [
             {
-              "id": "cc 1.2.59",
+              "id": "cc 1.2.60",
               "target": "cc"
             }
           ],
@@ -24701,7 +24696,7 @@
               "alias": "pki_types"
             },
             {
-              "id": "rustls-webpki 0.103.10",
+              "id": "rustls-webpki 0.103.11",
               "target": "webpki"
             },
             {
@@ -24793,14 +24788,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "rustls-webpki 0.103.10": {
+    "rustls-webpki 0.103.11": {
       "name": "rustls-webpki",
-      "version": "0.103.10",
+      "version": "0.103.11",
       "package_url": "https://github.com/rustls/webpki",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/rustls-webpki/0.103.10/download",
-          "sha256": "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
+          "url": "https://static.crates.io/crates/rustls-webpki/0.103.11/download",
+          "sha256": "20a6af516fea4b20eccceaf166e8aa666ac996208e8a644ce3ef5aa783bc7cd4"
         }
       },
       "targets": [
@@ -24837,7 +24832,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.103.10"
+        "version": "0.103.11"
       },
       "license": "ISC",
       "license_ids": [
@@ -27811,7 +27806,7 @@
         "deps": {
           "common": [
             {
-              "id": "fastrand 2.4.0",
+              "id": "fastrand 2.4.1",
               "target": "fastrand"
             },
             {
@@ -29004,14 +28999,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "tokio 1.51.0": {
+    "tokio 1.51.1": {
       "name": "tokio",
-      "version": "1.51.0",
+      "version": "1.51.1",
       "package_url": "https://github.com/tokio-rs/tokio",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/tokio/1.51.0/download",
-          "sha256": "2bd1c4c0fc4a7ab90fc15ef6daaa3ec3b893f004f915f2392557ed23237820cd"
+          "url": "https://static.crates.io/crates/tokio/1.51.1/download",
+          "sha256": "f66bf9585cda4b724d3e78ab34b73fb2bbaba9011b9bfdf69dc836382ea13b8c"
         }
       },
       "targets": [
@@ -29166,7 +29161,7 @@
           ],
           "selects": {}
         },
-        "version": "1.51.0"
+        "version": "1.51.1"
       },
       "license": "MIT",
       "license_ids": [
@@ -29265,7 +29260,7 @@
               "target": "native_tls"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             }
           ],
@@ -29316,7 +29311,7 @@
               "target": "rustls"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             }
           ],
@@ -29415,7 +29410,7 @@
               "target": "slab"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             }
           ],
@@ -29633,7 +29628,7 @@
         "deps": {
           "common": [
             {
-              "id": "indexmap 2.13.1",
+              "id": "indexmap 2.14.0",
               "target": "indexmap"
             },
             {
@@ -29794,7 +29789,7 @@
               "target": "sync_wrapper"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -30267,7 +30262,7 @@
               "target": "parking_lot"
             },
             {
-              "id": "rand 0.10.0",
+              "id": "rand 0.10.1",
               "target": "rand"
             },
             {
@@ -30287,7 +30282,7 @@
               "target": "thiserror"
             },
             {
-              "id": "tokio 1.51.0",
+              "id": "tokio 1.51.1",
               "target": "tokio"
             },
             {
@@ -31449,7 +31444,7 @@
           "selects": {
             "wasm32-unknown-unknown": [
               {
-                "id": "wasm-bindgen 0.2.117",
+                "id": "wasm-bindgen 0.2.118",
                 "target": "wasm_bindgen"
               }
             ]
@@ -31922,14 +31917,14 @@
       ],
       "license_file": null
     },
-    "wasm-bindgen 0.2.117": {
+    "wasm-bindgen 0.2.118": {
       "name": "wasm-bindgen",
-      "version": "0.2.117",
+      "version": "0.2.118",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasm-bindgen/0.2.117/download",
-          "sha256": "0551fc1bb415591e3372d0bc4780db7e587d84e2a7e79da121051c5c4b89d0b0"
+          "url": "https://static.crates.io/crates/wasm-bindgen/0.2.118/download",
+          "sha256": "0bf938a0bacb0469e83c1e148908bd7d5a6010354cf4fb73279b7447422e3a89"
         }
       },
       "targets": [
@@ -31981,11 +31976,11 @@
               "target": "once_cell"
             },
             {
-              "id": "wasm-bindgen 0.2.117",
+              "id": "wasm-bindgen 0.2.118",
               "target": "build_script_build"
             },
             {
-              "id": "wasm-bindgen-shared 0.2.117",
+              "id": "wasm-bindgen-shared 0.2.118",
               "target": "wasm_bindgen_shared"
             }
           ],
@@ -31995,13 +31990,13 @@
         "proc_macro_deps": {
           "common": [
             {
-              "id": "wasm-bindgen-macro 0.2.117",
+              "id": "wasm-bindgen-macro 0.2.118",
               "target": "wasm_bindgen_macro"
             }
           ],
           "selects": {}
         },
-        "version": "0.2.117"
+        "version": "0.2.118"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -32016,7 +32011,7 @@
         "link_deps": {
           "common": [
             {
-              "id": "wasm-bindgen-shared 0.2.117",
+              "id": "wasm-bindgen-shared 0.2.118",
               "target": "wasm_bindgen_shared"
             }
           ],
@@ -32040,14 +32035,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "wasm-bindgen-futures 0.4.67": {
+    "wasm-bindgen-futures 0.4.68": {
       "name": "wasm-bindgen-futures",
-      "version": "0.4.67",
+      "version": "0.4.68",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasm-bindgen-futures/0.4.67/download",
-          "sha256": "03623de6905b7206edd0a75f69f747f134b7f0a2323392d664448bf2d3c5d87e"
+          "url": "https://static.crates.io/crates/wasm-bindgen-futures/0.4.68/download",
+          "sha256": "f371d383f2fb139252e0bfac3b81b265689bf45b6874af544ffa4c975ac1ebf8"
         }
       },
       "targets": [
@@ -32079,18 +32074,18 @@
         "deps": {
           "common": [
             {
-              "id": "js-sys 0.3.94",
+              "id": "js-sys 0.3.95",
               "target": "js_sys"
             },
             {
-              "id": "wasm-bindgen 0.2.117",
+              "id": "wasm-bindgen 0.2.118",
               "target": "wasm_bindgen"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.4.67"
+        "version": "0.4.68"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32099,14 +32094,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "wasm-bindgen-macro 0.2.117": {
+    "wasm-bindgen-macro 0.2.118": {
       "name": "wasm-bindgen-macro",
-      "version": "0.2.117",
+      "version": "0.2.118",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasm-bindgen-macro/0.2.117/download",
-          "sha256": "7fbdf9a35adf44786aecd5ff89b4563a90325f9da0923236f6104e603c7e86be"
+          "url": "https://static.crates.io/crates/wasm-bindgen-macro/0.2.118/download",
+          "sha256": "eeff24f84126c0ec2db7a449f0c2ec963c6a49efe0698c4242929da037ca28ed"
         }
       },
       "targets": [
@@ -32135,14 +32130,14 @@
               "target": "quote"
             },
             {
-              "id": "wasm-bindgen-macro-support 0.2.117",
+              "id": "wasm-bindgen-macro-support 0.2.118",
               "target": "wasm_bindgen_macro_support"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.2.117"
+        "version": "0.2.118"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32151,14 +32146,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "wasm-bindgen-macro-support 0.2.117": {
+    "wasm-bindgen-macro-support 0.2.118": {
       "name": "wasm-bindgen-macro-support",
-      "version": "0.2.117",
+      "version": "0.2.118",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasm-bindgen-macro-support/0.2.117/download",
-          "sha256": "dca9693ef2bab6d4e6707234500350d8dad079eb508dca05530c85dc3a529ff2"
+          "url": "https://static.crates.io/crates/wasm-bindgen-macro-support/0.2.118/download",
+          "sha256": "9d08065faf983b2b80a79fd87d8254c409281cf7de75fc4b773019824196c904"
         }
       },
       "targets": [
@@ -32199,14 +32194,14 @@
               "target": "syn"
             },
             {
-              "id": "wasm-bindgen-shared 0.2.117",
+              "id": "wasm-bindgen-shared 0.2.118",
               "target": "wasm_bindgen_shared"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.2.117"
+        "version": "0.2.118"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32215,14 +32210,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "wasm-bindgen-shared 0.2.117": {
+    "wasm-bindgen-shared 0.2.118": {
       "name": "wasm-bindgen-shared",
-      "version": "0.2.117",
+      "version": "0.2.118",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasm-bindgen-shared/0.2.117/download",
-          "sha256": "39129a682a6d2d841b6c429d0c51e5cb0ed1a03829d8b3d1e69a011e62cb3d3b"
+          "url": "https://static.crates.io/crates/wasm-bindgen-shared/0.2.118/download",
+          "sha256": "5fd04d9e306f1907bd13c6361b5c6bfc7b3b3c095ed3f8a9246390f8dbdee129"
         }
       },
       "targets": [
@@ -32263,14 +32258,14 @@
               "target": "unicode_ident"
             },
             {
-              "id": "wasm-bindgen-shared 0.2.117",
+              "id": "wasm-bindgen-shared 0.2.118",
               "target": "build_script_build"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.2.117"
+        "version": "0.2.118"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -32387,7 +32382,7 @@
               "target": "anyhow"
             },
             {
-              "id": "indexmap 2.13.1",
+              "id": "indexmap 2.14.0",
               "target": "indexmap"
             },
             {
@@ -32447,19 +32442,19 @@
               "target": "futures_util"
             },
             {
-              "id": "js-sys 0.3.94",
+              "id": "js-sys 0.3.95",
               "target": "js_sys"
             },
             {
-              "id": "wasm-bindgen 0.2.117",
+              "id": "wasm-bindgen 0.2.118",
               "target": "wasm_bindgen"
             },
             {
-              "id": "wasm-bindgen-futures 0.4.67",
+              "id": "wasm-bindgen-futures 0.4.68",
               "target": "wasm_bindgen_futures"
             },
             {
-              "id": "web-sys 0.3.94",
+              "id": "web-sys 0.3.95",
               "target": "web_sys"
             }
           ],
@@ -32526,7 +32521,7 @@
               "target": "hashbrown"
             },
             {
-              "id": "indexmap 2.13.1",
+              "id": "indexmap 2.14.0",
               "target": "indexmap"
             },
             {
@@ -32546,14 +32541,14 @@
       ],
       "license_file": null
     },
-    "web-sys 0.3.94": {
+    "web-sys 0.3.95": {
       "name": "web-sys",
-      "version": "0.3.94",
+      "version": "0.3.95",
       "package_url": "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/web-sys/0.3.94/download",
-          "sha256": "cd70027e39b12f0849461e08ffc50b9cd7688d942c1c8e3c7b22273236b4dd0a"
+          "url": "https://static.crates.io/crates/web-sys/0.3.95/download",
+          "sha256": "4f2dfbb17949fa2088e5d39408c48368947b86f7834484e87b73de55bc14d97d"
         }
       },
       "targets": [
@@ -32634,18 +32629,18 @@
         "deps": {
           "common": [
             {
-              "id": "js-sys 0.3.94",
+              "id": "js-sys 0.3.95",
               "target": "js_sys"
             },
             {
-              "id": "wasm-bindgen 0.2.117",
+              "id": "wasm-bindgen 0.2.118",
               "target": "wasm_bindgen"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.3.94"
+        "version": "0.3.95"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -36245,7 +36240,7 @@
               "target": "heck"
             },
             {
-              "id": "indexmap 2.13.1",
+              "id": "indexmap 2.14.0",
               "target": "indexmap"
             },
             {
@@ -36453,7 +36448,7 @@
               "target": "bitflags"
             },
             {
-              "id": "indexmap 2.13.1",
+              "id": "indexmap 2.14.0",
               "target": "indexmap"
             },
             {
@@ -36555,7 +36550,7 @@
               "target": "id_arena"
             },
             {
-              "id": "indexmap 2.13.1",
+              "id": "indexmap 2.14.0",
               "target": "indexmap"
             },
             {
@@ -38580,7 +38575,7 @@
     "syntect 5.3.0",
     "thiserror 2.0.18",
     "thiserror-impl 2.0.18",
-    "tokio 1.51.0",
+    "tokio 1.51.1",
     "tower 0.5.3",
     "tracing 0.1.44",
     "turul-mcp-client 0.3.31",
@@ -38596,7 +38591,7 @@
     "lazy_static 1.5.0",
     "num_cpus 1.17.0",
     "predicates 3.1.4",
-    "rand 0.9.2",
+    "rand 0.10.1",
     "regex 1.12.3",
     "tempfile 3.27.0",
     "wait-timeout 0.2.1"
