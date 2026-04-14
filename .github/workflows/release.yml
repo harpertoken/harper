@@ -46,41 +46,62 @@ jobs:
         id: analyze
         run: |
           # Find last release tags for each package
-          CORE_LAST_TAG=$(git describe --tags --abbrev=0 --match 'harper-core-*' 2>/dev/null || echo "")
-          UI_LAST_TAG=$(git describe --tags --abbrev=0 --match 'harper-ui-*' 2>/dev/null || echo "")
+          CORE_LAST_TAG=$(git describe --tags --abbrev=0 --match 'harper-core-*' 2>/dev/null || true)
+          UI_LAST_TAG=$(git describe --tags --abbrev=0 --match 'harper-ui-*' 2>/dev/null || true)
           
-          echo "core_last_tag=${CORE_LAST_TAG:-none}" >> $GITHUB_OUTPUT
-          echo "ui_last_tag=${UI_LAST_TAG:-none}" >> $GITHUB_OUTPUT
+          if [ -z "$CORE_LAST_TAG" ]; then
+            CORE_LAST_TAG="none"
+          fi
+          if [ -z "$UI_LAST_TAG" ]; then
+            UI_LAST_TAG="none"
+          fi
+          
+          echo "core_last_tag=$CORE_LAST_TAG" >> $GITHUB_OUTPUT
+          echo "ui_last_tag=$UI_LAST_TAG" >> $GITHUB_OUTPUT
           
           # Get commits since last release for harper-core
-          if [ -n "$CORE_LAST_TAG" ]; then
-            CORE_COMMITS=$(git log "$CORE_LAST_TAG..HEAD" --oneline -- lib/harper-core/ || true)
+          if [ "$CORE_LAST_TAG" != "none" ]; then
+            CORE_COMMITS=$(git log "$CORE_LAST_TAG..HEAD" --oneline -- lib/harper-core/ 2>/dev/null || true)
           else
             CORE_COMMITS=$(git log --oneline -- lib/harper-core/ | head -30 || true)
           fi
           
           # Get commits since last release for harper-ui
-          if [ -n "$UI_LAST_TAG" ]; then
-            UI_COMMITS=$(git log "$UI_LAST_TAG..HEAD" --oneline -- lib/harper-ui/ || true)
+          if [ "$UI_LAST_TAG" != "none" ]; then
+            UI_COMMITS=$(git log "$UI_LAST_TAG..HEAD" --oneline -- lib/harper-ui/ 2>/dev/null || true)
           else
             UI_COMMITS=$(git log --oneline -- lib/harper-ui/ | head -30 || true)
           fi
           
-          CORE_HAS_FEAT=$(echo "$CORE_COMMITS" | grep -cE "\[feat\]|feat:" || echo "0")
-          CORE_HAS_FIX=$(echo "$CORE_COMMITS" | grep -cE "\[fix\]|fix:" || echo "0")
-          CORE_HAS_BREAKING=$(echo "$CORE_COMMITS" | grep -cE "!:|BREAKING" || echo "0")
+          CORE_HAS_FEAT=0
+          if echo "$CORE_COMMITS" | grep -qE "\[feat\]|feat:"; then
+            CORE_HAS_FEAT=$(echo "$CORE_COMMITS" | grep -cE "\[feat\]|feat:" || echo "0")
+          fi
           
-          UI_HAS_FEAT=$(echo "$UI_COMMITS" | grep -cE "\[feat\]|feat:" || echo "0")
-          UI_HAS_FIX=$(echo "$UI_COMMITS" | grep -cE "\[fix\]|fix:" || echo "0")
-          UI_HAS_BREAKING=$(echo "$UI_COMMITS" | grep -cE "!:|BREAKING" || echo "0")
+          CORE_HAS_FIX=0
+          if echo "$CORE_COMMITS" | grep -qE "\[fix\]|fix:"; then
+            CORE_HAS_FIX=$(echo "$CORE_COMMITS" | grep -cE "\[fix\]|fix:" || echo "0")
+          fi
           
-          echo "core_commits<<EOF" >> $GITHUB_OUTPUT
-          echo "$CORE_COMMITS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          CORE_HAS_BREAKING=0
+          if echo "$CORE_COMMITS" | grep -qE "!:|BREAKING"; then
+            CORE_HAS_BREAKING=$(echo "$CORE_COMMITS" | grep -cE "!:|BREAKING" || echo "0")
+          fi
           
-          echo "ui_commits<<EOF" >> $GITHUB_OUTPUT
-          echo "$UI_COMMITS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          UI_HAS_FEAT=0
+          if echo "$UI_COMMITS" | grep -qE "\[feat\]|feat:"; then
+            UI_HAS_FEAT=$(echo "$UI_COMMITS" | grep -cE "\[feat\]|feat:" || echo "0")
+          fi
+          
+          UI_HAS_FIX=0
+          if echo "$UI_COMMITS" | grep -qE "\[fix\]|fix:"; then
+            UI_HAS_FIX=$(echo "$UI_COMMITS" | grep -cE "\[fix\]|fix:" || echo "0")
+          fi
+          
+          UI_HAS_BREAKING=0
+          if echo "$UI_COMMITS" | grep -qE "!:|BREAKING"; then
+            UI_HAS_BREAKING=$(echo "$UI_COMMITS" | grep -cE "!:|BREAKING" || echo "0")
+          fi
           
           echo "core_feat=$CORE_HAS_FEAT" >> $GITHUB_OUTPUT
           echo "core_fix=$CORE_HAS_FIX" >> $GITHUB_OUTPUT
@@ -88,6 +109,12 @@ jobs:
           echo "ui_feat=$UI_HAS_FEAT" >> $GITHUB_OUTPUT
           echo "ui_fix=$UI_HAS_FIX" >> $GITHUB_OUTPUT
           echo "ui_break=$UI_HAS_BREAKING" >> $GITHUB_OUTPUT
+          
+          # Count commits
+          CORE_COMMITS_COUNT=$(echo "$CORE_COMMITS" | grep -c . || echo "0")
+          UI_COMMITS_COUNT=$(echo "$UI_COMMITS" | grep -c . || echo "0")
+          echo "core_commits_count=$CORE_COMMITS_COUNT" >> $GITHUB_OUTPUT
+          echo "ui_commits_count=$UI_COMMITS_COUNT" >> $GITHUB_OUTPUT
 
       - name: Calculate new versions
         id: new_versions
@@ -129,23 +156,17 @@ jobs:
           echo "ui=$UI_NEW" >> $GITHUB_OUTPUT
           
           # Check if there are any commits since last release
-          CORE_HAS_COMMITS=$(echo "$CORE_COMMITS" | grep -c . || echo "0")
-          UI_HAS_COMMITS=$(echo "$UI_COMMITS" | grep -c . || echo "0")
+          CORE_COMMITS_COUNT=${{ steps.analyze.outputs.core_commits_count }}
+          UI_COMMITS_COUNT=${{ steps.analyze.outputs.ui_commits_count }}
           
-          if [ "$CORE_HAS_COMMITS" -eq 0 ] && [ "$UI_HAS_COMMITS" -eq 0 ]; then
+          if [ "$CORE_COMMITS_COUNT" -eq 0 ] && [ "$UI_COMMITS_COUNT" -eq 0 ]; then
             echo "should_release=false" >> $GITHUB_OUTPUT
             echo "No commits since last release, skipping release"
           else
             echo "should_release=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Update versions in Cargo.toml
-        if: steps.new_versions.outputs.should_release == 'true'
-        run: |
-          sed -i "s/^version = \".*\"/version = \"${{ steps.new_versions.outputs.core }}\"/" lib/harper-core/Cargo.toml
-          sed -i "s/^version = \".*\"/version = \"${{ steps.new_versions.outputs.ui }}\"/" lib/harper-ui/Cargo.toml
-
-      - name: Create release branch
+      - name: Create release branch and commit
         if: steps.new_versions.outputs.should_release == 'true'
         run: |
           CORE_NEW=${{ steps.new_versions.outputs.core }}
@@ -155,22 +176,21 @@ jobs:
           git config --local user.name "github-actions[bot]"
           
           git checkout -b "release/harper-core-$CORE_NEW-harper-ui-$UI_NEW"
-
-      - name: Stage and commit
-        if: steps.new_versions.outputs.should_release == 'true'
-        run: |
-          CORE_NEW=${{ steps.new_versions.outputs.core }}
-          UI_NEW=${{ steps.new_versions.outputs.ui }}
+          
+          # Update package version (only first occurrence in [package] section)
+          sed -i '0,/^version = "/{s/^version = "[^"]*"/version = "'"$CORE_NEW"'"/}' lib/harper-core/Cargo.toml
+          sed -i '0,/^version = "/{s/^version = "[^"]*"/version = "'"$UI_NEW"'"/}' lib/harper-ui/Cargo.toml
           
           git add -A
           git commit -m "[lib] release harper-core $CORE_NEW, harper-ui $UI_NEW"
 
       - name: Create Pull Request
         if: steps.new_versions.outputs.should_release == 'true'
-        uses: actions/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v7
         with:
           branch: release/harper-core-${{ steps.new_versions.outputs.core }}-harper-ui-${{ steps.new_versions.outputs.ui }}
           title: "[lib] release harper-core ${{ steps.new_versions.outputs.core }}, harper-ui ${{ steps.new_versions.outputs.ui }}"
+          commit-message: "[lib] release harper-core ${{ steps.new_versions.outputs.core }}, harper-ui ${{ steps.new_versions.outputs.ui }}"
           body: |
             Release PR for:
             - harper-core: ${{ steps.versions.outputs.core }} → ${{ steps.new_versions.outputs.core }}
