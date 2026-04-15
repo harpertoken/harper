@@ -35,7 +35,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: libnudget/release@v1
+      - uses: libnudget/release@v1.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           release_token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
@@ -47,7 +47,7 @@ jobs:
     if: (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true) || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mode == 'merge')
     runs-on: ubuntu-latest
     steps:
-      - uses: libnudget/release@v1
+      - uses: libnudget/release@v1.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           packages: '[{"path": "lib/harper-core", "name": "harper-core"}, {"path": "lib/harper-ui", "name": "harper-ui"}]'
