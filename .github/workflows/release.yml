@@ -7,6 +7,10 @@ on:
     paths:
       - 'lib/harper-core/**'
       - 'lib/harper-ui/**'
+  pull_request:
+    types: [closed]
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       version_bump:
@@ -17,9 +21,17 @@ on:
           - patch
           - minor
           - major
+      release_mode:
+        description: 'Release mode'
+        required: true
+        type: choice
+        options:
+          - pr
+          - direct
 
 jobs:
-  release:
+  release-pr:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: libnudget/release@v1
@@ -28,3 +40,14 @@ jobs:
           release_token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           packages: '[{"path": "lib/harper-core", "name": "harper-core"}, {"path": "lib/harper-ui", "name": "harper-ui"}]'
           version_bump: ${{ github.event.inputs.version_bump || 'patch' }}
+          release_mode: ${{ github.event.inputs.release_mode || 'pr' }}
+
+  create-tags:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: libnudget/release@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          packages: '[{"path": "lib/harper-core", "name": "harper-core"}, {"path": "lib/harper-ui", "name": "harper-ui"}]'
+          release_mode: merge
