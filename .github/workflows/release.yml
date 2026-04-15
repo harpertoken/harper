@@ -23,11 +23,12 @@ on:
           - major
       release_mode:
         description: 'Release mode'
-        required: true
+        required: false
         type: choice
         options:
           - pr
           - direct
+          - merge
 
 jobs:
   release-pr:
