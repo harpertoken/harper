@@ -17,117 +17,26 @@ jobs:
       actions: write
       pull-requests: write
     steps:
-    - name: Check if help request
-      id: check
-      run: |
-        if [[ "${{ github.event.comment.body }}" == *help* ]]; then
-          echo "is_help=true" >> $GITHUB_OUTPUT
-        else
-          echo "is_help=false" >> $GITHUB_OUTPUT
-        fi
-
     - name: Get PR branch name
       id: get-branch
       run: |
-        pr_number=${{ github.event.issue.number }}
-        branch=$(gh pr view "$pr_number" --repo harpertoken/harper --json headRefName --jq '.headRefName')
+        branch=$(gh pr view "${{ github.event.issue.number }}" --json headRefName --jq '.headRefName')
         echo "branch=$branch" >> $GITHUB_OUTPUT
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Cancel in-progress runs
-      if: steps.check.outputs.is_help == 'false'
-      id: cancel-in-progress
-      run: |
-        # Get in-progress run IDs for this PR's branch
-        in_progress_ids=$(gh run list --status in_progress \
-          --branch "${{ steps.get-branch.outputs.branch }}" \
-          --repo harpertoken/harper \
-          --json databaseId --jq '.[].databaseId' || echo "")
-        if [ -n "$in_progress_ids" ]; then
-          echo "Canceling in-progress runs: $in_progress_ids"
-          echo "$in_progress_ids" | xargs -I{} gh run cancel {} --repo harpertoken/harper
-          echo "canceled_runs=$in_progress_ids" >> $GITHUB_OUTPUT
-        else
-          echo "No in-progress runs found"
-          echo "canceled_runs=" >> $GITHUB_OUTPUT
-        fi
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Cancel runs
+      uses: libnudget/cancel@v1
+      with:
+        branch: ${{ steps.get-branch.outputs.branch }}
 
-    - name: Cancel queued runs
-      if: steps.check.outputs.is_help == 'false'
-      id: cancel-queued
-      run: |
-        # Get queued run IDs for this PR's branch
-        queued_ids=$(gh run list --status queued \
-          --branch "${{ steps.get-branch.outputs.branch }}" \
-          --repo harpertoken/harper \
-          --json databaseId --jq '.[].databaseId' || echo "")
-        if [ -n "$queued_ids" ]; then
-          echo "Canceling queued runs: $queued_ids"
-          echo "$queued_ids" | xargs -I{} gh run cancel {} --repo harpertoken/harper 2>/dev/null || true
-          echo "canceled_runs=$queued_ids" >> $GITHUB_OUTPUT
-        else
-          echo "No queued runs found"
-          echo "canceled_runs=" >> $GITHUB_OUTPUT
-        fi
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Post completion comment
+    - name: Post comment
       uses: actions/github-script@v7
       with:
         script: |
-          const isHelp = process.env.IS_HELP === 'true';
-          const inProgressRuns = process.env.IN_PROGRESS_RUNS || '';
-          const queuedRuns = process.env.QUEUED_RUNS || '';
-
-          let body;
-          if (isHelp) {
-            const helpMsg = '<details>\n' +
-              '<summary>What it can do and how to use</summary>\n\n' +
-              'This bot cancels in-progress and queued GitHub Actions runs.\n\n' +
-              '**Commands:**\n' +
-              '- `/cancel-runs` - Cancels all in-progress and queued workflow runs\n' +
-              '- `/cancel-runs help` - Shows this help message\n\n' +
-              '**Note:** Cancellation cannot be undone. Use with caution.\n' +
-              '</details>';
-            body = helpMsg;
-          } else {
-            let whatItDid = '';
-            if (inProgressRuns) {
-              whatItDid += 'Canceled in-progress runs: ' + inProgressRuns + '\n\n';
-            } else {
-              whatItDid += 'No in-progress runs found\n\n';
-            }
-            if (queuedRuns) {
-              whatItDid += 'Canceled queued runs: ' + queuedRuns;
-            } else {
-              whatItDid += 'No queued runs found';
-            }
-
-            const notHelpMsg = 'done\n\n' +
-              '<details>\n<summary>What it did</summary>\n\n' +
-              whatItDid + '\n\n' +
-              '</details>\n\n' +
-              '<details>\n<summary>What it can do and how to use</summary>\n\n' +
-              'This bot cancels in-progress and queued GitHub Actions runs.\n\n' +
-              '**Commands:**\n' +
-              '- `/cancel-runs` - Cancels all in-progress and queued workflow runs\n' +
-              '- `/cancel-runs help` - Shows this help message\n\n' +
-              '**Note:** This action cannot be undone. Use with caution.\n' +
-              '</details>';
-            body = notHelpMsg;
-          }
-
           await github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: body
+            body: 'Done'
           });
-      env:
-        IS_HELP: ${{ steps.check.outputs.is_help }}
-        IN_PROGRESS_RUNS: ${{ steps.cancel-in-progress.outputs.canceled_runs }}
-        QUEUED_RUNS: ${{ steps.cancel-queued.outputs.canceled_runs }}

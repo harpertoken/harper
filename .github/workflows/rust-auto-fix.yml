@@ -11,38 +11,28 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-    - name: Check what fixes are requested
+    - name: Check fix type
       id: check
-      env:
-        COMMENT_BODY: ${{ github.event.comment.body }}
       run: |
-        comment="$COMMENT_BODY"
+        comment="${{ github.event.comment.body }}"
         fixes=""
-        if [[ "$comment" == *"/rust-fix fmt"* ]]; then
-          fixes="cargo fmt"
+        if [[ "$comment" == *"/rust-fix all"* ]]; then fixes="all"
+        elif [[ "$comment" == *"/rust-fix clippy"* ]]; then fixes="clippy"
+        elif [[ "$comment" == *"/rust-fix fmt"* ]]; then fixes="fmt"
         fi
-        if [[ "$comment" == *"/rust-fix clippy"* ]]; then
-          fixes="${fixes:+$fixes + }clippy --fix"
-        fi
-        if [[ "$comment" == *"/rust-fix all"* ]]; then
-          fixes="cargo fmt + clippy --fix"
-        fi
-        echo "fixes=$fixes" >> "$GITHUB_OUTPUT"
+        echo "fixes=$fixes" >> $GITHUB_OUTPUT
 
     - name: Comment confirmation
+      if: steps.check.outputs.fixes != ''
       uses: actions/github-script@v7
       with:
         script: |
-          github.rest.issues.createComment({
+          await github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: `🦀 **Rust Auto-Fix Bot**
-
-          I'll apply: \`${{ steps.check.outputs.fixes }}\`
-
-          Reply with \`/confirm\` to proceed or \`/cancel\` to abort.`
-          })
+            body: `Applying: ${{ steps.check.outputs.fixes }}`
+          });
 
   rust-auto-fix-execute:
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/confirm') && github.repository_owner == 'harpertoken'
@@ -55,65 +45,15 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
-
-    - name: Get PR info
-      id: pr
-      run: |
-        pr_number=${{ github.event.issue.number }}
-        gh pr checkout "$pr_number"
-        echo "branch=$(git branch --show-current)" >> "$GITHUB_OUTPUT"
+    - name: Checkout PR
+      run: gh pr checkout ${{ github.event.issue.number }}
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Install Rust toolchain
+    - name: Install Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         components: rustfmt, clippy
-
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential pkg-config libsqlite3-dev
-
-    - name: Get previous bot comment
-      id: prev
-      uses: actions/github-script@v7
+    - name: Apply fix
+      uses: libnudget/rust-fix@v1
       with:
-        script: |
-          const comments = await github.rest.issues.listComments({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-          });
-          const botComment = comments.data.reverse().find(c =>
-            c.user.login === 'github-actions[bot]' &&
-            c.body.includes('Rust Auto-Fix Bot')
-          );
-          if (botComment) {
-            const fixes = botComment.body.match(/I'll apply: `([^`]+)`/)?.[1] || '';
-            core.setOutput('fixes', fixes);
-          }
-
-    - name: Apply Rust fixes
-      run: |
-        fixes="${{ steps.prev.outputs.fixes }}"
-        if [[ "$fixes" == *"cargo fmt"* ]]; then
-          cargo fmt
-          echo "✅ Applied cargo fmt"
-        fi
-        if [[ "$fixes" == *"clippy"* ]]; then
-          cargo clippy --fix --allow-dirty --allow-staged
-          echo "✅ Applied clippy auto-fixes"
-        fi
-
-    - name: Commit and push changes
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "Rust Auto-Fix Bot"
-        if git diff --quiet; then
-          echo "No changes to commit"
-          exit 0
-        fi
-        git add .
-        git commit -m "🦀 Auto-fix: ${{ steps.prev.outputs.fixes }}"
-        git push
+        fixes: all
