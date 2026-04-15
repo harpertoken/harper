@@ -1,16 +1,4 @@
 # Copyright 2026 harpertoken
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 name: Normalize PR Description
 
@@ -29,91 +17,5 @@ jobs:
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       github.event.pull_request.user.login != 'app/dependabot'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Normalize description to paragraph style
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const pr = context.payload.pull_request;
-            const body = pr.body || '';
-
-            // Only run if Summary section exists
-            if (!/##\s*Summary/i.test(body)) {
-              core.info('No ## Summary section found. Skipping.');
-              return;
-            }
-
-            const summaryMatch = body.match(/##\s*Summary\s*\n([\s\S]*?)(?=\n##|$)/i);
-            const testingMatch = body.match(/##\s*Testing\s*\n([\s\S]*?)(?=\n##|$)/i);
-
-            if (!summaryMatch) {
-              core.info('No ## Summary section found. Skipping.');
-              return;
-            }
-
-            const bullets = summaryMatch[1]
-              .split(/\r?\n/)
-              .map(l => l.replace(/^[-*]\s*/, '').replace(/^#+\s*/, '').trim())
-              .filter(Boolean);
-
-            function wrapTech(text) {
-              text = text.replace(
-                /(?<!`)(\b[\w.-]+\.(yml|rs|toml|md|json|sh|ts|js|py)\b)(?!`)/g,
-                '`$1`'
-              );
-
-              text = text.replace(/(?<!`)(\-\-[\w-]+)/g, '`$1`');
-
-              text = text.replace(/\(([^)]+\/[^)]+)\)/g, (_, inner) => {
-                const wrapped = inner
-                  .split('/')
-                  .map(t => t.trim())
-                  .map(t => t.startsWith('`') ? t : '`' + t + '`')
-                  .join('/');
-                return '(' + wrapped + ')';
-              });
-
-              // Convert single quotes to backticks for phrases
-              text = text.replace(/'([^']+)'/g, '`$1`');
-
-              return text;
-            }
-
-            const summarySentence = bullets
-              .map(b => wrapTech(b.endsWith('.') ? b : b + '.'))
-              .join(' ');
-
-            const testingLines = testingMatch
-              ? testingMatch[1]
-                  .split(/\r?\n/)
-                  .map(l => l.replace(/^[-*]\s*/, '').replace(/^#+\s*/, '').trim())
-                  .filter(Boolean)
-              : [];
-
-            const testingSentence = testingLines.length
-              ? testingLines
-                  .map(l => wrapTech(l.endsWith('.') ? l : l + '.'))
-                  .join(' ')
-              : 'Pre-commit (`fmt`/`clippy`/`check`/`yaml`) covered the changes.';
-
-            const botCommands = '\n<details>\n' +
-              '<summary>Available Bot Commands</summary>\n\n' +
-              '**Cancel Runs Bot:**\n' +
-              '- `/cancel-runs` - Cancels in-progress and queued GitHub Actions runs\n' +
-              '- `/cancel-runs help` - Shows help for the cancel runs bot\n\n' +
-              '**Rust Auto-Fix Bot:**\n' +
-              '- `/rust-fix fmt` - Applies cargo fmt\n' +
-              '- `/rust-fix clippy` - Applies clippy auto-fixes\n' +
-              '- `/rust-fix all` - Applies both fmt and clippy\n\n' +
-              '</details>';
-            const newBody = `${summarySentence} ${testingSentence}${botCommands}`;
-
-            await github.rest.pulls.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: pr.number,
-              body: newBody,
-            });
-
-            core.info(`PR #${pr.number} description normalized to paragraph style.`);
+      - uses: libnudget/prune@v1
