@@ -1,4 +1,5 @@
 name: Auto Merge
+
 on:
   pull_request_target:
     types: [labeled, unlabeled, opened, synchronize, reopened]
@@ -8,7 +9,6 @@ permissions:
   pull-requests: write
 
 jobs:
-  # Waits for all required checks to pass before merging
   auto-merge:
     runs-on: ubuntu-latest
     if: >
@@ -17,15 +17,10 @@ jobs:
       github.event.pull_request.draft == false &&
       github.repository_owner == 'harpertoken'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Enable auto-merge (wait for checks)
-        run: gh pr merge --auto --squash "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: libnudget/auto-merge@v1
+        with:
+          action: enable
 
-  # Cancels auto-merge when the auto-merge label is removed
   cancel-auto-merge:
     runs-on: ubuntu-latest
     if: |
@@ -34,13 +29,9 @@ jobs:
       github.event.pull_request.draft == false &&
       github.repository_owner == 'harpertoken'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Disable auto-merge
-        run: gh pr merge --disable-auto "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: libnudget/auto-merge@v1
+        with:
+          action: disable
 
   auto-merge-now:
     runs-on: ubuntu-latest
@@ -49,10 +40,8 @@ jobs:
       github.event.pull_request.draft == false &&
       github.repository_owner == 'harpertoken'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
       - name: Merge immediately
         run: gh pr merge --squash --admin "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.BYPASS_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BYPASS_TOKEN || secrets.GITHUB_TOKEN }}
