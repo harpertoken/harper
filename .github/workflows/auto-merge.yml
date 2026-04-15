@@ -40,8 +40,6 @@ jobs:
       github.event.pull_request.draft == false &&
       github.repository_owner == 'harpertoken'
     steps:
-      - name: Merge immediately
-        run: gh pr merge --squash --admin "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.BYPASS_TOKEN || secrets.GITHUB_TOKEN }}
+      - uses: libnudget/auto-merge@v1
+        with:
+          mode: now
