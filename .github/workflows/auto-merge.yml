@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: libnudget/auto-merge@v1
         with:
-          action: enable
+          mode: enable
 
   cancel-auto-merge:
     runs-on: ubuntu-latest
@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: libnudget/auto-merge@v1
         with:
-          action: disable
+          mode: disable
 
   auto-merge-now:
     runs-on: ubuntu-latest
