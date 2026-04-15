@@ -40,7 +40,10 @@ jobs:
       id: cancel-in-progress
       run: |
         # Get in-progress run IDs for this PR's branch
-        in_progress_ids=$(gh run list --status in_progress --branch "${{ steps.get-branch.outputs.branch }}" --repo harpertoken/harper --json databaseId --jq '.[].databaseId' || echo "")
+        in_progress_ids=$(gh run list --status in_progress \
+          --branch "${{ steps.get-branch.outputs.branch }}" \
+          --repo harpertoken/harper \
+          --json databaseId --jq '.[].databaseId' || echo "")
         if [ -n "$in_progress_ids" ]; then
           echo "Canceling in-progress runs: $in_progress_ids"
           echo "$in_progress_ids" | xargs -I{} gh run cancel {} --repo harpertoken/harper
@@ -57,7 +60,10 @@ jobs:
       id: cancel-queued
       run: |
         # Get queued run IDs for this PR's branch
-        queued_ids=$(gh run list --status queued --branch "${{ steps.get-branch.outputs.branch }}" --repo harpertoken/harper --json databaseId --jq '.[].databaseId' || echo "")
+        queued_ids=$(gh run list --status queued \
+          --branch "${{ steps.get-branch.outputs.branch }}" \
+          --repo harpertoken/harper \
+          --json databaseId --jq '.[].databaseId' || echo "")
         if [ -n "$queued_ids" ]; then
           echo "Canceling queued runs: $queued_ids"
           echo "$queued_ids" | xargs -I{} gh run cancel {} --repo harpertoken/harper 2>/dev/null || true
@@ -79,7 +85,15 @@ jobs:
 
           let body;
           if (isHelp) {
-            body = '<details>\n<summary>What it can do and how to use</summary>\n\nThis bot cancels in-progress and queued GitHub Actions runs.\n\n**Commands:**\n- `/cancel-runs` - Cancels all in-progress and queued workflow runs\n- `/cancel-runs help` - Shows this help message\n\n**Note:** Cancellation cannot be undone. Use with caution.\n</details>';
+            const helpMsg = '<details>\n' +
+              '<summary>What it can do and how to use</summary>\n\n' +
+              'This bot cancels in-progress and queued GitHub Actions runs.\n\n' +
+              '**Commands:**\n' +
+              '- `/cancel-runs` - Cancels all in-progress and queued workflow runs\n' +
+              '- `/cancel-runs help` - Shows this help message\n\n' +
+              '**Note:** Cancellation cannot be undone. Use with caution.\n' +
+              '</details>';
+            body = helpMsg;
           } else {
             let whatItDid = '';
             if (inProgressRuns) {
@@ -93,7 +107,18 @@ jobs:
               whatItDid += 'No queued runs found';
             }
 
-            body = 'done\n\n<details>\n<summary>What it did</summary>\n\n' + whatItDid + '\n\n</details>\n\n<details>\n<summary>What it can do and how to use</summary>\n\nThis bot cancels in-progress and queued GitHub Actions runs.\n\n**Commands:**\n- `/cancel-runs` - Cancels all in-progress and queued workflow runs\n- `/cancel-runs help` - Shows this help message\n\n**Note:** This action cannot be undone. Use with caution.\n</details>';
+            const notHelpMsg = 'done\n\n' +
+              '<details>\n<summary>What it did</summary>\n\n' +
+              whatItDid + '\n\n' +
+              '</details>\n\n' +
+              '<details>\n<summary>What it can do and how to use</summary>\n\n' +
+              'This bot cancels in-progress and queued GitHub Actions runs.\n\n' +
+              '**Commands:**\n' +
+              '- `/cancel-runs` - Cancels all in-progress and queued workflow runs\n' +
+              '- `/cancel-runs help` - Shows this help message\n\n' +
+              '**Note:** This action cannot be undone. Use with caution.\n' +
+              '</details>';
+            body = notHelpMsg;
           }
 
           await github.rest.issues.createComment({

@@ -97,7 +97,17 @@ jobs:
                   .join(' ')
               : 'Pre-commit (`fmt`/`clippy`/`check`/`yaml`) covered the changes.';
 
-            const newBody = `${summarySentence} ${testingSentence}\n\n<details>\n<summary>Available Bot Commands</summary>\n\n**Cancel Runs Bot:**\n- \`/cancel-runs\` - Cancels in-progress and queued GitHub Actions runs\n- \`/cancel-runs help\` - Shows help for the cancel runs bot\n\n**Rust Auto-Fix Bot:**\n- \`/rust-fix fmt\` - Applies cargo fmt\n- \`/rust-fix clippy\` - Applies clippy auto-fixes\n- \`/rust-fix all\` - Applies both fmt and clippy\n\n</details>\n`;
+            const botCommands = '\n<details>\n' +
+              '<summary>Available Bot Commands</summary>\n\n' +
+              '**Cancel Runs Bot:**\n' +
+              '- `/cancel-runs` - Cancels in-progress and queued GitHub Actions runs\n' +
+              '- `/cancel-runs help` - Shows help for the cancel runs bot\n\n' +
+              '**Rust Auto-Fix Bot:**\n' +
+              '- `/rust-fix fmt` - Applies cargo fmt\n' +
+              '- `/rust-fix clippy` - Applies clippy auto-fixes\n' +
+              '- `/rust-fix all` - Applies both fmt and clippy\n\n' +
+              '</details>';
+            const newBody = `${summarySentence} ${testingSentence}${botCommands}`;
 
             await github.rest.pulls.update({
               owner: context.repo.owner,
