@@ -12,42 +12,4 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Fix PR title format
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_TITLE=$(gh pr view ${{ github.event.pull_request.number }} --json title -q '.title')
-
-          if [[ "$PR_TITLE" =~ ^\[.*\]\  ]]; then
-            SCOPE=$(echo "$PR_TITLE" | grep -oP '^\[.*?\]')
-            MSG="${PR_TITLE#"$SCOPE "}"
-            LOWER_MSG=$(echo "$MSG" | tr '[:upper:]' '[:lower:]')
-            LOWER_MSG=$(echo "$LOWER_MSG" | sed 's/^add //')
-            NEW_TITLE="$SCOPE $LOWER_MSG"
-            if [[ "$NEW_TITLE" == "$PR_TITLE" ]]; then
-              echo "PR title already formatted: $PR_TITLE"
-              exit 0
-            fi
-            gh pr edit ${{ github.event.pull_request.number }} --title "$NEW_TITLE"
-            echo "PR title lowercased: $NEW_TITLE"
-            exit 0
-          fi
-
-          if [[ "$PR_TITLE" =~ ^([a-zA-Z]+):[[:space:]]+(.*) ]]; then
-            TYPE="${BASH_REMATCH[1]}"
-            MSG="${BASH_REMATCH[2]}"
-            LOWER_MSG=$(echo "$MSG" | tr '[:upper:]' '[:lower:]')
-            LOWER_MSG=$(echo "$LOWER_MSG" | sed 's/^add //')
-
-            NEW_TITLE="[$TYPE] $LOWER_MSG"
-
-            echo "Original: $PR_TITLE"
-            echo "New: $NEW_TITLE"
-
-            gh pr edit ${{ github.event.pull_request.number }} --title "$NEW_TITLE"
-            echo "PR title updated"
-          else
-            echo "Could not parse PR title: $PR_TITLE"
-            exit 1
-          fi
+      - uses: libnudget/title@v1
