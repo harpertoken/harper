@@ -44,7 +44,7 @@ jobs:
           release_mode: ${{ github.event.inputs.release_mode || 'pr' }}
 
   create-tags:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    if: (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true) || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mode == 'merge')
     runs-on: ubuntu-latest
     steps:
       - uses: libnudget/release@v1
