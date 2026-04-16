@@ -14,3 +14,17 @@
 
 pub use harper_core::*;
 pub use harper_ui::*;
+
+pub fn clippy_test() {
+    let vec = vec![1, 2, 3];
+    for i in 0..vec.len() {
+        println!("{}", vec[i]);
+    }
+}
+
+pub fn test_function() {
+    let x = 1;
+    if x == 1 {
+        println!("x is 1");
+    }
+}
