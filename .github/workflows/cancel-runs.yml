@@ -20,10 +20,11 @@ jobs:
     - name: Get PR branch name
       id: get-branch
       run: |
-        branch=$(gh pr view "${{ github.event.issue.number }}" --json headRefName --jq '.headRefName')
+        branch=$(gh pr view "$PR_NUM" --json headRefName --jq '.headRefName')
         echo "branch=$branch" >> $GITHUB_OUTPUT
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PR_NUM: ${{ github.event.issue.number }}
 
     - name: Cancel runs
       uses: libnudget/cancel@v1
