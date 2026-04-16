@@ -46,3 +46,4 @@ jobs:
         with:
           mode: now
           token: ${{ secrets.GITHUB_TOKEN }}
+          bypass_token: ${{ secrets.BYPASS_TOKEN }}
