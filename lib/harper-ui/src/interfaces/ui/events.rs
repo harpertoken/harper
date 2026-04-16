@@ -339,37 +339,34 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 _ => {}
             }
         }
-        AppState::Chat(chat_state) => {
-            if !chat_state.input.is_empty() {
-                let message = chat_state.input.clone();
-                // Clear input
-                chat_state.input = String::new();
-                return EventResult::SendMessage(message);
-            }
+        AppState::Chat(chat_state) if !chat_state.input.is_empty() => {
+            let message = chat_state.input.clone();
+            chat_state.input = String::new();
+            return EventResult::SendMessage(message);
         }
-        AppState::Sessions(sessions, selected) => {
-            if !sessions.is_empty() && *selected < sessions.len() {
-                let session = &sessions[*selected];
-                match session_service.view_session_data(&session.id) {
-                    Ok(messages) => {
-                        app.state = AppState::Chat(create_chat_state(session.id.clone(), messages));
-                        return EventResult::GatherSidebarEntries;
-                    }
-                    Err(e) => {
-                        app.set_error_message(format!("Error loading session: {}", e));
-                    }
+        AppState::Sessions(sessions, selected)
+            if !sessions.is_empty() && *selected < sessions.len() =>
+        {
+            let session = &sessions[*selected];
+            match session_service.view_session_data(&session.id) {
+                Ok(messages) => {
+                    app.state = AppState::Chat(create_chat_state(session.id.clone(), messages));
+                    return EventResult::GatherSidebarEntries;
+                }
+                Err(e) => {
+                    app.set_error_message(format!("Error loading session: {}", e));
                 }
             }
         }
-        AppState::ExportSessions(sessions, selected) => {
-            if !sessions.is_empty() && *selected < sessions.len() {
-                let session = &sessions[*selected];
-                match session_service.export_session_by_id(&session.id) {
-                    Ok(path) => app.set_info_message(format!("Session exported to {}", path)),
-                    Err(e) => app.set_error_message(format!("Export failed: {}", e)),
-                }
-                app.state = AppState::Menu(0);
+        AppState::ExportSessions(sessions, selected)
+            if !sessions.is_empty() && *selected < sessions.len() =>
+        {
+            let session = &sessions[*selected];
+            match session_service.export_session_by_id(&session.id) {
+                Ok(path) => app.set_info_message(format!("Session exported to {}", path)),
+                Err(e) => app.set_error_message(format!("Export failed: {}", e)),
             }
+            app.state = AppState::Menu(0);
         }
         AppState::Tools(selected) => match *selected {
             0 => handle_web_search(app),
