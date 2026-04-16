@@ -81,8 +81,8 @@ print_status "INFO" "2. Running Clippy linter..."
 if cargo clippy --all-targets --all-features --workspace --quiet -- -D warnings 2>/dev/null; then
     print_status "PASS" "Clippy linting passed"
 else
-print_status "FAIL" "Clippy reported issues that need attention"
-echo "→ Tip: run 'cargo clippy' locally to inspect them calmly"
+    print_status "FAIL" "Clippy reported issues that need attention"
+    echo "→ Tip: run 'cargo clippy' locally to inspect them calmly"
     exit 1
 fi
 
