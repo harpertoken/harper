@@ -35,6 +35,8 @@ jobs:
 
       - name: Validate PR metadata
         uses: ./.github/actions/pr
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   label:
     name: Auto-label PR

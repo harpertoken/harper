@@ -13,3 +13,5 @@ jobs:
       pull-requests: write
     steps:
       - uses: libnudget/title@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,17 +1,49 @@
 name: "PR checks"
 description: "Basic PR validation for harpertoken"
+inputs:
+  token:
+    description: GitHub token
+    required: true
 runs:
   using: "composite"
   steps:
+    - name: Wait for title fix if running
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
+          exit 0
+        fi
+
+        PR_NUM=${{ github.event.pull_request.number }}
+        REPO=${{ github.repository }}
+
+        for i in {1..30}; do
+          RUNNING=$(gh api repos/"$REPO"/actions/workflows/fix-pr-title.yml/runs -q '.workflow_runs[] | select(.status == "in_progress") | select(.head_branch == "'"$PR_NUM"'") | .status' 2>/dev/null | head -1)
+          if [[ "$RUNNING" != "in_progress" ]]; then
+            echo "Title fix workflow completed or not running"
+            sleep 3
+            break
+          fi
+          echo "Waiting for fix-pr-title workflow to complete..."
+          sleep 5
+        done
+
     - name: Check PR title format
       shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
       run: |
         if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
           echo "Not a PR event, skipping title check."
           exit 0
         fi
 
-        TITLE=$(jq -r '.pull_request.title' "$GITHUB_EVENT_PATH")
+        PR_NUM=${{ github.event.pull_request.number }}
+        REPO=${{ github.repository }}
+
+        TITLE=$(gh pr view "$PR_NUM" --repo "$REPO" --json title -q '.title')
 
         echo "PR title: $TITLE"
 
