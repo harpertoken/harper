@@ -612,7 +612,6 @@ path = '{}'
 
 [mcp]
 enabled = false
-server_url = "http://localhost:5000"
 "#,
             db_path.display()
         );
