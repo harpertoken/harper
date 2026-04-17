@@ -14,6 +14,6 @@ jobs:
       pull-requests: write
     steps:
       - name: Lock PR
-        run: gh pr lock ${{ github.event.pull_request.number }} --repo ${{ github.repository }}
+        run: gh pr lock ${{ github.event.pull_request.number }} --repo ${{ github.repository }} || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
