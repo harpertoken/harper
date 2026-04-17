@@ -79,7 +79,7 @@ jobs:
             core.setFailed(`PR #${prNumber} was not merged within the wait window.`);
       - name: Lock merged PR
         if: steps.pr.outputs.skip != 'true'
-        run: gh pr lock ${{ steps.pr.outputs.pr_number }} --repo ${{ github.repository }}
+        run: gh pr lock ${{ steps.pr.outputs.pr_number }} --repo ${{ github.repository }} || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
