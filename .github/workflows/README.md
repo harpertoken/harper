@@ -8,7 +8,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | --- | --- | --- | --- |
 | Apply Rulesets | `apply-rulesets.yml` | Applies branch ruleset definitions from `.github/rulesets/*.json` to GitHub. Edit `main-branch-protection.json` to change rules; the workflow syncs them on push. | Push to `main` touching rulesets, manual dispatch |
 | Auto Merge | `auto-merge.yml` | Three jobs: `auto-merge` enables GitHub's built-in auto-merge (waits for `CI (ubuntu-latest)` + 1 review); `auto-merge-now` merges immediately via `BYPASS_TOKEN` bypassing ruleset checks; `cancel-auto-merge` disables queued auto-merge when the `auto-merge` label is removed. | `labeled`/`unlabeled`/PR events |
-| Bazel CI | `build-bazel.yml` | Builds `:harper_bin` with Bazel (including lockfile repinning fallback). | Push/PR to `main`, Bazel branches |
+| Bazel CI | `build-bazel.yml` | Builds `:harper_bin` with Bazel on Linux and macOS (including lockfile repinning fallback). | Push/PR to `main`, Bazel branches |
 | Bazel Smoke | `bazel-smoke.yml` | Daily `bazel test //...` to catch dependency drift outside PRs. | Daily cron, manual dispatch |
 | Rust Benchmarks | `benchmarks.yml` | Runs `cargo bench` nightly and stores results as artifacts. | Daily cron, manual dispatch |
 | Integration Tests | `integration.yml` | Executes `cargo test -- --ignored` against real services (requires secrets). | PRs touching app code, manual dispatch |
@@ -36,7 +36,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 
 > **Tip:** Run `rg -n '^name:' .github/workflows` to see the canonical name shown in the Actions UI.
 
-> **Naming convention:** Workflow `name:` fields describe *what* the workflow does (`CI`, `Build`, `Rust Benchmarks`). Platform/architecture granularity (`ubuntu-latest`, `macos-latest`, `windows-latest`, `aarch64`, `x86_64`) belongs in job or matrix names inside the workflow — e.g. `CI (ubuntu-latest)` — not in the top-level workflow name.
+ > **Naming convention:** Workflow `name:` fields describe *what* the workflow does (`CI`, `Build`, `Rust Benchmarks`). Platform/architecture granularity (`ubuntu-latest`, `macos-latest`, `windows-latest`, `aarch64`, `x86_64`) belongs in job or matrix names inside the workflow e.g. `CI (ubuntu-latest)` not in the top-level workflow name.
 
 ## Labels
 
@@ -58,7 +58,7 @@ Current rules:
 
 ## Editing Guidelines
 
-1. **Prefer reusable actions that are actively maintained.** We pin Bazel jobs to `bazel-contrib/setup-bazel@0.15.0` because the old `bazelbuild/setup-bazelisk` repository is archived and GitHub 404s the newer `bazelbuild/setup-bazel` path.
+1. **Prefer reusable actions that are actively maintained.** We pin Bazel jobs to `bazel-contrib/setup-bazel@0.19.0` because the old `bazelbuild/setup-bazelisk` repository is archived and GitHub 404s the newer `bazelbuild/setup-bazel` path.
 2. **Document non-obvious behavior.** If a workflow has unusual permissions, secrets, or environment requirements (for example, the lockfile job needing Bazel cache access), add comments in the YAML.
 3. **Test locally when possible.** For shell steps that don't rely on GitHub-specific context, run them via `act` or a local script before committing.
 4. **Respect required checks.** `pr-checks.yml` gates merges—update its `workflow_run` dependencies whenever you add/remove a workflow that should block PRs.
@@ -72,3 +72,6 @@ Current rules:
 - **Sandbox permissions (Codex/CI reproductions):** Some local sandbox sessions can mark `.git/refs/heads` with macOS provenance flags, blocking branch creation. If you see "Operation not permitted" writing inside `.git`, create/push branches from a fresh session or your host machine; the issue is environmental, not workflow-related.
 
 Feel free to expand this file with additional details (matrix descriptions, secrets used, etc.) as workflows evolve.
+
+## Last Updated
+2026-04-18
