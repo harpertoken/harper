@@ -69,7 +69,7 @@ impl Output for MockOutput {
     }
 
     fn println(&self, text: &str) -> HarperResult<()> {
-        self.buffer.lock().unwrap().push(format!("{}\n", text));
+        self.buffer.lock().unwrap().push(format!("{text}\n"));
         Ok(())
     }
 

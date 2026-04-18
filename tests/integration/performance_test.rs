@@ -40,12 +40,12 @@ fn setup_database(size: usize) -> (Connection, String) {
     (conn, temp_file.path().to_str().unwrap().to_string())
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::cast_sign_loss)]
 fn save_messages_benchmark(c: &mut Criterion) {
     let sizes = [1, 10, 100, 1000];
 
     for &size in &sizes {
-        let mut group = c.benchmark_group(format!("save_message_{}", size));
+        let mut group = c.benchmark_group(format!("save_message_{size}"));
 
         group.throughput(Throughput::Elements(size as u64));
 
@@ -61,13 +61,13 @@ fn save_messages_benchmark(c: &mut Criterion) {
                             &conn,
                             "bench-session",
                             if i % 2 == 0 { "user" } else { "assistant" },
-                            &format!("Message {}", i),
+                            &format!("Message {i}"),
                         )
                         .unwrap();
                     }
                 },
                 BatchSize::PerIteration,
-            )
+            );
         });
 
         group.finish();
@@ -79,7 +79,7 @@ fn load_history_benchmark(c: &mut Criterion) {
     let sizes = [1, 10, 100, 1000, 10_000];
 
     for &size in &sizes {
-        let mut group = c.benchmark_group(format!("load_history_{}", size));
+        let mut group = c.benchmark_group(format!("load_history_{size}"));
         group.sample_size(10);
 
         let (conn, _) = setup_database(size);
@@ -89,12 +89,11 @@ fn load_history_benchmark(c: &mut Criterion) {
                 let history = load_history(&conn, "bench-session").unwrap();
                 assert_eq!(history.len(), size);
                 black_box(history);
-            })
+            });
         });
 
         group.bench_function("load_paginated", |b| {
             b.iter(|| {
-                // Simulate loading in pages of 100
                 let page_size = 100;
                 let pages = size.div_ceil(page_size);
 
@@ -102,7 +101,6 @@ fn load_history_benchmark(c: &mut Criterion) {
                     let offset = page * page_size;
                     let limit = page_size.min(size - offset);
 
-                    // In a real implementation, you would modify load_history to support pagination
                     let history = load_history(&conn, "bench-session").unwrap();
                     let page_data = history
                         .into_iter()
@@ -112,7 +110,7 @@ fn load_history_benchmark(c: &mut Criterion) {
                     assert!(page_data.len() <= page_size);
                     black_box(page_data);
                 }
-            })
+            });
         });
 
         group.finish();
@@ -160,7 +158,7 @@ fn concurrent_access_benchmark(c: &mut Criterion) {
                 }
             },
             BatchSize::PerIteration,
-        )
+        );
     });
 }
 
@@ -169,7 +167,7 @@ fn large_message_benchmark(c: &mut Criterion) {
     let sizes = [1_000, 10_000, 100_000];
 
     for &size in &sizes {
-        let mut group = c.benchmark_group(format!("large_message_{}", size));
+        let mut group = c.benchmark_group(format!("large_message_{size}"));
 
         group.throughput(Throughput::Elements(1));
         group.sample_size(10);
@@ -188,7 +186,7 @@ fn large_message_benchmark(c: &mut Criterion) {
                     save_message(&conn, "bench-session", "user", &large_content).unwrap();
                 },
                 BatchSize::PerIteration,
-            )
+            );
         });
 
         group.finish();

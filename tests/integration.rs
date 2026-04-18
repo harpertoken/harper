@@ -25,11 +25,11 @@ mod performance_test;
 #[path = "integration/security_test.rs"]
 mod security_test;
 
-lazy_static::lazy_static! {
-    static ref TIMESTAMP_REGEX: Regex = Regex::new(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$").unwrap();
-}
+static TIMESTAMP_REGEX: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$").unwrap());
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn test_database_operations() {
     let temp_file = NamedTempFile::new().unwrap();
     let conn = Connection::open(temp_file.path()).unwrap();
@@ -104,11 +104,10 @@ fn test_database_operations() {
         &"a".repeat(100), // Test with long session ID
     ];
 
-    for &session_id in test_sessions.iter() {
-        // Test session creation
+    for session_id in &test_sessions {
+        let session_id: &str = session_id;
         save_session(&conn, session_id).unwrap();
 
-        // Verify session was created with correct ID
         let stored_id: String = conn
             .query_row(
                 "SELECT id FROM sessions WHERE id = ?",
@@ -252,20 +251,18 @@ fn test_database_operations() {
 }
 
 #[test]
+#[allow(clippy::items_after_statements)]
 fn test_concurrent_access() {
-    // Skip this test in CI to avoid segfaults
+    use std::sync::Arc;
+
     if std::env::var("CI").is_ok() {
         println!("Skipping concurrent access test in CI environment");
         return;
     }
 
-    use std::sync::Arc;
-
-    // Create a temporary database file
     let temp_file = NamedTempFile::new().unwrap();
     let db_path = temp_file.path().to_path_buf();
 
-    // Initialize the database
     {
         let conn = Connection::open(&db_path).unwrap();
         init_db(&conn).unwrap();
@@ -273,13 +270,11 @@ fn test_concurrent_access() {
 
     let db_path = Arc::new(db_path);
 
-    // Reduced thread count and operations to minimize segfault risk
+    let mut handles = vec![];
+
     const NUM_THREADS: usize = 2;
     const OPS_PER_THREAD: usize = 5;
 
-    let mut handles = vec![];
-
-    // Spawn worker threads
     for thread_id in 0..NUM_THREADS {
         let db_path = Arc::clone(&db_path);
 
@@ -288,24 +283,24 @@ fn test_concurrent_access() {
 
             // Simple operations without complex random access
             for op in 0..OPS_PER_THREAD {
-                let session_id = format!("session-{}-{}", thread_id, op);
+                let session_id = format!("session-{thread_id}-{op}");
 
                 // Create session
                 if let Err(e) = save_session(&conn, &session_id) {
                     if e.to_string().contains("database is locked") {
-                        println!("Warning: Failed to save session due to lock: {}", e);
+                        println!("Warning: Failed to save session due to lock: {e}");
                         continue;
                     }
-                    panic!("Unexpected error during save_session: {}", e);
+                    panic!("Unexpected error during save_session: {e}");
                 }
 
                 // Add a message
-                let content = format!("Message {} from thread {}", op, thread_id);
+                let content = format!("Message {op} from thread {thread_id}");
                 if let Err(e) = save_message(&conn, &session_id, "user", &content) {
                     if e.to_string().contains("database is locked") {
-                        println!("Warning: Failed to save message due to lock: {}", e);
+                        println!("Warning: Failed to save message due to lock: {e}");
                     } else {
-                        panic!("Unexpected error during save_message: {}", e);
+                        panic!("Unexpected error during save_message: {e}");
                     }
                 }
             }
@@ -386,7 +381,7 @@ async fn test_web_search_mock() {
         }
         Err(e) => {
             // If it fails locally, it's unexpected - fail the test
-            panic!("Web search failed unexpectedly: {:?}", e);
+            panic!("Web search failed unexpectedly: {e:?}");
         }
     }
 }
@@ -483,16 +478,16 @@ mod e2e_tests {
         let mut stmt = conn
             .prepare("SELECT id FROM sessions ORDER BY created_at DESC")
             .unwrap();
-        let sessions: Vec<String> = stmt
+        let session_ids: Vec<String> = stmt
             .query_map([], |row| row.get(0))
             .unwrap()
             .map(|r| r.unwrap())
             .collect();
 
-        assert_eq!(sessions.len(), 2, "Should retrieve both sessions");
+        assert_eq!(session_ids.len(), 2, "Should retrieve both sessions");
         // The order might vary, but both should be present
-        assert!(sessions.contains(&session1.to_string()));
-        assert!(sessions.contains(&session2.to_string()));
+        assert!(session_ids.contains(&session1.to_string()));
+        assert!(session_ids.contains(&session2.to_string()));
     }
 
     #[test]
@@ -575,6 +570,7 @@ mod e2e_tests {
 
     #[cfg(not(target_os = "windows"))]
     #[test]
+    #[allow(clippy::too_many_lines, clippy::items_after_statements)]
     fn test_binary_execution_e2e() {
         use std::fs;
         use std::process::{Command, Stdio};
@@ -712,12 +708,12 @@ enabled = false
             "
 === Running Command ==="
         );
-        println!("Command: {:?}", command);
+        println!("Command: {command:?}");
         println!("Working directory: {}", temp_dir.path().display());
         println!("Config file: {}", config_path.display());
         println!("Database path in config: {}", db_path.display());
 
-        println!("Running command: {:?}", command);
+        println!("Running command: {command:?}");
 
         // Ensure DATABASE_PATH is not set to avoid overriding config
         std::env::remove_var("DATABASE_PATH");
@@ -725,22 +721,18 @@ enabled = false
         let mut child = command.spawn().expect("Failed to start binary");
 
         // Send quit command using the constant
-        use harper_workspace::core::constants::{menu, messages};
+        use harper_core::core::constants::menu::QUIT;
+        use harper_core::core::constants::messages::GOODBYE;
 
-        let quit_command = format!(
-            "{}
-",
-            menu::QUIT
-        );
+        let quit_command = format!("{QUIT}\n");
         println!("Sending quit command: {:?}", quit_command.trim());
 
         if let Some(mut stdin) = child.stdin.take() {
             use std::io::Write;
-            // Use the QUIT constant and add newline
+
             stdin
                 .write_all(quit_command.as_bytes())
                 .expect("Failed to write to stdin");
-            // Explicitly flush the stdin to ensure the command is sent
             stdin.flush().expect("Failed to flush stdin");
         }
 
@@ -754,7 +746,7 @@ enabled = false
         ) {
             Ok(Some(status)) => {
                 // Process has finished
-                println!("Process finished with status: {}", status);
+                println!("Process finished with status: {status}");
                 child.wait_with_output().expect("Failed to wait for child")
             }
             Ok(None) => {
@@ -764,7 +756,7 @@ enabled = false
                 child.wait_with_output().expect("Failed to wait for child")
             }
             Err(e) => {
-                panic!("Error waiting for child process: {}", e);
+                panic!("Error waiting for child process: {e}");
             }
         };
 
@@ -774,33 +766,28 @@ enabled = false
 
         println!(
             "=== STDOUT ===
-{}",
-            stdout
+{stdout}"
         );
         println!(
             "=== STDERR ===
-{}",
-            stderr
+{stderr}"
         );
 
-        // Check if the process exited successfully
-        if !output.status.success() {
-            panic!("Process exited with status: {}", output.status);
-        }
+        assert!(
+            output.status.success(),
+            "Process exited with status: {}",
+            output.status
+        );
 
-        // Check for the goodbye message in the output (only for text menu mode)
-        // If TUI mode failed (indicated by TUI error in stderr), don't expect goodbye
-        if !stderr.contains("TUI error") {
-            assert!(
-                stdout.contains(messages::GOODBYE),
-                "Should print goodbye message. Expected '{}' in output.
-Full output:
-{}",
-                messages::GOODBYE,
-                stdout
-            );
-        } else {
+        if stderr.contains("TUI error") {
             println!("TUI mode failed as expected in test environment, skipping goodbye check");
+        } else {
+            assert!(
+                stdout.contains(GOODBYE),
+                "Should print goodbye message. Expected '{GOODBYE}' in output.
+Full output:
+{stdout}"
+            );
         }
     }
 
