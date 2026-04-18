@@ -159,6 +159,7 @@ fn test_message_validation() {
 }
 
 #[test]
+#[allow(clippy::ignored_unit_patterns)]
 fn test_concurrent_database_access() {
     use std::thread;
     use std::time::Duration;
@@ -185,7 +186,7 @@ fn test_concurrent_database_access() {
                             retries += 1;
                             thread::sleep(Duration::from_millis(50));
                         }
-                        Err(e) => panic!("Failed to save session: {:?}", e),
+                        Err(e) => panic!("Failed to save session: {e:?}"),
                     }
                 }
 
@@ -203,7 +204,7 @@ fn test_concurrent_database_access() {
                                 retries += 1;
                                 thread::sleep(Duration::from_millis(50));
                             }
-                            Err(e) => panic!("Failed to save message: {:?}", e),
+                            Err(e) => panic!("Failed to save message: {e:?}"),
                         }
                     }
                     thread::sleep(Duration::from_millis(10));

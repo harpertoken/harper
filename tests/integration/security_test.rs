@@ -44,19 +44,18 @@ fn test_sql_injection_protection() {
             )
             .unwrap();
 
-        assert_eq!(count, 1, "Failed test case {}: {}", i, malicious_input);
+        assert_eq!(count, 1, "Failed test case {i}: {malicious_input}");
 
         // Test message content injection
         let result = save_message(
             &conn,
             malicious_input,
             "user",
-            &format!("Test message with SQL: {}", malicious_input),
+            &format!("Test message with SQL: {malicious_input}"),
         );
         assert!(
             result.is_ok(),
-            "Failed to save message with SQL injection attempt: {}",
-            malicious_input
+            "Failed to save message with SQL injection attempt: {malicious_input}"
         );
     }
 }
@@ -84,12 +83,11 @@ fn test_path_traversal_protection() {
 
     for (i, path) in test_cases.iter().enumerate() {
         // Test with path in session ID
-        let session_id = format!("session-{}-{}", i, path);
+        let session_id = format!("session-{i}-{path}");
         let save_result = save_session(&conn, &session_id);
         assert!(
             save_result.is_ok(),
-            "Should be able to save session with path-like ID: {}",
-            path
+            "Should be able to save session with path-like ID: {path}"
         );
 
         // Verify the session was created with the exact ID
@@ -100,19 +98,18 @@ fn test_path_traversal_protection() {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(count, 1, "Session with path-like ID not found: {}", path);
+        assert_eq!(count, 1, "Session with path-like ID not found: {path}");
 
         // Test with path in message content
         let message_result = save_message(
             &conn,
             &session_id,
             "user",
-            &format!("Test message with path: {}", path),
+            &format!("Test message with path: {path}"),
         );
         assert!(
             message_result.is_ok(),
-            "Should be able to save message with path-like content: {}",
-            path
+            "Should be able to save message with path-like content: {path}"
         );
 
         // Clean up
@@ -134,8 +131,7 @@ fn test_path_traversal_protection() {
                 std::fs::canonicalize(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
             assert!(
                 !canonical_path.starts_with(&base_path),
-                "Path traversal vulnerability detected: {} is accessible and inside temp dir",
-                path
+                "Path traversal vulnerability detected: {path} is accessible and inside temp dir"
             );
         }
     }
@@ -177,23 +173,18 @@ fn test_xss_protection() {
         // Note: XSS protection should be handled at the application level when displaying content
         assert_eq!(
             last_message.content, *payload,
-            "Message content was modified in test case {}: {}",
-            i, payload
+            "Message content was modified in test case {i}: {payload}"
         );
 
-        // The role should be one of the allowed values
         assert!(
             ["user", "assistant", "system"].contains(&last_message.role.as_str()),
-            "Invalid role in test case {}: {}",
-            i,
+            "Invalid role in test case {i}: {}",
             last_message.role
         );
 
-        // Verify the message is in the history
         assert!(
             history.iter().any(|m| m.content == *payload),
-            "Message with payload not found in history: {}",
-            payload
+            "Message with payload not found in history: {payload}"
         );
     }
 }
