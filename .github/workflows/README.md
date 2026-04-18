@@ -21,14 +21,12 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | CodeQL | `codeql.yml` | Performs CodeQL static analysis on Rust (security scanning). | Push/PR to `main`, weekly cron |
 | Dependency Review | `dependency-review.yml` | Uses GitHub's dependency-review action on PRs. | PR events |
 | Docs | `docs.yml` | Builds documentation/mdbook (fails PR if docs break). | Push/PR touching docs |
-| Fix Changelog | `fix-changelog.yml` | Ensures changelog formatting stays consistent. | PRs touching changelog |
 | Fix PR Title | `fix-pr-title.yml` | Rewrites PR titles into `[scope] message` format and lowercases the description part. | PR events |
 | Label Sync | `label-sync.yml` | Syncs repository labels from `config/labeler.yml`. | Manual/cron |
 | Lock Merged PRs | `lock-merged-prs.yml` | Locks PRs after manual merge. Auto Merge path is handled by `post-auto-merge-ci.yml`. | PR closed |
 | Nightly | `nightly.yml` | Runs the nightly job (currently the same matrix as `ci.yml` but scheduled). | Nightly cron |
 | PR Checks | `pr-checks.yml` | Aggregates status checks required for merge (references other workflows). | PR workflow_call |
 | Release | `release.yml` | Builds release artifacts (binaries, packages). | Manual dispatch / tag push |
-| Release Please | `release-please.yml` | Uses release-please to cut versions and changelog PRs. | Push to `main` |
 | Rust Auto-Fix Bot | `rust-auto-fix.yml` | Applies automated `cargo fmt`/`clippy --fix` patches via bot PRs. | Issue comment / workflow_dispatch |
 | Cancel Runs Bot | `cancel-runs.yml` | Cancels in-progress and queued GitHub Actions runs when `/cancel-runs` is commented on PRs, then posts completion details with collapsible sections. | Issue comment on PRs |
 | Update Rust lockfiles | `update-lockfiles.yml` | Weekly `cargo update` + `bazel sync --only=crates`, opens PR. | Weekly cron + manual dispatch |

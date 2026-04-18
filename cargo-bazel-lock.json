@@ -1,5 +1,5 @@
 {
-  "checksum": "651835a56b624a5f580fe68a3cf852e8b040306b979225c85670dd848f468387",
+  "checksum": "08bff5379c135675568ac390e2f82e14e160571c1292a31a8fa7362db78fb0dd",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -891,14 +891,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "assert_cmd 2.2.0": {
+    "assert_cmd 2.2.1": {
       "name": "assert_cmd",
-      "version": "2.2.0",
+      "version": "2.2.1",
       "package_url": "https://github.com/assert-rs/assert_cmd.git",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/assert_cmd/2.2.0/download",
-          "sha256": "9a686bbee5efb88a82df0621b236e74d925f470e5445d3220a5648b892ec99c9"
+          "url": "https://static.crates.io/crates/assert_cmd/2.2.1/download",
+          "sha256": "39bae1d3fa576f7c6519514180a72559268dd7d1fe104070956cb687bc6673bd"
         }
       },
       "targets": [
@@ -939,7 +939,7 @@
               "target": "anstyle"
             },
             {
-              "id": "assert_cmd 2.2.0",
+              "id": "assert_cmd 2.2.1",
               "target": "build_script_build"
             },
             {
@@ -973,7 +973,7 @@
           }
         },
         "edition": "2024",
-        "version": "2.2.0"
+        "version": "2.2.1"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -2454,7 +2454,7 @@
               "target": "sync_wrapper"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -9958,7 +9958,7 @@
             ],
             "cfg(all(target_arch = \"wasm32\", target_os = \"wasi\", target_env = \"p2\"))": [
               {
-                "id": "wasip2 1.0.2+wasi-0.2.9",
+                "id": "wasip2 1.0.3+wasi-0.2.9",
                 "target": "wasip2"
               }
             ],
@@ -10105,7 +10105,7 @@
             ],
             "cfg(all(target_arch = \"wasm32\", target_os = \"wasi\", target_env = \"p2\"))": [
               {
-                "id": "wasip2 1.0.2+wasi-0.2.9",
+                "id": "wasip2 1.0.3+wasi-0.2.9",
                 "target": "wasip2"
               }
             ],
@@ -10311,7 +10311,7 @@
               "target": "slab"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -10550,7 +10550,7 @@
               "target": "thiserror"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -10646,7 +10646,7 @@
               "target": "serde_json"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -10737,7 +10737,7 @@
               "target": "syntect"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -10797,7 +10797,7 @@
         "deps_dev": {
           "common": [
             {
-              "id": "assert_cmd 2.2.0",
+              "id": "assert_cmd 2.2.1",
               "target": "assert_cmd"
             },
             {
@@ -10845,7 +10845,7 @@
               "target": "tempfile"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -10858,9 +10858,12 @@
         "edition": "2021",
         "version": "0.7.0"
       },
-      "license": null,
-      "license_ids": [],
-      "license_file": "COMMERCIAL_LICENSE"
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": null
     },
     "hashbrown 0.14.5": {
       "name": "hashbrown",
@@ -11894,7 +11897,7 @@
               "target": "smallvec"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -11961,7 +11964,7 @@
               "target": "rustls"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -12038,7 +12041,7 @@
               "target": "native_tls"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -12160,7 +12163,7 @@
               "target": "pin_project_lite"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -16370,7 +16373,7 @@
               "target": "num_traits"
             },
             {
-              "id": "pxfm 0.1.28",
+              "id": "pxfm 0.1.29",
               "target": "pxfm"
             }
           ],
@@ -19745,7 +19748,7 @@
               "target": "phf_shared"
             },
             {
-              "id": "rand 0.8.5",
+              "id": "rand 0.8.6",
               "target": "rand"
             }
           ],
@@ -21211,14 +21214,14 @@
       ],
       "license_file": null
     },
-    "pxfm 0.1.28": {
+    "pxfm 0.1.29": {
       "name": "pxfm",
-      "version": "0.1.28",
+      "version": "0.1.29",
       "package_url": "https://github.com/awxkee/pxfm",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/pxfm/0.1.28/download",
-          "sha256": "b5a041e753da8b807c9255f28de81879c78c876392ff2469cde94799b2896b9d"
+          "url": "https://static.crates.io/crates/pxfm/0.1.29/download",
+          "sha256": "e0c5ccf5294c6ccd63a74f1565028353830a9c2f5eb0c682c355c471726a6e3f"
         }
       },
       "targets": [
@@ -21241,7 +21244,7 @@
           "**"
         ],
         "edition": "2024",
-        "version": "0.1.28"
+        "version": "0.1.29"
       },
       "license": "BSD-3-Clause OR Apache-2.0",
       "license_ids": [
@@ -21610,14 +21613,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "rand 0.8.5": {
+    "rand 0.8.6": {
       "name": "rand",
-      "version": "0.8.5",
+      "version": "0.8.6",
       "package_url": "https://github.com/rust-random/rand",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/rand/0.8.5/download",
-          "sha256": "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+          "url": "https://static.crates.io/crates/rand/0.8.6/download",
+          "sha256": "5ca0ecfa931c29007047d1bc58e623ab12e5590e8c7cc53200d5202b69266d8a"
         }
       },
       "targets": [
@@ -21714,7 +21717,7 @@
           }
         },
         "edition": "2018",
-        "version": "0.8.5"
+        "version": "0.8.6"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -23486,7 +23489,7 @@
                 "target": "pin_project_lite"
               },
               {
-                "id": "tokio 1.52.0",
+                "id": "tokio 1.52.1",
                 "target": "tokio"
               },
               {
@@ -23743,7 +23746,7 @@
                 "target": "pin_project_lite"
               },
               {
-                "id": "tokio 1.52.0",
+                "id": "tokio 1.52.1",
                 "target": "tokio"
               },
               {
@@ -25265,7 +25268,7 @@
               "target": "once_cell"
             },
             {
-              "id": "rand 0.8.5",
+              "id": "rand 0.8.6",
               "target": "rand"
             },
             {
@@ -28995,14 +28998,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "tokio 1.52.0": {
+    "tokio 1.52.1": {
       "name": "tokio",
-      "version": "1.52.0",
+      "version": "1.52.1",
       "package_url": "https://github.com/tokio-rs/tokio",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/tokio/1.52.0/download",
-          "sha256": "a91135f59b1cbf38c91e73cf3386fca9bb77915c45ce2771460c9d92f0f3d776"
+          "url": "https://static.crates.io/crates/tokio/1.52.1/download",
+          "sha256": "b67dee974fe86fd92cc45b7a95fdd2f99a36a6d7b0d431a231178d3d670bbcc6"
         }
       },
       "targets": [
@@ -29157,7 +29160,7 @@
           ],
           "selects": {}
         },
-        "version": "1.52.0"
+        "version": "1.52.1"
       },
       "license": "MIT",
       "license_ids": [
@@ -29256,7 +29259,7 @@
               "target": "native_tls"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             }
           ],
@@ -29307,7 +29310,7 @@
               "target": "rustls"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             }
           ],
@@ -29406,7 +29409,7 @@
               "target": "slab"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             }
           ],
@@ -29785,7 +29788,7 @@
               "target": "sync_wrapper"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -30278,7 +30281,7 @@
               "target": "thiserror"
             },
             {
-              "id": "tokio 1.52.0",
+              "id": "tokio 1.52.1",
               "target": "tokio"
             },
             {
@@ -31817,14 +31820,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "wasip2 1.0.2+wasi-0.2.9": {
+    "wasip2 1.0.3+wasi-0.2.9": {
       "name": "wasip2",
-      "version": "1.0.2+wasi-0.2.9",
+      "version": "1.0.3+wasi-0.2.9",
       "package_url": "https://github.com/bytecodealliance/wasi-rs",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/wasip2/1.0.2+wasi-0.2.9/download",
-          "sha256": "9517f9239f02c069db75e65f174b3da828fe5f5b945c4dd26bd25d89c03ebcf5"
+          "url": "https://static.crates.io/crates/wasip2/1.0.3+wasi-0.2.9/download",
+          "sha256": "20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6"
         }
       },
       "targets": [
@@ -31849,21 +31852,21 @@
         "deps": {
           "common": [
             {
-              "id": "wit-bindgen 0.51.0",
+              "id": "wit-bindgen 0.57.1",
               "target": "wit_bindgen"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "1.0.2+wasi-0.2.9"
+        "version": "1.0.3+wasi-0.2.9"
       },
       "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
       "license_ids": [
         "Apache-2.0",
         "MIT"
       ],
-      "license_file": null
+      "license_file": "LICENSE-APACHE"
     },
     "wasip3 0.4.0+wasi-0.3.0-rc-2026-01-06": {
       "name": "wasip3",
@@ -36128,6 +36131,77 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
+    "wit-bindgen 0.57.1": {
+      "name": "wit-bindgen",
+      "version": "0.57.1",
+      "package_url": "https://github.com/bytecodealliance/wit-bindgen",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/wit-bindgen/0.57.1/download",
+          "sha256": "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "wit_bindgen",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        },
+        {
+          "BuildScript": {
+            "crate_name": "build_script_build",
+            "crate_root": "build.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "wit_bindgen",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "wit-bindgen 0.57.1",
+              "target": "build_script_build"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2024",
+        "version": "0.57.1"
+      },
+      "build_script_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "compile_data_glob_excludes": [
+          "**/*.rs"
+        ],
+        "data_glob": [
+          "**"
+        ]
+      },
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
     "wit-bindgen-core 0.51.0": {
       "name": "wit-bindgen-core",
       "version": "0.51.0",
@@ -37171,7 +37245,7 @@
               "target": "ordered_stream"
             },
             {
-              "id": "rand 0.8.5",
+              "id": "rand 0.8.6",
               "target": "rand"
             },
             {
@@ -38571,7 +38645,7 @@
     "syntect 5.3.0",
     "thiserror 2.0.18",
     "thiserror-impl 2.0.18",
-    "tokio 1.52.0",
+    "tokio 1.52.1",
     "tower 0.5.3",
     "tracing 0.1.44",
     "turul-mcp-client 0.3.32",
@@ -38582,7 +38656,7 @@
     "windows-targets 0.53.5"
   ],
   "direct_dev_deps": [
-    "assert_cmd 2.2.0",
+    "assert_cmd 2.2.1",
     "criterion 0.5.1",
     "lazy_static 1.5.0",
     "num_cpus 1.17.0",
