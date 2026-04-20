@@ -6,7 +6,7 @@ Harper is a terminal assistant that translates what you type into shell commands
   <img src="https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png?v=2" width="600" alt="Harper interface" />
 </div>
 
-Harper comes with four themes: default, light, dark, and github. Pick whichever you prefer by adding a `[ui]` section to your `config/local.toml`.
+Includes four themes (default, light, dark, github). Configure via `[ui]` in `config/local.toml`.
 
 Getting started is simple. Clone the repo, copy the example env file, and run it:
 
