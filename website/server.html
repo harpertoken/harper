@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harper · API Server</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="page">
+        <header class="site-header">
+            <div class="brand">HARPER<span>·AI</span></div>
+            <nav class="nav">
+                <a href="index.html">Home</a>
+                <a href="installation.html">Install</a>
+                <a href="troubleshooting.html">Troubleshooting</a>
+                <a href="blog.html">Blog</a>
+                <a href="changelog.html">Changelog</a>
+                <a href="server.html" aria-current="page">API Server</a>
+                <a href="terms.html">Terms</a>
+                <a href="privacy.html">Privacy</a>
+            </nav>
+        </header>
+
+        <main class="surface">
+            <section class="hero">
+                <div>
+                    <h1 class="hero-title">HTTP API Server</h1>
+                    <p class="hero-lede">
+                        Run Harper as a REST API for programmatic access. List sessions, retrieve history, and integrate with external tools.
+                    </p>
+                </div>
+            </section>
+
+            <section class="grid" style="margin-top: 2.5rem;">
+                <div class="card">
+                    <h3>Enable Server</h3>
+                    <pre><code>[server]
+enabled = true
+host = "127.0.0.1"
+port = 8080</code></pre>
+                </div>
+                <div class="card">
+                    <h3>Endpoints</h3>
+                    <ul>
+                        <li>GET /health - Health check</li>
+                        <li>GET /api/sessions - List sessions</li>
+                        <li>GET /api/sessions/:id - Get session</li>
+                        <li>DELETE /api/sessions/:id - Delete</li>
+                        <li>POST /api/chat - Send message</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section style="margin-top: 2.5rem;">
+                <h2>Example Usage</h2>
+                <pre><code># Start server
+cargo run -p harper-ui --bin harper
+
+# In another terminal
+curl http://127.0.0.1:8080/health
+# {"status":"ok","version":"0.8.0"}
+
+curl http://127.0.0.1:8080/api/sessions</code></pre>
+            </section>
+        </main>
+
+        <footer class="footnote">Harper · Terminal autonomy without theatrics.</footer>
+    </div>
+</body>
+</html>

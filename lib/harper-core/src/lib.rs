@@ -16,6 +16,7 @@ pub mod agent;
 pub mod core;
 pub mod memory;
 pub mod runtime;
+pub mod server;
 pub mod tools;
 
 // Re-export core types

@@ -246,6 +246,7 @@ impl<'a> ChatService<'a> {
             exec_policy: ExecPolicyConfig {
                 allowed_commands: None,
                 blocked_commands: None,
+                sandbox: None,
             },
             approver: None,
             background_tasks: TaskScheduler::new(),

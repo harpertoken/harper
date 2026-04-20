@@ -16,8 +16,18 @@ name: CI
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'lib/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'lib/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
   schedule:
     - cron: '0 0 * * 0'  # Weekly dependency check
 env:

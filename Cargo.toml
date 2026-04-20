@@ -13,7 +13,7 @@
 # limitations under the License.
 
 [workspace]
-members = ["lib/harper-core", "lib/harper-ui", "lib/harper-mcp-server"]
+members = ["lib/harper-core", "lib/harper-ui", "lib/harper-mcp-server", "lib/harper-firmware", "lib/harper-sandbox"]
 resolver = "2"
 
 [package]
@@ -34,6 +34,8 @@ path = "src/lib.rs"
 [dependencies]
 harper-core = { path = "lib/harper-core" }
 harper-ui = { path = "lib/harper-ui" }
+harper-firmware = { path = "lib/harper-firmware" }
+harper-sandbox = { path = "lib/harper-sandbox" }
 
 [dev-dependencies]
 assert_cmd = "2.0"

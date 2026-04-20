@@ -1,0 +1,25 @@
+[package]
+name = "harper-firmware"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85.0"
+authors = ["Harper Contributors"]
+license = "MIT OR Apache-2.0"
+description = "Firmware abstraction layer for Harper"
+
+[dependencies]
+thiserror = "2.0"
+async-trait = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+
+[features]
+esp32 = []
+stm32 = []
+raspberry_pi = []
+default = []
+
+[[example]]
+name = "firmware_basic"
+path = "examples/basic.rs"

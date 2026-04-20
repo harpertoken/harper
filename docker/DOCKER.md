@@ -123,6 +123,36 @@ docker run --rm -it -v %cd%/data:/app/data --env-file .env harper
 docker run --rm -it -v ${pwd}/data:/app/data --env-file .env harper
 ```
 
+## Sandbox Isolation
+
+Harper runs with sandbox isolation in Docker when `exec_policy.sandbox.enabled = true`.
+
+### Enable Sandbox
+
+Use `config/docker.toml` which has sandbox enabled by default:
+
+```bash
+docker run --rm -it -v $(pwd)/config:/app/config --env-file .env harper
+```
+
+Or manually set in your config:
+
+```toml
+[exec_policy.sandbox]
+enabled = true
+allowed_dirs = ["/app"]
+network_access = false
+readonly_home = true
+max_execution_time_secs = 30
+```
+
+### How It Works
+
+- **bubblewrap**: Linux namespace isolation
+- Restricts filesystem access to allowed directories only
+- Disables network by default (set `network_access = true` to enable)
+- Timeouts commands after 30 seconds
+
 ## Configuration
 
 ### Environment Variables

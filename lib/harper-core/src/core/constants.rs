@@ -188,6 +188,10 @@ pub mod tools {
     #[allow(dead_code)]
     pub const SCREENPIPE: &str = "[SCREENPIPE";
 
+    /// Firmware operations prefix
+    #[allow(dead_code)]
+    pub const FIRMWARE: &str = "[FIRMWARE";
+
     /// Command suffix
     #[allow(dead_code)]
     pub const COMMAND_SUFFIX: &str = "]";

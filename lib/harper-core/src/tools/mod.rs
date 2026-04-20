@@ -21,6 +21,7 @@ pub mod api;
 pub mod code_analysis;
 pub mod db;
 pub mod filesystem;
+pub mod firmware;
 pub mod git;
 pub mod github;
 pub mod image;
@@ -275,6 +276,11 @@ impl<'a> ToolService<'a> {
                 .call_llm_after_tool(client, history, response, &search_result)
                 .await?;
             Ok(Some((final_response, search_result)))
+        } else if response.to_uppercase().starts_with(tools::FIRMWARE) {
+            self.execute_sync_tool(client, history, response, |_, response| {
+                firmware::handle_firmware_command(response)
+            })
+            .await
         } else {
             Ok(None)
         }
@@ -461,6 +467,38 @@ impl<'a> ToolService<'a> {
                     .call_llm_after_tool(client, history, raw_response, &files_result)
                     .await?;
                 Ok(Some((final_response, files_result)))
+            }
+            "firmware_list" => {
+                let result = firmware::handle_firmware_command("[FIRMWARE list]")?;
+                let final_response = self
+                    .call_llm_after_tool(client, history, raw_response, &result)
+                    .await?;
+                Ok(Some((final_response, result)))
+            }
+            "firmware_info" => {
+                if let Some(device) = args.get("device").and_then(|v| v.as_str()) {
+                    let command = format!("[FIRMWARE info {}]", device);
+                    let result = firmware::handle_firmware_command(&command)?;
+                    let final_response = self
+                        .call_llm_after_tool(client, history, raw_response, &result)
+                        .await?;
+                    Ok(Some((final_response, result)))
+                } else {
+                    Ok(None)
+                }
+            }
+            "firmware_gpio" => {
+                if let Some(pin) = args.get("pin").and_then(|v| v.as_i64()) {
+                    let state = args.get("state").and_then(|v| v.as_str()).unwrap_or("high");
+                    let command = format!("[FIRMWARE gpio {} {}]", pin, state);
+                    let result = firmware::handle_firmware_command(&command)?;
+                    let final_response = self
+                        .call_llm_after_tool(client, history, raw_response, &result)
+                        .await?;
+                    Ok(Some((final_response, result)))
+                } else {
+                    Ok(None)
+                }
             }
             _ => Ok(None),
         }

@@ -1,5 +1,5 @@
 {
-  "checksum": "08bff5379c135675568ac390e2f82e14e160571c1292a31a8fa7362db78fb0dd",
+  "checksum": "efee991c65601788143998cd4fee23ba8115a3ab40bfd988f284c582ae49f595",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -3456,6 +3456,54 @@
         "MIT"
       ],
       "license_file": "LICENSE"
+    },
+    "caps 0.5.6": {
+      "name": "caps",
+      "version": "0.5.6",
+      "package_url": "https://github.com/lucab/caps-rs",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/caps/0.5.6/download",
+          "sha256": "fd1ddba47aba30b6a889298ad0109c3b8dcb0e8fc993b459daa7067d46f865e0"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "caps",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "caps",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "libc 0.2.185",
+              "target": "libc"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2018",
+        "version": "0.5.6"
+      },
+      "license": "MIT/Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE-2.0"
     },
     "cast 0.3.0": {
       "name": "cast",
@@ -10616,6 +10664,76 @@
       ],
       "license_file": null
     },
+    "harper-firmware 0.1.0": {
+      "name": "harper-firmware",
+      "version": "0.1.0",
+      "package_url": null,
+      "repository": null,
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "harper_firmware",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "harper_firmware",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "log 0.4.29",
+              "target": "log"
+            },
+            {
+              "id": "serde 1.0.228",
+              "target": "serde"
+            },
+            {
+              "id": "serde_json 1.0.149",
+              "target": "serde_json"
+            },
+            {
+              "id": "thiserror 2.0.18",
+              "target": "thiserror"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "proc_macro_deps": {
+          "common": [
+            {
+              "id": "async-trait 0.1.89",
+              "target": "async_trait"
+            }
+          ],
+          "selects": {}
+        },
+        "version": "0.1.0"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": null
+    },
     "harper-mcp-server 0.1.0": {
       "name": "harper-mcp-server",
       "version": "0.1.0",
@@ -10659,6 +10777,78 @@
             }
           ],
           "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.1.0"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": null
+    },
+    "harper-sandbox 0.1.0": {
+      "name": "harper-sandbox",
+      "version": "0.1.0",
+      "package_url": null,
+      "repository": null,
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "harper_sandbox",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "harper_sandbox",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "log 0.4.29",
+              "target": "log"
+            },
+            {
+              "id": "serde 1.0.228",
+              "target": "serde"
+            },
+            {
+              "id": "serde_json 1.0.149",
+              "target": "serde_json"
+            },
+            {
+              "id": "thiserror 2.0.18",
+              "target": "thiserror"
+            },
+            {
+              "id": "tokio 1.52.1",
+              "target": "tokio"
+            }
+          ],
+          "selects": {
+            "cfg(target_os = \"linux\")": [
+              {
+                "id": "caps 0.5.6",
+                "target": "caps"
+              }
+            ]
+          }
         },
         "edition": "2021",
         "version": "0.1.0"
@@ -38381,7 +38571,9 @@
   "binary_crates": [],
   "workspace_members": {
     "harper-core 0.8.0": "lib/harper-core",
+    "harper-firmware 0.1.0": "lib/harper-firmware",
     "harper-mcp-server 0.1.0": "lib/harper-mcp-server",
+    "harper-sandbox 0.1.0": "lib/harper-sandbox",
     "harper-ui 0.7.1": "lib/harper-ui",
     "harper-workspace 0.7.0": ""
   },
@@ -38561,6 +38753,11 @@
     "cfg(target_os = \"android\")": [],
     "cfg(target_os = \"haiku\")": [],
     "cfg(target_os = \"hermit\")": [],
+    "cfg(target_os = \"linux\")": [
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-unknown-nixos-gnu"
+    ],
     "cfg(target_os = \"macos\")": [
       "aarch64-apple-darwin"
     ],
@@ -38615,6 +38812,7 @@
     "axum 0.8.9",
     "base64 0.22.1",
     "bitflags 2.11.1",
+    "caps 0.5.6",
     "cbc 0.1.2",
     "chrono 0.4.44",
     "colored 3.1.1",
@@ -38633,6 +38831,7 @@
     "hyper 1.9.0",
     "image 0.25.10",
     "keyring 2.3.3",
+    "log 0.4.29",
     "ratatui 0.30.0",
     "reqwest 0.12.28",
     "ring 0.17.14",

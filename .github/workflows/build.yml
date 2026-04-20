@@ -20,6 +20,7 @@ on:
     paths:
       - '.github/workflows/**'
       - 'src/**'
+      - 'lib/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'docker/Dockerfile'
@@ -28,6 +29,7 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'lib/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'docker/Dockerfile'

@@ -136,6 +136,39 @@ async fn main() -> Result<(), HarperError> {
     }
     let exec_policy = config.exec_policy.clone();
 
+    // Check for server mode
+    let server_enabled = config.server.enabled.unwrap_or(false);
+    if server_enabled {
+        let host = config.server.host.as_deref().unwrap_or("127.0.0.1");
+        let port = config.server.port.unwrap_or(8080);
+        let addr = format!("{}:{}", host, port);
+
+        let conn = std::sync::Arc::new(std::sync::Mutex::new(
+            harper_core::memory::storage::create_connection(&config.database.path)
+                .expect("Failed to create database connection"),
+        ));
+
+        println!("Starting Harper API server on http://{}", addr);
+        println!("Endpoints:");
+        println!("  GET  /health          - Health check");
+        println!("  GET  /api/sessions    - List sessions");
+        println!("  GET  /api/sessions/:id - Get session");
+        println!("  POST /api/chat        - Send chat message");
+
+        let conn_clone = conn.clone();
+        tokio::spawn(async move {
+            if let Err(e) = harper_core::server::run_server(&addr, conn_clone).await {
+                eprintln!("Server error: {}", e);
+            }
+        });
+
+        // Wait for Ctrl+C
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to listen for Ctrl+C");
+        return Ok(());
+    }
+
     // MCP client initialization
     let mcp_client = if config.mcp.enabled {
         match turul_mcp_client::transport::HttpTransport::new(&config.mcp.server_url) {

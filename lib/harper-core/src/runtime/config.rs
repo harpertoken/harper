@@ -30,6 +30,8 @@ pub struct HarperConfig {
     pub tools: ToolsConfig,
     pub exec_policy: ExecPolicyConfig,
     pub custom_commands: CustomCommandsConfig,
+    pub firmware: FirmwareConfig,
+    pub server: ServerConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,11 +87,52 @@ pub struct ExecPolicyConfig {
     pub allowed_commands: Option<Vec<String>>,
     #[allow(dead_code)]
     pub blocked_commands: Option<Vec<String>>,
+    pub sandbox: Option<SandboxConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SandboxConfig {
+    pub enabled: Option<bool>,
+    pub allowed_dirs: Option<Vec<String>>,
+    pub network_access: Option<bool>,
+    pub readonly_home: Option<bool>,
+    pub max_execution_time_secs: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CustomCommandsConfig {
     pub commands: Option<std::collections::HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FirmwareConfig {
+    pub enabled: Option<bool>,
+    pub devices: Option<Vec<FirmwareDeviceConfig>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FirmwareDeviceConfig {
+    pub name: String,
+    pub platform: String,
+    pub port: Option<String>,
+    pub address: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ServerConfig {
+    pub enabled: Option<bool>,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: Some(false),
+            host: Some("127.0.0.1".to_string()),
+            port: Some(8080),
+        }
+    }
 }
 
 impl HarperConfig {

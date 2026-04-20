@@ -21,6 +21,11 @@ use crate::core::error::HarperResult;
 use crate::core::Message;
 use rusqlite::{params, Connection};
 
+/// Create a new database connection
+pub fn create_connection(path: &str) -> HarperResult<Connection> {
+    Connection::open(path).map_err(|e| crate::core::error::HarperError::Database(e.to_string()))
+}
+
 /// Initialize the database schema
 ///
 /// Creates the necessary tables for storing sessions and messages if they don't exist.
