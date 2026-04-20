@@ -3,7 +3,7 @@
 Harper is a terminal assistant that translates what you type into shell commands. It shows you what it's about to run, asks for your approval, and keeps a log of everything so you can review it later. You can connect it to cloud AI services like OpenAI, Sambanova, and Gemini, or run it completely offline with Ollama.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png" width="600" alt="Harper interface" />
+  <img src="https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png?v=2" width="600" alt="Harper interface" />
 </div>
 
 Harper comes with four themes: default, light, dark, and github. Pick whichever you prefer by adding a `[ui]` section to your `config/local.toml`.
