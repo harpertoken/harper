@@ -127,8 +127,6 @@ impl Sandbox {
 
     #[cfg(target_os = "linux")]
     async fn execute_bwrap(&self, command: &str, args: &[&str]) -> Result<std::process::Output> {
-        use std::os::unix::process::CommandExt;
-
         let mut bwrap_args = vec!["--unshare-pid".to_string()];
 
         if !self.config.network_access {
@@ -148,7 +146,7 @@ impl Sandbox {
 
         if self.config.readonly_home {
             if let Ok(home) = std::env::var("HOME") {
-                bpush(&mut bwrap_args, "--ro-bind", home, "--tmpfs".to_string());
+                bpush(&mut bwrap_args, "--ro-bind", home);
             }
         } else if let Ok(home) = std::env::var("HOME") {
             bpush(&mut bwrap_args, "--ro-bind", home);
