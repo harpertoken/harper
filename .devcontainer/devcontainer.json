@@ -5,7 +5,7 @@
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/git:1": {}
   },
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config bubblewrap",
   "customizations": {
     "vscode": {
       "extensions": [
