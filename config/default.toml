@@ -47,4 +47,29 @@ theme = "default"
 [custom_commands]
 # commands = { "hello" = "Say hello to the user", "status" = "Show system status" }
 
+[firmware]
+enabled = true
+
+# [[firmware.devices]]
+# name = "my-esp32"
+# platform = "esp32"
+# port = "/dev/ttyUSB0"
+
+# [[firmware.devices]]
+# name = "my-stm32"
+# platform = "stm32"
+# port = "/dev/ttyUSB1"
+
+[exec_policy.sandbox]
+enabled = false
+allowed_dirs = []
+# network_access = false
+# readonly_home = true
+# max_execution_time_secs = 30
+
+[server]
+enabled = false
+host = "127.0.0.1"
+port = 8080
+
 # Updated for v0.3.4

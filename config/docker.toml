@@ -1,0 +1,45 @@
+# Docker configuration - sandbox enabled by default
+# This file is automatically used when running in Docker
+
+[api]
+provider = "OpenAI"
+api_key = "your_api_key_here"
+base_url = "https://api.openai.com/v1/chat/completions"
+model_name = "gpt-4-turbo"
+
+[database]
+path = ".harper/sessions.db"
+
+[mcp]
+enabled = false
+server_url = "http://localhost:5001"
+
+[prompts]
+system_prompt_id = "default"
+
+[ui]
+theme = "default"
+
+[tools]
+# enabled_tools = ["read_file", "write_file", "run_command"]
+# disabled_tools = []
+
+[exec_policy]
+# allowed_commands = ["ls", "cat", "grep"]
+# blocked_commands = []
+
+# Sandbox enabled in Docker for isolation
+[exec_policy.sandbox]
+enabled = true
+allowed_dirs = ["/app"]
+network_access = false
+readonly_home = true
+max_execution_time_secs = 30
+
+[firmware]
+enabled = false
+
+[server]
+enabled = true
+host = "0.0.0.0"
+port = 8080

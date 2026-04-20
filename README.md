@@ -1,53 +1,24 @@
 # Harper
 
-Harper is a terminal-first assistant platform that turns natural-language requests into safe shell actions. It keeps a full command log, prompts for approval before executing anything, and can run with cloud LLMs or entirely offline via Ollama.
+Harper is a terminal assistant that translates what you type into shell commands. It shows you what it's about to run, asks for your approval, and keeps a log of everything so you can review it later. You can connect it to cloud AI services like OpenAI, Sambanova, and Gemini, or run it completely offline with Ollama.
 
-![Harper interface](https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png)
+<div align="center">
+  <img src="https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png" width="600" alt="Harper interface" />
+</div>
 
-## Quick Start
+Harper comes with four themes: default, light, dark, and github. Pick whichever you prefer by adding a `[ui]` section to your `config/local.toml`.
 
-```bash
+Getting started is simple. Clone the repo, copy the example env file, and run it:
+
+```
 git clone https://github.com/harpertoken/harper.git
 cd harper
-cp .env.example .env           # pick a provider below
+cp .env.example .env
 cargo run -p harper-ui --bin harper
 ```
 
-### Providers
+Pick your AI provider in the config file. If you want offline mode, set up Ollama first, then point Harper to it.
 
-```toml
-# config/local.toml
-[api]
-provider  = "OpenAI" | "Sambanova" | "Gemini" | "Ollama"
-api_key   = "..."              # leave empty for Ollama
-base_url  = "https://..."      # or http://localhost:11434/api/chat
-model_name = "gpt-4-turbo"     # e.g. llama3 for Ollama
-```
+When you're working on Harper itself, run `cargo fmt` to format, `cargo clippy --all-targets --all-features` to lint, and `cargo test` to test.
 
-For Ollama:
-```bash
-ollama serve &
-ollama pull llama3
-export OLLAMA_HOST=http://localhost:11434
-export OLLAMA_MODEL=llama3
-```
-
-## Commands
-
-| Task  | Command |
-| --- | --- |
-| Format | `cargo fmt` |
-| Lint | `cargo clippy --all-targets --all-features` |
-| Tests | `cargo test` |
-| UI | `cargo run -p harper-ui --bin harper` |
-
-## Docs
-
-- [Configuration](docs/user-guide/configuration.md)
-- [Installation guide](docs/user-guide/installation.md)
-- [Troubleshooting](docs/user-guide/troubleshooting.md)
-
-## Contributing & License
-
-- CLA + guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Commercial terms only (see [COMMERCIAL_LICENSE](COMMERCIAL_LICENSE))
+Check the docs for more on installation, configuration, and troubleshooting. Contributors should read CONTRIBUTING.md, and note that commercial use needs its own license.

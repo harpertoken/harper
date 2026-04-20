@@ -31,11 +31,15 @@ nav:
       - Keychain: user-guide/keychain.md
       - Screenpipe: user-guide/screenpipe.md
       - Troubleshooting: user-guide/troubleshooting.md
+  - Advanced:
+      - HTTP Server: user-guide/server.md
+      - Sandbox: user-guide/sandbox.md
+      - Firmware: user-guide/firmware.md
   - Development:
       - Contributing: development/contributing.md
       - CI/CD: development/cicd.md
       - API Reference: development/api.md
-      - Agents: AGENTS.md
+      - Agents: development/AGENTS.md
   - About:
       - Privacy Policy: about/privacy.md
       - Governance: about/governance.md

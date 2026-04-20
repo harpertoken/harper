@@ -42,6 +42,7 @@ async fn test_command_logging() {
     let exec_policy = ExecPolicyConfig {
         allowed_commands: Some(vec!["echo".to_string()]),
         blocked_commands: None,
+        sandbox: None,
     };
 
     let output = shell::execute_command(

@@ -57,8 +57,8 @@ COPY tests ./tests
 # Runtime stage
 FROM debian:bookworm-slim
 
-# Install ca-certificates for HTTPS requests
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install ca-certificates and bubblewrap for sandbox isolation
+RUN apt-get update && apt-get install -y ca-certificates bubblewrap && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

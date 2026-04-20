@@ -74,6 +74,9 @@ Available tools:
 - run_command(command): Run a shell command
 - todo(action, description?, index?): Manage todo list (actions: add, list, remove, clear)
 - list_changed_files(ext?, tracked_only?, since?): List changed files with optional filters
+- firmware_list(): List available firmware devices
+- firmware_info(device): Get device info
+- firmware_gpio(pin, state): Control GPIO pins (state: high/low)
 
 To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"path\": \"example.txt\", \"content\": \"Hello world\"}");
 
