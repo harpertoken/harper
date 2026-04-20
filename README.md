@@ -17,6 +17,8 @@ cp .env.example .env
 cargo run -p harper-ui --bin harper
 ```
 
+Running in a sandbox (bubblewrap on Linux, sandbox-exec on macOS) isolates shell commands for safety.
+
 Pick your AI provider in the config file. If you want offline mode, set up Ollama first, then point Harper to it.
 
 When you're working on Harper itself, run `cargo fmt` to format, `cargo clippy --all-targets --all-features` to lint, and `cargo test` to test.
