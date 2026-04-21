@@ -4851,9 +4851,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "turul-mcp-client"
-version = "0.3.32"
+version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3355c07b9813ac559e180a27f0eb62c7816294d59e9b5429e3478dd82ca8602"
+checksum = "1affd492346ff64237eec74103c1b5dbfca24295beba6558137438aa86854af3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4868,7 +4868,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "turul-mcp-json-rpc-server 0.3.32",
+ "turul-mcp-json-rpc-server 0.3.33",
  "turul-mcp-protocol",
  "url",
 ]
@@ -4888,9 +4888,9 @@ dependencies = [
 
 [[package]]
 name = "turul-mcp-json-rpc-server"
-version = "0.3.32"
+version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e863475f17a669803a4566d1b858e2f6408c138a55f1a1b06423f4af8b4bd8db"
+checksum = "7a7208f39c8187d8a078589dff9fa02164e9dc99c3e8757d3c30e16efd1fcfc6"
 dependencies = [
  "async-trait",
  "futures",
@@ -4901,24 +4901,24 @@ dependencies = [
 
 [[package]]
 name = "turul-mcp-protocol"
-version = "0.3.32"
+version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bc3d41e9c49c7d969115295325b3b07611e1e2861ffc3649cca980be2975e75"
+checksum = "c81eb887bb93ff99fdb1f6d2974d14629df5dc15199396aac0d663e9a86a7eb2"
 dependencies = [
  "turul-mcp-protocol-2025-11-25",
 ]
 
 [[package]]
 name = "turul-mcp-protocol-2025-11-25"
-version = "0.3.32"
+version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2586edbf9d48ea3c05e475ac32da4306986d98248959b451fd488a8bbcc181e7"
+checksum = "16bbe8b28a53800fa63f1918a46ef98a672ede45d770dec70bdadd005a18aa87"
 dependencies = [
  "async-trait",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
- "turul-mcp-json-rpc-server 0.3.32",
+ "turul-mcp-json-rpc-server 0.3.33",
 ]
 
 [[package]]
