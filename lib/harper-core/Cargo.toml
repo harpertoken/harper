@@ -42,7 +42,7 @@ uuid = { version = "1.17.0", features = ["v4"] }
 ring = "0.17.14"
 aes = "0.8"
 cbc = "0.1"
-ctr = "0.9"
+ctr = "0.10"
 hex-literal = "1.1.0"
 rustyline = "17.0"
 image = "0.25.6"
