@@ -276,3 +276,202 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::thread;
+    use std::time::Duration;
+
+    #[test]
+    fn test_rate_limiter_new() {
+        let limiter = RateLimiter::new();
+        // Should allow requests initially
+        assert!(limiter.check("127.0.0.1"));
+    }
+
+    #[test]
+    fn test_rate_limiter_under_limit() {
+        let limiter = RateLimiter::new();
+        let ip = "127.0.0.1";
+
+        // Should allow up to RATE_LIMIT_REQUESTS
+        for _ in 0..RATE_LIMIT_REQUESTS {
+            assert!(limiter.check(ip), "Should allow request under limit");
+        }
+    }
+
+    #[test]
+    fn test_rate_limiter_over_limit() {
+        let limiter = RateLimiter::new();
+        let ip = "127.0.0.1";
+
+        // Fill up the limit
+        for _ in 0..RATE_LIMIT_REQUESTS {
+            assert!(limiter.check(ip));
+        }
+
+        // This should be blocked
+        assert!(!limiter.check(ip), "Should block request over limit");
+    }
+
+    #[test]
+    fn test_rate_limiter_cleanup() {
+        let limiter = RateLimiter::new();
+        let ip = "127.0.0.1";
+
+        // Fill up the limit
+        for _ in 0..RATE_LIMIT_REQUESTS {
+            assert!(limiter.check(ip));
+        }
+        assert!(!limiter.check(ip));
+
+        // Wait for the window to expire (simulate time passing)
+        thread::sleep(Duration::from_secs(RATE_LIMIT_WINDOW_SECS + 1));
+
+        // Should allow again after cleanup
+        assert!(limiter.check(ip), "Should allow after window expires");
+    }
+
+    #[test]
+    fn test_rate_limiter_different_ips() {
+        let limiter = RateLimiter::new();
+
+        // Fill up for one IP
+        for _ in 0..RATE_LIMIT_REQUESTS {
+            assert!(limiter.check("127.0.0.1"));
+        }
+        assert!(!limiter.check("127.0.0.1"));
+
+        // Different IP should still work
+        assert!(limiter.check("127.0.0.2"));
+    }
+
+    #[test]
+    fn test_error_response() {
+        let response = error_response(Some(json!(1)), -32600, "Test error", None);
+        assert_eq!(response.jsonrpc, "2.0");
+        assert_eq!(response.id, Some(json!(1)));
+        assert!(response.result.is_none());
+        assert!(response.error.is_some());
+
+        let error = response.error.unwrap();
+        assert_eq!(error.code, -32600);
+        assert_eq!(error.message, "Test error");
+        assert!(error.data.is_none());
+    }
+
+    #[test]
+    fn test_handle_initialize_valid() {
+        let params = json!({
+            "protocolVersion": PROTOCOL_VERSION
+        });
+        let response = handle_initialize(json!(1), Some(&params));
+
+        assert_eq!(response.jsonrpc, "2.0");
+        assert_eq!(response.id, Some(json!(1)));
+        assert!(response.error.is_none());
+        assert!(response.result.is_some());
+
+        let result = response.result.unwrap();
+        assert_eq!(result["protocolVersion"], PROTOCOL_VERSION);
+        assert!(result.get("capabilities").is_some());
+        assert!(result.get("serverInfo").is_some());
+    }
+
+    #[test]
+    fn test_handle_initialize_invalid_protocol() {
+        let params = json!({
+            "protocolVersion": "invalid"
+        });
+        let response = handle_initialize(json!(1), Some(&params));
+
+        assert!(response.error.is_some());
+        assert_eq!(response.error.unwrap().code, -32602);
+    }
+
+    #[test]
+    fn test_handle_initialize_no_params() {
+        let response = handle_initialize(json!(1), None);
+
+        assert!(response.error.is_some());
+        assert_eq!(response.error.unwrap().code, -32601);
+    }
+
+    #[test]
+    fn test_handle_tools_list() {
+        let response = handle_tools_list(json!(1));
+
+        assert_eq!(response.jsonrpc, "2.0");
+        assert_eq!(response.id, Some(json!(1)));
+        assert!(response.error.is_none());
+        assert!(response.result.is_some());
+
+        let result = response.result.unwrap();
+        let tools = result["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 2);
+        assert_eq!(tools[0]["name"], "echo");
+        assert_eq!(tools[1]["name"], "get_time");
+    }
+
+    #[test]
+    fn test_handle_tools_call_echo() {
+        let params = json!({
+            "name": "echo",
+            "arguments": {
+                "message": "Hello, World!"
+            }
+        });
+        let response = handle_tools_call(json!(1), Some(&params));
+
+        assert!(response.error.is_none());
+        assert!(response.result.is_some());
+
+        let result = response.result.unwrap();
+        let content = &result["content"][0];
+        assert_eq!(content["type"], "text");
+        assert_eq!(content["text"], "Hello, World!");
+    }
+
+    #[test]
+    fn test_handle_tools_call_get_time() {
+        let params = json!({
+            "name": "get_time",
+            "arguments": {}
+        });
+        let response = handle_tools_call(json!(1), Some(&params));
+
+        assert!(response.error.is_none());
+        assert!(response.result.is_some());
+
+        let result = response.result.unwrap();
+        let content = &result["content"][0];
+        assert_eq!(content["type"], "text");
+        // Should be a valid RFC3339 timestamp
+        assert!(content["text"].as_str().unwrap().contains('T'));
+    }
+
+    #[test]
+    fn test_handle_tools_call_invalid_tool() {
+        let params = json!({
+            "name": "invalid_tool",
+            "arguments": {}
+        });
+        let response = handle_tools_call(json!(1), Some(&params));
+
+        assert!(response.error.is_some());
+        assert_eq!(response.error.unwrap().code, -32601);
+    }
+
+    #[test]
+    fn test_handle_tools_call_missing_args() {
+        let params = json!({
+            "name": "echo"
+        });
+        let response = handle_tools_call(json!(1), Some(&params));
+
+        assert!(response.error.is_some());
+        assert_eq!(response.error.unwrap().code, -32602);
+    }
+}

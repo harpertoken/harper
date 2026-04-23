@@ -37,7 +37,7 @@ jobs:
         rm -rf /tmp/*bazel* 2>/dev/null || true
         rm -f cargo-bazel-lock.json
     - name: Build with Bazel
-      run: CARGO_BAZEL_REPIN=1 bazel build :harper_bin
+      run: CARGO_BAZEL_REPIN=true bazel build :harper_bin
     - name: Test with Bazel
       run: bazel test //...
     - name: Test Bazel build
@@ -59,7 +59,7 @@ jobs:
         rm -rf /tmp/*bazel* 2>/dev/null || true
         rm -f cargo-bazel-lock.json
     - name: Build with Bazel
-      run: CARGO_BAZEL_REPIN=1 bazel build :harper_bin
+      run: CARGO_BAZEL_REPIN=true bazel build :harper_bin
     - name: Test with Bazel
       run: bazel test //...
     - name: Test Bazel build

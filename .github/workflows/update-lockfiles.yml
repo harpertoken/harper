@@ -49,7 +49,7 @@ jobs:
           set -euo pipefail
           bazel shutdown
           rm -f cargo-bazel-lock.json
-          CARGO_BAZEL_REPIN=1 bazel build :harper_bin 2>/dev/null || true
+          CARGO_BAZEL_REPIN=true bazel build :harper_bin 2>/dev/null || true
           bazel shutdown
 
       - name: Create PR
