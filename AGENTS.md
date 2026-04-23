@@ -1,5 +1,5 @@
 <!--
-Copyright 2025 harpertoken
+Copyright 2026 harpertoken
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ This document outlines the policies and guidelines for AI agents (including Harp
 - [Security Guidelines](#security-guidelines)
 - [Validation Rules](#validation-rules)
 - [Error Handling](#error-handling)
-- [Audit Trail](#audit-tr)
+- [Audit Trail](#audit-trail)
 - [User Consent](#user-consent)
 - [Pull Request Guidelines](#pull-request-guidelines)
 
