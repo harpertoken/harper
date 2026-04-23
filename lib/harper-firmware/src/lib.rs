@@ -259,3 +259,177 @@ pub mod stm32;
 pub use esp32::Esp32Device;
 pub use raspberry_pi::RaspberryPiDevice;
 pub use stm32::Stm32Device;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pin_mode_variants() {
+        let modes = [
+            PinMode::Input,
+            PinMode::Output,
+            PinMode::InputPullUp,
+            PinMode::InputPullDown,
+            PinMode::Analog,
+        ];
+        for mode in modes {
+            assert!(!format!("{:?}", mode).is_empty());
+        }
+    }
+
+    #[test]
+    fn test_pin_state_variants() {
+        let states = [PinState::Low, PinState::High, PinState::Unknown];
+        for state in states {
+            assert!(!format!("{:?}", state).is_empty());
+        }
+    }
+
+    #[test]
+    fn test_pin_config_creation() {
+        let config = PinConfig {
+            pin_number: 13,
+            mode: PinMode::Output,
+            initial_state: Some(PinState::High),
+        };
+        assert_eq!(config.pin_number, 13);
+        assert!(matches!(config.mode, PinMode::Output));
+        assert!(matches!(config.initial_state, Some(PinState::High)));
+    }
+
+    #[test]
+    fn test_platform_parse() {
+        assert!(matches!(Platform::parse("esp32"), Platform::Esp32));
+        assert!(matches!(Platform::parse("ESP32"), Platform::Esp32));
+        assert!(matches!(Platform::parse("stm32"), Platform::Stm32));
+        assert!(matches!(Platform::parse("pico"), Platform::RaspberryPiPico));
+        assert!(matches!(Platform::parse("arduino"), Platform::Arduino));
+        assert!(matches!(Platform::parse("unknown"), Platform::Custom));
+    }
+
+    #[test]
+    fn test_spi_mode_variants() {
+        let modes = [
+            SpiMode::Mode0,
+            SpiMode::Mode1,
+            SpiMode::Mode2,
+            SpiMode::Mode3,
+        ];
+        for mode in modes {
+            assert!(!format!("{:?}", mode).is_empty());
+        }
+    }
+
+    #[test]
+    fn test_parity_variants() {
+        let parity = [Parity::None, Parity::Even, Parity::Odd];
+        for p in parity {
+            assert!(!format!("{:?}", p).is_empty());
+        }
+    }
+
+    #[test]
+    fn test_i2c_config_creation() {
+        let config = I2cConfig {
+            address: 0x68,
+            bus_speed: 400000,
+            sda_pin: Some(21),
+            scl_pin: Some(22),
+        };
+        assert_eq!(config.address, 0x68);
+        assert_eq!(config.bus_speed, 400000);
+        assert_eq!(config.sda_pin, Some(21));
+    }
+
+    #[test]
+    fn test_spi_config_creation() {
+        let config = SpiConfig {
+            mode: SpiMode::Mode0,
+            frequency: 1_000_000,
+            mosi_pin: Some(23),
+            miso_pin: Some(19),
+            clock_pin: Some(18),
+            chip_select: Some(5),
+        };
+        assert!(matches!(config.mode, SpiMode::Mode0));
+        assert_eq!(config.frequency, 1_000_000);
+    }
+
+    #[test]
+    fn test_uart_config_creation() {
+        let config = UartConfig {
+            baud_rate: 115200,
+            data_bits: 8,
+            stop_bits: 1,
+            parity: Parity::None,
+            rx_pin: Some(16),
+            tx_pin: Some(17),
+        };
+        assert_eq!(config.baud_rate, 115200);
+        assert_eq!(config.data_bits, 8);
+        assert!(matches!(config.parity, Parity::None));
+    }
+
+    #[test]
+    fn test_pwm_config_creation() {
+        let config = PwmConfig {
+            pin: 12,
+            frequency: 1000,
+            duty_cycle: 0.5,
+        };
+        assert_eq!(config.pin, 12);
+        assert_eq!(config.frequency, 1000);
+        assert_eq!(config.duty_cycle, 0.5);
+    }
+
+    #[test]
+    fn test_adc_config_creation() {
+        let config = AdcConfig {
+            pin: 34,
+            resolution: 12,
+            vref: 3.3,
+        };
+        assert_eq!(config.pin, 34);
+        assert_eq!(config.resolution, 12);
+        assert_eq!(config.vref, 3.3);
+    }
+
+    #[test]
+    fn test_device_info_creation() {
+        let info = DeviceInfo {
+            name: "ESP32 DevKit".to_string(),
+            platform: Platform::Esp32,
+            firmware_version: Some("1.0.0".to_string()),
+            capabilities: vec!["gpio".to_string(), "i2c".to_string()],
+        };
+        assert_eq!(info.name, "ESP32 DevKit");
+        assert!(matches!(info.platform, Platform::Esp32));
+        assert_eq!(info.capabilities.len(), 2);
+    }
+
+    #[test]
+    fn test_firmware_registry() {
+        let registry = FirmwareRegistry::new();
+        assert!(registry.list_devices().is_empty());
+        assert!(registry.get("test").is_none());
+    }
+
+    #[test]
+    fn test_firmware_error_display() {
+        let err = FirmwareError::DeviceNotConnected("uart0".to_string());
+        assert!(format!("{}", err).contains("Device not connected"));
+
+        let err = FirmwareError::CommunicationError("timeout".to_string());
+        assert!(format!("{}", err).contains("Communication error"));
+
+        let err = FirmwareError::PinError("invalid pin".to_string());
+        assert!(format!("{}", err).contains("Pin error"));
+
+        let err = FirmwareError::UnsupportedPlatform("custom".to_string());
+        assert!(format!("{}", err).contains("Unsupported platform"));
+
+        let err = FirmwareError::IoError("read failed".to_string());
+        assert!(format!("{}", err).contains("IO error"));
+    }
+}
