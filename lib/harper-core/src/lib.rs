@@ -19,24 +19,37 @@ pub mod runtime;
 pub mod server;
 pub mod tools;
 
+// Re-export error module for external access
+pub use crate::core::error;
+
 // Re-export core types
-#[allow(unused_imports)]
-pub use core::*;
+pub use crate::core::constants::VERSION;
+pub use crate::core::error::{HarperError, HarperResult};
+pub use crate::core::llm_client::call_llm;
+pub use crate::core::models::ProviderModels;
+pub use crate::core::{ApiConfig, ApiProvider, Message};
 
 // Re-export agent types
-pub use agent::chat::*;
+pub use crate::agent::chat::ChatService;
 
 // Re-export tools
-#[allow(unused_imports)]
-pub use tools::*;
+pub use crate::tools::{
+    api, code_analysis, db, filesystem, firmware, git, github, image, parsing, screenpipe, shell,
+    todo, web, ToolService,
+};
 
 // Re-export memory utilities
-pub use memory::cache::*;
-pub use memory::storage::*;
+pub use crate::memory::cache::{CacheAligned, CacheAlignedBuffer, CACHE_LINE_BYTES};
+pub use crate::memory::storage::{
+    clear_todos, create_connection, delete_messages, delete_session, delete_todo, init_db,
+    insert_command_log, list_sessions, load_command_logs_for_session, load_history,
+    load_latest_command_log, load_todos, save_message, save_session, save_todo, CommandLogEntry,
+};
+pub use crate::runtime::utils;
 
 // Re-export runtime
-#[allow(unused_imports)]
-pub use runtime::*;
+pub use crate::runtime::config::ExecPolicyConfig;
+pub use crate::runtime::scheduler::TaskScheduler;
 
 #[cfg(test)]
 mod tests {
