@@ -268,18 +268,16 @@ impl Sandbox {
 
     pub fn is_command_allowed(&self, command: &str) -> bool {
         if let Some(allowed) = &self.config.allowed_commands {
-            if !allowed.is_empty() {
-                return allowed.iter().any(|c| command.contains(c));
+            if !allowed.is_empty() && allowed.iter().any(|c| command.contains(c)) {
+                return true;
             }
         }
         if let Some(blocked) = &self.config.blocked_commands {
-            for b in blocked {
-                if command.contains(b) {
-                    return false;
-                }
+            if blocked.iter().any(|b| command.contains(b)) {
+                return false;
             }
         }
-        true
+        self.config.allowed_commands.is_none()
     }
 }
 
@@ -288,7 +286,7 @@ fn bpush(args: &mut Vec<String>, flag: &str, val: impl Into<String>) {
     args.push(flag.to_string());
     args.push(val.into());
 }
-
+// }
 #[allow(dead_code)]
 mod config {
     pub use super::SandboxConfig;
@@ -343,6 +341,8 @@ mod tests {
         let config = SandboxConfig::default();
         assert!(!config.enabled);
         assert!(config.readonly_home);
+        assert!(!config.network_access);
+        assert_eq!(config.max_execution_time_secs, Some(30));
     }
 
     #[test]
@@ -350,5 +350,75 @@ mod tests {
         std::env::set_var("HARPER_SANDBOX_ENABLED", "true");
         let config = config::from_env();
         assert!(config.enabled);
+        std::env::remove_var("HARPER_SANDBOX_ENABLED");
+    }
+
+    #[test]
+    fn test_sandbox_new() {
+        let config = SandboxConfig::default();
+        let sandbox = Sandbox::new(config);
+        // Backend detection depends on platform, but new() should work
+        assert!(matches!(
+            sandbox.backend,
+            SandboxBackend::Bubblewrap | SandboxBackend::SandboxExec | SandboxBackend::None
+        ));
+    }
+
+    #[test]
+    fn test_backend_name() {
+        let config = SandboxConfig::default();
+        let sandbox = Sandbox::new(config);
+
+        let name = sandbox.backend_name();
+        match sandbox.backend {
+            SandboxBackend::Bubblewrap => assert_eq!(name, "bubblewrap (bwrap)"),
+            SandboxBackend::SandboxExec => assert_eq!(name, "sandbox-exec (macOS)"),
+            SandboxBackend::None => assert_eq!(name, "none"),
+        }
+    }
+
+    #[test]
+    fn test_is_available() {
+        let config = SandboxConfig::default();
+        let sandbox = Sandbox::new(config);
+        // Availability depends on backend detection
+        let available = sandbox.is_available();
+        assert_eq!(available, sandbox.backend != SandboxBackend::None);
+    }
+
+    #[test]
+    fn test_is_command_allowed_no_restrictions() {
+        let config = SandboxConfig::default();
+        let sandbox = Sandbox::new(config);
+
+        assert!(sandbox.is_command_allowed("ls"));
+        assert!(sandbox.is_command_allowed("echo hello"));
+        assert!(sandbox.is_command_allowed("rm -rf /"));
+    }
+
+    #[test]
+    fn test_is_command_allowed_with_blocked() {
+        let config = SandboxConfig {
+            blocked_commands: Some(vec!["rm".to_string(), "sudo".to_string()]),
+            ..Default::default()
+        };
+        let sandbox = Sandbox::new(config);
+
+        assert!(sandbox.is_command_allowed("ls"));
+        assert!(!sandbox.is_command_allowed("rm -rf /"));
+        assert!(!sandbox.is_command_allowed("sudo apt update"));
+    }
+
+    #[test]
+    fn test_is_command_allowed_with_allowed() {
+        let config = SandboxConfig {
+            allowed_commands: Some(vec!["ls".to_string(), "cat".to_string()]),
+            ..Default::default()
+        };
+        let sandbox = Sandbox::new(config);
+
+        assert!(sandbox.is_command_allowed("ls"));
+        assert!(sandbox.is_command_allowed("cat file.txt"));
+        assert!(!sandbox.is_command_allowed("rm -rf /"));
     }
 }
