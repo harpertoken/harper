@@ -13,58 +13,48 @@
 // limitations under the License.
 
 use colored::Colorize;
-use std::fmt;
 
 /// Custom error type for Harper application
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum HarperError {
     /// Configuration related errors
+    #[error("Configuration error: {0}")]
     Config(String),
     /// Database related errors
+    #[error("Database error: {0}")]
     Database(String),
     /// API related errors
+    #[error("API error: {0}")]
     Api(String),
     /// MCP related errors
     #[allow(dead_code)]
+    #[error("MCP error: {0}")]
     Mcp(String),
     /// Cryptography related errors
+    #[error("Cryptography error: {0}")]
     Crypto(String),
     /// I/O related errors
+    #[error("I/O error: {0}")]
     Io(String),
     /// File operation errors
+    #[error("File operation error: {0}")]
     File(String),
     /// Command execution errors
+    #[error("Command execution error: {0}")]
     Command(String),
     /// Web search errors
     #[allow(dead_code)]
+    #[error("Web search error: {0}")]
     WebSearch(String),
+    /// Firmware errors
+    #[error("Firmware error: {0}")]
+    Firmware(#[from] harper_firmware::FirmwareError),
+    /// Sandbox errors
+    #[error("Sandbox error: {0}")]
+    Sandbox(#[from] harper_sandbox::SandboxError),
 }
-
-impl fmt::Display for HarperError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            HarperError::Config(msg) => write!(f, "Configuration error: {}", msg),
-            HarperError::Database(msg) => write!(f, "Database error: {}", msg),
-            HarperError::Api(msg) => write!(f, "API error: {}", msg),
-            HarperError::Mcp(msg) => write!(f, "MCP error: {}", msg),
-            HarperError::Crypto(msg) => write!(f, "Cryptography error: {}", msg),
-            HarperError::Io(msg) => write!(f, "I/O error: {}", msg),
-            HarperError::File(msg) => write!(f, "File operation error: {}", msg),
-            HarperError::Command(msg) => write!(f, "Command execution error: {}", msg),
-            HarperError::WebSearch(msg) => write!(f, "Web search error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for HarperError {}
 
 impl HarperError {
-    /// Get formatted error message for display
-    #[deprecated(note = "Please use `to_string()` instead")]
-    pub fn display_message(&self) -> String {
-        self.to_string()
-    }
-
     /// Get colored error message for CLI
     pub fn cli_message(&self) -> colored::ColoredString {
         self.to_string().red()

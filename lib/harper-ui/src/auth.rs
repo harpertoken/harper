@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use harper_core::{HarperError, HarperResult};
 use keyring::Entry;
 use std::io::{self, Write};
 
@@ -73,8 +74,8 @@ pub fn handle_auth_command(args: &[String]) -> Option<i32> {
 
     match subcommand {
         "login" => {
-            if let Err(message) = login(provider) {
-                eprintln!("Auth login failed: {}", message);
+            if let Err(err) = login(provider) {
+                eprintln!("Auth login failed: {}", err);
                 return Some(1);
             }
             println!(
@@ -84,8 +85,8 @@ pub fn handle_auth_command(args: &[String]) -> Option<i32> {
             Some(0)
         }
         "logout" => {
-            if let Err(message) = logout(provider) {
-                eprintln!("Auth logout failed: {}", message);
+            if let Err(err) = logout(provider) {
+                eprintln!("Auth logout failed: {}", err);
                 return Some(1);
             }
             println!(
@@ -116,31 +117,31 @@ pub fn is_placeholder_key(value: &str) -> bool {
     trimmed == "your_api_key_here" || trimmed == "your_gemini_api_key_here"
 }
 
-fn login(provider: Provider) -> Result<(), String> {
+fn login(provider: Provider) -> HarperResult<()> {
     let api_key = prompt_for_key(provider)?;
     if api_key.trim().is_empty() {
-        return Err("API key cannot be empty.".to_string());
+        return Err(HarperError::Api("API key cannot be empty.".to_string()));
     }
 
     let entry = Entry::new(KEYRING_SERVICE, provider.account_name())
-        .map_err(|e| format!("Failed to open keychain entry: {}", e))?;
+        .map_err(|e| HarperError::Crypto(format!("Failed to open keychain entry: {}", e)))?;
     entry
         .set_password(api_key.trim())
-        .map_err(|e| format!("Failed to store key: {}", e))?;
+        .map_err(|e| HarperError::Crypto(format!("Failed to store key: {}", e)))?;
 
     Ok(())
 }
 
-fn logout(provider: Provider) -> Result<(), String> {
+fn logout(provider: Provider) -> HarperResult<()> {
     let entry = Entry::new(KEYRING_SERVICE, provider.account_name())
-        .map_err(|e| format!("Failed to open keychain entry: {}", e))?;
+        .map_err(|e| HarperError::Crypto(format!("Failed to open keychain entry: {}", e)))?;
     entry
         .delete_password()
-        .map_err(|e| format!("Failed to remove key: {}", e))?;
+        .map_err(|e| HarperError::Crypto(format!("Failed to remove key: {}", e)))?;
     Ok(())
 }
 
-fn prompt_for_key(provider: Provider) -> Result<String, String> {
+fn prompt_for_key(provider: Provider) -> HarperResult<String> {
     println!(
         "Enter {} API key (input will be visible):",
         provider.display_name()
@@ -148,16 +149,16 @@ fn prompt_for_key(provider: Provider) -> Result<String, String> {
     print!("> ");
     io::stdout()
         .flush()
-        .map_err(|e| format!("Failed to flush stdout: {}", e))?;
+        .map_err(|e| HarperError::Io(format!("Failed to flush stdout: {}", e)))?;
 
     let mut input = String::new();
     io::stdin()
         .read_line(&mut input)
-        .map_err(|e| format!("Failed to read input: {}", e))?;
+        .map_err(|e| HarperError::Io(format!("Failed to read input: {}", e)))?;
     Ok(input)
 }
 
-fn parse_provider(args: &[String]) -> Result<Provider, String> {
+fn parse_provider(args: &[String]) -> HarperResult<Provider> {
     let mut provider_value: Option<String> = None;
 
     let mut iter = args.iter().skip(3);
@@ -173,14 +174,14 @@ fn parse_provider(args: &[String]) -> Result<Provider, String> {
         }
     }
 
-    let provider_value =
-        provider_value.ok_or_else(|| "Missing provider. Use --provider <name>.".to_string())?;
+    let provider_value = provider_value
+        .ok_or_else(|| HarperError::Api("Missing provider. Use --provider <name>.".to_string()))?;
 
     Provider::from_str(&provider_value).ok_or_else(|| {
-        format!(
+        HarperError::Api(format!(
             "Unknown provider '{}'. Use OpenAI, Sambanova, or Gemini.",
             provider_value
-        )
+        ))
     })
 }
 

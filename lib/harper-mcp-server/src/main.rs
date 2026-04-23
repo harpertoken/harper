@@ -39,7 +39,7 @@ impl RateLimiter {
         let now = Instant::now();
         let window = Duration::from_secs(RATE_LIMIT_WINDOW_SECS);
 
-        let mut requests = self.requests.lock().unwrap();
+        let mut requests = self.requests.lock().expect("Failed to lock rate limiter");
 
         // Clean up expired entries
         for v in requests.values_mut() {

@@ -512,7 +512,7 @@ impl<'a> ChatService<'a> {
             "clear" => CommandAction::Clear,
             "audit" => match parse_audit_params(args) {
                 Ok(params) => CommandAction::Audit(params),
-                Err(err) => CommandAction::Unknown(err),
+                Err(err) => CommandAction::Unknown(err.to_string()),
             },
             cmd => {
                 if let Some(desc) = self.custom_commands.get(cmd) {
@@ -1262,7 +1262,7 @@ impl<'a> ChatService<'a> {
     }
 }
 
-fn parse_audit_params(args: Option<&str>) -> Result<AuditParams, String> {
+fn parse_audit_params(args: Option<&str>) -> HarperResult<AuditParams> {
     let mut params = AuditParams::default();
 
     let Some(arg_text) = args.filter(|a| !a.is_empty()) else {
@@ -1272,13 +1272,20 @@ fn parse_audit_params(args: Option<&str>) -> Result<AuditParams, String> {
     for token in arg_text.split_whitespace() {
         if token.chars().all(|c| c.is_ascii_digit()) {
             if params.limit.is_some() {
-                return Err("Audit limit specified multiple times.".to_string());
+                return Err(HarperError::Api(
+                    "Audit limit specified multiple times.".to_string(),
+                ));
             }
-            let parsed = token
-                .parse::<usize>()
-                .map_err(|_| format!("Invalid limit '{}'. Use a positive integer.", token))?;
+            let parsed = token.parse::<usize>().map_err(|_| {
+                HarperError::Api(format!(
+                    "Invalid limit '{}'. Use a positive integer.",
+                    token
+                ))
+            })?;
             if parsed == 0 {
-                return Err("Audit limit must be greater than zero.".to_string());
+                return Err(HarperError::Api(
+                    "Audit limit must be greater than zero.".to_string(),
+                ));
             }
             params.limit = Some(parsed);
             continue;
@@ -1286,10 +1293,14 @@ fn parse_audit_params(args: Option<&str>) -> Result<AuditParams, String> {
 
         if let Some(value) = token.strip_prefix("status=") {
             if params.status.is_some() {
-                return Err("Status filter specified multiple times.".to_string());
+                return Err(HarperError::Api(
+                    "Status filter specified multiple times.".to_string(),
+                ));
             }
             if value.is_empty() {
-                return Err("Status filter cannot be empty.".to_string());
+                return Err(HarperError::Api(
+                    "Status filter cannot be empty.".to_string(),
+                ));
             }
             params.status = Some(value.to_lowercase());
             continue;
@@ -1297,16 +1308,18 @@ fn parse_audit_params(args: Option<&str>) -> Result<AuditParams, String> {
 
         if let Some(value) = token.strip_prefix("approval=") {
             if params.approval.is_some() {
-                return Err("Approval filter specified multiple times.".to_string());
+                return Err(HarperError::Api(
+                    "Approval filter specified multiple times.".to_string(),
+                ));
             }
             params.approval = Some(match value.to_lowercase().as_str() {
                 "approved" => AuditApprovalFilter::Approved,
                 "rejected" => AuditApprovalFilter::Rejected,
                 "auto" => AuditApprovalFilter::Auto,
                 _ => {
-                    return Err(
-                        "Approval filter must be one of: approved, rejected, auto.".to_string()
-                    )
+                    return Err(HarperError::Api(
+                        "Approval filter must be one of: approved, rejected, auto.".to_string(),
+                    ))
                 }
             });
             continue;
@@ -1318,7 +1331,9 @@ fn parse_audit_params(args: Option<&str>) -> Result<AuditParams, String> {
             "failed" | "succeeded" | "error" | "cancelled" | "blocked"
         ) {
             if params.status.is_some() {
-                return Err("Status filter specified multiple times.".to_string());
+                return Err(HarperError::Api(
+                    "Status filter specified multiple times.".to_string(),
+                ));
             }
             params.status = Some(lower);
             continue;
@@ -1326,7 +1341,9 @@ fn parse_audit_params(args: Option<&str>) -> Result<AuditParams, String> {
 
         if matches!(lower.as_str(), "approved" | "rejected" | "auto") {
             if params.approval.is_some() {
-                return Err("Approval filter specified multiple times.".to_string());
+                return Err(HarperError::Api(
+                    "Approval filter specified multiple times.".to_string(),
+                ));
             }
             params.approval = Some(match lower.as_str() {
                 "approved" => AuditApprovalFilter::Approved,
@@ -1337,10 +1354,10 @@ fn parse_audit_params(args: Option<&str>) -> Result<AuditParams, String> {
             continue;
         }
 
-        return Err(format!(
+        return Err(HarperError::Api(format!(
             "Unknown audit argument '{}'. Use /audit [limit] [status=...] [approval=approved|rejected|auto].",
             token
-        ));
+        )));
     }
 
     Ok(params)
@@ -1387,7 +1404,7 @@ mod tests {
     #[test]
     fn parse_audit_errors_on_unknown_token() {
         let err = parse_audit_params(Some("foo=bar")).expect_err("should fail");
-        assert!(err.contains("Unknown audit argument"));
+        assert!(err.to_string().contains("Unknown audit argument"));
     }
 
     #[test]
@@ -1424,6 +1441,8 @@ mod tests {
     #[test]
     fn parse_audit_duplicate_status_errors() {
         let err = parse_audit_params(Some("status=failed succeeded")).expect_err("should fail");
-        assert!(err.contains("Status filter specified multiple times"));
+        assert!(err
+            .to_string()
+            .contains("Status filter specified multiple times"));
     }
 }
