@@ -15,9 +15,53 @@
 use axum::{routing::post, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tracing::info;
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
+const RATE_LIMIT_REQUESTS: u64 = 100;
+const RATE_LIMIT_WINDOW_SECS: u64 = 60;
+
+struct RateLimiter {
+    requests: Mutex<HashMap<String, Vec<Instant>>>,
+}
+
+impl RateLimiter {
+    fn new() -> Self {
+        Self {
+            requests: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn check(&self, client_ip: &str) -> bool {
+        let now = Instant::now();
+        let window = Duration::from_secs(RATE_LIMIT_WINDOW_SECS);
+
+        let mut requests = self.requests.lock().unwrap();
+
+        // Clean up expired entries
+        for v in requests.values_mut() {
+            v.retain(|t| now.duration_since(*t) < window);
+        }
+
+        // Check rate limit
+        let entry = requests.entry(client_ip.to_string()).or_default();
+
+        if entry.len() >= RATE_LIMIT_REQUESTS as usize {
+            return false;
+        }
+
+        entry.push(now);
+        true
+    }
+}
+
+// Global rate limiter instance
+lazy_static::lazy_static! {
+    static ref RATE_LIMITER: RateLimiter = RateLimiter::new();
+}
 
 fn error_response(
     id: Option<Value>,
@@ -60,38 +104,24 @@ struct JsonRpcError {
     data: Option<Value>,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct InitializeParams {
-    protocol_version: String,
-}
-
-#[derive(Deserialize)]
-struct ToolCallParams {
-    name: String,
-}
-
-fn parse_params<T: for<'de> serde::de::Deserialize<'de>>(params: Option<&Value>) -> Option<T> {
-    let args = params?.get("arguments")?;
-    serde_json::from_value(args.clone()).ok()
-}
-
 fn handle_initialize(request_id: Value, params: Option<&Value>) -> JsonRpcResponse {
-    let init_params: InitializeParams =
-        match params.and_then(|p| serde_json::from_value(p.clone()).ok()) {
-            Some(p) => p,
-            None => return error_response(Some(request_id), -32600, "Invalid Request", None),
-        };
-
-    if init_params.protocol_version != PROTOCOL_VERSION {
-        return error_response(
-            Some(request_id),
-            -32602,
-            "Unsupported protocol version",
-            None,
-        );
+    // Check protocol version
+    if let Some(params) = params {
+        if let Some(version) = params.get("protocolVersion") {
+            if version != PROTOCOL_VERSION {
+                return error_response(
+                    Some(request_id),
+                    -32602,
+                    "Unsupported protocol version",
+                    None,
+                );
+            }
+        } else {
+            return error_response(Some(request_id), -32600, "Invalid Request", None);
+        }
+    } else {
+        return error_response(Some(request_id), -32601, "Method not found", None);
     }
-
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
         id: Some(request_id),
@@ -148,58 +178,71 @@ fn handle_tools_list(request_id: Value) -> JsonRpcResponse {
 }
 
 fn handle_tools_call(request_id: Value, params: Option<&Value>) -> JsonRpcResponse {
-    let tool_params: ToolCallParams =
-        match params.and_then(|p| serde_json::from_value(p.clone()).ok()) {
-            Some(p) => p,
-            None => return error_response(Some(request_id), -32600, "Invalid Request", None),
-        };
-
-    match tool_params.name.as_str() {
-        "echo" => {
-            let msg = parse_params::<EchoArgs>(params)
-                .and_then(|args| args.message)
-                .unwrap_or_default();
-            let result = json!({
-                "content": [{
-                    "type": "text",
-                    "text": msg
-                }]
-            });
-            JsonRpcResponse {
-                jsonrpc: "2.0".to_string(),
-                id: Some(request_id),
-                result: Some(result),
-                error: None,
+    if let Some(params) = params {
+        if let Some(name) = params.get("name") {
+            if name == "echo" {
+                if let Some(args) = params.get("arguments") {
+                    if let Some(Value::String(msg)) = args.get("message") {
+                        let result = json!({
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": msg
+                                }
+                            ]
+                        });
+                        JsonRpcResponse {
+                            jsonrpc: "2.0".to_string(),
+                            id: Some(request_id),
+                            result: Some(result),
+                            error: None,
+                        }
+                    } else {
+                        error_response(Some(request_id), -32602, "Invalid params", None)
+                    }
+                } else {
+                    error_response(Some(request_id), -32602, "Invalid params", None)
+                }
+            } else if name == "get_time" {
+                let now = chrono::Utc::now().to_rfc3339();
+                let result = json!({
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": now
+                        }
+                    ]
+                });
+                JsonRpcResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id: Some(request_id),
+                    result: Some(result),
+                    error: None,
+                }
+            } else {
+                error_response(Some(request_id), -32601, "Method not found", None)
             }
+        } else {
+            error_response(Some(request_id), -32602, "Invalid params", None)
         }
-        "get_time" => {
-            let now = chrono::Utc::now().to_rfc3339();
-            let result = json!({
-                "content": [{
-                    "type": "text",
-                    "text": now
-                }]
-            });
-            JsonRpcResponse {
-                jsonrpc: "2.0".to_string(),
-                id: Some(request_id),
-                result: Some(result),
-                error: None,
-            }
-        }
-        _ => error_response(Some(request_id), -32601, "Method not found", None),
+    } else {
+        error_response(Some(request_id), -32600, "Invalid Request", None)
     }
-}
-
-#[derive(Deserialize)]
-struct EchoArgs {
-    #[serde(default)]
-    message: Option<String>,
 }
 
 async fn handle_request(
     axum::Json(rpc_req): axum::Json<JsonRpcRequest>,
 ) -> axum::Json<JsonRpcResponse> {
+    let client_ip = "default";
+    if !RATE_LIMITER.check(client_ip) {
+        return axum::Json(error_response(
+            Some(rpc_req.id.clone()),
+            -32029,
+            "Rate limit exceeded. Try again later.",
+            None,
+        ));
+    }
+
     info!(
         "MCP request: method={}, id={:?}",
         rpc_req.method, rpc_req.id
@@ -225,6 +268,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", axum::routing::get(health));
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 5001));
     println!("MCP server listening on http://127.0.0.1:5001");
+    println!(
+        "Rate limit: {} requests per {} seconds",
+        RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW_SECS
+    );
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
