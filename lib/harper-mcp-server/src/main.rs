@@ -60,24 +60,38 @@ struct JsonRpcError {
     data: Option<Value>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InitializeParams {
+    protocol_version: String,
+}
+
+#[derive(Deserialize)]
+struct ToolCallParams {
+    name: String,
+}
+
+fn parse_params<T: for<'de> serde::de::Deserialize<'de>>(params: Option<&Value>) -> Option<T> {
+    let args = params?.get("arguments")?;
+    serde_json::from_value(args.clone()).ok()
+}
+
 fn handle_initialize(request_id: Value, params: Option<&Value>) -> JsonRpcResponse {
-    // Check protocol version
-    if let Some(params) = params {
-        if let Some(version) = params.get("protocolVersion") {
-            if version != PROTOCOL_VERSION {
-                return error_response(
-                    Some(request_id),
-                    -32602,
-                    "Unsupported protocol version",
-                    None,
-                );
-            }
-        } else {
-            return error_response(Some(request_id), -32600, "Invalid Request", None);
-        }
-    } else {
-        return error_response(Some(request_id), -32601, "Method not found", None);
+    let init_params: InitializeParams =
+        match params.and_then(|p| serde_json::from_value(p.clone()).ok()) {
+            Some(p) => p,
+            None => return error_response(Some(request_id), -32600, "Invalid Request", None),
+        };
+
+    if init_params.protocol_version != PROTOCOL_VERSION {
+        return error_response(
+            Some(request_id),
+            -32602,
+            "Unsupported protocol version",
+            None,
+        );
     }
+
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
         id: Some(request_id),
@@ -134,56 +148,53 @@ fn handle_tools_list(request_id: Value) -> JsonRpcResponse {
 }
 
 fn handle_tools_call(request_id: Value, params: Option<&Value>) -> JsonRpcResponse {
-    if let Some(params) = params {
-        if let Some(name) = params.get("name") {
-            if name == "echo" {
-                if let Some(args) = params.get("arguments") {
-                    if let Some(Value::String(msg)) = args.get("message") {
-                        let result = json!({
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": msg
-                                }
-                            ]
-                        });
-                        JsonRpcResponse {
-                            jsonrpc: "2.0".to_string(),
-                            id: Some(request_id),
-                            result: Some(result),
-                            error: None,
-                        }
-                    } else {
-                        error_response(Some(request_id), -32602, "Invalid params", None)
-                    }
-                } else {
-                    error_response(Some(request_id), -32602, "Invalid params", None)
-                }
-            } else if name == "get_time" {
-                let now = chrono::Utc::now().to_rfc3339();
-                let result = json!({
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": now
-                        }
-                    ]
-                });
-                JsonRpcResponse {
-                    jsonrpc: "2.0".to_string(),
-                    id: Some(request_id),
-                    result: Some(result),
-                    error: None,
-                }
-            } else {
-                error_response(Some(request_id), -32601, "Method not found", None)
+    let tool_params: ToolCallParams =
+        match params.and_then(|p| serde_json::from_value(p.clone()).ok()) {
+            Some(p) => p,
+            None => return error_response(Some(request_id), -32600, "Invalid Request", None),
+        };
+
+    match tool_params.name.as_str() {
+        "echo" => {
+            let msg = parse_params::<EchoArgs>(params)
+                .and_then(|args| args.message)
+                .unwrap_or_default();
+            let result = json!({
+                "content": [{
+                    "type": "text",
+                    "text": msg
+                }]
+            });
+            JsonRpcResponse {
+                jsonrpc: "2.0".to_string(),
+                id: Some(request_id),
+                result: Some(result),
+                error: None,
             }
-        } else {
-            error_response(Some(request_id), -32602, "Invalid params", None)
         }
-    } else {
-        error_response(Some(request_id), -32600, "Invalid Request", None)
+        "get_time" => {
+            let now = chrono::Utc::now().to_rfc3339();
+            let result = json!({
+                "content": [{
+                    "type": "text",
+                    "text": now
+                }]
+            });
+            JsonRpcResponse {
+                jsonrpc: "2.0".to_string(),
+                id: Some(request_id),
+                result: Some(result),
+                error: None,
+            }
+        }
+        _ => error_response(Some(request_id), -32601, "Method not found", None),
     }
+}
+
+#[derive(Deserialize)]
+struct EchoArgs {
+    #[serde(default)]
+    message: Option<String>,
 }
 
 async fn handle_request(
