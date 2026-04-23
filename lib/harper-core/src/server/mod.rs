@@ -63,8 +63,11 @@ pub async fn health() -> Json<HealthResponse> {
 }
 
 pub async fn list_sessions(State(state): State<Arc<ServerState>>) -> Json<Vec<SessionListItem>> {
-    let conn = state.conn.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title FROM sessions ORDER BY updated_at DESC LIMIT 50").unwrap();
+    let conn = state
+        .conn
+        .lock()
+        .expect("Failed to lock database connection");
+    let mut stmt = conn.prepare("SELECT id, created_at, updated_at, title FROM sessions ORDER BY updated_at DESC LIMIT 50").expect("Failed to prepare SQL statement");
 
     let sessions: Vec<SessionListItem> = stmt
         .query_map([], |row| {
@@ -75,7 +78,7 @@ pub async fn list_sessions(State(state): State<Arc<ServerState>>) -> Json<Vec<Se
                 title: row.get(3)?,
             })
         })
-        .unwrap()
+        .expect("Failed to execute query")
         .filter_map(|r| r.ok())
         .collect();
 
@@ -86,7 +89,10 @@ pub async fn get_session(
     State(state): State<Arc<ServerState>>,
     Path(session_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state
+        .conn
+        .lock()
+        .expect("Failed to lock database connection");
 
     let mut stmt = conn
         .prepare("SELECT messages FROM sessions WHERE id = ?")
@@ -110,7 +116,10 @@ pub async fn delete_session(
     State(state): State<Arc<ServerState>>,
     Path(session_id): Path<String>,
 ) -> StatusCode {
-    let conn = state.conn.lock().unwrap();
+    let conn = state
+        .conn
+        .lock()
+        .expect("Failed to lock database connection");
 
     match conn.execute("DELETE FROM sessions WHERE id = ?", [&session_id]) {
         Ok(_) => StatusCode::NO_CONTENT,

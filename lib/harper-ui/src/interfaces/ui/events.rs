@@ -117,7 +117,12 @@ pub fn handle_event(
                 match key.code {
                     KeyCode::Char('y') | KeyCode::Char('Y') => {
                         let command = approval.command.clone();
-                        if let Some(tx) = approval.tx.lock().unwrap().take() {
+                        if let Some(tx) = approval
+                            .tx
+                            .lock()
+                            .expect("Failed to lock approval channel")
+                            .take()
+                        {
                             let _ = tx.send(true);
                         }
                         app.pending_approval = None;
@@ -126,7 +131,12 @@ pub fn handle_event(
                     }
                     KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
                         let command = approval.command.clone();
-                        if let Some(tx) = approval.tx.lock().unwrap().take() {
+                        if let Some(tx) = approval
+                            .tx
+                            .lock()
+                            .expect("Failed to lock approval channel")
+                            .take()
+                        {
                             let _ = tx.send(false);
                         }
                         app.pending_approval = None;
