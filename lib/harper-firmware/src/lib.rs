@@ -17,16 +17,22 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
+/// Errors that can occur during firmware operations
 #[derive(Debug, Error)]
 pub enum FirmwareError {
+    /// Device is not connected or available
     #[error("Device not connected: {0}")]
     DeviceNotConnected(String),
+    /// Communication failure with the device
     #[error("Communication error: {0}")]
     CommunicationError(String),
+    /// Pin configuration or access error
     #[error("Pin error: {0}")]
     PinError(String),
+    /// Platform is not supported for firmware operations
     #[error("Unsupported platform: {0}")]
     UnsupportedPlatform(String),
+    /// Input/output operation failed
     #[error("IO error: {0}")]
     IoError(String),
 }

@@ -47,7 +47,22 @@ fn process_git_status_output(output: std::process::Output) -> String {
     }
 }
 
-/// Get git status
+/// Get the current git repository status
+///
+/// Returns the output of `git status --porcelain` which shows
+/// staged, unstaged, and untracked files in a machine-readable format.
+///
+/// # Returns
+/// A string containing the git status output
+///
+/// # Errors
+/// Returns `HarperError::Command` if the git command fails
+///
+/// # Example
+/// ```
+/// let status = harper_core::tools::git::git_status()?;
+/// println!("Git status: {}", status);
+/// ```
 pub fn git_status() -> crate::core::error::HarperResult<String> {
     let output = std::process::Command::new("git")
         .arg("status")
@@ -70,7 +85,26 @@ pub async fn git_status_async() -> crate::core::error::HarperResult<String> {
     Ok(process_git_status_output(output))
 }
 
-/// Show git diff
+/// Get the current git diff
+///
+/// Returns the output of `git diff` showing unstaged changes
+/// between the working directory and the index.
+///
+/// # Returns
+/// A string containing the git diff output
+///
+/// # Errors
+/// Returns `HarperError::Command` if the git command fails
+///
+/// # Example
+/// ```
+/// let diff = harper_core::tools::git::git_diff()?;
+/// if diff.is_empty() {
+///     println!("No unstaged changes");
+/// } else {
+///     println!("Unstaged changes:\n{}", diff);
+/// }
+/// ```
 pub fn git_diff() -> crate::core::error::HarperResult<String> {
     let output = std::process::Command::new("git")
         .arg("diff")
