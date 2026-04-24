@@ -83,8 +83,8 @@ impl Sandbox {
     ///
     /// # Example
     /// ```ignore
-    /// let config = SandboxConfig::default();
-    /// let sandbox = Sandbox::new(config);
+    /// // let config = SandboxConfig::default();
+    /// // let sandbox = Sandbox::new(config);
     /// ```
     #[must_use]
     pub fn new(config: SandboxConfig) -> Self {
@@ -150,8 +150,8 @@ impl Sandbox {
     ///
     /// # Example
     /// ```ignore
-    /// let output = sandbox.execute("echo", &["hello", "world"]).await?;
-    /// println!("Output: {}", String::from_utf8_lossy(&output.stdout));
+    /// // let output = sandbox.execute("echo", &["hello", "world"]).await?;
+    /// // println!("Output: {}", String::from_utf8_lossy(&output.stdout));
     /// ```
     pub async fn execute(&self, command: &str, args: &[&str]) -> Result<std::process::Output> {
         if !self.config.enabled {
@@ -325,9 +325,9 @@ impl Sandbox {
     ///
     /// # Example
     /// ```ignore
-    /// if sandbox.is_command_allowed("ls") {
-    ///     println!("ls command is allowed");
-    /// }
+    /// // if sandbox.is_command_allowed("ls") {
+    /// //     println!("ls command is allowed");
+    /// // }
     /// ```
     #[must_use]
     pub fn is_command_allowed(&self, command: &str) -> bool {
