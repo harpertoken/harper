@@ -16,7 +16,7 @@ use axum::{routing::post, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 use tracing::info;
 
@@ -49,7 +49,7 @@ impl RateLimiter {
         // Check rate limit
         let entry = requests.entry(client_ip.to_string()).or_default();
 
-        if entry.len() >= RATE_LIMIT_REQUESTS as usize {
+        if entry.len() >= usize::try_from(RATE_LIMIT_REQUESTS).unwrap_or(usize::MAX) {
             return false;
         }
 
@@ -59,9 +59,7 @@ impl RateLimiter {
 }
 
 // Global rate limiter instance
-lazy_static::lazy_static! {
-    static ref RATE_LIMITER: RateLimiter = RateLimiter::new();
-}
+static RATE_LIMITER: LazyLock<RateLimiter> = LazyLock::new(RateLimiter::new);
 
 fn error_response(
     id: Option<Value>,
@@ -268,10 +266,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", axum::routing::get(health));
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 5001));
     println!("MCP server listening on http://127.0.0.1:5001");
-    println!(
-        "Rate limit: {} requests per {} seconds",
-        RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW_SECS
-    );
+    println!("Rate limit: {RATE_LIMIT_REQUESTS} requests per {RATE_LIMIT_WINDOW_SECS} seconds");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())

@@ -76,16 +76,17 @@ pub struct Sandbox {
 impl Sandbox {
     /// Create a new sandbox with the given configuration
     ///
-    /// Automatically detects the available backend (Bubblewrap, SandboxExec, or None).
+    /// Automatically detects the available backend (Bubblewrap, `SandboxExec`, or None).
     ///
     /// # Arguments
     /// * `config` - Sandbox configuration settings
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// let config = SandboxConfig::default();
     /// let sandbox = Sandbox::new(config);
     /// ```
+    #[must_use]
     pub fn new(config: SandboxConfig) -> Self {
         let backend = Self::detect_backend();
         Self { config, backend }
@@ -114,6 +115,7 @@ impl Sandbox {
     ///
     /// # Returns
     /// true if sandboxing is supported, false otherwise
+    #[must_use]
     pub fn is_available(&self) -> bool {
         self.backend != SandboxBackend::None
     }
@@ -122,6 +124,7 @@ impl Sandbox {
     ///
     /// # Returns
     /// A string describing the backend: "bubblewrap (bwrap)", "sandbox-exec (macOS)", or "none"
+    #[must_use]
     pub fn backend_name(&self) -> &str {
         match self.backend {
             SandboxBackend::Bubblewrap => "bubblewrap (bwrap)",
@@ -146,7 +149,7 @@ impl Sandbox {
     /// Returns `SandboxError` for execution failures, timeouts, or unavailable sandbox
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// let output = sandbox.execute("echo", &["hello", "world"]).await?;
     /// println!("Output: {}", String::from_utf8_lossy(&output.stdout));
     /// ```
@@ -174,8 +177,7 @@ impl Sandbox {
             {
                 Ok(result) => result.map_err(|e| SandboxError::ExecutionFailed(e.to_string())),
                 Err(_) => Err(SandboxError::ExecutionFailed(format!(
-                    "Command timed out after {} seconds",
-                    timeout
+                    "Command timed out after {timeout} seconds"
                 ))),
             }
         } else {
@@ -234,8 +236,7 @@ impl Sandbox {
             {
                 Ok(result) => result.map_err(|e| SandboxError::ExecutionFailed(e.to_string())),
                 Err(_) => Err(SandboxError::ExecutionFailed(format!(
-                    "Command timed out after {} seconds",
-                    timeout
+                    "Command timed out after {timeout} seconds"
                 ))),
             }
         } else {
@@ -290,8 +291,7 @@ impl Sandbox {
             {
                 Ok(result) => result.map_err(|e| SandboxError::ExecutionFailed(e.to_string())),
                 Err(_) => Err(SandboxError::ExecutionFailed(format!(
-                    "Command timed out after {} seconds",
-                    timeout
+                    "Command timed out after {timeout} seconds"
                 ))),
             }
         } else {
@@ -324,11 +324,12 @@ impl Sandbox {
     /// true if the command is permitted, false otherwise
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// if sandbox.is_command_allowed("ls") {
     ///     println!("ls command is allowed");
     /// }
     /// ```
+    #[must_use]
     pub fn is_command_allowed(&self, command: &str) -> bool {
         if let Some(allowed) = &self.config.allowed_commands {
             if !allowed.is_empty() && allowed.iter().any(|c| command.contains(c)) {
@@ -354,7 +355,7 @@ fn bpush(args: &mut Vec<String>, flag: &str, val: impl Into<String>) {
 mod config {
     pub use super::SandboxConfig;
 
-    use super::*;
+    use std::path::PathBuf;
 
     pub fn from_env() -> SandboxConfig {
         let enabled = std::env::var("HARPER_SANDBOX_ENABLED")
