@@ -3847,10 +3847,12 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
+ "h2",
  "http",
  "http-body",
  "http-body-util",
  "hyper",
+ "hyper-rustls",
  "hyper-util",
  "js-sys",
  "log",
@@ -4866,9 +4868,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "turul-mcp-client"
-version = "0.3.34"
+version = "0.3.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ef6ce2e09ae9e864fd1d85538560275dfcaa77e0c503b241e6681fe55c4e55d"
+checksum = "17c7c081876ab260d8b9439cf402f1a49868a299764cc04e13b6db62c2a8dbb3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4903,18 +4905,18 @@ dependencies = [
 
 [[package]]
 name = "turul-mcp-protocol"
-version = "0.3.34"
+version = "0.3.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b65790890299c32a42cb5685e43ff1a2c2bd9579de8cb0947d3224b1d42d3ab"
+checksum = "8b80d8c60f73d2a98db91abc1d166d1f375a426f1d5ecd9e888b7b171105a9c7"
 dependencies = [
  "turul-mcp-protocol-2025-11-25",
 ]
 
 [[package]]
 name = "turul-mcp-protocol-2025-11-25"
-version = "0.3.34"
+version = "0.3.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba4b9d327b1ba3ae38bd08be60faac9bc3b5b00b0eb7f23d27856ab74d30817b"
+checksum = "20dbbe6b8d1c62ad8cf294ba2b526fb49203b327016590b9036bbf08691ef97c"
 dependencies = [
  "async-trait",
  "serde",
