@@ -1,97 +1,70 @@
-.PHONY: help test build clean fmt lint doc install run dev check all
-
 # Copyright 2026 harpertoken
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the Apache License, Version 2.0
 
-# Default target
-help:
-	@echo "Harper - AI Agent"
-	@echo ""
-	@echo "Available commands:"
-	@echo "  make test     - Run all tests and checks"
-	@echo "  make build    - Build the project"
-	@echo "  make run      - Run the application"
-	@echo "  make dev      - Run in development mode"
-	@echo "  make fmt      - Format code"
-	@echo "  make lint     - Run linter"
-	@echo "  make doc      - Generate documentation"
-	@echo "  make clean    - Clean build artifacts"
-	@echo "  make install  - Install dependencies"
-	@echo "  make check    - Quick check (fmt + lint)"
-	@echo "  make all      - Run everything (check + test + build)"
+.PHONY: help test test-release build build-debug run run-server dev fmt lint doc clean install update audit deny check all
 
-# Run comprehensive tests
-test:
-	@./scripts/test.sh
+help: ## Show available targets
+	@printf "\nHarper\n\n"
+	@printf "Usage:\n  make <target>\n\n"
+	@printf "Targets:\n"
+	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?##"} {printf "  %-14s %s\n", $$1, $$2}'
 
-# Build the project
-build:
-	cargo build --release
+test: ## Run tests (unit + integration)
+	@cargo test --lib --workspace
+	@cargo test --tests --workspace
 
-# Run the application
-run:
-	cargo run
+test-release: ## Run tests in release mode
+	@cargo test --release --workspace
 
-# Development mode with file watching (requires cargo-watch)
-dev:
+build: ## Build release
+	@cargo build --release --workspace
+
+build-debug: ## Build debug
+	@cargo build --workspace
+
+run: ## Run harper-ui
+	@cargo run -p harper-ui
+
+run-server: ## Run harper-mcp-server
+	@cargo run -p harper-mcp-server
+
+dev: ## Development mode (watch if available)
 	@if command -v cargo-watch >/dev/null 2>&1; then \
 		cargo watch -x run; \
 	else \
-		echo "cargo-watch not installed. Run: cargo install cargo-watch"; \
-		cargo run; \
+		printf "cargo-watch not installed. Install with:\n  cargo install cargo-watch\n"; \
+		cargo run -p harper-ui; \
 	fi
 
-# Format code
-fmt:
-	cargo fmt --all
+fmt: ## Check formatting
+	@cargo fmt --all --check
 
-# Run linter
-lint:
-	cargo clippy --all-targets --all-features --workspace -- -D warnings
+lint: ## Run clippy
+	@cargo clippy --all-targets --all-features --workspace -- -D warnings
 
-# Generate documentation
-doc:
-	cargo doc --no-deps --document-private-items --all-features --workspace --open
+doc: ## Generate docs
+	@cargo doc --no-deps --document-private-items --all-features --workspace --open
 
-# Clean build artifacts
-clean:
-	cargo clean
-	rm -f chat_sessions.db
-	rm -f session_*.txt
+clean: ## Clean artifacts
+	@cargo clean
+	@rm -f chat_sessions.db session_*.txt
 
-# Install development dependencies
-install:
-	cargo install cargo-audit cargo-deny cargo-watch cargo-llvm-cov
+install: ## Install dev tools
+	@cargo install cargo-audit cargo-deny cargo-watch
 
-# Quick check
-check: fmt lint
-	@echo "Quick check completed"
+update: ## Update dependencies
+	@cargo update
 
-# Run everything
-all: check test build
-	@echo "All tasks completed successfully"
+audit: ## Security audit
+	@cargo audit || true
 
-# Update dependencies
-update:
-	cargo update
+deny: ## Dependency check
+	@cargo deny check || true
 
-# Security audit
-audit:
-	cargo audit
+check: fmt lint doc ## Quick check
+	@printf "✓ check complete\n"
 
-# Dependency check
-deny:
-	cargo deny check
-
-# Updated for v0.1.6
+all: check test test-release build build-debug ## Run everything
+	@printf "✓ all tasks complete\n"

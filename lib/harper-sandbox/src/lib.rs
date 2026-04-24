@@ -82,7 +82,7 @@ impl Sandbox {
     /// * `config` - Sandbox configuration settings
     ///
     /// # Example
-    /// ```ignore
+    /// ```text
     /// // let config = SandboxConfig::default();
     /// // let sandbox = Sandbox::new(config);
     /// ```
@@ -149,7 +149,7 @@ impl Sandbox {
     /// Returns `SandboxError` for execution failures, timeouts, or unavailable sandbox
     ///
     /// # Example
-    /// ```ignore
+    /// ```text
     /// // let output = sandbox.execute("echo", &["hello", "world"]).await?;
     /// // println!("Output: {}", String::from_utf8_lossy(&output.stdout));
     /// ```
@@ -324,7 +324,7 @@ impl Sandbox {
     /// true if the command is permitted, false otherwise
     ///
     /// # Example
-    /// ```ignore
+    /// ```text
     /// // if sandbox.is_command_allowed("ls") {
     /// //     println!("ls command is allowed");
     /// // }
