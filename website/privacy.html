@@ -9,7 +9,7 @@
 <body>
     <div class="page">
         <header class="site-header">
-            <div class="brand">HARPER<span>·AI</span></div>
+            <div class="brand"><img src="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" alt="" />HARPER<span>·AI</span></div>
             <nav class="nav">
                 <a href="index.html">Home</a>
                 <a href="installation.html">Install</a>
@@ -23,34 +23,30 @@
         </header>
 
         <main class="surface">
-            <section>
+            <div class="content-container">
                 <h1 class="hero-title">Privacy</h1>
-                <p class="hero-lede">Everything stays on your machine unless you point Harper at an API endpoint.</p>
-            </section>
+                <p class="hero-lede">Everything stays on your machine.</p>
 
-            <section class="list" style="margin-top: 2rem;">
-                <article class="list-item">
-                    <div class="list-title">Local-first</div>
-                    <p class="list-desc">Session history, approvals, and audit logs live in your workspace. We operate no telemetry pipeline.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Provider traffic</div>
-                    <p class="list-desc">When you choose OpenAI/SambaNova/Gemini, calls go directly from your machine to their APIs. Review their policies separately.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Offline mode</div>
-                    <p class="list-desc">Running Ollama keeps prompts entirely on-device. No network requests occur.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Contact</div>
-                    <p class="list-desc">Questions? harpertoken@icloud.com.</p>
-                </article>
-            </section>
+                <h2>Local-first</h2>
+                <p>Session history, approvals, and audit logs live in your workspace. No telemetry.</p>
+
+                <h2>Provider traffic</h2>
+                <p>Calls go directly from your machine to OpenAI, SambaNova, or Gemini. Review their policies.</p>
+
+                <h2>Offline mode</h2>
+                <p>Ollama keeps prompts entirely on-device. No network requests.</p>
+            </div>
         </main>
 
         <footer class="footnote">
-            <a class="button secondary" href="index.html" style="text-decoration:none;">← Back to Harper</a>
+            <a class="button secondary" href="index.html">← Back</a> · v2
         </footer>
     </div>
+    <script>
+        const header = document.querySelector('.site-header');
+        window.addEventListener('scroll', () => {
+            header.classList.toggle('scrolled', window.scrollY > 50);
+        });
+    </script>
 </body>
 </html>

@@ -9,7 +9,7 @@
 <body>
     <div class="page">
         <header class="site-header">
-            <div class="brand">HARPER<span>·AI</span></div>
+            <div class="brand"><img src="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" alt="" />HARPER<span>·AI</span></div>
             <nav class="nav">
                 <a href="index.html">Home</a>
                 <a href="installation.html">Install</a>
@@ -23,49 +23,59 @@
         </header>
 
         <main class="surface">
-            <section class="hero">
-                <div>
-                    <h1 class="hero-title">HTTP API Server</h1>
-                    <p class="hero-lede">
-                        Run Harper as a REST API for programmatic access. List sessions, retrieve history, and integrate with external tools.
-                    </p>
-                </div>
-            </section>
+            <div class="content-container">
+                <h1 class="hero-title">API Server</h1>
+                <p class="hero-lede">Run Harper as a REST API.</p>
 
-            <section class="grid" style="margin-top: 2.5rem;">
-                <div class="card">
-                    <h3>Enable Server</h3>
+                <h2>Config</h2>
+                <p>Enable the server in your config.</p>
+                <div class="code-wrapper">
                     <pre><code>[server]
 enabled = true
 host = "127.0.0.1"
 port = 8080</code></pre>
+                    <button class="copy-btn"></button>
                 </div>
-                <div class="card">
-                    <h3>Endpoints</h3>
-                    <ul>
-                        <li>GET /health - Health check</li>
-                        <li>GET /api/sessions - List sessions</li>
-                        <li>GET /api/sessions/:id - Get session</li>
-                        <li>DELETE /api/sessions/:id - Delete</li>
-                        <li>POST /api/chat - Send message</li>
-                    </ul>
+
+                <h2>Endpoints</h2>
+                <ul>
+                    <li>GET /health — health check</li>
+                    <li>GET /api/sessions — list sessions</li>
+                    <li>GET /api/sessions/:id — get session</li>
+                    <li>DELETE /api/sessions/:id — delete</li>
+                    <li>POST /api/chat — send message</li>
+                </ul>
+
+                <h2>Example</h2>
+                <div class="code-wrapper">
+                    <pre><code>curl http://127.0.0.1:8080/health</code></pre>
+                    <button class="copy-btn"></button>
                 </div>
-            </section>
-
-            <section style="margin-top: 2.5rem;">
-                <h2>Example Usage</h2>
-                <pre><code># Start server
-cargo run -p harper-ui --bin harper
-
-# In another terminal
-curl http://127.0.0.1:8080/health
-# {"status":"ok","version":"0.8.0"}
-
-curl http://127.0.0.1:8080/api/sessions</code></pre>
-            </section>
+                <div class="code-wrapper">
+                    <pre><code>curl http://127.0.0.1:8080/api/sessions</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+            </div>
         </main>
 
-        <footer class="footnote">Harper · Terminal autonomy without theatrics.</footer>
+        <footer class="footnote">
+            <a class="button secondary" href="index.html">← Back</a> · v2
+        </footer>
     </div>
+    <script>
+        const header = document.querySelector('.site-header');
+        window.addEventListener('scroll', () => {
+            header.classList.toggle('scrolled', window.scrollY > 50);
+        });
+
+        document.querySelectorAll('.copy-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const code = btn.closest('.code-wrapper').querySelector('code').textContent;
+                await navigator.clipboard.writeText(code);
+                btn.classList.add('copied');
+                setTimeout(() => btn.classList.remove('copied'), 1500);
+            });
+        });
+    </script>
 </body>
 </html>

@@ -9,7 +9,7 @@
 <body>
     <div class="page">
         <header class="site-header">
-            <div class="brand">HARPER<span>·AI</span></div>
+            <div class="brand"><img src="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" alt="" />HARPER<span>·AI</span></div>
             <nav class="nav">
                 <a href="index.html">Home</a>
                 <a href="installation.html">Install</a>
@@ -23,34 +23,33 @@
         </header>
 
         <main class="surface">
-            <section>
+            <div class="content-container">
                 <h1 class="hero-title">Terms</h1>
-                <p class="hero-lede">Commercial license only. Everything else is noise.</p>
-            </section>
+                <p class="hero-lede">Commercial license only.</p>
 
-            <section class="list" style="margin-top: 2rem;">
-                <article class="list-item">
-                    <div class="list-title">License</div>
-                    <p class="list-desc">Use requires an active agreement with Harpertoken. See COMMERCIAL_LICENSE for full text.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Restrictions</div>
-                    <p class="list-desc">No redistribution, resale, or reverse engineering. Do not train models on Harper transcripts without permission.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Warranty</div>
-                    <p class="list-desc">Software is provided “as is”. You are responsible for any commands executed by the agent.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Contact</div>
-                    <p class="list-desc">Licensing questions → harpertoken@icloud.com.</p>
-                </article>
-            </section>
+                <h2>License</h2>
+                <p>Use requires an active agreement with Harpertoken. See COMMERCIAL_LICENSE for full text.</p>
+
+                <h2>Restrictions</h2>
+                <p>No redistribution, resale, or reverse engineering. Do not train models on transcripts without permission.</p>
+
+                <h2>Warranty</h2>
+                <p>Software is provided as-is. You are responsible for commands executed by the agent.</p>
+
+                <h2>Contact</h2>
+                <p>Licensing: harpertoken@icloud.com</p>
+            </div>
         </main>
 
         <footer class="footnote">
-            <a class="button secondary" href="index.html" style="text-decoration:none;">← Back to Harper</a>
+            <a class="button secondary" href="index.html">← Back</a> · v2
         </footer>
     </div>
+    <script>
+        const header = document.querySelector('.site-header');
+        window.addEventListener('scroll', () => {
+            header.classList.toggle('scrolled', window.scrollY > 50);
+        });
+    </script>
 </body>
 </html>

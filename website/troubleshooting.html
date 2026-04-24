@@ -9,7 +9,7 @@
 <body>
     <div class="page">
         <header class="site-header">
-            <div class="brand">HARPER<span>·AI</span></div>
+            <div class="brand"><img src="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" alt="" />HARPER<span>·AI</span></div>
             <nav class="nav">
                 <a href="index.html">Home</a>
                 <a href="installation.html">Install</a>
@@ -23,92 +23,52 @@
         </header>
 
         <main class="surface">
-            <section>
+            <div class="content-container">
                 <h1 class="hero-title">Troubleshooting</h1>
-                <p class="hero-lede">Solutions for common issues with Harper.</p>
-            </section>
+                <p class="hero-lede">Solutions for common issues.</p>
 
-            <section class="list" style="margin-top: 2rem;">
-                <article class="list-item">
-                    <div class="list-title">Symptom</div>
-                    <p>Harper is running an older version than expected or displaying an outdated UI.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Cause</div>
-                    <p>This typically occurs when:</p>
-                    <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
-                        <li>A new version was released but the local binary was not updated</li>
-                        <li>Multiple installations of Harper exist (e.g., via Homebrew, manual build, or in different directories)</li>
-                        <li>The binary in PATH is pointing to an older build</li>
-                    </ul>
-                </article>
-            </section>
+                <h2>Wrong version</h2>
+                <p>Check your installed version and location.</p>
+                <div class="code-wrapper">
+                    <pre><code>which harper</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <div class="code-wrapper">
+                    <pre><code>harper --version</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <div class="code-wrapper">
+                    <pre><code>brew upgrade harpertoken/tap/harper-ai</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
 
-            <section style="margin-top: 2rem;">
-                <h2>Resolution</h2>
-                <article class="list-item">
-                    <div class="list-title">Option 1: Rebuild from source</div>
-                    <p>If you have the source code:</p>
-                    <pre style="background: #1a1a1a; padding: 1rem; border-radius: 8px; overflow-x: auto;"><code style="color: #a5d6ff;"># Pull the latest changes
-git pull origin main
-
-# Build the project
-cargo build --release
-
-# Verify the version
-./target/release/harper --version</code></pre>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Option 2: Update local binary</div>
-                    <p>Copy the newly built binary to the bin directory:</p>
-                    <pre style="background: #1a1a1a; padding: 1rem; border-radius: 8px; overflow-x: auto;"><code style="color: #a5d6ff;">cp target/release/harper bin/harper</code></pre>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Option 3: Update system binary</div>
-                    <p>Copy the binary to your system's local bin directory:</p>
-                    <pre style="background: #1a1a1a; padding: 1rem; border-radius: 8px; overflow-x: auto;"><code style="color: #a5d6ff;"># Common locations:
-cp target/release/harper ~/.local/bin/harper
-
-# Or use Homebrew's prefix:
-cp target/release/harper $(brew --prefix)/bin/harper</code></pre>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Option 4: Via Homebrew</div>
-                    <p>If you installed Harper via Homebrew:</p>
-                    <pre style="background: #1a1a1a; padding: 1rem; border-radius: 8px; overflow-x: auto;"><code style="color: #a5d6ff;">brew upgrade harpertoken/tap/harper-ai</code></pre>
-                </article>
-            </section>
-
-            <section style="margin-top: 2rem;">
-                <h2>Verification</h2>
-                <article class="list-item">
-                    <div class="list-title">Check which binary is being used</div>
-                    <pre style="background: #1a1a1a; padding: 1rem; border-radius: 8px; overflow-x: auto;"><code style="color: #a5d6ff;">which harper</code></pre>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Check the version</div>
-                    <pre style="background: #1a1a1a; padding: 1rem; border-radius: 8px; overflow-x: auto;"><code style="color: #a5d6ff;">harper --version</code></pre>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Compare with latest release</div>
-                    <p>Check the latest release on GitHub: <a href="https://github.com/harpertoken/harper/releases" style="color: #a5d6ff;">https://github.com/harpertoken/harper/releases</a></p>
-                </article>
-            </section>
-
-            <section style="margin-top: 2rem;">
                 <h2>Multiple installations</h2>
-                <p>If you have multiple installations, you may see unexpected behavior. To check locations:</p>
-                <pre style="background: #1a1a1a; padding: 1rem; border-radius: 8px; overflow-x: auto;"><code style="color: #a5d6ff;"># Find all harper binaries
-find /usr/local/bin -name "harper" 2>/dev/null
-find ~/.local/bin -name "harper" 2>/dev/null
-find $HOME -name "harper" 2>/dev/null</code></pre>
-                <p style="margin-top: 1rem;">Ensure the PATH points to the desired installation.</p>
-            </section>
+                <p>Find all harper binaries on your system.</p>
+                <div class="code-wrapper">
+                    <pre><code>find /usr/local/bin ~/.local/bin $HOME -name "harper" 2>/dev/null</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+            </div>
         </main>
 
         <footer class="footnote">
-            <a class="button secondary" href="index.html" style="text-decoration:none;">← Back to Harper</a>
+            <a class="button secondary" href="index.html">← Back</a> · v2
         </footer>
     </div>
+    <script>
+        const header = document.querySelector('.site-header');
+        window.addEventListener('scroll', () => {
+            header.classList.toggle('scrolled', window.scrollY > 50);
+        });
+
+        document.querySelectorAll('.copy-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const code = btn.closest('.code-wrapper').querySelector('code').textContent;
+                await navigator.clipboard.writeText(code);
+                btn.classList.add('copied');
+                setTimeout(() => btn.classList.remove('copied'), 1500);
+            });
+        });
+    </script>
 </body>
 </html>

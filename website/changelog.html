@@ -9,7 +9,7 @@
 <body>
     <div class="page">
         <header class="site-header">
-            <div class="brand">HARPER<span>·AI</span></div>
+            <div class="brand"><img src="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" alt="" />HARPER<span>·AI</span></div>
             <nav class="nav">
                 <a href="index.html">Home</a>
                 <a href="installation.html">Install</a>
@@ -23,30 +23,46 @@
         </header>
 
         <main class="surface">
-            <section>
-                <h1 class="hero-title">Version history</h1>
-                <p class="hero-lede">Every release is tracked here. No vague marketing prose.</p>
-            </section>
+            <div class="content-container">
+                <h1 class="hero-title">Changelog</h1>
+                <p class="hero-lede">Every release. No marketing prose.</p>
 
-            <section class="list" style="margin-top: 2rem;">
-                <article class="list-item">
-                    <div class="list-title">Calm UI + offline intent routing</div>
-                    <p class="list-desc">New minimal surfaces, sidebar intent insights, deterministic list-changed-files tool, and Ollama support.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Provider swap layer</div>
-                    <p class="list-desc">Unified configuration for OpenAI, SambaNova, Gemini, and any REST-compatible endpoint.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Initial release</div>
-                    <p class="list-desc">Approvals, audit trail, memory-backed chat, and the first version of the TUI.</p>
-                </article>
-            </section>
+                <div id="releases">
+                    <p class="loading">Fetching releases...</p>
+                </div>
+            </div>
         </main>
 
         <footer class="footnote">
-            <a class="button secondary" href="index.html" style="text-decoration:none;">← Back to Harper</a>
+            <a class="button secondary" href="index.html">← Back</a> · v2
         </footer>
     </div>
+    <script>
+        const header = document.querySelector('.site-header');
+        window.addEventListener('scroll', () => {
+            header.classList.toggle('scrolled', window.scrollY > 50);
+        });
+
+        fetch('https://api.github.com/repos/harpertoken/harper/releases?per_page=10', {
+            headers: { 'Accept': 'application/vnd.github+json' }
+        })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(releases => {
+            const container = document.getElementById('releases');
+            if (!releases.length) {
+                container.innerHTML = '<p>No releases found.</p>';
+                return;
+            }
+            container.innerHTML = releases.slice(0, 5).map(rel => {
+                const date = rel.published_at ? new Date(rel.published_at).toLocaleDateString() : '';
+                return `<h2>${rel.tag_name}${date ? ' <span>' + date + '</span>' : ''}</h2>
+                <p>${rel.body ? rel.body.slice(0, 300) + (rel.body.length > 300 ? '...' : '') : 'No description.'}</p>
+                <p><a href="${rel.html_url}" target="_blank">View on GitHub →</a></p>`;
+            }).join('') + '<h2>All releases</h2><p><a href="https://github.com/harpertoken/harper/releases" target="_blank">github.com/harpertoken/harper/releases →</a></p>';
+        })
+        .catch(() => {
+            document.getElementById('releases').innerHTML = '<p>Could not load releases. <a href="https://github.com/harpertoken/harper/releases" target="_blank">View on GitHub</a></p>';
+        });
+    </script>
 </body>
 </html>
