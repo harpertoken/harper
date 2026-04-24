@@ -140,6 +140,13 @@ pub async fn chat(
     })
 }
 
+/// Creates the Axum router with all API routes configured
+///
+/// # Arguments
+/// * `conn` - Database connection wrapped in Arc<Mutex<>>
+///
+/// # Returns
+/// Configured Axum Router with health and session endpoints
 pub fn create_router(conn: Arc<Mutex<Connection>>) -> Router {
     let state = Arc::new(ServerState { conn });
 

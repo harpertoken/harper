@@ -21,8 +21,28 @@ use crate::core::error::HarperError;
 use crate::memory::storage;
 use crate::tools::parsing;
 
-/// Manage todo list operations
-/// Supports: [TODO add "task description"], [TODO list], [TODO remove N]
+/// Manage todo list operations for task tracking
+///
+/// Supports the following commands:
+/// - `[TODO add "task description"]` - Add a new todo item
+/// - `[TODO list]` - List all todo items
+/// - `[TODO remove N]` - Remove todo item by index (1-based)
+///
+/// # Arguments
+/// * `conn` - SQLite database connection
+/// * `response` - Input string containing the todo command
+///
+/// # Returns
+/// A success message or the list of todos
+///
+/// # Errors
+/// Returns `HarperError::Command` for invalid commands or database errors
+///
+/// # Example
+/// ```
+/// let result = manage_todo(&conn, "[TODO add \"fix bug\"]")?;
+/// println!("Result: {}", result);
+/// ```
 pub fn manage_todo(
     conn: &rusqlite::Connection,
     response: &str,

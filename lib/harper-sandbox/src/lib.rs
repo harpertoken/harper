@@ -64,12 +64,28 @@ pub enum SandboxBackend {
     None,
 }
 
+/// Sandbox execution environment for secure command running
+///
+/// Provides isolated execution of system commands with configurable
+/// restrictions on directories, commands, and network access.
 pub struct Sandbox {
     config: SandboxConfig,
     backend: SandboxBackend,
 }
 
 impl Sandbox {
+    /// Create a new sandbox with the given configuration
+    ///
+    /// Automatically detects the available backend (Bubblewrap, SandboxExec, or None).
+    ///
+    /// # Arguments
+    /// * `config` - Sandbox configuration settings
+    ///
+    /// # Example
+    /// ```
+    /// let config = SandboxConfig::default();
+    /// let sandbox = Sandbox::new(config);
+    /// ```
     pub fn new(config: SandboxConfig) -> Self {
         let backend = Self::detect_backend();
         Self { config, backend }
@@ -92,10 +108,20 @@ impl Sandbox {
         SandboxBackend::None
     }
 
+    /// Check if sandbox execution is available on this system
+    ///
+    /// Returns true if a supported sandbox backend is detected and available.
+    ///
+    /// # Returns
+    /// true if sandboxing is supported, false otherwise
     pub fn is_available(&self) -> bool {
         self.backend != SandboxBackend::None
     }
 
+    /// Get the name of the detected sandbox backend
+    ///
+    /// # Returns
+    /// A string describing the backend: "bubblewrap (bwrap)", "sandbox-exec (macOS)", or "none"
     pub fn backend_name(&self) -> &str {
         match self.backend {
             SandboxBackend::Bubblewrap => "bubblewrap (bwrap)",
@@ -104,6 +130,26 @@ impl Sandbox {
         }
     }
 
+    /// Execute a command in the sandbox environment
+    ///
+    /// Runs the specified command with arguments, applying sandbox restrictions
+    /// based on the configuration. If sandboxing is disabled, executes directly.
+    ///
+    /// # Arguments
+    /// * `command` - The command to execute
+    /// * `args` - Command arguments as string slices
+    ///
+    /// # Returns
+    /// The command output including stdout, stderr, and exit status
+    ///
+    /// # Errors
+    /// Returns `SandboxError` for execution failures, timeouts, or unavailable sandbox
+    ///
+    /// # Example
+    /// ```
+    /// let output = sandbox.execute("echo", &["hello", "world"]).await?;
+    /// println!("Output: {}", String::from_utf8_lossy(&output.stdout));
+    /// ```
     pub async fn execute(&self, command: &str, args: &[&str]) -> Result<std::process::Output> {
         if !self.config.enabled {
             return self.execute_direct(command, args).await;
@@ -266,6 +312,23 @@ impl Sandbox {
         ))
     }
 
+    /// Check if a command is allowed to run based on configured restrictions
+    ///
+    /// Commands are allowed if they match the allowed list (if specified) and
+    /// don't match the blocked list.
+    ///
+    /// # Arguments
+    /// * `command` - The command string to check
+    ///
+    /// # Returns
+    /// true if the command is permitted, false otherwise
+    ///
+    /// # Example
+    /// ```
+    /// if sandbox.is_command_allowed("ls") {
+    ///     println!("ls command is allowed");
+    /// }
+    /// ```
     pub fn is_command_allowed(&self, command: &str) -> bool {
         if let Some(allowed) = &self.config.allowed_commands {
             if !allowed.is_empty() && allowed.iter().any(|c| command.contains(c)) {
