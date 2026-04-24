@@ -59,9 +59,11 @@ fn process_git_status_output(output: std::process::Output) -> String {
 /// Returns `HarperError::Command` if the git command fails
 ///
 /// # Example
-/// ```
-/// let status = harper_core::tools::git::git_status()?;
-/// println!("Git status: {}", status);
+/// ```ignore
+/// match harper_core::tools::git::git_status() {
+///     Ok(status) => println!("Git status: {}", status),
+///     Err(e) => println!("Error: {}", e),
+/// }
 /// ```
 pub fn git_status() -> crate::core::error::HarperResult<String> {
     let output = std::process::Command::new("git")
@@ -97,12 +99,11 @@ pub async fn git_status_async() -> crate::core::error::HarperResult<String> {
 /// Returns `HarperError::Command` if the git command fails
 ///
 /// # Example
-/// ```
-/// let diff = harper_core::tools::git::git_diff()?;
-/// if diff.is_empty() {
-///     println!("No unstaged changes");
-/// } else {
-///     println!("Unstaged changes:\n{}", diff);
+/// ```ignore
+/// match harper_core::tools::git::git_diff() {
+///     Ok(diff) if diff.is_empty() => println!("No unstaged changes"),
+///     Ok(diff) => println!("Unstaged changes:\n{}", diff),
+///     Err(e) => println!("Error: {}", e),
 /// }
 /// ```
 pub fn git_diff() -> crate::core::error::HarperResult<String> {

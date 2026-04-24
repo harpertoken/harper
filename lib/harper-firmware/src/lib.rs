@@ -339,12 +339,12 @@ mod tests {
     fn test_i2c_config_creation() {
         let config = I2cConfig {
             address: 0x68,
-            bus_speed: 400000,
+            bus_speed: 400_000,
             sda_pin: Some(21),
             scl_pin: Some(22),
         };
         assert_eq!(config.address, 0x68);
-        assert_eq!(config.bus_speed, 400000);
+        assert_eq!(config.bus_speed, 400_000);
         assert_eq!(config.sda_pin, Some(21));
     }
 
@@ -365,14 +365,14 @@ mod tests {
     #[test]
     fn test_uart_config_creation() {
         let config = UartConfig {
-            baud_rate: 115200,
+            baud_rate: 115_200,
             data_bits: 8,
             stop_bits: 1,
             parity: Parity::None,
             rx_pin: Some(16),
             tx_pin: Some(17),
         };
-        assert_eq!(config.baud_rate, 115200);
+        assert_eq!(config.baud_rate, 115_200);
         assert_eq!(config.data_bits, 8);
         assert!(matches!(config.parity, Parity::None));
     }

@@ -39,8 +39,10 @@ use crate::tools::parsing;
 /// Returns `HarperError::Command` for invalid commands or database errors
 ///
 /// # Example
-/// ```
-/// let result = manage_todo(&conn, "[TODO add \"fix bug\"]")?;
+/// ```ignore
+/// // This function requires a database connection
+/// // Use it in your application with a proper rusqlite::Connection
+/// let result = manage_todo(&connection, "[TODO add \"fix bug\"]")?;
 /// println!("Result: {}", result);
 /// ```
 pub fn manage_todo(
