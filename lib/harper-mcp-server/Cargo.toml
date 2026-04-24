@@ -31,4 +31,4 @@ axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
 lazy_static = "1.5"
-dashmap = "5.5"
+dashmap = "6.1"
