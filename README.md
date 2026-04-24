@@ -1,6 +1,4 @@
 # Harper
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fharpertoken%2Fharper.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fharpertoken%2Fharper?ref=badge_shield)
-
 
 Harper is a terminal assistant that translates what you type into shell commands. It shows you what it's about to run, asks for your approval, and keeps a log of everything so you can review it later. You can connect it to cloud AI services like OpenAI, Sambanova, and Gemini, or run it completely offline with Ollama.
 
@@ -26,7 +24,3 @@ Pick your AI provider in the config file. If you want offline mode, set up Ollam
 When you're working on Harper itself, run `cargo fmt` to format, `cargo clippy --all-targets --all-features` to lint, and `cargo test` to test.
 
 Check the docs for more on installation, configuration, and troubleshooting. Contributors should read CONTRIBUTING.md, and note that commercial use needs its own license.
-
-
-## License
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fharpertoken%2Fharper.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fharpertoken%2Fharper?ref=badge_large)
