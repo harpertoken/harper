@@ -52,7 +52,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           release_token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-          packages: '[{"path": "lib/harper-core", "name": "harper-core"}, {"path": "lib/harper-ui", "name": "harper-ui"}]'
+          packages: '[{"path": "lib/harper-core", "name": "harper-core"}, {"path": "lib/harper-ui", "name": "harper-ui"}, {"path": "lib/harper-firmware", "name": "harper-firmware"}, {"path": "lib/harper-mcp-server", "name": "harper-mcp-server"}, {"path": "lib/harper-sandbox", "name": "harper-sandbox"}]'
           version_bump: ${{ github.event.inputs.version_bump || 'patch' }}
           release_mode: ${{ github.event.inputs.release_mode || 'pr' }}
 
@@ -67,5 +67,5 @@ jobs:
       - uses: libnudget/release@v1.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          packages: '[{"path": "lib/harper-core", "name": "harper-core"}, {"path": "lib/harper-ui", "name": "harper-ui"}]'
+          packages: '[{"path": "lib/harper-core", "name": "harper-core"}, {"path": "lib/harper-ui", "name": "harper-ui"}, {"path": "lib/harper-firmware", "name": "harper-firmware"}, {"path": "lib/harper-mcp-server", "name": "harper-mcp-server"}, {"path": "lib/harper-sandbox", "name": "harper-sandbox"}]'
           release_mode: merge
