@@ -9,7 +9,7 @@
 <body>
     <div class="page">
         <header class="site-header">
-            <div class="brand">HARPER<span>·AI</span></div>
+            <div class="brand"><img src="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" alt="" />HARPER<span>·AI</span></div>
             <nav class="nav">
                 <a href="index.html" aria-current="page">Home</a>
                 <a href="installation.html">Install</a>
@@ -23,51 +23,40 @@
         </header>
 
         <main class="surface">
-            <section class="hero">
-                <div>
-                    <h1 class="hero-title">Terminal workflows without ceremony.</h1>
-                    <p class="hero-lede">
-                        Harper translates natural language into safe shell commands, prompts for approval before execution,
-                        and keeps an audit trail for every session. Swap between OpenAI, Gemini, SambaNova, or run fully offline via Ollama.
-                    </p>
-                    <div class="actions">
-                        <a class="button primary" href="https://github.com/harpertoken/harper">View on GitHub</a>
-                        <a class="button secondary" href="installation.html">Documentation</a>
-                    </div>
-                </div>
-                <img src="harper.png" alt="Harper terminal screenshot" class="hero-image" />
-            </section>
+            <div class="content-container">
+                <h1 class="hero-title">Terminal workflows<br/><span>without ceremony.</span></h1>
+                <p class="hero-lede">Natural language → shell commands. Prompt approval before execution. Full audit trail.</p>
 
-            <section class="grid" style="margin-top: 2.5rem;">
-                <div class="card">
-                    <h3>Deterministic command flow</h3>
-                    <p>Natural-language requests resolve into explicit shell commands with previews and approvals.</p>
+                <div class="actions">
+                    <a class="button primary" href="https://github.com/harpertoken/harper">GitHub</a>
+                    <a class="button secondary" href="installation.html">Install</a>
                 </div>
-                <div class="card">
-                    <h3>Provider flexibility</h3>
-                    <p>Switch providers by editing `config/local.toml` or environment variables—no UI changes required.</p>
-                </div>
-                <div class="card">
-                    <h3>Session memory</h3>
-                    <p>Conversations, tool calls, and outputs persist locally for later replay and compliance.</p>
-                </div>
-                <div class="card">
-                    <h3>Sandbox isolation</h3>
-                    <p>Secure command execution with bubblewrap (Linux) or sandbox-exec (macOS).</p>
-                </div>
-                <div class="card">
-                    <h3>HTTP API server</h3>
-                    <p>Run Harper as a REST API for programmatic access.</p>
-                </div>
-                <div class="card">
-                    <h3>Firmware abstraction</h3>
-                    <p>Control ESP32, STM32, and Raspberry Pi devices via chat commands.</p>
-                </div>
-            </section>
 
+                <h2>How it works</h2>
+                <p>You describe what you want in plain text. Harper generates shell commands, shows them to you, and waits for approval before running anything.</p>
+
+                <h2>Features</h2>
+                <ul>
+                    <li>Preview every command before execution</li>
+                    <li>Full audit trail of all sessions</li>
+                    <li>Sandbox isolation (bubblewrap/linux, sandbox-exec/macos)</li>
+                    <li>Works with OpenAI, Gemini, SambaNova, or Ollama</li>
+                </ul>
+
+                <h2>Sandbox</h2>
+                <p>Commands run in isolation. On Linux, bubblewrap creates a minimal namespace. On macOS, sandbox-exec provides App Sandbox profiles. No network unless you allow it.</p>
+            </div>
         </main>
 
-        <footer class="footnote">Harper · Terminal autonomy without theatrics.</footer>
+        <footer class="footnote">
+            <a href="changelog.html">Design</a> · v2
+        </footer>
     </div>
+    <script>
+        const header = document.querySelector('.site-header');
+        window.addEventListener('scroll', () => {
+            header.classList.toggle('scrolled', window.scrollY > 50);
+        });
+    </script>
 </body>
 </html>

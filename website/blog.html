@@ -9,7 +9,7 @@
 <body>
     <div class="page">
         <header class="site-header">
-            <div class="brand">HARPER<span>·AI</span></div>
+            <div class="brand"><img src="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" alt="" />HARPER<span>·AI</span></div>
             <nav class="nav">
                 <a href="index.html">Home</a>
                 <a href="installation.html">Install</a>
@@ -23,34 +23,30 @@
         </header>
 
         <main class="surface">
-            <section>
+            <div class="content-container">
                 <h1 class="hero-title">Notes from the console.</h1>
-                <p class="hero-lede">Release commentary, security updates, and design discussions.</p>
-            </section>
+                <p class="hero-lede">Release commentary and design discussions.</p>
 
-            <section class="list" style="margin-top: 2rem;">
-                <article class="list-item">
-                    <div class="list-title">Release recap</div>
-                    <p class="list-desc">Shipped the Ollama offline path, deterministic list-changed-files intent, and the quiet UI you see above.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Provider swap layer</div>
-                    <p class="list-desc">Documenting how Harper now flips between OpenAI, SambaNova, Gemini, or any REST-compatible endpoint without UI changes.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Launch notes</div>
-                    <p class="list-desc">Initial release: approvals, audit logs, persistent sessions, and the first iteration of the TUI.</p>
-                </article>
-                <article class="list-item">
-                    <div class="list-title">Setup checklist</div>
-                    <p class="list-desc">Step-by-step instructions that became today's Quick Start: clone, copy `.env`, run the UI.</p>
-                </article>
-            </section>
+                <h2>Release recap</h2>
+                <p>Ollama offline path, deterministic list-changed-files intent, and the quiet UI you see above.</p>
+
+                <h2>Provider swap</h2>
+                <p>Harper flips between OpenAI, SambaNova, Gemini, or any REST-compatible endpoint without UI changes.</p>
+
+                <h2>Initial release</h2>
+                <p>Approvals, audit logs, persistent sessions, and the first iteration of the TUI.</p>
+            </div>
         </main>
 
         <footer class="footnote">
-            <a class="button secondary" href="index.html" style="text-decoration:none;">← Back to Harper</a>
+            <a class="button secondary" href="index.html">← Back</a> · v2
         </footer>
     </div>
+    <script>
+        const header = document.querySelector('.site-header');
+        window.addEventListener('scroll', () => {
+            header.classList.toggle('scrolled', window.scrollY > 50);
+        });
+    </script>
 </body>
 </html>
