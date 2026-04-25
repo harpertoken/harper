@@ -51,55 +51,47 @@ impl<'a> PromptBuilder<'a> {
         }
 
         let mut prompt = format!(
-            "You are a helpful AI assistant powered by the {} model.
-You have the ability to read and write files, search and replace text in files, and run shell commands{}.",
+            "You are Harper, a system-integrated assistant.
+Operating on model: {}.
+Capabilities: File I/O, shell execution, and persistent memory{}.",
             self.config.model_name,
-            if web_search_enabled { " and search the web" } else { "" }
+            if web_search_enabled {
+                ", plus web search"
+            } else {
+                ""
+            }
         );
 
-        // Add project context
         if let Ok(context) = self.get_project_context().await {
-            prompt.push_str(&format!("\n\nProject Context:\n{}\n", context));
+            prompt.push_str(&format!("\n\nContext:\n{}", context));
         }
 
-        prompt.push_str("
+        prompt.push_str(
+            "\n\nInterface via JSON tool commands. Analysis should be concise and direct.
 
-You have tools to interact with the system. To use a tool, respond with the tool command in JSON format.
-If you have just received a tool execution result, analyze it and respond to the user in natural language. Do not output the tool call again.
+Core Tools:
+- read_file(path)
+- write_file(path, content)
+- search_replace(path, old, new)
+- run_command(command)
+- todo(action, [desc], [index])
+- list_changed_files([ext], [tracked], [since])
+- firmware_list(), firmware_info(device), firmware_gpio(pin, state)
 
-Available tools:
-- read_file(path): Read the contents of a file
-- write_file(path, content): Write content to a file
-- search_replace(path, old_string, new_string): Search and replace text in a file
-- run_command(command): Run a shell command
-- todo(action, description?, index?): Manage todo list (actions: add, list, remove, clear)
-- list_changed_files(ext?, tracked_only?, since?): List changed files with optional filters
-- firmware_list(): List available firmware devices
-- firmware_info(device): Get device info
-- firmware_gpio(pin, state): Control GPIO pins (state: high/low)
+Example: {\"tool\": \"read_file\", \"path\": \"src/main.rs\"}",
+        );
 
-To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"path\": \"example.txt\", \"content\": \"Hello world\"}");
-
-        // Add MCP tools if available
         if let Some(mcp_tools) = self.get_mcp_tools_text().await {
             prompt.push_str(&mcp_tools);
         }
 
-        // Load and append agent guidelines
-        match std::fs::read_to_string("docs/AGENTS.md") {
-            Ok(guidelines) => prompt.push_str(&format!("\n\nAgent Guidelines:\n{}\n", guidelines)),
-            Err(e) => eprintln!(
-                "Warning: Could not load AGENTS.md: {}. Agent will proceed without guidelines.",
-                e
-            ),
+        if let Ok(guidelines) = std::fs::read_to_string("docs/AGENTS.md") {
+            prompt.push_str(&format!("\n\nGuidelines:\n{}\n", guidelines));
         }
 
         if web_search_enabled {
-            let current_year = chrono::Local::now().year();
-            prompt.push_str(&format!(
-                "\n- Search the web: `[SEARCH: your query]`. Current year: {}\n",
-                current_year
-            ));
+            let year = chrono::Local::now().year();
+            prompt.push_str(&format!("\nWeb: `[SEARCH: query]`. Current: {}\n", year));
         }
 
         prompt
@@ -158,8 +150,8 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
             }
         }
 
-        context.push_str(&format!("Current directory: {}\n", current_dir.display()));
-        context.push_str(&format!("Files in project root: {}\n", files.join(", ")));
+        context.push_str(&format!("Dir: {}\n", current_dir.display()));
+        context.push_str(&format!("Files: {}\n", files.join(", ")));
 
         // Git status
         if let Ok(git_status) = std::process::Command::new("git")
@@ -169,9 +161,7 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
             if git_status.status.success() {
                 let status = String::from_utf8_lossy(&git_status.stdout);
                 if !status.trim().is_empty() {
-                    context.push_str(&format!("Git status:\n{}", status));
-                } else {
-                    context.push_str("Git status: clean\n");
+                    context.push_str(&format!("Git:\n{}", status));
                 }
             }
         }
@@ -188,15 +178,16 @@ To use a tool, respond with a JSON object like: {\"tool\": \"write_file\", \"pat
                         return None;
                     }
 
-                    let mut tools_text = String::from("\n\nMCP Tools (Model Context Protocol):\n");
+                    let mut tools_text = String::from("\n\nMCP Tools:\n");
                     for tool in &tools {
                         tools_text.push_str(&format!(
                             "- {}: {}\n",
                             tool.name,
-                            tool.description.as_deref().unwrap_or("No description")
+                            tool.description.as_deref().unwrap_or("...")
                         ));
                     }
-                    tools_text.push_str("\nTo use an MCP tool, respond with: {\"mcp_tool\": \"tool_name\", \"arguments\": {...}}");
+                    tools_text
+                        .push_str("\nRespond: {\"mcp_tool\": \"name\", \"arguments\": {...}}");
                     Some(tools_text)
                 }
                 Err(e) => {

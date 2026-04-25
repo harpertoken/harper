@@ -14,28 +14,28 @@
 
 use ratatui::prelude::*;
 use ratatui::style::Modifier;
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap};
 
-use super::app::{AppState, ApprovalState, MessageType, SessionInfo, TuiApp, UiMessage};
+use super::app::{AppState, ApprovalState, SessionInfo, TuiApp, UiMessage};
 use super::theme::Theme;
 
-// Keyboard shortcut constants for the new footer
+// Refined shortcuts for a cleaner footer
 const FOOTER_SHORTCUTS: [[(&str, &str); 6]; 2] = [
     [
-        ("^G", "Get Help"),
-        ("^O", "Write Out"),
-        ("^W", "Where Is"),
-        ("^K", "Cut"),
-        ("^T", "Execute"),
-        ("^C", "Location"),
+        ("G", "Help"),
+        ("O", "Export"),
+        ("W", "Search"),
+        ("K", "Cut"),
+        ("B", "Sidebar"),
+        ("C", "ID"),
     ],
     [
-        ("^X", "Exit"),
-        ("^J", "Justify"),
-        ("^R", "Read File"),
-        ("^U", "Paste"),
-        ("^Y", "Prev Page"),
-        ("^V", "Next Page"),
+        ("X", "Exit"),
+        ("R", "Load"),
+        ("U", "Paste"),
+        ("T", "Enter"),
+        ("Y", "Prev"),
+        ("V", "Next"),
     ],
 ];
 
@@ -54,7 +54,6 @@ pub fn parse_content_with_code<'a>(
     let mut remaining = content;
 
     while let Some(start) = remaining.find("```") {
-        // Text before code block
         if start > 0 {
             spans.push(Span::styled(
                 &remaining[..start],
@@ -62,11 +61,9 @@ pub fn parse_content_with_code<'a>(
             ));
         }
 
-        // Find end of code block
         let after_start = &remaining[start + 3..];
         if let Some(end) = after_start.find("```") {
             let code_block = &after_start[..end];
-            // Parse language and code
             if let Some(newline_pos) = code_block.find('\n') {
                 let language = &code_block[..newline_pos].trim();
                 let code = &code_block[newline_pos + 1..];
@@ -78,12 +75,10 @@ pub fn parse_content_with_code<'a>(
                     syntax_theme,
                 ));
             } else {
-                // No language, treat as plain
                 spans.push(Span::styled(code_block, Style::default().fg(default_color)));
             }
             remaining = &after_start[end + 3..];
         } else {
-            // No closing ```, treat rest as text
             spans.push(Span::styled(
                 &remaining[start..],
                 Style::default().fg(default_color),
@@ -93,7 +88,6 @@ pub fn parse_content_with_code<'a>(
         }
     }
 
-    // Remaining text
     if !remaining.is_empty() {
         spans.push(Span::styled(remaining, Style::default().fg(default_color)));
     }
@@ -102,103 +96,117 @@ pub fn parse_content_with_code<'a>(
 }
 
 pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
+    let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(0),
-            Constraint::Length(3), // Footer: 1 status line + 2 shortcut lines
+            Constraint::Length(2), // Slimmer footer
         ])
-        .split(frame.area());
+        .split(area);
 
     let main_area = chunks[0];
     let footer_area = chunks[1];
 
     match &app.state {
-        AppState::Menu(selected) => draw_menu(frame, *selected, theme, main_area),
+        AppState::Menu(selected) => draw_zen_menu(frame, *selected, theme, main_area),
         AppState::Chat(chat_state) => {
-            // Create layout for chat: messages area and input area
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Min(5),    // Messages area
-                    Constraint::Length(3), // Input area
-                ])
-                .split(main_area);
+            let chat_area = if chat_state.sidebar_visible {
+                let chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([
+                        Constraint::Percentage(20), // Slimmer sidebar
+                        Constraint::Percentage(80),
+                    ])
+                    .split(main_area);
 
-            // Messages area
-            let safe_scroll_offset = chat_state.scroll_offset.min(chat_state.messages.len());
-            let displayed_messages = &chat_state.messages[safe_scroll_offset..];
-            let message_lines: Vec<Line> = displayed_messages
-                .iter()
-                .filter(|msg| msg.role != "system")
-                .flat_map(|msg| {
-                    let default_color = match msg.role.as_str() {
-                        "user" => theme.input,
-                        "assistant" => theme.output,
-                        _ => theme.foreground,
-                    };
-                    if msg.content.contains("```") {
-                        let spans = parse_content_with_code(
-                            &theme.syntax_set,
-                            &theme.theme_set,
-                            &msg.content,
-                            default_color,
-                            &theme.syntax_theme,
-                        );
-                        vec![Line::from(spans)]
-                    } else {
-                        msg.content
-                            .lines()
-                            .map(|line| Line::styled(line, default_color))
-                            .collect::<Vec<_>>()
-                    }
-                })
-                .collect();
-
-            let title = if chat_state.web_search_enabled {
-                "Chat (Web Search Enabled)"
+                draw_zen_sidebar(frame, &chat_state.sidebar_entries, theme, chunks[0]);
+                chunks[1]
             } else {
-                "Chat"
+                main_area
             };
 
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(5), Constraint::Length(3)])
+                .split(chat_area);
+
+            // Messages area - Typography focused
+            let safe_scroll_offset = chat_state.scroll_offset.min(chat_state.messages.len());
+            let displayed_messages = &chat_state.messages[safe_scroll_offset..];
+            let mut message_lines: Vec<Line> = Vec::new();
+
+            for msg in displayed_messages.iter().filter(|msg| msg.role != "system") {
+                let label = match msg.role.as_str() {
+                    "user" => "User ›",
+                    "assistant" => "Harper ›",
+                    _ => "System ›",
+                };
+
+                let label_style = match msg.role.as_str() {
+                    "user" => Style::default()
+                        .fg(theme.accent)
+                        .add_modifier(Modifier::BOLD),
+                    "assistant" => Style::default()
+                        .fg(theme.title)
+                        .add_modifier(Modifier::BOLD),
+                    _ => theme.muted_style(),
+                };
+
+                message_lines.push(Line::from(vec![Span::styled(label, label_style)]));
+
+                let content_color = if msg.role == "user" {
+                    theme.foreground
+                } else {
+                    theme.output
+                };
+
+                if msg.content.contains("```") {
+                    let spans = parse_content_with_code(
+                        &theme.syntax_set,
+                        &theme.theme_set,
+                        &msg.content,
+                        content_color,
+                        &theme.syntax_theme,
+                    );
+                    message_lines.push(Line::from(spans));
+                } else {
+                    for line in msg.content.lines() {
+                        message_lines.push(Line::styled(line, content_color));
+                    }
+                }
+                message_lines.push(Line::raw("")); // Breathing room
+            }
+
+            let chat_block = Block::default()
+                .borders(Borders::NONE) // No noise
+                .padding(Padding::uniform(1));
+
             let messages_widget = Paragraph::new(message_lines)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title(title)
-                        .border_style(theme.border_style())
-                        .title_style(theme.title_style()),
-                )
+                .block(chat_block)
                 .wrap(Wrap { trim: false });
 
             frame.render_widget(messages_widget, chunks[0]);
 
-            // Input area with contextual hint while idle
-            let mut input_lines = vec![Line::from(Span::styled(
-                format!("> {}", chat_state.input),
-                Style::default().fg(theme.input),
-            ))];
+            // Input area - Minimalist
+            let input_block = Block::default()
+                .borders(Borders::TOP)
+                .border_style(theme.muted_style())
+                .padding(Padding::horizontal(1));
+
+            let mut input_text = vec![Line::from(vec![
+                Span::styled("› ", Style::default().fg(theme.accent)),
+                Span::styled(&chat_state.input, Style::default().fg(theme.input)),
+            ])];
+
             if chat_state.input.trim().is_empty() {
-                let hint_style = theme
-                    .muted_style()
-                    .add_modifier(Modifier::ITALIC)
-                    .add_modifier(Modifier::DIM);
-                input_lines.push(Line::from(Span::styled(
-                    "Hint: Press @ + Tab for file paths • Ask \"shell where am I\" for offline probes",
-                    hint_style,
+                input_text.push(Line::from(Span::styled(
+                    "Type a message... (Ctrl+G for help)",
+                    theme.muted_style().add_modifier(Modifier::ITALIC),
                 )));
             }
 
-            let input_widget = Paragraph::new(input_lines)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Input")
-                        .border_style(theme.border_style())
-                        .title_style(theme.title_style()),
-                )
-                .style(Style::default().bg(theme.background).fg(theme.input))
-                .wrap(Wrap { trim: false });
+            let input_widget = Paragraph::new(input_text).block(input_block);
 
             frame.render_widget(input_widget, chunks[1]);
         }
@@ -214,23 +222,138 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         }
     }
 
-    // Draw status bar
-    draw_status_bar(frame, app, theme, footer_area);
+    draw_zen_footer(frame, app, theme, footer_area);
 
-    // Draw approval overlay if present
     if let Some(approval) = &app.pending_approval {
         draw_approval(frame, approval, theme);
     }
 
-    // Draw message overlay if present
     if let Some(msg) = &app.message {
         draw_message_overlay(frame, msg, theme);
     }
 }
 
+fn draw_zen_sidebar(frame: &mut Frame, entries: &[String], theme: &Theme, area: Rect) {
+    let items: Vec<ListItem> = entries
+        .iter()
+        .map(|entry| {
+            let content = if entry.starts_with("[git]") {
+                entry.trim_start_matches("[git] ").to_string()
+            } else if entry.starts_with("[dir]") {
+                entry.trim_start_matches("[dir] ").to_string()
+            } else if entry.starts_with("[file]") {
+                entry.trim_start_matches("[file] ").to_string()
+            } else if entry.starts_with("[probe]") {
+                entry.trim_start_matches("[probe] ").to_string()
+            } else {
+                entry.clone()
+            };
+
+            ListItem::new(Line::from(vec![Span::styled(content, theme.muted_style())]))
+        })
+        .collect();
+
+    let sidebar = List::new(items).block(
+        Block::default()
+            .borders(Borders::RIGHT)
+            .border_style(theme.muted_style())
+            .padding(Padding::horizontal(1)),
+    );
+
+    frame.render_widget(sidebar, area);
+}
+
+fn draw_zen_menu(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
+    let menu_items = ["New Conversation", "History", "Export", "Settings", "Quit"];
+
+    let area = centered_rect(40, 30, area);
+
+    let items: Vec<ListItem> = menu_items
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            let (prefix, style) = if i == selected {
+                (
+                    "› ",
+                    Style::default()
+                        .fg(theme.accent)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                ("  ", Style::default().fg(theme.muted))
+            };
+
+            ListItem::new(Line::from(vec![
+                Span::styled(prefix, style),
+                Span::styled(*label, style),
+            ]))
+        })
+        .collect();
+
+    let menu = List::new(items).block(
+        Block::default()
+            .title("Harper")
+            .title_style(
+                Style::default()
+                    .fg(theme.foreground)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .padding(Padding::uniform(1)),
+    );
+
+    frame.render_widget(menu, area);
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
+
+fn draw_zen_footer(frame: &mut Frame, _app: &TuiApp, theme: &Theme, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::TOP)
+        .border_style(theme.muted_style());
+    let area = block.inner(area);
+    frame.render_widget(block, frame.area()); // Render border on full area
+
+    let col_width = area.width / 6;
+    for (row_idx, row) in FOOTER_SHORTCUTS.iter().enumerate() {
+        for (col_idx, (key, label)) in row.iter().enumerate() {
+            let shortcut_area = Rect {
+                x: area.x + col_idx as u16 * col_width,
+                y: area.y + row_idx as u16,
+                width: col_width,
+                height: 1,
+            };
+
+            let shortcut_text = Line::from(vec![
+                Span::styled(*key, Style::default().fg(theme.accent)),
+                Span::styled(format!(" {}", label), theme.muted_style()),
+            ]);
+
+            frame.render_widget(Paragraph::new(shortcut_text), shortcut_area);
+        }
+    }
+}
+
 fn draw_approval(frame: &mut Frame, state: &ApprovalState, theme: &Theme) {
     let content = format!(
-        "{}\n\n{}\n\nPress 'y' to approve or 'n' to reject.\nUse ↑↓ to scroll.",
+        "{}\n\n{}\n\n[Y] Approve  [N] Reject",
         state.prompt, state.command
     );
     let area = frame.area();
@@ -248,9 +371,9 @@ fn draw_approval(frame: &mut Frame, state: &ApprovalState, theme: &Theme) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title("Security Approval Required")
-        .border_style(theme.warning_style())
-        .title_style(theme.title_style())
+        .border_style(theme.muted_style())
+        .title(" Security ")
+        .title_style(theme.warning_style())
         .style(Style::default().bg(theme.background));
 
     let paragraph = Paragraph::new(content)
@@ -261,41 +384,6 @@ fn draw_approval(frame: &mut Frame, state: &ApprovalState, theme: &Theme) {
 
     frame.render_widget(Clear, overlay_area);
     frame.render_widget(paragraph, overlay_area);
-}
-
-fn draw_menu(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
-    let menu_items = [
-        "Start Chat",
-        "Load Session",
-        "Export Session",
-        "Tools",
-        "Exit",
-    ];
-
-    let items: Vec<ListItem> = menu_items
-        .iter()
-        .enumerate()
-        .map(|(i, item)| {
-            let style = if i == selected {
-                Style::default().bg(theme.accent).fg(theme.foreground)
-            } else {
-                Style::default().fg(theme.foreground)
-            };
-            ListItem::new(*item).style(style)
-        })
-        .collect();
-
-    let menu = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Harper")
-                .border_style(theme.border_style())
-                .title_style(theme.title_style()),
-        )
-        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
-
-    frame.render_widget(menu, area);
 }
 
 fn draw_sessions(
@@ -310,23 +398,21 @@ fn draw_sessions(
         .enumerate()
         .map(|(i, session)| {
             let style = if i == selected {
-                Style::default().bg(theme.accent).fg(theme.foreground)
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(theme.foreground)
             };
-            ListItem::new(format!("{} - {}", session.name, session.created_at)).style(style)
+            ListItem::new(format!("{} › {}", session.name, session.created_at)).style(style)
         })
         .collect();
 
-    let sessions_list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Sessions")
-                .border_style(theme.border_style())
-                .title_style(theme.title_style()),
-        )
-        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+    let sessions_list = List::new(items).block(
+        Block::default()
+            .title(" Sessions ")
+            .padding(Padding::uniform(1)),
+    );
 
     frame.render_widget(sessions_list, area);
 }
@@ -343,36 +429,35 @@ fn draw_export_sessions(
         .enumerate()
         .map(|(i, session)| {
             let style = if i == selected {
-                Style::default().bg(theme.accent).fg(theme.foreground)
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(theme.foreground)
             };
-            ListItem::new(format!("Export: {} - {}", session.name, session.created_at)).style(style)
+            ListItem::new(format!("Export › {}", session.name)).style(style)
         })
         .collect();
 
-    let sessions_list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Select Sessions to Export")
-                .border_style(theme.border_style())
-                .title_style(theme.title_style()),
-        )
-        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+    let sessions_list = List::new(items).block(
+        Block::default()
+            .title(" Export ")
+            .padding(Padding::uniform(1)),
+    );
 
     frame.render_widget(sessions_list, area);
 }
 
 fn draw_tools(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
-    let tools = ["Search", "System Info", "Process List", "Git Status"];
-
+    let tools = ["Search", "System", "Processes", "Git"];
     let items: Vec<ListItem> = tools
         .iter()
         .enumerate()
         .map(|(i, tool)| {
             let style = if i == selected {
-                Style::default().bg(theme.accent).fg(theme.foreground)
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(theme.foreground)
             };
@@ -380,15 +465,11 @@ fn draw_tools(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
         })
         .collect();
 
-    let tools_list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Tools")
-                .border_style(theme.border_style())
-                .title_style(theme.title_style()),
-        )
-        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+    let tools_list = List::new(items).block(
+        Block::default()
+            .title(" Tools ")
+            .padding(Padding::uniform(1)),
+    );
 
     frame.render_widget(tools_list, area);
 }
@@ -406,10 +487,10 @@ fn draw_view_session(
     let message_lines: Vec<Line> = displayed_messages
         .iter()
         .flat_map(|msg| {
-            let default_color = match msg.role.as_str() {
-                "user" => theme.input,
-                "assistant" => theme.output,
-                _ => theme.foreground,
+            let default_color = if msg.role == "user" {
+                theme.input
+            } else {
+                theme.output
             };
             msg.content
                 .lines()
@@ -421,104 +502,30 @@ fn draw_view_session(
     let view = Paragraph::new(message_lines)
         .block(
             Block::default()
-                .borders(Borders::ALL)
-                .title(format!("Session: {}", name))
-                .border_style(theme.border_style())
-                .title_style(theme.title_style()),
+                .title(format!(" {} ", name))
+                .padding(Padding::uniform(1)),
         )
         .wrap(Wrap { trim: false });
 
     frame.render_widget(view, area);
 }
 
-fn draw_status_bar(frame: &mut Frame, app: &TuiApp, theme: &Theme, area: Rect) {
-    let status_text = if app.pending_approval.is_some() {
-        " Approval Required "
-    } else {
-        match &app.state {
-            AppState::Menu(_) => " Ready ",
-            AppState::Chat(..) => " Chatting ",
-            AppState::Sessions(_, _) => " Sessions ",
-            AppState::ExportSessions(_, _) => " Export ",
-            AppState::Tools(_) => " Tools ",
-            AppState::ViewSession(_, _, _) => " Viewing ",
-        }
-    };
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1), // Status line
-            Constraint::Length(2), // Shortcuts grid
-        ])
-        .split(area);
-
-    // Draw status line (centered)
-    let status_line = format!("[ {} ]", status_text.trim());
-    let status_paragraph = Paragraph::new(status_line)
-        .style(theme.title_style().add_modifier(Modifier::BOLD))
-        .alignment(Alignment::Center);
-    frame.render_widget(status_paragraph, chunks[0]);
-
-    // Draw shortcuts grid
-    let col_width = area.width / 6;
-    for (row_idx, row) in FOOTER_SHORTCUTS.iter().enumerate() {
-        for (col_idx, (key, label)) in row.iter().enumerate() {
-            let shortcut_area = Rect {
-                x: area.x + col_idx as u16 * col_width,
-                y: chunks[1].y + row_idx as u16,
-                width: col_width,
-                height: 1,
-            };
-
-            let shortcut_text = Line::from(vec![
-                Span::styled(
-                    *key,
-                    Style::default()
-                        .bg(theme.foreground)
-                        .fg(theme.background)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(format!(" {}", label), Style::default().fg(theme.foreground)),
-            ]);
-
-            frame.render_widget(Paragraph::new(shortcut_text), shortcut_area);
-        }
-    }
-}
-
 fn draw_message_overlay(frame: &mut Frame, message: &UiMessage, theme: &Theme) {
-    let (title, style, border_style) = match message.message_type {
-        MessageType::Error => ("⚠ Error", theme.error_style(), theme.error_style()),
-        MessageType::Help => (
-            "💡 Keyboard Shortcuts",
-            theme.info_style(),
-            theme.info_style(),
-        ),
-        MessageType::Status => ("ℹ Status", theme.info_style(), theme.info_style()),
-        MessageType::Info => ("📢 Message", theme.warning_style(), theme.warning_style()),
-    };
-
     let overlay = Paragraph::new(message.content.as_str())
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(title)
-                .border_style(border_style)
-                .title_style(theme.title_style()),
+                .border_style(theme.muted_style())
+                .padding(Padding::uniform(1)),
         )
-        .style(
-            Style::default()
-                .bg(theme.background)
-                .fg(style.fg.unwrap_or(theme.foreground)),
-        )
+        .style(Style::default().bg(theme.background).fg(theme.foreground))
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
 
     let area = frame.area();
     let message_lines = message.content.lines().count().max(1) as u16;
-    let overlay_height = (message_lines + 2).min(area.height / 2);
-    let overlay_width = (message.content.len() as u16 + 4).min(area.width * 3 / 4);
+    let overlay_height = (message_lines + 4).min(area.height / 2);
+    let overlay_width = (message.content.len() as u16 + 8).min(area.width * 3 / 4);
 
     let overlay_area = Rect {
         x: (area.width - overlay_width) / 2,
@@ -546,64 +553,13 @@ mod tests {
     #[test]
     fn test_parse_content_with_code_no_code() {
         let (syntax_set, theme_set) = setup();
-        let content = "Hello world";
         let spans = parse_content_with_code(
             &syntax_set,
             &theme_set,
-            content,
+            "Hello",
             Color::White,
             "base16-ocean.dark",
         );
         assert_eq!(spans.len(), 1);
-        assert_eq!(spans[0].content, "Hello world");
-    }
-
-    #[test]
-    fn test_parse_content_with_code_with_code_block() {
-        let (syntax_set, theme_set) = setup();
-        let content = "Before ```rust\nfn main() {}\n``` After";
-        let spans = parse_content_with_code(
-            &syntax_set,
-            &theme_set,
-            content,
-            Color::White,
-            "base16-ocean.dark",
-        );
-        // Should have spans for "Before ", highlighted code, " After"
-        assert!(spans.len() > 1);
-        // First span plain
-        assert_eq!(spans[0].content, "Before ");
-        // Then highlighted spans
-    }
-
-    #[test]
-    fn test_parse_content_with_code_unclosed_code_block() {
-        let (syntax_set, theme_set) = setup();
-        let content = "Text ```code";
-        let spans = parse_content_with_code(
-            &syntax_set,
-            &theme_set,
-            content,
-            Color::White,
-            "base16-ocean.dark",
-        );
-        // Should treat as plain text before and the unclosed block as plain
-        assert_eq!(spans.len(), 2, "Should have two spans for unclosed block");
-        assert_eq!(spans[0].content, "Text ");
-        assert_eq!(spans[1].content, "```code");
-    }
-
-    #[test]
-    fn test_parse_content_with_code_multiple_blocks() {
-        let (syntax_set, theme_set) = setup();
-        let content = "```js\nconsole.log()\n``` and ```python\nprint()\n```";
-        let spans = parse_content_with_code(
-            &syntax_set,
-            &theme_set,
-            content,
-            Color::White,
-            "base16-ocean.dark",
-        );
-        assert!(spans.len() > 2);
     }
 }

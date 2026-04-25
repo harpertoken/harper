@@ -205,17 +205,13 @@ async fn main() -> Result<(), HarperError> {
         loop {
             use harper_core::core::constants::messages;
 
-            println!(
-                "
-{}",
-                messages::MAIN_MENU_TITLE.bold().yellow()
-            );
-            println!("1. Start new chat session");
-            println!("2. List previous sessions");
-            println!("3. View a session's history");
-            println!("4. Export a session's history");
-            println!("5. Quit");
-            print!("{}", messages::ENTER_CHOICE);
+            println!("\n{}", messages::MAIN_MENU_TITLE.bold().yellow());
+            println!("1  Start session");
+            println!("2  History");
+            println!("3  View");
+            println!("4  Export");
+            println!("5  Quit");
+            print!("\n{}", messages::ENTER_CHOICE);
             exit_on_error(std::io::stdout().flush(), "Failed to flush stdout");
 
             let mut menu_choice = String::new();

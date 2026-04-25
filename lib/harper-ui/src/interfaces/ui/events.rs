@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 // Keyboard shortcut constants
 const HELP_MESSAGE: &str =
-    "Ctrl+H:Help | @+Tab:File Complete | Esc:Back | ↑↓:Navigate | Enter:Select | Ctrl+C:Quit | Ctrl+W:Toggle Web Search";
+    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Enter:Select | X:Exit | W:Web | B:Sidebar";
 
 use super::app::{AppState, ChatState, SessionInfo, TuiApp};
 use harper_core::memory::session_service::SessionService;

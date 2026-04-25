@@ -106,11 +106,35 @@ impl Theme {
         }
     }
 
+    pub fn minimal() -> Self {
+        Self {
+            background: Color::Rgb(15, 15, 15),    // Deep, soft black
+            foreground: Color::Rgb(220, 220, 220), // Soft white
+            accent: Color::Rgb(130, 150, 180),     // Muted steel blue
+            border: Color::Rgb(40, 40, 40),        // Subtle borders
+            title: Color::Rgb(180, 180, 180),      // Gray titles
+            input: Color::Rgb(255, 255, 255),      // Pure white for active input
+            output: Color::Rgb(200, 200, 200),     // Off-white for responses
+            error: Color::Rgb(180, 100, 100),      // Muted red
+            success: Color::Rgb(100, 150, 100),    // Muted green
+            warning: Color::Rgb(180, 150, 100),    // Muted gold
+            info: Color::Rgb(130, 150, 180),       // Match accent
+            muted: Color::Rgb(80, 80, 80),         // Dimmed text
+            highlight: Color::Rgb(240, 240, 240),  // Bright highlight
+            selection: Color::Rgb(45, 45, 45),     // Subtle background selection
+            syntax_theme: "base16-ocean.dark".to_string(),
+            syntax_set: SyntaxSet::load_defaults_newlines(),
+            theme_set: ThemeSet::load_defaults(),
+        }
+    }
+
     pub fn from_name(name: &str) -> Self {
         match name {
             "dark" => Self::dark(),
             "light" => Self::light(),
             "github" => Self::github(),
+            "cyberpunk" => Self::cyberpunk(),
+            "minimal" => Self::minimal(),
             _ => Self::default(),
         }
     }
@@ -131,6 +155,28 @@ impl Theme {
             muted: Color::Rgb(139, 148, 158),      // GitHub muted
             highlight: Color::Rgb(255, 223, 93),   // GitHub highlight
             selection: Color::Rgb(58, 117, 215),   // GitHub selection
+            syntax_theme: "base16-ocean.dark".to_string(),
+            syntax_set: SyntaxSet::load_defaults_newlines(),
+            theme_set: ThemeSet::load_defaults(),
+        }
+    }
+
+    pub fn cyberpunk() -> Self {
+        Self {
+            background: Color::Rgb(2, 2, 10),      // Deep space black
+            foreground: Color::Rgb(255, 255, 255), // Pure white
+            accent: Color::Rgb(255, 0, 153),       // Neon Pink
+            border: Color::Rgb(0, 255, 255),       // Neon Cyan
+            title: Color::Rgb(255, 255, 0),        // Neon Yellow
+            input: Color::Rgb(0, 255, 255),        // Neon Cyan
+            output: Color::Rgb(57, 255, 20),       // Neon Green
+            error: Color::Rgb(255, 49, 49),        // Neon Red
+            success: Color::Rgb(57, 255, 20),      // Neon Green
+            warning: Color::Rgb(255, 172, 28),     // Neon Orange
+            info: Color::Rgb(171, 32, 253),        // Neon Purple
+            muted: Color::Rgb(100, 100, 100),      // Dark Gray
+            highlight: Color::Rgb(255, 0, 255),    // Magenta
+            selection: Color::Rgb(0, 0, 255),      // Blue
             syntax_theme: "base16-ocean.dark".to_string(),
             syntax_set: SyntaxSet::load_defaults_newlines(),
             theme_set: ThemeSet::load_defaults(),
