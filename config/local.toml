@@ -33,4 +33,4 @@ enabled = true
 server_url = "http://localhost:5001"
 
 [ui]
-theme = "light"
+theme = "minimal"

@@ -108,15 +108,15 @@ pub mod menu {
 pub mod messages {
     /// Exit message when quitting the application
     #[allow(dead_code)]
-    pub const GOODBYE: &str = "Goodbye!";
+    pub const GOODBYE: &str = "Goodbye";
 
     /// Menu title
     #[allow(dead_code)]
-    pub const MAIN_MENU_TITLE: &str = "Main Menu";
+    pub const MAIN_MENU_TITLE: &str = "Harper";
 
     /// Prompt for user input
     #[allow(dead_code)]
-    pub const ENTER_CHOICE: &str = "Enter your choice: ";
+    pub const ENTER_CHOICE: &str = "Select › ";
 }
 
 /// Exit commands

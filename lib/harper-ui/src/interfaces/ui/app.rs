@@ -44,7 +44,7 @@ pub fn gather_sidebar_entries(chat_state: Option<&ChatState>) -> Vec<String> {
             for line in msg.content.lines().rev() {
                 let trimmed = line.trim();
                 if trimmed.starts_with("$ ") {
-                    entries.push(format!("[probe] {}", trimmed.trim_start_matches("$ ")));
+                    entries.push(trimmed.trim_start_matches("$ ").to_string());
                 }
                 if entries.len() >= 5 {
                     break;
@@ -65,7 +65,7 @@ pub fn gather_sidebar_entries(chat_state: Option<&ChatState>) -> Vec<String> {
             {
                 continue;
             }
-            entries.push(format!("[git] {}", trimmed));
+            entries.push(trimmed.to_string());
             if entries.len() >= 10 {
                 break;
             }
@@ -79,11 +79,7 @@ pub fn gather_sidebar_entries(chat_state: Option<&ChatState>) -> Vec<String> {
                 if name.starts_with('.') {
                     continue;
                 }
-                let kind = entry
-                    .file_type()
-                    .map(|ft| if ft.is_dir() { "dir" } else { "file" })
-                    .unwrap_or("item");
-                entries.push(format!("[{}] {}", kind, name));
+                entries.push(name);
                 if entries.len() >= 12 {
                     break;
                 }
@@ -92,7 +88,7 @@ pub fn gather_sidebar_entries(chat_state: Option<&ChatState>) -> Vec<String> {
     }
 
     if entries.is_empty() {
-        entries.push("No harvest context yet".to_string());
+        entries.push("Empty context".to_string());
     }
     entries
 }
@@ -104,7 +100,7 @@ pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<String> {
         for line in msg.content.lines().rev() {
             let trimmed = line.trim();
             if trimmed.starts_with("$ ") {
-                entries.push(format!("[probe] {}", trimmed.trim_start_matches("$ ")));
+                entries.push(trimmed.trim_start_matches("$ ").to_string());
             }
             if entries.len() >= MAX_SIDEBAR_PROBE_ENTRIES {
                 break;
@@ -124,7 +120,7 @@ pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<String> {
             {
                 continue;
             }
-            entries.push(format!("[git] {}", trimmed));
+            entries.push(trimmed.to_string());
             if entries.len() >= MAX_SIDEBAR_GIT_ENTRIES {
                 break;
             }
@@ -137,7 +133,7 @@ pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<String> {
             Err(_) => {
                 // If we can't read the directory, just skip it
                 if entries.is_empty() {
-                    entries.push("No harvest context yet".to_string());
+                    entries.push("Empty context".to_string());
                 }
                 return entries;
             }
@@ -147,12 +143,7 @@ pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<String> {
             if name.starts_with('.') {
                 continue;
             }
-            let kind = entry
-                .file_type()
-                .await
-                .map(|ft| if ft.is_dir() { "dir" } else { "file" })
-                .unwrap_or("item");
-            entries.push(format!("[{}] {}", kind, name));
+            entries.push(name);
             if entries.len() >= MAX_SIDEBAR_FILE_ENTRIES {
                 break;
             }
@@ -160,7 +151,7 @@ pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<String> {
     }
 
     if entries.is_empty() {
-        entries.push("No harvest context yet".to_string());
+        entries.push("Empty context".to_string());
     }
     entries
 }

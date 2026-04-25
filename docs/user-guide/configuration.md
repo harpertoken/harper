@@ -108,11 +108,7 @@ session_dir = "./sessions"
 
 ```toml
 [ui]
-theme = "dark"
-color = true
-prompt = "> "
-show_timestamps = true
-show_token_count = false
+theme = "minimal"  # Options: minimal, cyberpunk, default, light, dark, github
 ```
 
 ## Environment Variables
