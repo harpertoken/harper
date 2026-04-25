@@ -220,6 +220,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         AppState::ViewSession(name, messages, selected) => {
             draw_view_session(frame, name, messages, *selected, theme, main_area)
         }
+        AppState::Stats(stats) => draw_stats(frame, stats, theme, main_area),
     }
 
     draw_zen_footer(frame, app, theme, footer_area);
@@ -231,6 +232,75 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     if let Some(msg) = &app.message {
         draw_message_overlay(frame, msg, theme);
     }
+}
+
+fn draw_stats(
+    frame: &mut Frame,
+    stats: &harper_core::memory::session_service::GlobalStats,
+    theme: &Theme,
+    area: Rect,
+) {
+    let stats_lines = vec![
+        Line::from(vec![
+            Span::styled("Total Sessions   ", theme.muted_style()),
+            Span::styled(
+                stats.total_sessions.to_string(),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Total Messages   ", theme.muted_style()),
+            Span::styled(
+                stats.total_messages.to_string(),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Total Commands   ", theme.muted_style()),
+            Span::styled(
+                stats.total_commands.to_string(),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Approved Commands ", theme.muted_style()),
+            Span::styled(
+                stats.approved_commands.to_string(),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Avg Duration     ", theme.muted_style()),
+            Span::styled(
+                format!("{:.2} ms", stats.avg_command_duration_ms),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+    ];
+
+    let area = centered_rect(50, 40, area);
+    let stats_widget = Paragraph::new(stats_lines).block(
+        Block::default()
+            .title(" Usage Statistics ")
+            .title_style(
+                Style::default()
+                    .fg(theme.foreground)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .padding(Padding::uniform(2)),
+    );
+
+    frame.render_widget(stats_widget, area);
 }
 
 fn draw_zen_sidebar(frame: &mut Frame, entries: &[String], theme: &Theme, area: Rect) {
@@ -264,9 +334,16 @@ fn draw_zen_sidebar(frame: &mut Frame, entries: &[String], theme: &Theme, area: 
 }
 
 fn draw_zen_menu(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
-    let menu_items = ["New Conversation", "History", "Export", "Settings", "Quit"];
+    let menu_items = [
+        "New Conversation",
+        "History",
+        "Export",
+        "Statistics",
+        "Settings",
+        "Quit",
+    ];
 
-    let area = centered_rect(40, 30, area);
+    let area = centered_rect(40, 35, area);
 
     let items: Vec<ListItem> = menu_items
         .iter()

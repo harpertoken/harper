@@ -1,0 +1,104 @@
+{
+  "name": "harper-review-vscode",
+  "displayName": "Harper Review",
+  "description": "Inline code review diagnostics and quick fixes powered by a local Harper server.",
+  "version": "0.1.0",
+  "publisher": "harpertoken",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/harpertoken/harper.git"
+  },
+  "scripts": {
+    "package": "vsce package --out harper-review.vsix"
+  },
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other",
+    "Linters"
+  ],
+  "activationEvents": [
+    "onCommand:harperReview.reviewCurrentFile",
+    "onCommand:harperReview.reviewSelection",
+    "onCommand:harperReview.applyAllFixes",
+    "onLanguage:rust",
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:python",
+    "onLanguage:go",
+    "onLanguage:java"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "harperReview.reviewCurrentFile",
+        "title": "Harper: Review Current File"
+      },
+      {
+        "command": "harperReview.reviewSelection",
+        "title": "Harper: Review Selection"
+      },
+      {
+        "command": "harperReview.applyAllFixes",
+        "title": "Harper: Apply All Suggested Fixes"
+      },
+      {
+        "command": "harperReview.clearDiagnostics",
+        "title": "Harper: Clear Review Diagnostics"
+      }
+    ],
+    "configuration": {
+      "title": "Harper Review",
+      "properties": {
+        "harperReview.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8081",
+          "description": "Base URL for the local Harper server."
+        },
+        "harperReview.autoReviewOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run Harper review automatically when a file is saved."
+        },
+        "harperReview.maxFindings": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Maximum number of findings returned for a review."
+        },
+        "harperReview.instructions": {
+          "type": "string",
+          "default": "Focus on correctness, regressions, missing validation, and concrete fix suggestions.",
+          "description": "Extra instructions sent with each review request."
+        },
+        "harperReview.requestTimeoutMs": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 1000,
+          "description": "Timeout in milliseconds for review requests."
+        }
+      }
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "harperReview.reviewCurrentFile",
+          "group": "navigation"
+        },
+        {
+          "command": "harperReview.reviewSelection",
+          "when": "editorHasSelection",
+          "group": "navigation"
+        },
+        {
+          "command": "harperReview.applyAllFixes",
+          "group": "navigation"
+        }
+      ]
+    }
+  }
+}

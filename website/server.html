@@ -33,28 +33,179 @@
                     <pre><code>[server]
 enabled = true
 host = "127.0.0.1"
-port = 8080</code></pre>
+port = 8081</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+
+                <h2>Run both TUI and server</h2>
+                <p>You can run the server in one terminal and the TUI in another:</p>
+                <div class="code-wrapper">
+                    <pre><code># Terminal 1 - server + TUI
+cargo run -p harper-ui --bin harper
+
+# Terminal 2 - TUI only (no server)
+cargo run -p harper-ui --bin harper -- --no-server</code></pre>
                     <button class="copy-btn"></button>
                 </div>
 
                 <h2>Endpoints</h2>
                 <ul>
-                    <li>GET /health — health check</li>
-                    <li>GET /api/sessions — list sessions</li>
-                    <li>GET /api/sessions/:id — get session</li>
-                    <li>DELETE /api/sessions/:id — delete</li>
-                    <li>POST /api/chat — send message</li>
+                    <li>GET /health - health check</li>
+                    <li>GET /api/sessions - list sessions</li>
+                    <li>GET /api/sessions/{id} - get session</li>
+                    <li>DELETE /api/sessions/{id} - delete</li>
+                    <li>POST /api/chat - send message</li>
+                    <li>POST /api/review - inline code review findings and fix suggestions</li>
                 </ul>
+
+                <h2>Test the server</h2>
+                <div class="code-wrapper">
+                    <pre><code># Health check
+curl http://127.0.0.1:8081/health</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <div class="code-wrapper">
+                    <pre><code># List sessions
+curl http://127.0.0.1:8081/api/sessions</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+
+                <h3>Health response</h3>
+                <div class="code-wrapper">
+                    <pre><code>{"status":"ok","version":"0.10.0"}</code></pre>
+                </div>
+
+                <h3>Sessions response</h3>
+                <div class="code-wrapper">
+                    <pre><code>{"sessions":[]}</code></pre>
+                </div>
 
                 <h2>Example</h2>
                 <div class="code-wrapper">
-                    <pre><code>curl http://127.0.0.1:8080/health</code></pre>
+                    <pre><code>curl http://127.0.0.1:8081/health</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <div class="code-wrapper">
-                    <pre><code>curl http://127.0.0.1:8080/api/sessions</code></pre>
+                    <pre><code>curl http://127.0.0.1:8081/api/sessions</code></pre>
                     <button class="copy-btn"></button>
                 </div>
+                <div class="code-wrapper">
+                    <pre><code>curl -X POST http://127.0.0.1:8081/api/review \
+  -H "Content-Type: application/json" \
+  -d '{
+    "file_path": "src/main.rs",
+    "language": "rust",
+    "max_findings": 5,
+    "instructions": "Focus on correctness and concrete fixes.",
+    "content": "fn main() { let x = 1; let x = 2; }"
+  }'</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+
+                <h3>Response</h3>
+                <div class="code-wrapper">
+                    <pre><code>{"summary":"Revised code to eliminate redundant variable declaration","findings":[
+  {
+    "title":"Redundant Variable Declaration",
+    "severity":"error",
+    "message":"The second assignment to `x` is unnecessary...",
+    "range":{"start_line":1,"start_column":13,"end_line":1,"end_column":24},
+    "suggestion":{
+      "description":"Remove the redundant `let x = 2;` line",
+      "replacement":"fn main() { let x = 2; }"
+    }
+  }
+],"model":"llama3"}</code></pre>
+                </div>
+
+                <h2>Editor integration</h2>
+                <p>Harper now ships a VS Code extension scaffold that consumes <code>/api/review</code> and turns findings into diagnostics and quick fixes.</p>
+                <p>Run the review with <strong>Cmd+Shift+P</strong> → "Harper: Review Current File", or bind a custom shortcut:</p>
+                <pre><code class="language-json">{
+  "key": "cmd+shift+r",
+  "command": "harperReview.reviewCurrentFile"
+}</code></pre>
+                <p>View findings in <strong>Cmd+Shift+M</strong> (Problems view).</p>
+
+                <h3>Verify diagnostics appear</h3>
+                <p>After running "Harper: Review Current File", look for:</p>
+                <ul>
+                    <li><strong>Status bar</strong> - Bottom-right corner of VS Code. You should see either:
+                        <ul>
+                            <li><code>$(warning) Harper N</code> - warning icon with <strong>N findings</strong> the LLM found in this file</li>
+                            <li><code>$(check) Harper Clean</code> - green check if no issues found</li>
+                            <li><code>$(error) Harper Review</code> - red X if error occurred</li>
+                        </ul>
+                        <p><em>The number (N) changes for each file - it's the actual count of issues detected, not a fixed value.</em></p>
+                    </li>
+                    <li><strong>Problems view</strong> - Press <strong>Cmd+Shift+M</strong>. You should see entries with:
+                        <ul>
+                            <li>Source: "Harper Review"</li>
+                            <li>Error/Warning/Info icons based on severity</li>
+                            <li>File path and line number</li>
+                        </ul>
+                    </li>
+                    <li><strong>Quick fixes</strong> - In the editor:
+                        <ul>
+                            <li>Red/yellow/blue squiggly underlines on code with issues</li>
+                            <li>Hover to see the finding message</li>
+                            <li>Click the lightbulb icon or press <strong>Cmd+.</strong> to see fix options</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><em>Example findings include: unused variables, missing error handling, inefficient patterns, security issues, and more.</em></p>
+
+                <h3>Rebuild VSIX</h3>
+                <div class="code-wrapper">
+                    <pre><code>cd extensions/harper-review-vscode
+vsce package --out harper-review.vsix</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>Then reinstall: <strong>Extensions</strong> → <strong>...</strong> → <strong>Install from VSIX...</strong></p>
+
+                <h3>Troubleshooting</h3>
+                <h4>Server not running</h4>
+                <div class="code-wrapper">
+                    <pre><code>curl http://127.0.0.1:8081/health
+# {"status":"ok","version":"0.10.0"}</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>If it fails, start the server: <code>cargo run -p harper-ui --bin harper</code></p>
+
+                <h4>Extension shows "fetch failed"</h4>
+                <ul>
+                    <li>Check server is running: <code>curl http://127.0.0.1:8081/health</code></li>
+                    <li>Reload VS Code: <strong>Cmd+Shift+P</strong> → "Developer: Reload Window"</li>
+                    <li>Check port in settings: <strong>Cmd+,</strong> → search "harperReview.serverUrl"</li>
+                </ul>
+
+                <h4>Port already in use</h4>
+                <p>If you get "Address already in use", stop existing server or use different port:</p>
+                <div class="code-wrapper">
+                    <pre><code>pkill -f harper
+# Or change port in config/local.toml:
+[server]
+port = 8082</code></pre>
+                </div>
+
+                <h3>Change port</h3>
+                <p>To use a different port, update these files:</p>
+                <h4>Code (backend)</h4>
+                <ul>
+                    <li><code>config/local.toml</code> - main config</li>
+                    <li><code>lib/harper-ui/src/main.rs</code> - line 147, fallback default</li>
+                </ul>
+                <h4>VS Code extension</h4>
+                <ul>
+                    <li><code>extension.js</code> - server URL</li>
+                    <li><code>package.json</code> - default serverUrl</li>
+                </ul>
+                <h4>Docs</h4>
+                <ul>
+                    <li><code>website/server.html</code> - curl commands</li>
+                    <li><code>docs/user-guide/server.md</code> - curl commands</li>
+                    <li><code>extensions/README.md</code> - config example</li>
+                </ul>
             </div>
         </main>
 

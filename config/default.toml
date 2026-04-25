@@ -70,6 +70,4 @@ allowed_dirs = []
 [server]
 enabled = false
 host = "127.0.0.1"
-port = 8080
-
-# Updated for v0.3.4
+port = 8081

@@ -48,6 +48,8 @@ rustyline = "17.0"
 image = "0.25.6"
 urlencoding = "2.1"
 async-trait = "0.1"
+walkdir = "2.5"
+tempfile = "3.10"
 harper-firmware = { path = "../harper-firmware" }
 harper-sandbox = { path = "../harper-sandbox" }
 
@@ -84,7 +86,6 @@ version = "0.61"
 version = "0.53"
 
 [dev-dependencies]
-tempfile = "3.3.0"
 criterion = "0.5"
 
 [features]

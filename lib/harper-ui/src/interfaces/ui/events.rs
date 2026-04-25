@@ -284,6 +284,7 @@ pub fn handle_event(
                     AppState::ExportSessions(_, _) => app.state = AppState::Menu(0),
                     AppState::Tools(_) => app.state = AppState::Menu(0),
                     AppState::ViewSession(_, _, _) => app.state = AppState::Menu(0),
+                    AppState::Stats(_) => app.state = AppState::Menu(0),
                 },
                 KeyCode::Down | KeyCode::Char('j') => {
                     if matches!(app.state, AppState::Chat(_)) {
@@ -344,8 +345,12 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 } // Start Chat
                 1 => load_sessions_into_state(app, session_service),
                 2 => load_export_sessions_into_state(app, session_service),
-                3 => app.state = AppState::Tools(0), // Tools
-                4 => return EventResult::Quit,       // Exit
+                3 => match session_service.get_global_stats() {
+                    Ok(stats) => app.state = AppState::Stats(stats),
+                    Err(e) => app.set_error_message(format!("Error loading stats: {}", e)),
+                },
+                4 => app.state = AppState::Tools(0), // Tools
+                5 => return EventResult::Quit,       // Exit
                 _ => {}
             }
         }

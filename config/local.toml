@@ -29,8 +29,13 @@ model_name = "llama3"
 path = ".harper/sessions.db"
 
 [mcp]
-enabled = true
+enabled = false
 server_url = "http://localhost:5001"
 
 [ui]
 theme = "minimal"
+
+[server]
+enabled = true
+host = "127.0.0.1"
+port = 8081

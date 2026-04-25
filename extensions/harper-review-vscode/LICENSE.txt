@@ -1,0 +1,9 @@
+Harper Review for VS Code
+Copyright 2026 harpertoken
+
+SPDX-License-Identifier: MIT OR Apache-2.0
+
+This extension is distributed under the terms of the MIT License or the
+Apache License, Version 2.0, at your option.
+
+Repository: https://github.com/harpertoken/harper
