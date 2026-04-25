@@ -24,3 +24,7 @@ Pick your AI provider in the config file. If you want offline mode, set up Ollam
 When you're working on Harper itself, run `cargo fmt` to format, `cargo clippy --all-targets --all-features` to lint, and `cargo test` to test.
 
 Check the docs for more on installation, configuration, and troubleshooting. Contributors should read CONTRIBUTING.md, and note that commercial use needs its own license.
+
+Harper also includes an optional HTTP review API (port 8081) for editor integrations, plus a VS Code extension scaffold in `extensions/harper-review-vscode`.
+
+Learn more at [`harper/server.html`](https://harpertoken.github.io/harper/server.html).

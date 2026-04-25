@@ -69,16 +69,27 @@ Capabilities: File I/O, shell execution, and persistent memory{}.",
         prompt.push_str(
             "\n\nInterface via JSON tool commands. Analysis should be concise and direct.
 
-Core Tools:
-- read_file(path)
-- write_file(path, content)
-- search_replace(path, old, new)
-- run_command(command)
-- todo(action, [desc], [index])
-- list_changed_files([ext], [tracked], [since])
-- firmware_list(), firmware_info(device), firmware_gpio(pin, state)
+Use this JSON shape for built-in tools:
+{\"tool\":\"tool_name\",\"args\":{...}}
 
-Example: {\"tool\": \"read_file\", \"path\": \"src/main.rs\"}",
+Core Tools:
+- read_file(args: {\"path\": \"src/main.rs\"})
+- write_file(args: {\"path\": \"src/main.rs\", \"content\": \"...\"})
+- search_replace(args: {\"path\": \"src/main.rs\", \"old_string\": \"old\", \"new_string\": \"new\"})
+- run_command(args: {\"command\": \"git status\"})
+- todo(args: {\"action\": \"add|list|remove|clear\", \"description\": \"...\", \"index\": 1})
+- list_changed_files(args: {\"ext\": \"rs\", \"tracked_only\": true, \"since\": \"HEAD~1\"})
+- git_status(args: {})
+- git_diff(args: {})
+- git_add(args: {\"files\": \"src/main.rs\"})
+- git_commit(args: {\"message\": \"feat: update prompt contract\"})
+- codebase_investigator(args: {\"action\": \"find_calls\", \"symbol\": \"ToolService\"})
+- codebase_investigator(args: {\"action\": \"trace_relationship\", \"x\": \"PromptBuilder\", \"y\": \"ToolService\"})
+- firmware_list(args: {})
+- firmware_info(args: {\"device\": \"esp32\"})
+- firmware_gpio(args: {\"pin\": 2, \"state\": true})
+
+Example: {\"tool\":\"read_file\",\"args\":{\"path\":\"src/main.rs\"}}",
         );
 
         if let Some(mcp_tools) = self.get_mcp_tools_text().await {

@@ -17,6 +17,9 @@ use colored::Colorize;
 /// Custom error type for Harper application
 #[derive(Debug, thiserror::Error)]
 pub enum HarperError {
+    /// Validation related errors
+    #[error("Validation error: {0}")]
+    Validation(String),
     /// Configuration related errors
     #[error("Configuration error: {0}")]
     Config(String),

@@ -19,6 +19,7 @@
 
 pub mod api;
 pub mod code_analysis;
+pub mod codebase_investigator;
 pub mod db;
 pub mod filesystem;
 pub mod firmware;
@@ -254,6 +255,17 @@ impl<'a> ToolService<'a> {
                 code_analysis::analyze_code(response)
             })
             .await
+        } else if response
+            .to_uppercase()
+            .starts_with(tools::CODEBASE_INVESTIGATE)
+        {
+            let tool_result =
+                codebase_investigator::investigate_codebase(response, self.approver.clone())
+                    .await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, response, &tool_result)
+                .await?;
+            Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::DB_QUERY) {
             let tool_result = db::run_query(response, self.approver.clone()).await?;
             let final_response = self
@@ -403,6 +415,44 @@ impl<'a> ToolService<'a> {
                 } else {
                     Ok(None)
                 }
+            }
+            "codebase_investigator" => {
+                let action = args.get("action").and_then(|v| v.as_str());
+                if let Some(act) = action {
+                    let mut bracket_command = format!("[CODEBASE_INVESTIGATE {}", act);
+                    match act {
+                        "find_calls" => {
+                            if let Some(symbol) = args.get("symbol").and_then(|v| v.as_str()) {
+                                bracket_command.push_str(&format!(" {}]", symbol));
+                            }
+                        }
+                        "trace_relationship" => {
+                            let x = args.get("x").and_then(|v| v.as_str());
+                            let y = args.get("y").and_then(|v| v.as_str());
+                            if let (Some(x), Some(y)) = (x, y) {
+                                bracket_command.push_str(&format!(" {} {}]", x, y));
+                            }
+                        }
+                        "clone_context" => {
+                            if let Some(repo_url) = args.get("repo_url").and_then(|v| v.as_str()) {
+                                bracket_command.push_str(&format!(" {}]", repo_url));
+                            }
+                        }
+                        _ => {}
+                    }
+                    if bracket_command.ends_with(']') {
+                        let tool_result = codebase_investigator::investigate_codebase(
+                            &bracket_command,
+                            self.approver.clone(),
+                        )
+                        .await?;
+                        let final_response = self
+                            .call_llm_after_tool(client, history, raw_response, &tool_result)
+                            .await?;
+                        return Ok(Some((final_response, tool_result)));
+                    }
+                }
+                Ok(None)
             }
             "git_status" => {
                 let status_result = git::git_status()?;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use harper_core::core::Message;
+use harper_core::memory::session_service::GlobalStats;
 use std::fs;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
@@ -190,6 +191,7 @@ pub enum AppState {
     ExportSessions(Vec<SessionInfo>, usize),  // sessions, selected for export
     Tools(usize),                             // selected tool
     ViewSession(String, Vec<Message>, usize), // name, messages, selected
+    Stats(GlobalStats),
 }
 
 #[derive(Clone)]
@@ -278,7 +280,7 @@ impl TuiApp {
         }
 
         match &mut self.state {
-            AppState::Menu(sel) => *sel = (*sel + 1) % 5,
+            AppState::Menu(sel) => *sel = (*sel + 1) % 6,
             AppState::Chat(chat_state) => {
                 chat_state.scroll_offset =
                     (chat_state.scroll_offset + 1).min(chat_state.messages.len());
@@ -299,6 +301,7 @@ impl TuiApp {
                     *sel = (*sel + 1) % messages.len();
                 }
             }
+            AppState::Stats(_) => {}
         }
     }
 
@@ -309,7 +312,7 @@ impl TuiApp {
         }
 
         match &mut self.state {
-            AppState::Menu(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
+            AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
             AppState::Chat(chat_state) => {
                 chat_state.scroll_offset = chat_state.scroll_offset.saturating_sub(1);
             }
@@ -341,6 +344,7 @@ impl TuiApp {
                     };
                 }
             }
+            AppState::Stats(_) => {}
         }
     }
 }

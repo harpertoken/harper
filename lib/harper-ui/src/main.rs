@@ -136,8 +136,12 @@ async fn main() -> Result<(), HarperError> {
     }
     let exec_policy = config.exec_policy.clone();
 
+    // Check for --no-server flag
+    let args: Vec<String> = std::env::args().collect();
+    let no_server = args.iter().any(|a| a == "--no-server");
+
     // Check for server mode
-    let server_enabled = config.server.enabled.unwrap_or(false);
+    let server_enabled = config.server.enabled.unwrap_or(false) && !no_server;
     if server_enabled {
         let host = config.server.host.as_deref().unwrap_or("127.0.0.1");
         let port = config.server.port.unwrap_or(8080);
@@ -152,12 +156,16 @@ async fn main() -> Result<(), HarperError> {
         println!("Endpoints:");
         println!("  GET  /health          - Health check");
         println!("  GET  /api/sessions    - List sessions");
-        println!("  GET  /api/sessions/:id - Get session");
+        println!("  GET  /api/sessions/{{id}} - Get session");
         println!("  POST /api/chat        - Send chat message");
+        println!("  POST /api/review      - Review file content");
 
         let conn_clone = conn.clone();
+        let api_config_clone = api_config.clone();
         tokio::spawn(async move {
-            if let Err(e) = harper_core::server::run_server(&addr, conn_clone).await {
+            if let Err(e) =
+                harper_core::server::run_server(&addr, conn_clone, api_config_clone).await
+            {
                 eprintln!("Server error: {}", e);
             }
         });

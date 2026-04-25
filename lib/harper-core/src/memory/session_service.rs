@@ -37,6 +37,15 @@ pub struct Session {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct GlobalStats {
+    pub total_sessions: usize,
+    pub total_messages: usize,
+    pub total_commands: usize,
+    pub approved_commands: usize,
+    pub avg_command_duration_ms: f64,
+}
+
 /// Service for managing chat sessions
 pub struct SessionService<'a> {
     conn: &'a Connection,
@@ -67,6 +76,40 @@ impl<'a> SessionService<'a> {
             input: Arc::new(input),
             output: Arc::new(output),
         }
+    }
+
+    /// Get global usage statistics
+    pub fn get_global_stats(&self) -> HarperResult<GlobalStats> {
+        let total_sessions: usize =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))?;
+        let total_messages: usize =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM messages", [], |r| r.get(0))?;
+        let total_commands: usize =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM command_logs", [], |r| r.get(0))?;
+        let approved_commands: usize = self.conn.query_row(
+            "SELECT COUNT(*) FROM command_logs WHERE approved = 1",
+            [],
+            |r| r.get(0),
+        )?;
+        let avg_duration: f64 = self
+            .conn
+            .query_row(
+                "SELECT AVG(duration_ms) FROM command_logs WHERE duration_ms IS NOT NULL",
+                [],
+                |r| r.get::<_, Option<f64>>(0),
+            )?
+            .unwrap_or(0.0);
+
+        Ok(GlobalStats {
+            total_sessions,
+            total_messages,
+            total_commands,
+            approved_commands,
+            avg_command_duration_ms: avg_duration,
+        })
     }
 
     /// List all previous sessions (returns data)

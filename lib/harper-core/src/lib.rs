@@ -136,6 +136,12 @@ mod tests {
             "Configuration error: test config error"
         );
 
+        let validation_error = HarperError::Validation("invalid input".to_string());
+        assert_eq!(
+            format!("{}", validation_error),
+            "Validation error: invalid input"
+        );
+
         let api_error = HarperError::Api("test api error".to_string());
         assert_eq!(format!("{}", api_error), "API error: test api error");
 

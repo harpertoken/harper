@@ -172,6 +172,10 @@ pub mod tools {
     #[allow(dead_code)]
     pub const CODE_ANALYZE: &str = "[CODE_ANALYZE";
 
+    /// Codebase investigation prefix
+    #[allow(dead_code)]
+    pub const CODEBASE_INVESTIGATE: &str = "[CODEBASE_INVESTIGATE";
+
     /// Database query prefix
     #[allow(dead_code)]
     pub const DB_QUERY: &str = "[DB_QUERY";
