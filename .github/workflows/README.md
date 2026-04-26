@@ -7,30 +7,30 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Workflow | File | What it does | Key trigger(s) |
 | --- | --- | --- | --- |
 | Apply Rulesets | `apply-rulesets.yml` | Applies branch ruleset definitions from `.github/rulesets/*.json` to GitHub. Edit `main-branch-protection.json` to change rules; the workflow syncs them on push. | Push to `main` touching rulesets, manual dispatch |
-| Auto Merge | `auto-merge.yml` | Three jobs: `auto-merge` enables GitHub's built-in auto-merge (waits for `CI (ubuntu-latest)` + 1 review); `auto-merge-now` merges immediately via `BYPASS_TOKEN` bypassing ruleset checks; `cancel-auto-merge` disables queued auto-merge when the `auto-merge` label is removed. | `labeled`/`unlabeled`/PR events |
+| Auto Merge | `auto-merge.yml` | Three jobs via `libnudget/auto-merge@v1`: `auto-merge` enables GitHub's built-in auto-merge (waits for `CI (ubuntu-latest)` + 1 review); `auto-merge-now` merges immediately via `BYPASS_TOKEN` bypassing ruleset checks; `cancel-auto-merge` disables queued auto-merge when the `auto-merge` label is removed. | `labeled`/`unlabeled`/PR events |
 | Bazel CI | `build-bazel.yml` | Builds `:harper_bin` with Bazel on Linux and macOS (including lockfile repinning fallback). | Push/PR to `main`, Bazel branches |
 | Bazel Smoke | `bazel-smoke.yml` | Daily `bazel test //...` to catch dependency drift outside PRs. | Daily cron, manual dispatch |
 | Rust Benchmarks | `benchmarks.yml` | Runs `cargo bench` nightly and stores results as artifacts. | Daily cron, manual dispatch |
-| Integration Tests | `integration.yml` | Executes `cargo test -- --ignored` against real services (requires secrets). | PRs touching app code, manual dispatch |
+| Integration Tests | `integration.yml` | Executes `cargo test -- --include-ignored` against real services (requires secrets). | PRs touching app code, manual dispatch (with environment input) |
 | Package Test | `package-test.yml` | Builds release binaries and packages them for smoke testing. | Tag push (`v*`), manual dispatch |
 | Post Auto Merge CI | `post-auto-merge-ci.yml` | Re-runs fmt/clippy/tests on `main` after Auto Merge completes; also locks the merged PR via `gh pr lock`. | Completion of Auto Merge workflow |
-| Normalize PR Description | `normalize-pr-description.yml` | Rewrites `## Summary`/`## Testing` bullet-style PR bodies into a single paragraph with backtick-wrapped technical terms. Skips forks and dependabot. | PR opened/edited/ready_for_review |
-| Build | `build.yml` | Runs the canonical `cargo fmt`, `cargo clippy`, and test matrix. | Push/PR to `main` |
-| CI | `ci.yml` | Lint, formatting, unit tests, and integration tests (builds binary first). | Push/PR to `main` |
-| CLA | `cla.yml` | Enforces the Contributor License Agreement via comment status. | PR opened/synchronized |
+| Normalize PR Description | `normalize-pr-description.yml` | Rewrites `## Summary`/`## Testing` bullet-style PR bodies into a single paragraph with backtick-wrapped technical terms via `libnudget/prune@v1`. Skips forks and dependabot. | PR opened/edited/ready_for_review |
+| Build | `build.yml` | Builds Docker image and runs e2e tests; publishes to GHCR/Docker Hub on merge to `main`. | Push/PR to `main` touching docker files, workflow dispatch |
+| CI | `ci.yml` | Runs on `main`/`develop`: validation checks, clippy, docs, unit+integration tests, release build, security audit, e2e tests. Also runs a weekly audit and coverage upload. | Push/PR to `main`/`develop`, weekly cron |
+| CLA | `cla.yml` | Enforces the Contributor License Agreement via cla-bot. | PR opened/synchronized |
 | CodeQL | `codeql.yml` | Performs CodeQL static analysis on Rust (security scanning). | Push/PR to `main`, weekly cron |
 | Dependency Review | `dependency-review.yml` | Uses GitHub's dependency-review action on PRs. | PR events |
-| Docs | `docs.yml` | Builds documentation/mdbook (fails PR if docs break). | Push/PR touching docs |
-| Fix PR Title | `fix-pr-title.yml` | Rewrites PR titles into `[scope] message` format and lowercases the description part. | PR events |
-| Label Sync | `label-sync.yml` | Syncs repository labels from `config/labeler.yml`. | Manual/cron |
-| Lock Merged PRs | `lock-merged-prs.yml` | Locks PRs after manual merge. Auto Merge path is handled by `post-auto-merge-ci.yml`. | PR closed |
-| Nightly | `nightly.yml` | Runs the nightly job (currently the same matrix as `ci.yml` but scheduled). | Nightly cron |
-| PR Checks | `pr-checks.yml` | Aggregates status checks required for merge (references other workflows). | PR workflow_call |
-| Release | `release.yml` | Builds release artifacts (binaries, packages). | Manual dispatch / tag push |
-| Rust Auto-Fix Bot | `rust-auto-fix.yml` | Applies automated `cargo fmt`/`clippy --fix` patches via bot PRs. | Issue comment / workflow_dispatch |
-| Cancel Runs Bot | `cancel-runs.yml` | Cancels in-progress and queued GitHub Actions runs when `/cancel-runs` is commented on PRs, then posts completion details with collapsible sections. | Issue comment on PRs |
-| Update Rust lockfiles | `update-lockfiles.yml` | Weekly `cargo update` + `bazel sync --only=crates`, opens PR. | Weekly cron + manual dispatch |
-| Deploy Website | `website.yml` | Builds and deploys the docs/website bundle to GitHub Pages. | Push to `main` / workflow_dispatch |
+| Docs | `docs.yml` | Builds mkdocs documentation and deploys to GitHub Pages. | Push/PR touching docs |
+| Fix PR Title | `fix-pr-title.yml` | Rewrites PR titles into `[scope] message` format via `libnudget/title@v1`. | PR events on `main` |
+| Label Sync | `label-sync.yml` | Syncs repository labels from `config/labeler.yml` via custom script. | Weekly cron, manual dispatch |
+| Lock Merged PRs | `lock-merged-prs.yml` | Locks PRs after merge (via `gh pr lock`). Auto Merge path is handled by `post-auto-merge-ci.yml`. | PR closed (merged) |
+| Nightly | `nightly.yml` | Uses `libnudget/rust-nightly` reusable workflow: runs tests, builds release, creates draft release with tag `nightly-{date}`. Benchmarks disabled for faster runs. | Daily cron (midnight UTC), manual dispatch |
+| PR Checks | `pr-checks.yml` | Validates PR metadata and auto-labels via `config/labeler.yml`. | PR workflow_call, push to `main` |
+| Release | `release.yml` | Creates release PRs or direct tags for harper-core, harper-ui, harper-firmware, harper-mcp-server, harper-sandbox via `libnudget/release@v1.0.0`. | Push to `main` touching lib dirs, PR merged, manual dispatch |
+| Rust Auto-Fix Bot | `rust-auto-fix.yml` | Applies automated `cargo fmt`/`clippy --fix` patches via `libnudget/rust-fix@v1` when `/rust-fix` comment is confirmed with `/confirm`. | Issue comment on PRs |
+| Cancel Runs Bot | `cancel-runs.yml` | Cancels in-progress runs when `/cancel-runs` is commented on PRs via `libnudget/cancel@v1`. Also triggers on `cancel-runs` label. | Issue comment on PRs, `cancel-runs` label |
+| Update Rust lockfiles | `update-lockfiles.yml` | Runs `cargo update` + `CARGO_BAZEL_REPIN=true bazel build :harper_bin` (repins `cargo-bazel-lock.json`), opens PR. | Weekly cron (Sunday midnight UTC), manual dispatch |
+| Deploy Website | `website.yml` | Builds and deploys the website bundle to GitHub Pages. | Push to `main` touching `website/**`, manual dispatch |
 
 > **Tip:** Run `rg -n '^name:' .github/workflows` to see the canonical name shown in the Actions UI.
 
@@ -72,4 +72,4 @@ Current rules:
 Feel free to expand this file with additional details (matrix descriptions, secrets used, etc.) as workflows evolve.
 
 ## Last Updated
-2026-04-18
+2026-04-26
