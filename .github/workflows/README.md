@@ -24,7 +24,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Fix PR Title | `fix-pr-title.yml` | Rewrites PR titles into `[scope] message` format via `libnudget/title@v1`. | PR events on `main` |
 | Label Sync | `label-sync.yml` | Syncs repository labels from `config/labeler.yml` via custom script. | Weekly cron, manual dispatch |
 | Lock Merged PRs | `lock-merged-prs.yml` | Locks PRs after merge (via `gh pr lock`). Auto Merge path is handled by `post-auto-merge-ci.yml`. | PR closed (merged) |
-| Nightly | `nightly.yml` | Uses `libnudget/rust-nightly` reusable workflow: runs tests, builds release, creates draft release with tag `nightly-{date}`. Benchmarks disabled for faster runs. | Daily cron (midnight UTC), manual dispatch |
+| Nightly | `nightly.yml` | Uses `libnudget/rust-nightly` reusable workflow: runs tests, builds release, creates prerelease with tag `nightly-{sha}`. Benchmarks disabled for faster runs. | Daily cron (midnight UTC), manual dispatch |
 | PR Checks | `pr-checks.yml` | Validates PR metadata and auto-labels via `config/labeler.yml`. | PR workflow_call, push to `main` |
 | Release | `release.yml` | Creates release PRs or direct tags for harper-core, harper-ui, harper-firmware, harper-mcp-server, harper-sandbox via `libnudget/release@v1.0.0`. | Push to `main` touching lib dirs, PR merged, manual dispatch |
 | Rust Auto-Fix Bot | `rust-auto-fix.yml` | Applies automated `cargo fmt`/`clippy --fix` patches via `libnudget/rust-fix@v1` when `/rust-fix` comment is confirmed with `/confirm`. | Issue comment on PRs |
