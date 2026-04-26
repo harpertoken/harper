@@ -20,7 +20,7 @@ Harper is written in Rust (minimum version 1.85.0) using a workspace-based archi
 - `harper-firmware` provides firmware abstraction for embedded devices like ESP32, STM32, and Raspberry Pi.
 - `harper-sandbox` provides sandbox isolation using bubblewrap on Linux or sandbox-exec on macOS.
 
-Harper integrates with OpenAI, Sambanova, and Gemini APIs.
+Harper integrates with OpenAI, Sambanova, Gemini, and Cerebras APIs. Default model is GPT-5.5.
 
 # User Interface
 

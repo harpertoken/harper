@@ -18,7 +18,7 @@
 provider = "OpenAI"
 api_key = "your_api_key_here"
 base_url = "https://api.openai.com/v1/chat/completions"
-model_name = "gpt-4-turbo"
+model_name = "gpt-5.5"
 
 [database]
 path = ".harper/sessions.db"

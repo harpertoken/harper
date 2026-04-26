@@ -181,16 +181,48 @@ pub async fn delete_session(
 }
 
 pub async fn chat(
-    State(_state): State<Arc<ServerState>>,
+    State(state): State<Arc<ServerState>>,
     Json(payload): Json<ChatRequest>,
-) -> Json<ChatResponse> {
-    Json(ChatResponse {
-        message: format!(
-            "Chat endpoint: '{}'. Full chat API coming soon!",
-            payload.message
-        ),
-        session_id: payload.session_id.unwrap_or_else(|| "new".to_string()),
-    })
+) -> Result<Json<ChatResponse>, (StatusCode, String)> {
+    let message = payload.message.clone();
+    let session_id = payload
+        .session_id
+        .clone()
+        .unwrap_or_else(|| "api".to_string());
+
+    let system_prompt = r#"You are Harper, a CLI assistant that helps users run shell commands.
+
+User Intent Recognition:
+- read a file -> use read_file
+- run a command -> use run_command
+- list or show files -> use run_command (ls)
+- create a new file -> use write_file
+- update or fix a file -> use search_replace
+- understand how something works -> use codebase_investigator
+
+When user asks to run a command, return ONLY the command they should run.
+Example: "list files" -> "ls"
+Example: "check the README" -> "cat README.md"#;
+
+    let history = vec![
+        Message {
+            role: "system".to_string(),
+            content: system_prompt.to_string(),
+        },
+        Message {
+            role: "user".to_string(),
+            content: message,
+        },
+    ];
+
+    let response = call_llm(&state.client, &state.api_config, &history)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(ChatResponse {
+        message: response,
+        session_id,
+    }))
 }
 
 pub async fn review_code(
