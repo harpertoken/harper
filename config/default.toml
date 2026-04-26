@@ -16,12 +16,17 @@
 provider = "OpenAI"
 api_key = "your_api_key_here"
 base_url = "https://api.openai.com/v1/chat/completions"
-model_name = "gpt-4-turbo"
+model_name = "gpt-5.5"
 # To run fully offline with Ollama:
 # provider = "Ollama"
 # api_key = ""
 # base_url = "http://localhost:11434/api/chat"
 # model_name = "llama3"
+# To use Cerebras (fast, cost-effective):
+# provider = "Cerebras"
+# api_key = "your_cerebras_api_key_here"
+# base_url = "https://api.cerebras.ai/v1/chat/completions"
+# model_name = "qwen-3-32b-a4b"
 
 [database]
 path = ".harper/sessions.db"

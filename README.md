@@ -1,6 +1,6 @@
 # Harper
 
-Harper is a terminal assistant that translates what you type into shell commands. It shows you what it's about to run, asks for your approval, and keeps a log of everything so you can review it later. You can connect it to cloud AI services like OpenAI, Sambanova, and Gemini, or run it completely offline with Ollama.
+Harper is a terminal assistant that translates what you type into shell commands. It shows you what it's about to run, asks for your approval, and keeps a log of everything so you can review it later. You can connect it to cloud AI services like OpenAI, Sambanova, Gemini, and Cerebras, or run it completely offline with Ollama.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png?v=2" width="600" alt="Harper interface" />

@@ -22,7 +22,7 @@ pub struct ProviderModels {
 impl ProviderModels {
     pub const OPENAI: ProviderModels = ProviderModels {
         base_url: "https://api.openai.com/v1/chat/completions",
-        default_model: "gpt-4-turbo",
+        default_model: "gpt-5.5",
     };
 
     pub const SAMBANOVA: ProviderModels = ProviderModels {
@@ -38,5 +38,10 @@ impl ProviderModels {
     pub const OLLAMA: ProviderModels = ProviderModels {
         base_url: "http://localhost:11434/api/chat",
         default_model: "llama3",
+    };
+
+    pub const CEREBRAS: ProviderModels = ProviderModels {
+        base_url: "https://api.cerebras.ai/v1/chat/completions",
+        default_model: "qwen-3-32b-a4b",
     };
 }

@@ -225,6 +225,20 @@ impl HarperConfig {
             }
         }
 
+        // Map CEREBRAS_API_KEY
+        if let Ok(key) = env::var("CEREBRAS_API_KEY") {
+            if !key.trim().is_empty() {
+                temp_builder = temp_builder.set_override("api.api_key", key)?;
+                temp_builder = temp_builder.set_override("api.provider", "Cerebras")?;
+                temp_builder =
+                    temp_builder.set_override("api.base_url", ProviderModels::CEREBRAS.base_url)?;
+                temp_builder = temp_builder
+                    .set_override("api.model_name", ProviderModels::CEREBRAS.default_model)?;
+                *builder = temp_builder;
+                return Ok(());
+            }
+        }
+
         // Map DATABASE_PATH
         if let Ok(path) = env::var("DATABASE_PATH") {
             if !path.trim().is_empty() {

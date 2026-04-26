@@ -23,6 +23,7 @@ pub enum Provider {
     OpenAI,
     Sambanova,
     Gemini,
+    Cerebras,
 }
 
 impl Provider {
@@ -31,6 +32,7 @@ impl Provider {
             "openai" | "open_ai" => Some(Self::OpenAI),
             "sambanova" | "samba" => Some(Self::Sambanova),
             "gemini" => Some(Self::Gemini),
+            "cerebras" | "cerebras-ai" => Some(Self::Cerebras),
             _ => None,
         }
     }
@@ -40,6 +42,7 @@ impl Provider {
             Self::OpenAI => "OpenAI",
             Self::Sambanova => "Sambanova",
             Self::Gemini => "Gemini",
+            Self::Cerebras => "Cerebras",
         }
     }
 
@@ -48,6 +51,7 @@ impl Provider {
             Self::OpenAI => "OpenAI",
             Self::Sambanova => "Sambanova",
             Self::Gemini => "Gemini",
+            Self::Cerebras => "Cerebras",
         }
     }
 }
@@ -179,7 +183,7 @@ fn parse_provider(args: &[String]) -> HarperResult<Provider> {
 
     Provider::from_str(&provider_value).ok_or_else(|| {
         HarperError::Api(format!(
-            "Unknown provider '{}'. Use OpenAI, Sambanova, or Gemini.",
+            "Unknown provider '{}'. Use OpenAI, Sambanova, Gemini, or Cerebras.",
             provider_value
         ))
     })
@@ -187,8 +191,8 @@ fn parse_provider(args: &[String]) -> HarperResult<Provider> {
 
 fn print_usage() {
     eprintln!("Usage:");
-    eprintln!("  harper auth login --provider <openai|sambanova|gemini>");
-    eprintln!("  harper auth logout --provider <openai|sambanova|gemini>");
+    eprintln!("  harper auth login --provider <openai|sambanova|gemini|cerebras>");
+    eprintln!("  harper auth logout --provider <openai|sambanova|gemini|cerebras>");
 }
 
 #[cfg(test)]

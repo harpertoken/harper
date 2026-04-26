@@ -69,6 +69,19 @@ Capabilities: File I/O, shell execution, and persistent memory{}.",
         prompt.push_str(
             "\n\nInterface via JSON tool commands. Analysis should be concise and direct.
 
+User Intent Recognition:
+- read a file -> use read_file
+- update or fix a file -> use search_replace or write_file
+- run a command -> use run_command
+- list or show files -> use run_command or list tool
+- search or find something -> use run_command with grep
+- create a new file -> use write_file
+- delete or remove a file -> ask first, then run_command
+- commit or push -> use git tools
+- understand how something works -> use codebase_investigator
+- what changed -> use git_diff or list_changed_files
+- tell me about a file -> use read_file
+
 Use this JSON shape for built-in tools:
 {\"tool\":\"tool_name\",\"args\":{...}}
 
@@ -96,7 +109,7 @@ Example: {\"tool\":\"read_file\",\"args\":{\"path\":\"src/main.rs\"}}",
             prompt.push_str(&mcp_tools);
         }
 
-        if let Ok(guidelines) = std::fs::read_to_string("docs/AGENTS.md") {
+        if let Ok(guidelines) = std::fs::read_to_string("AGENTS.md") {
             prompt.push_str(&format!("\n\nGuidelines:\n{}\n", guidelines));
         }
 
