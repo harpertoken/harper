@@ -47,10 +47,8 @@ jobs:
       - name: Update cargo-bazel-lock.json
         run: |
           set -euo pipefail
-          bazel shutdown
           rm -f cargo-bazel-lock.json
           CARGO_BAZEL_REPIN=true bazel build :harper_bin 2>/dev/null || true
-          bazel shutdown
 
       - name: Create PR
         uses: peter-evans/create-pull-request@v7
