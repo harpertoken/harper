@@ -26,4 +26,6 @@ jobs:
       rust-version: stable
       test-flags: --all-features --workspace
       build-flags: --release --all-features --workspace
-      run-benchmarks: true
+      run-benchmarks: false
+      create-release: true
+      release-tag: nightly
