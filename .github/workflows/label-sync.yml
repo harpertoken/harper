@@ -34,9 +34,16 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const yaml = require('js-yaml');
+            // Simple YAML-like parser for labeler config
+            const content = fs.readFileSync('config/labeler.yml', 'utf8');
+            const labels = new Set();
 
-            const labelerConfig = yaml.load(fs.readFileSync('config/labeler.yml', 'utf8'));
+            // Extract label names using regex
+            const regex = /"([^"]+)":/g;
+            let match;
+            while ((match = regex.exec(content)) !== null) {
+              labels.add(match[1]);
+            }
 
             const labelColors = {
               'area:': '1d76db',
@@ -57,7 +64,7 @@ jobs:
               'needs-design-review': 'Requires design review'
             };
 
-            for (const [labelName, _] of Object.entries(labelerConfig)) {
+            for (const labelName of labels) {
               const color = Object.entries(labelColors).find(([prefix, _]) => labelName.startsWith(prefix))?.[1] || 'ededed';
               const description = labelDescriptions[labelName] || labelName;
 
