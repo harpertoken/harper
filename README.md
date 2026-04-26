@@ -1,30 +1,36 @@
 # Harper
 
-Harper is a terminal assistant that translates what you type into shell commands. It shows you what it's about to run, asks for your approval, and keeps a log of everything so you can review it later. You can connect it to cloud AI services like OpenAI, Sambanova, Gemini, and Cerebras, or run it completely offline with Ollama.
+Harper is a terminal assistant for code and shell work. It turns natural-language requests into explicit commands, shows exactly what it’s about to run, asks for approval when needed, and keeps a full audit trail.
+
+The goal isn’t to replace the shell with chat. It’s to make command-driven work faster while keeping control visible.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png?v=2" width="600" alt="Harper interface" />
+  <img src="https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png?v=2" width="600" alt="Harper interface" style="border-radius: 14px;" />
 </div>
 
-3+ themes (minimal, cyberpunk, etc). Set via `[ui]` in `config/local.toml`.
+Harper works with OpenAI, SambaNova, Gemini, and Cerebras, or fully offline using Ollama. It keeps session history, supports planner-style task tracking, and exposes an optional HTTP review API for editor integrations.
 
-Getting started is simple. Clone the repo, copy the example env file, and run it:
+To get started, clone the repo, copy the env file, and run the TUI:
 
 ```bash
 git clone https://github.com/harpertoken/harper.git
 cd harper
 cp .env.example .env
-cargo run -p harper-ui --bin harper
+cargo harper
 ```
 
-Running in a sandbox (bubblewrap on Linux, sandbox-exec on macOS) isolates shell commands for safety.
+You can use Harper to inspect files, patch code, run commands, and manage multi-step work without losing track of what’s happening. Commands stay explicit, risky actions can require approval, and every session keeps both an audit log and active plan state. If you want to plug it into an editor workflow, the HTTP review API is there for that.
 
-Pick your AI provider in the config file. If you want offline mode, set up Ollama first, then point Harper to it.
+Configuration is straightforward. Pick your model provider in `config/local.toml`, set UI options under `[ui]`, and point Harper to Ollama if you want offline mode. Sandboxed execution is supported on Linux (bubblewrap) and macOS (sandbox-exec), so commands can run in isolation when configured.
 
-When you're working on Harper itself, run `cargo fmt` to format, `cargo clippy --all-targets --all-features` to lint, and `cargo test` to test.
+If you are working on Harper itself, the normal development loop is:
 
-Check the docs for more on installation, configuration, and troubleshooting. Contributors should read CONTRIBUTING.md, and note that commercial use needs its own license.
+```bash
+cargo fmt
+cargo clippy --all-targets --all-features
+cargo test
+```
 
-Harper also includes an optional HTTP review API (port 8081) for editor integrations, plus a VS Code extension scaffold in `extensions/harper-review-vscode`.
+The workspace is split across `harper-core`, `harper-ui`, and supporting crates, so most changes touch both core logic and the TUI.
 
-Learn more at [`harper/server.html`](https://harpertoken.github.io/harper/server.html).
+Harper also includes an optional HTTP review API (port `8081`), a VS Code scaffold in `extensions/harper-review-vscode`, more docs at [`harper/server.html`](https://harpertoken.github.io/harper/server.html), and contributor guidance in `CONTRIBUTING.md`.

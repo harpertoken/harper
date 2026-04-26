@@ -201,6 +201,7 @@ pub async fn list_changed_files_with_policy(
         exec_policy,
         audit_ctx,
         approver.clone(),
+        None,
     )
     .await?;
 
@@ -211,8 +212,15 @@ pub async fn list_changed_files_with_policy(
             escaped
         );
         Some(
-            shell::execute_command(&command, config, exec_policy, audit_ctx, approver.clone())
-                .await?,
+            shell::execute_command(
+                &command,
+                config,
+                exec_policy,
+                audit_ctx,
+                approver.clone(),
+                None,
+            )
+            .await?,
         )
     } else {
         None

@@ -23,10 +23,12 @@ pub mod tools;
 pub use crate::core::error;
 
 // Re-export core types
+pub use crate::core::agents::{AgentsSource, ResolvedAgents};
 pub use crate::core::constants::VERSION;
 pub use crate::core::error::{HarperError, HarperResult};
 pub use crate::core::llm_client::call_llm;
 pub use crate::core::models::ProviderModels;
+pub use crate::core::plan::{PlanItem, PlanRuntime, PlanState, PlanStepStatus};
 pub use crate::core::{ApiConfig, ApiProvider, Message};
 
 // Re-export agent types
@@ -34,16 +36,18 @@ pub use crate::agent::chat::ChatService;
 
 // Re-export tools
 pub use crate::tools::{
-    api, code_analysis, db, filesystem, firmware, git, github, image, parsing, screenpipe, shell,
-    todo, web, ToolService,
+    api, code_analysis, db, filesystem, firmware, git, github, image, parsing, plan, screenpipe,
+    shell, todo, web, ToolService,
 };
 
 // Re-export memory utilities
 pub use crate::memory::cache::{CacheAligned, CacheAlignedBuffer, CACHE_LINE_BYTES};
+pub use crate::memory::session_service::SessionStateView;
 pub use crate::memory::storage::{
     clear_todos, create_connection, delete_messages, delete_session, delete_todo, init_db,
-    insert_command_log, list_sessions, load_command_logs_for_session, load_history,
-    load_latest_command_log, load_todos, save_message, save_session, save_todo, CommandLogEntry,
+    insert_command_log, list_sessions, load_active_agents, load_command_logs_for_session,
+    load_history, load_latest_command_log, load_plan_state, load_todos, save_active_agents,
+    save_message, save_plan_state, save_session, save_todo, CommandLogEntry,
 };
 pub use crate::runtime::utils;
 
@@ -281,6 +285,61 @@ mod tests {
 
         let todos_after = crate::memory::storage::load_todos(&conn)?;
         assert_eq!(todos_after.len(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_state_round_trip() -> Result<(), Box<dyn std::error::Error>> {
+        let (_temp, conn) = setup_test_db()?;
+        let plan = PlanState {
+            explanation: Some("Implement plan persistence".to_string()),
+            items: vec![
+                PlanItem {
+                    step: "Add storage".to_string(),
+                    status: PlanStepStatus::Completed,
+                },
+                PlanItem {
+                    step: "Render UI".to_string(),
+                    status: PlanStepStatus::InProgress,
+                },
+            ],
+            runtime: None,
+            updated_at: None,
+        };
+
+        save_plan_state(&conn, "session-plan-test", &plan)?;
+        let loaded =
+            load_plan_state(&conn, "session-plan-test")?.expect("plan state should be present");
+
+        assert_eq!(loaded.explanation, plan.explanation);
+        assert_eq!(loaded.items, plan.items);
+        assert!(loaded.updated_at.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn test_update_plan_tool_persists_items() -> Result<(), Box<dyn std::error::Error>> {
+        let (_temp, conn) = setup_test_db()?;
+        let args = serde_json::json!({
+            "explanation": "Tracking implementation progress",
+            "items": [
+                { "step": "Inspect dispatch", "status": "completed" },
+                { "step": "Persist plan", "status": "in_progress" }
+            ]
+        });
+
+        let result = crate::tools::plan::update_plan(&conn, "tool-plan-test", &args)?;
+        assert!(result.contains("Plan updated: 2 steps"));
+
+        let loaded =
+            load_plan_state(&conn, "tool-plan-test")?.expect("plan state should be present");
+        assert_eq!(loaded.items.len(), 2);
+        assert_eq!(
+            loaded.explanation.as_deref(),
+            Some("Tracking implementation progress")
+        );
+        assert_eq!(loaded.items[0].status, PlanStepStatus::Completed);
+        assert_eq!(loaded.items[1].status, PlanStepStatus::InProgress);
         Ok(())
     }
 

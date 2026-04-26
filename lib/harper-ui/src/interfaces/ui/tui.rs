@@ -24,14 +24,15 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use harper_core::agent::chat::ChatService;
-use harper_core::core::io_traits::UserApproval;
+use harper_core::core::io_traits::{RuntimeEventSink, UserApproval};
 use harper_core::core::ApiConfig;
 use harper_core::memory::session_service::SessionService;
 use harper_core::runtime::config::ExecPolicyConfig;
+use harper_core::{PlanState, ResolvedAgents, SessionStateView};
 use rusqlite::Connection;
 use turul_mcp_client::McpClient;
 
-use super::app::{AppState, ApprovalState, ChatState, TuiApp};
+use super::app::{AppState, ApprovalState, ChatState, CommandOutputState, TuiApp};
 use super::events::{self, EventResult};
 use super::theme::Theme;
 use super::widgets;
@@ -46,6 +47,10 @@ type ApprovalMessage = (String, String, Arc<Mutex<Option<oneshot::Sender<bool>>>
 /// Approval provider for TUI that uses channels to communicate with the UI loop
 pub struct TuiApproval {
     approval_tx: mpsc::Sender<ApprovalMessage>,
+}
+
+pub struct TuiRuntimeEvents {
+    ui_tx: mpsc::Sender<UiUpdate>,
 }
 
 #[async_trait]
@@ -73,6 +78,83 @@ impl UserApproval for TuiApproval {
     }
 }
 
+#[async_trait]
+impl RuntimeEventSink for TuiRuntimeEvents {
+    async fn plan_updated(&self, session_id: &str, plan: Option<PlanState>) -> HarperResult<()> {
+        self.ui_tx
+            .send(UiUpdate::PlanUpdated {
+                session_id: session_id.to_string(),
+                active_plan: plan,
+            })
+            .await
+            .map_err(|_| {
+                harper_core::core::error::HarperError::Command(
+                    "Failed to send runtime plan update".to_string(),
+                )
+            })?;
+        Ok(())
+    }
+
+    async fn agents_updated(
+        &self,
+        session_id: &str,
+        agents: Option<ResolvedAgents>,
+    ) -> HarperResult<()> {
+        self.ui_tx
+            .send(UiUpdate::AgentsUpdated {
+                session_id: session_id.to_string(),
+                active_agents: agents,
+            })
+            .await
+            .map_err(|_| {
+                harper_core::core::error::HarperError::Command(
+                    "Failed to send runtime AGENTS update".to_string(),
+                )
+            })?;
+        Ok(())
+    }
+
+    async fn activity_updated(&self, session_id: &str, status: Option<String>) -> HarperResult<()> {
+        self.ui_tx
+            .send(UiUpdate::ActivityUpdated {
+                session_id: session_id.to_string(),
+                status,
+            })
+            .await
+            .map_err(|_| {
+                harper_core::core::error::HarperError::Command(
+                    "Failed to send runtime activity update".to_string(),
+                )
+            })?;
+        Ok(())
+    }
+
+    async fn command_output_updated(
+        &self,
+        session_id: &str,
+        command: String,
+        chunk: String,
+        is_error: bool,
+        done: bool,
+    ) -> HarperResult<()> {
+        self.ui_tx
+            .send(UiUpdate::CommandOutputUpdated {
+                session_id: session_id.to_string(),
+                command,
+                chunk,
+                is_error,
+                done,
+            })
+            .await
+            .map_err(|_| {
+                harper_core::core::error::HarperError::Command(
+                    "Failed to send runtime command output update".to_string(),
+                )
+            })?;
+        Ok(())
+    }
+}
+
 /// Messages sent to the background chat worker
 enum WorkerMsg {
     SendMessage {
@@ -84,9 +166,25 @@ enum WorkerMsg {
 
 /// Messages sent from the background chat worker to the UI
 enum UiUpdate {
-    MessageProcessed {
+    MessageProcessed(SessionStateView),
+    ActivityUpdated {
         session_id: String,
-        messages: Vec<harper_core::core::Message>,
+        status: Option<String>,
+    },
+    CommandOutputUpdated {
+        session_id: String,
+        command: String,
+        chunk: String,
+        is_error: bool,
+        done: bool,
+    },
+    PlanUpdated {
+        session_id: String,
+        active_plan: Option<PlanState>,
+    },
+    AgentsUpdated {
+        session_id: String,
+        active_agents: Option<ResolvedAgents>,
     },
     SidebarEntries {
         entries: Vec<String>,
@@ -121,6 +219,7 @@ pub async fn run_tui(
     let mut terminal = Terminal::new(backend)?;
 
     let mut app = TuiApp::new();
+    app.model_label = format!("{:?} / {}", api_config.provider, api_config.model_name);
 
     // Set up channels for background worker
     let (worker_tx, mut worker_rx) = mpsc::channel::<WorkerMsg>(10);
@@ -161,6 +260,9 @@ pub async fn run_tui(
 
             let mut api_cache = harper_core::core::cache::new_api_cache();
             let approver = Arc::new(TuiApproval { approval_tx });
+            let runtime_events = Arc::new(TuiRuntimeEvents {
+                ui_tx: ui_tx_clone.clone(),
+            });
 
             while let Some(msg) = worker_rx.recv().await {
                 match msg {
@@ -178,7 +280,8 @@ pub async fn run_tui(
                             worker_custom_commands.clone(),
                             worker_exec_policy.clone(),
                         )
-                        .with_approver(approver.clone());
+                        .with_approver(approver.clone())
+                        .with_runtime_events(runtime_events.clone());
 
                         // Load existing history
                         let mut history =
@@ -190,11 +293,19 @@ pub async fn run_tui(
                             .await
                         {
                             Ok(_) => {
+                                let session_service = SessionService::new(&worker_conn);
+                                let session_view = session_service
+                                    .load_session_state_view(&session_id)
+                                    .unwrap_or_else(|_| SessionStateView {
+                                        session_id: session_id.clone(),
+                                        messages: history.clone(),
+                                        plan: None,
+                                        agents: None,
+                                        agents_rendered: None,
+                                        agents_effective_rendered: None,
+                                    });
                                 let _ = ui_tx_clone
-                                    .send(UiUpdate::MessageProcessed {
-                                        session_id,
-                                        messages: history,
-                                    })
+                                    .send(UiUpdate::MessageProcessed(session_view))
                                     .await;
                             }
                             Err(e) => {
@@ -208,6 +319,7 @@ pub async fn run_tui(
     });
 
     loop {
+        app.refresh_activity_status();
         terminal.draw(|f| widgets::draw(f, &app, theme))?;
 
         // Handle both UI events and worker updates
@@ -234,6 +346,9 @@ pub async fn run_tui(
                                     role: "user".to_string(),
                                     content: msg.clone(),
                                 });
+                                chat_state.awaiting_response = true;
+                                chat_state.command_output = None;
+                                app.set_activity_status(Some("thinking".to_string()));
 
                                 let _ = worker_tx.send(WorkerMsg::SendMessage {
                                     user_msg: msg,
@@ -256,13 +371,78 @@ pub async fn run_tui(
             update = ui_rx.recv() => {
                 if let Some(update) = update {
                     match update {
-                        UiUpdate::MessageProcessed { session_id, messages } => {
+                        UiUpdate::MessageProcessed(session_view) => {
+                            let mut should_clear_activity = false;
                             if let AppState::Chat(chat_state) = &mut app.state {
-                                if chat_state.session_id == session_id {
-                                    chat_state.messages = messages;
+                                if chat_state.session_id == session_view.session_id {
+                                    chat_state.messages = session_view.messages;
+                                    chat_state.awaiting_response = false;
+                                    chat_state.active_plan = session_view.plan;
+                                    chat_state.active_agents = session_view.agents;
+                                    chat_state.refresh_review_state();
+                                    should_clear_activity = true;
                                     if chat_state.sidebar_visible {
                                         spawn_sidebar_gathering(chat_state, &ui_tx);
                                     }
+                                }
+                            }
+                            if should_clear_activity {
+                                app.set_activity_status(None);
+                            }
+                        }
+                        UiUpdate::ActivityUpdated { session_id, status } => {
+                            let matches_session = if let AppState::Chat(chat_state) = &app.state {
+                                chat_state.session_id == session_id
+                            } else {
+                                false
+                            };
+                            if matches_session {
+                                app.set_activity_status(status);
+                            }
+                        }
+                        UiUpdate::CommandOutputUpdated {
+                            session_id,
+                            command,
+                            chunk,
+                            is_error,
+                            done,
+                        } => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                if chat_state.session_id == session_id {
+                                    let state = chat_state.command_output.get_or_insert(CommandOutputState {
+                                        command: command.clone(),
+                                        content: String::new(),
+                                        has_error: false,
+                                        done: false,
+                                    });
+                                    if state.command != command {
+                                        *state = CommandOutputState {
+                                            command,
+                                            content: String::new(),
+                                            has_error: is_error,
+                                            done,
+                                        };
+                                    }
+                                    state.content.push_str(&chunk);
+                                    state.has_error |= is_error;
+                                    state.done = done;
+                                }
+                            }
+                        }
+                        UiUpdate::PlanUpdated { session_id, active_plan } => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                if chat_state.session_id == session_id {
+                                    chat_state.active_plan = active_plan;
+                                }
+                            }
+                        }
+                        UiUpdate::AgentsUpdated {
+                            session_id,
+                            active_agents,
+                        } => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                if chat_state.session_id == session_id {
+                                    chat_state.active_agents = active_agents;
                                 }
                             }
                         }
@@ -272,6 +452,10 @@ pub async fn run_tui(
                             }
                         }
                         UiUpdate::Error(err) => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                chat_state.awaiting_response = false;
+                            }
+                            app.set_activity_status(None);
                             app.set_error_message(err);
                         }
                     }
@@ -282,6 +466,7 @@ pub async fn run_tui(
             approval = approval_rx.recv() => {
                 if let Some((prompt, command, tx)) = approval {
                     // Use the new pending_approval overlay instead of replacing state
+                    app.set_activity_status(Some(format!("waiting approval: {}", command)));
                     app.pending_approval = Some(ApprovalState {
                         prompt,
                         command,

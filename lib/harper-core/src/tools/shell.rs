@@ -17,6 +17,7 @@
 //! This module provides functionality for executing shell commands
 //! with safety checks and user approval.
 
+use crate::core::plan::PlanRuntime;
 use crate::core::{error::HarperError, ApiConfig};
 use crate::memory::storage::{self, CommandLogRecord};
 use crate::runtime::config::ExecPolicyConfig;
@@ -24,6 +25,8 @@ use colored::*;
 use rusqlite::Connection;
 use std::io::{self, Write};
 use std::time::Instant;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command as TokioCommand;
 
 const OUTPUT_PREVIEW_LIMIT: usize = 512;
 
@@ -34,8 +37,33 @@ pub struct CommandAuditContext<'a> {
     pub source: &'a str,
 }
 
-use crate::core::io_traits::UserApproval;
+use crate::core::io_traits::{RuntimeEventSink, UserApproval};
 use std::sync::Arc;
+
+async fn emit_activity_update(
+    runtime_events: Option<&Arc<dyn RuntimeEventSink>>,
+    session_id: Option<&str>,
+    status: Option<String>,
+) {
+    if let (Some(sink), Some(session_id)) = (runtime_events, session_id) {
+        let _ = sink.activity_updated(session_id, status).await;
+    }
+}
+
+async fn emit_command_output(
+    runtime_events: Option<&Arc<dyn RuntimeEventSink>>,
+    session_id: Option<&str>,
+    command: &str,
+    chunk: String,
+    is_error: bool,
+    done: bool,
+) {
+    if let (Some(sink), Some(session_id)) = (runtime_events, session_id) {
+        let _ = sink
+            .command_output_updated(session_id, command.to_string(), chunk, is_error, done)
+            .await;
+    }
+}
 
 /// Execute a shell command with safety checks
 pub async fn execute_command(
@@ -44,6 +72,7 @@ pub async fn execute_command(
     exec_policy: &ExecPolicyConfig,
     audit_ctx: Option<&CommandAuditContext<'_>>,
     approver: Option<Arc<dyn UserApproval>>,
+    runtime_events: Option<Arc<dyn RuntimeEventSink>>,
 ) -> crate::core::error::HarperResult<String> {
     let command_str = if let Some(pos) = response.find(' ') {
         response[pos..].trim_start().trim_end_matches(']')
@@ -173,6 +202,26 @@ pub async fn execute_command(
 
     // Ask for approval if required
     if requires_approval {
+        emit_activity_update(
+            runtime_events.as_ref(),
+            audit_ctx.and_then(|ctx| ctx.session_id),
+            Some(format!("waiting approval: {}", command_str)),
+        )
+        .await;
+        if let Some(ctx) =
+            audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
+        {
+            let _ = crate::tools::plan::set_plan_runtime(
+                ctx.0,
+                ctx.1,
+                Some(PlanRuntime {
+                    active_tool: Some("run_command".to_string()),
+                    active_command: Some(command_str.to_string()),
+                    active_status: Some("waiting_approval".to_string()),
+                }),
+            );
+            emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
+        }
         let is_approved = if let Some(appr) = approver {
             appr.approve("Execute command?", command_str).await?
         } else {
@@ -201,6 +250,26 @@ pub async fn execute_command(
         };
 
         if !is_approved {
+            emit_activity_update(
+                runtime_events.as_ref(),
+                audit_ctx.and_then(|ctx| ctx.session_id),
+                Some("approval rejected".to_string()),
+            )
+            .await;
+            if let Some(ctx) =
+                audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
+            {
+                let _ = crate::tools::plan::set_plan_runtime(
+                    ctx.0,
+                    ctx.1,
+                    Some(PlanRuntime {
+                        active_tool: Some("run_command".to_string()),
+                        active_command: Some(command_str.to_string()),
+                        active_status: Some("blocked".to_string()),
+                    }),
+                );
+                emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
+            }
             maybe_log_command(
                 audit_ctx,
                 command_str,
@@ -218,11 +287,34 @@ pub async fn execute_command(
         approved = true;
     }
 
+    if let Some(ctx) =
+        audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
+    {
+        emit_activity_update(
+            runtime_events.as_ref(),
+            Some(ctx.1),
+            Some(format!("running command: {}", command_str)),
+        )
+        .await;
+        let _ = crate::tools::plan::set_plan_runtime(
+            ctx.0,
+            ctx.1,
+            Some(PlanRuntime {
+                active_tool: Some("run_command".to_string()),
+                active_command: Some(command_str.to_string()),
+                active_status: Some("running".to_string()),
+            }),
+        );
+        emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
+    }
+
     let start = Instant::now();
-    let output = std::process::Command::new("sh")
+    let mut child = TokioCommand::new("sh")
         .arg("-c")
         .arg(command_str)
-        .output()
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|e| {
             let err_msg = format!("Failed to execute command: {}", e);
             maybe_log_command(
@@ -239,13 +331,85 @@ pub async fn execute_command(
             );
             HarperError::Command(err_msg)
         })?;
-    let duration_ms = start.elapsed().as_millis() as i64;
-    let exit_code = output.status.code();
-    let stdout_preview = bytes_to_preview(&output.stdout);
-    let stderr_preview = bytes_to_preview(&output.stderr);
 
-    let result = if output.status.success() {
-        let out = String::from_utf8_lossy(&output.stdout).to_string();
+    let mut stdout_task = None;
+    if let Some(stdout) = child.stdout.take() {
+        let runtime_events = runtime_events.clone();
+        let session_id = audit_ctx.and_then(|ctx| ctx.session_id).map(str::to_string);
+        let command = command_str.to_string();
+        stdout_task = Some(tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            let mut collected = String::new();
+            while let Ok(Some(line)) = lines.next_line().await {
+                collected.push_str(&line);
+                collected.push('\n');
+                emit_command_output(
+                    runtime_events.as_ref(),
+                    session_id.as_deref(),
+                    &command,
+                    format!("{}\n", line),
+                    false,
+                    false,
+                )
+                .await;
+            }
+            collected
+        }));
+    }
+
+    let mut stderr_task = None;
+    if let Some(stderr) = child.stderr.take() {
+        let runtime_events = runtime_events.clone();
+        let session_id = audit_ctx.and_then(|ctx| ctx.session_id).map(str::to_string);
+        let command = command_str.to_string();
+        stderr_task = Some(tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            let mut collected = String::new();
+            while let Ok(Some(line)) = lines.next_line().await {
+                collected.push_str(&line);
+                collected.push('\n');
+                emit_command_output(
+                    runtime_events.as_ref(),
+                    session_id.as_deref(),
+                    &command,
+                    format!("{}\n", line),
+                    true,
+                    false,
+                )
+                .await;
+            }
+            collected
+        }));
+    }
+
+    let status = child.wait().await.map_err(|e| {
+        let err_msg = format!("Failed to wait for command: {}", e);
+        HarperError::Command(err_msg)
+    })?;
+    let duration_ms = start.elapsed().as_millis() as i64;
+    let stdout_text = match stdout_task {
+        Some(task) => task.await.unwrap_or_default(),
+        None => String::new(),
+    };
+    let stderr_text = match stderr_task {
+        Some(task) => task.await.unwrap_or_default(),
+        None => String::new(),
+    };
+    emit_command_output(
+        runtime_events.as_ref(),
+        audit_ctx.and_then(|ctx| ctx.session_id),
+        command_str,
+        String::new(),
+        false,
+        true,
+    )
+    .await;
+    let exit_code = status.code();
+    let stdout_preview = bytes_to_preview(stdout_text.as_bytes());
+    let stderr_preview = bytes_to_preview(stderr_text.as_bytes());
+
+    let result = if status.success() {
+        let out = stdout_text;
         maybe_log_command(
             audit_ctx,
             command_str,
@@ -260,7 +424,7 @@ pub async fn execute_command(
         );
         out
     } else {
-        let err_output = String::from_utf8_lossy(&output.stderr).to_string();
+        let err_output = stderr_text;
         maybe_log_command(
             audit_ctx,
             command_str,
@@ -276,7 +440,27 @@ pub async fn execute_command(
         err_output
     };
 
+    if let Some(ctx) =
+        audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
+    {
+        let _ = crate::tools::plan::set_plan_runtime(ctx.0, ctx.1, None);
+        emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
+    }
+
     Ok(result)
+}
+
+async fn emit_plan_update(
+    runtime_events: Option<&Arc<dyn RuntimeEventSink>>,
+    conn: &Connection,
+    session_id: &str,
+) {
+    if let Some(sink) = runtime_events {
+        let plan = crate::memory::storage::load_plan_state(conn, session_id)
+            .ok()
+            .flatten();
+        let _ = sink.plan_updated(session_id, plan).await;
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

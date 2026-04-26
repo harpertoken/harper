@@ -56,6 +56,29 @@ print_status() {
     esac
 }
 
+run_check_with_output() {
+    local fail_message=$1
+    local tip_message=$2
+    shift 2
+
+    local log_file
+    log_file=$(mktemp)
+
+    if "$@" >"$log_file" 2>&1; then
+        rm -f "$log_file"
+        return 0
+    fi
+
+    print_status "FAIL" "$fail_message"
+    if [ -n "$tip_message" ]; then
+        echo "$tip_message"
+    fi
+    echo "--- command output ---"
+    cat "$log_file"
+    rm -f "$log_file"
+    return 1
+}
+
 # Check if we're in the right directory
 if [ ! -f "Cargo.toml" ]; then
     print_status "FAIL" "Not in Harper project root (Cargo.toml not found)"
@@ -67,44 +90,48 @@ print_status "INFO" "Starting validation checks..."
 # 1. Rust Compilation Check
 echo ""
 print_status "INFO" "[1/14] Checking Rust compilation..."
-if cargo check --workspace --quiet 2>/dev/null; then
+if run_check_with_output \
+    "Rust compilation failed" \
+    "Run 'cargo check --workspace' for details" \
+    cargo check --workspace --quiet; then
     print_status "PASS" "Rust compilation successful ✓"
 else
-    print_status "FAIL" "Rust compilation failed"
-    echo "Run 'cargo check' for details"
     exit 1
 fi
 
 # 2. Clippy Linting
 echo ""
 print_status "INFO" "2. Running Clippy linter..."
-if cargo clippy --all-targets --all-features --workspace --quiet -- -A clippy::pedantic -D warnings 2>/dev/null; then
+if run_check_with_output \
+    "Clippy reported issues that need attention" \
+    "→ Tip: run 'cargo clippy --all-targets --all-features --workspace -- -A clippy::pedantic -D warnings' locally" \
+    cargo clippy --all-targets --all-features --workspace --quiet -- -A clippy::pedantic -D warnings; then
     print_status "PASS" "Clippy linting passed"
 else
-    print_status "FAIL" "Clippy reported issues that need attention"
-    echo "→ Tip: run 'cargo clippy' locally to inspect them calmly"
     exit 1
 fi
 
 # 3. Code Formatting
 echo ""
 print_status "INFO" "3. Checking code formatting..."
-if cargo fmt --all -- --check 2>/dev/null; then
+if run_check_with_output \
+    "Code formatting issues found" \
+    "Run 'cargo fmt --all' to fix formatting" \
+    cargo fmt --all -- --check; then
     print_status "PASS" "Code formatting correct"
 else
-    print_status "FAIL" "Code formatting issues found"
-    echo "Run 'cargo fmt' to fix formatting"
     exit 1
 fi
 
 # 4. Unit Tests
 echo ""
 print_status "INFO" "4. Running unit tests..."
-if cargo test --workspace --quiet 2>/dev/null; then
+if run_check_with_output \
+    "Unit tests failed" \
+    "Run 'cargo test --workspace' for details" \
+    cargo test --workspace --quiet; then
     print_status "PASS" "All unit tests passed"
 else
-    print_status "FAIL" "Unit tests failed"
-    echo "Run 'cargo test' for details"
     exit 1
 fi
 
@@ -170,8 +197,16 @@ fi
 # 9. TODO Comments Check
 echo ""
 print_status "INFO" "9. Checking for TODO comments..."
-# Look for TODO/FIXME/XXX in comments, not in string literals or identifiers
-TODO_COUNT=$(grep -r "(//|///|/\*|\*|//!).*TODO|(//|///|/\*|\*|//!).*FIXME|(//|///|/\*|\*|//!).*XXX" src/ --include="*.rs" 2>/dev/null | wc -l || echo "0")
+# Look for TODO/FIXME/XXX in Rust comments
+TODO_COUNT=$(
+    rg --glob '*.rs' --count-matches \
+        '(//|///|/\*|\*|//!).*(TODO|FIXME|XXX)' \
+        src/ 2>/dev/null || true
+)
+TODO_COUNT=$(
+    printf '%s\n' "$TODO_COUNT" \
+        | awk -F: '{sum += $NF} END {print sum + 0}'
+)
 if [ "$TODO_COUNT" -eq "0" ]; then
     print_status "PASS" "No unresolved TODO comments found"
 else
@@ -182,11 +217,12 @@ fi
 # 10. Documentation Check
 echo ""
 print_status "INFO" "10. Checking documentation..."
-if cargo doc --no-deps --workspace --quiet 2>/dev/null; then
+if run_check_with_output \
+    "Documentation build failed" \
+    "Run 'cargo doc --no-deps --workspace' for details" \
+    cargo doc --no-deps --workspace --quiet; then
     print_status "PASS" "Documentation builds successfully"
 else
-    print_status "FAIL" "Documentation build failed"
-    echo "Run 'cargo doc' for details"
     exit 1
 fi
 
@@ -194,12 +230,14 @@ fi
 echo ""
 print_status "INFO" "11. Checking license compliance..."
 if [ -x "$HOME/.cargo/bin/cargo-deny" ]; then
-    # Run cargo-deny but allow warnings (duplicate versions are not violations)
-    if "$HOME/.cargo/bin/cargo-deny" check >/dev/null 2>&1; then
+    # Check only policy areas relevant to repository validation here.
+    # Advisories depend on an external database and can fail for environment reasons.
+    if run_check_with_output \
+        "License compliance issues found" \
+        "Run '$HOME/.cargo/bin/cargo-deny check licenses bans sources' for details" \
+        "$HOME/.cargo/bin/cargo-deny" check licenses bans sources; then
         print_status "PASS" "License compliance check passed"
     else
-        print_status "FAIL" "License compliance issues found"
-        echo "Run '$HOME/.cargo/bin/cargo-deny check' for details"
         exit 1
     fi
 else
@@ -227,7 +265,10 @@ fi
 # 14. Build Optimization Check
 echo ""
 print_status "INFO" "14. Checking build optimization..."
-if cargo build --release --workspace --quiet 2>/dev/null; then
+if run_check_with_output \
+    "Release build failed" \
+    "Run 'cargo build --release --workspace' for details" \
+    cargo build --release --workspace --quiet; then
     if command -v stat >/dev/null 2>&1; then
         BIN=$(cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.packages[0].targets[] | select(.kind[]=="bin") | .name' 2>/dev/null || echo "harper")
         BINARY_SIZE=$(stat -f%z "target/release/$BIN" 2>/dev/null || stat -c%s "target/release/$BIN" 2>/dev/null || echo "unknown")
@@ -236,7 +277,6 @@ if cargo build --release --workspace --quiet 2>/dev/null; then
     fi
     print_status "PASS" "Release build successful (binary size: $BINARY_SIZE bytes)"
 else
-    print_status "FAIL" "Release build failed"
     exit 1
 fi
 

@@ -22,9 +22,9 @@ use uuid::Uuid;
 
 // Keyboard shortcut constants
 const HELP_MESSAGE: &str =
-    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Enter:Select | X:Exit | W:Web | B:Sidebar";
+    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | X:Exit | W:Web | B:Sidebar | A:Agents | F:Findings | M:Msgs | C:ID";
 
-use super::app::{AppState, ChatState, SessionInfo, TuiApp};
+use super::app::{AppState, ChatState, NavigationFocus, SessionInfo, TuiApp};
 use harper_core::memory::session_service::SessionService;
 
 // Constants
@@ -37,10 +37,24 @@ pub enum EventResult {
     Quit,
 }
 
-fn create_chat_state(session_id: String, messages: Vec<harper_core::core::Message>) -> ChatState {
-    ChatState {
+fn create_chat_state(
+    session_id: String,
+    messages: Vec<harper_core::core::Message>,
+    active_plan: Option<harper_core::PlanState>,
+    active_agents: Option<harper_core::ResolvedAgents>,
+) -> ChatState {
+    let mut chat_state = ChatState {
         session_id,
         messages,
+        awaiting_response: false,
+        active_plan,
+        active_agents,
+        active_review: None,
+        review_selected: 0,
+        navigation_focus: NavigationFocus::Messages,
+        command_output: None,
+        agents_panel_expanded: false,
+        agents_scroll_offset: 0,
         input: String::new(),
         web_search: false,
         web_search_enabled: false,
@@ -50,7 +64,9 @@ fn create_chat_state(session_id: String, messages: Vec<harper_core::core::Messag
         completion_prefix: None,
         sidebar_visible: false,
         sidebar_entries: Vec::new(),
-    }
+    };
+    chat_state.refresh_review_state();
+    chat_state
 }
 
 fn record_approval_history(app: &mut TuiApp, command: &str, approved: bool) {
@@ -69,7 +85,7 @@ fn load_sessions_into_state(app: &mut TuiApp, session_service: &SessionService) 
                 .into_iter()
                 .map(|s| SessionInfo {
                     id: s.id.clone(),
-                    name: s.id, // Use ID as name for now
+                    name: s.title.unwrap_or(s.id),
                     created_at: s.created_at,
                 })
                 .collect();
@@ -88,7 +104,7 @@ fn load_export_sessions_into_state(app: &mut TuiApp, session_service: &SessionSe
                 .into_iter()
                 .map(|s| SessionInfo {
                     id: s.id.clone(),
-                    name: s.id, // Use ID as name for now
+                    name: s.title.unwrap_or(s.id),
                     created_at: s.created_at,
                 })
                 .collect();
@@ -115,7 +131,7 @@ pub fn handle_event(
             // PRIORITIZE: Handle input for the security approval modal if active
             if let Some(approval) = &mut app.pending_approval {
                 match key.code {
-                    KeyCode::Char('y') | KeyCode::Char('Y') => {
+                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
                         let command = approval.command.clone();
                         if let Some(tx) = approval
                             .tx
@@ -126,6 +142,7 @@ pub fn handle_event(
                             let _ = tx.send(true);
                         }
                         app.pending_approval = None;
+                        app.set_activity_status(Some(format!("resuming: {}", command)));
                         record_approval_history(app, &command, true);
                         return EventResult::Continue;
                     }
@@ -140,6 +157,7 @@ pub fn handle_event(
                             let _ = tx.send(false);
                         }
                         app.pending_approval = None;
+                        app.set_activity_status(None);
                         record_approval_history(app, &command, false);
                         return EventResult::Continue;
                     }
@@ -243,6 +261,65 @@ pub fn handle_event(
                         }
                         return EventResult::Continue;
                     }
+                    KeyCode::Char('a') => {
+                        let mut status_message = None;
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            if chat_state.active_agents.is_some() {
+                                if !chat_state.agents_panel_expanded {
+                                    chat_state.agents_panel_expanded = true;
+                                    chat_state.agents_scroll_offset = 0;
+                                    chat_state.set_navigation_focus(NavigationFocus::Agents);
+                                    status_message =
+                                        Some("AGENTS panel expanded; focus on agents".to_string());
+                                } else if matches!(
+                                    chat_state.navigation_focus,
+                                    NavigationFocus::Agents
+                                ) {
+                                    chat_state.agents_panel_expanded = false;
+                                    chat_state.agents_scroll_offset = 0;
+                                    chat_state.set_navigation_focus(NavigationFocus::Messages);
+                                    status_message = Some(
+                                        "AGENTS panel collapsed; focus on messages".to_string(),
+                                    );
+                                } else {
+                                    chat_state.set_navigation_focus(NavigationFocus::Agents);
+                                    status_message = Some("Focus on AGENTS panel".to_string());
+                                }
+                            } else {
+                                status_message = Some("No active AGENTS sources".to_string());
+                            }
+                        }
+                        if let Some(message) = status_message {
+                            app.set_status_message(message);
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('f') => {
+                        let mut status_message = None;
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            if chat_state
+                                .active_review
+                                .as_ref()
+                                .is_some_and(|review| !review.findings.is_empty())
+                            {
+                                chat_state.set_navigation_focus(NavigationFocus::Review);
+                                status_message = Some("Focus on review findings".to_string());
+                            } else {
+                                status_message = Some("No review findings".to_string());
+                            }
+                        }
+                        if let Some(message) = status_message {
+                            app.set_status_message(message);
+                        }
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char('m') => {
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            chat_state.set_navigation_focus(NavigationFocus::Messages);
+                            app.set_status_message("Focus on messages".to_string());
+                        }
+                        return EventResult::Continue;
+                    }
                     KeyCode::Char('y') => {
                         app.previous();
                         return EventResult::Continue;
@@ -309,6 +386,9 @@ pub fn handle_event(
                     }
                 }
                 KeyCode::Enter => return handle_enter(app, session_service),
+                KeyCode::Right if preview_selected_session(app, session_service) => {
+                    return EventResult::Continue;
+                }
                 KeyCode::Tab => handle_tab(app),
                 KeyCode::Char(c) => {
                     // Handle q for quitting/returning only in non-input states
@@ -319,6 +399,9 @@ pub fn handle_event(
                             app.state = AppState::Menu(0);
                             return EventResult::Continue;
                         }
+                    }
+                    if c == 'l' && preview_selected_session(app, session_service) {
+                        return EventResult::Continue;
                     }
                     handle_char_input(app, c)
                 }
@@ -339,8 +422,12 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
         AppState::Menu(selected) => {
             match *selected {
                 0 => {
-                    app.state =
-                        AppState::Chat(create_chat_state(Uuid::new_v4().to_string(), vec![]));
+                    app.state = AppState::Chat(Box::new(create_chat_state(
+                        Uuid::new_v4().to_string(),
+                        vec![],
+                        None,
+                        None,
+                    )));
                     return EventResult::GatherSidebarEntries;
                 } // Start Chat
                 1 => load_sessions_into_state(app, session_service),
@@ -363,9 +450,14 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             if !sessions.is_empty() && *selected < sessions.len() =>
         {
             let session = &sessions[*selected];
-            match session_service.view_session_data(&session.id) {
-                Ok(messages) => {
-                    app.state = AppState::Chat(create_chat_state(session.id.clone(), messages));
+            match session_service.load_session_state_view(&session.id) {
+                Ok(session_view) => {
+                    app.state = AppState::Chat(Box::new(create_chat_state(
+                        session_view.session_id,
+                        session_view.messages,
+                        session_view.plan,
+                        session_view.agents,
+                    )));
                     return EventResult::GatherSidebarEntries;
                 }
                 Err(e) => {
@@ -390,9 +482,43 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             3 => handle_git_commands(app),
             _ => {}
         },
+        AppState::ViewSession(session_id, _, _) => {
+            match session_service.load_session_state_view(session_id) {
+                Ok(session_view) => {
+                    app.state = AppState::Chat(Box::new(create_chat_state(
+                        session_view.session_id,
+                        session_view.messages,
+                        session_view.plan,
+                        session_view.agents,
+                    )));
+                    return EventResult::GatherSidebarEntries;
+                }
+                Err(e) => app.set_error_message(format!("Error loading session: {}", e)),
+            }
+        }
         _ => {}
     }
     EventResult::Continue
+}
+
+fn preview_selected_session(app: &mut TuiApp, session_service: &SessionService) -> bool {
+    let AppState::Sessions(sessions, selected) = &app.state else {
+        return false;
+    };
+    if sessions.is_empty() || *selected >= sessions.len() {
+        return false;
+    }
+    let session = &sessions[*selected];
+    match session_service.view_session_data(&session.id) {
+        Ok(messages) => {
+            app.state = AppState::ViewSession(session.id.clone(), messages, 0);
+            true
+        }
+        Err(e) => {
+            app.set_error_message(format!("Error loading session preview: {}", e));
+            true
+        }
+    }
 }
 
 fn handle_git_commands(app: &mut TuiApp) {

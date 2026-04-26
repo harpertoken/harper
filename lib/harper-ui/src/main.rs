@@ -162,9 +162,15 @@ async fn main() -> Result<(), HarperError> {
 
         let conn_clone = conn.clone();
         let api_config_clone = api_config.clone();
+        let exec_policy_clone = exec_policy.clone();
         tokio::spawn(async move {
-            if let Err(e) =
-                harper_core::server::run_server(&addr, conn_clone, api_config_clone).await
+            if let Err(e) = harper_core::server::run_server(
+                &addr,
+                conn_clone,
+                api_config_clone,
+                exec_policy_clone,
+            )
+            .await
             {
                 eprintln!("Server error: {}", e);
             }

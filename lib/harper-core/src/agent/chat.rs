@@ -41,7 +41,7 @@ use rustyline::Editor;
 use rustyline::Helper;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use turul_mcp_client::{McpClient, ResourceContent};
 
@@ -173,7 +173,7 @@ impl Completer for FileCompleter {
     }
 }
 
-use crate::core::io_traits::UserApproval;
+use crate::core::io_traits::{RuntimeEventSink, UserApproval};
 use std::sync::Arc;
 
 /// Chat service for handling conversations
@@ -189,6 +189,7 @@ pub struct ChatService<'a> {
     custom_commands: HashMap<String, String>,
     exec_policy: ExecPolicyConfig,
     approver: Option<Arc<dyn UserApproval>>,
+    runtime_events: Option<Arc<dyn RuntimeEventSink>>,
     background_tasks: TaskScheduler<ChatBackgroundTask>,
     todo_reminder_armed: bool,
     last_audit_refresh: Option<Instant>,
@@ -219,6 +220,7 @@ impl<'a> ChatService<'a> {
             custom_commands,
             exec_policy,
             approver: None,
+            runtime_events: None,
             background_tasks: TaskScheduler::new(),
             todo_reminder_armed: false,
             last_audit_refresh: None,
@@ -228,6 +230,11 @@ impl<'a> ChatService<'a> {
     /// Set a custom user approval provider
     pub fn with_approver(mut self, approver: Arc<dyn UserApproval>) -> Self {
         self.approver = Some(approver);
+        self
+    }
+
+    pub fn with_runtime_events(mut self, runtime_events: Arc<dyn RuntimeEventSink>) -> Self {
+        self.runtime_events = Some(runtime_events);
         self
     }
 
@@ -249,6 +256,7 @@ impl<'a> ChatService<'a> {
                 sandbox: None,
             },
             approver: None,
+            runtime_events: None,
             background_tasks: TaskScheduler::new(),
             todo_reminder_armed: false,
             last_audit_refresh: None,
@@ -690,6 +698,7 @@ impl<'a> ChatService<'a> {
                     &self.exec_policy,
                     Some(&audit_ctx),
                     self.approver.clone(),
+                    self.runtime_events.clone(),
                 )
                 .await
                 {
@@ -810,14 +819,60 @@ impl<'a> ChatService<'a> {
             .timeout(std::time::Duration::from_secs(90))
             .build()?;
         let mut history_for_llm = history.clone();
+        if let Some(plan_prompt) = self.plan_prompt_for_request(history, session_id)? {
+            history_for_llm.push(Message {
+                role: "system".to_string(),
+                content: plan_prompt,
+            });
+        }
+        self.emit_activity_update(session_id, Some("thinking".to_string()));
         let mut response = self.call_llm(&client, &history_for_llm).await?;
         let mut executed_tool_calls: HashSet<String> = HashSet::new();
+        let mut injected_agents_guidance: HashSet<String> = HashSet::new();
         let mut last_tool_content: Option<String> = None;
+        let mut forced_tool_retry = false;
+        let last_user_msg = history
+            .iter()
+            .rev()
+            .find(|message| message.role == "user")
+            .map(|message| message.content.clone())
+            .unwrap_or_default();
 
         for _ in 0..MAX_TOOL_ROUNDS {
             let clean_response = Self::sanitize_model_response(&response);
             let tool_signature = Self::tool_call_signature(&clean_response);
-            let dedupe_key = tool_signature.unwrap_or_else(|| clean_response.clone());
+            let dedupe_key = tool_signature
+                .clone()
+                .unwrap_or_else(|| clean_response.clone());
+            if let Some(required_tool) =
+                Self::forced_tool_retry_target(&last_user_msg, &clean_response, forced_tool_retry)
+            {
+                forced_tool_retry = true;
+                history_for_llm.push(Message {
+                    role: "system".to_string(),
+                    content: format!(
+                        "The user request requires an actual tool call. Do not answer with prose. Respond now with exactly one JSON tool call using `{}`.",
+                        required_tool
+                    ),
+                });
+                self.emit_activity_update(session_id, Some("thinking".to_string()));
+                response = self.call_llm(&client, &history_for_llm).await?;
+                continue;
+            }
+            if let Some(agents_prompt) = self.agents_guidance_for_tool_call(
+                &clean_response,
+                session_id,
+                &injected_agents_guidance,
+            )? {
+                injected_agents_guidance.insert(dedupe_key.clone());
+                history_for_llm.push(Message {
+                    role: "system".to_string(),
+                    content: agents_prompt,
+                });
+                self.emit_activity_update(session_id, Some("thinking".to_string()));
+                response = self.call_llm(&client, &history_for_llm).await?;
+                continue;
+            }
             if executed_tool_calls.contains(&dedupe_key) {
                 if let Some(content) = last_tool_content {
                     return Ok(format!("Tool result:\n{}", content));
@@ -834,6 +889,9 @@ impl<'a> ChatService<'a> {
                 );
                 if let Some(approver) = &self.approver {
                     tool_service = tool_service.with_approver(approver.clone());
+                }
+                if let Some(runtime_events) = &self.runtime_events {
+                    tool_service = tool_service.with_runtime_events(runtime_events.clone());
                 }
                 tool_service
                     .handle_tool_use(
@@ -863,6 +921,203 @@ impl<'a> ChatService<'a> {
         }
 
         Ok(response)
+    }
+
+    fn agents_guidance_for_tool_call(
+        &self,
+        tool_call: &str,
+        session_id: &str,
+        injected_agents_guidance: &HashSet<String>,
+    ) -> Result<Option<String>, HarperError> {
+        let Some(tool_signature) = Self::tool_call_signature(tool_call) else {
+            return Ok(None);
+        };
+        if injected_agents_guidance.contains(&tool_signature) {
+            return Ok(None);
+        }
+
+        let target_paths = ToolService::target_paths_for_tool_call(tool_call);
+        if target_paths.is_empty() {
+            crate::memory::storage::save_active_agents(self.conn, session_id, None)?;
+            self.emit_agents_update(session_id, None);
+            return Ok(None);
+        }
+
+        let cwd = std::env::current_dir().map_err(|err| {
+            HarperError::Io(format!(
+                "Failed to resolve current working directory: {}",
+                err
+            ))
+        })?;
+        let target_refs: Vec<&Path> = target_paths.iter().map(PathBuf::as_path).collect();
+        let resolved_agents = crate::core::agents::resolve_agents_for_targets(&cwd, target_refs)?;
+        crate::memory::storage::save_active_agents(self.conn, session_id, Some(&resolved_agents))?;
+        self.emit_agents_update(session_id, Some(resolved_agents.clone()));
+        let Some(rendered) = resolved_agents.render_for_prompt() else {
+            return Ok(None);
+        };
+
+        Ok(Some(format!(
+            "Before executing this path-targeting tool, apply these scoped AGENTS.md instructions for the affected files:\n{}",
+            rendered
+        )))
+    }
+
+    fn emit_agents_update(
+        &self,
+        session_id: &str,
+        agents: Option<crate::core::agents::ResolvedAgents>,
+    ) {
+        let Some(runtime_events) = &self.runtime_events else {
+            return;
+        };
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let runtime_events = runtime_events.clone();
+            let session_id = session_id.to_string();
+            handle.spawn(async move {
+                let _ = runtime_events.agents_updated(&session_id, agents).await;
+            });
+        }
+    }
+
+    fn emit_activity_update(&self, session_id: &str, status: Option<String>) {
+        let Some(runtime_events) = &self.runtime_events else {
+            return;
+        };
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let runtime_events = runtime_events.clone();
+            let session_id = session_id.to_string();
+            handle.spawn(async move {
+                let _ = runtime_events.activity_updated(&session_id, status).await;
+            });
+        }
+    }
+
+    fn plan_prompt_for_request(
+        &self,
+        history: &[Message],
+        session_id: &str,
+    ) -> Result<Option<String>, HarperError> {
+        let Some(last_user_msg) = history
+            .iter()
+            .rev()
+            .find(|message| message.role == "user")
+            .map(|message| message.content.trim())
+        else {
+            return Ok(None);
+        };
+
+        if !Self::request_needs_plan(last_user_msg) {
+            return Ok(None);
+        }
+
+        let existing_plan = crate::memory::storage::load_plan_state(self.conn, session_id)?;
+        let has_active_plan = existing_plan.as_ref().is_some_and(|plan| {
+            !plan.items.is_empty()
+                && plan.items.iter().any(|item| {
+                    !matches!(item.status, crate::core::plan::PlanStepStatus::Completed)
+                })
+        });
+
+        if has_active_plan {
+            return Ok(Some(
+                "This is an active multi-step task. Refresh the plan with update_plan if the steps or statuses have changed before continuing."
+                    .to_string(),
+            ));
+        }
+
+        Ok(Some(
+            "This request looks multi-step. Before doing substantial work, call update_plan with concise steps and exactly one in_progress item."
+                .to_string(),
+        ))
+    }
+
+    fn request_needs_plan(user_msg: &str) -> bool {
+        let lower = user_msg.to_ascii_lowercase();
+        let word_count = lower.split_whitespace().count();
+        if word_count < 8 {
+            return false;
+        }
+
+        let action_markers = [
+            "fix",
+            "implement",
+            "update",
+            "refactor",
+            "debug",
+            "investigate",
+            "wire",
+            "integrate",
+            "add",
+            "build",
+            "make",
+        ];
+        let sequencing_markers = [
+            " then ", " and ", " also ", " after ", " before ", " next ", " while ",
+        ];
+
+        let has_action = action_markers.iter().any(|marker| lower.contains(marker));
+        let has_sequence = sequencing_markers
+            .iter()
+            .any(|marker| lower.contains(marker))
+            || lower.contains(',')
+            || lower.contains(':');
+
+        has_action && (has_sequence || word_count >= 14)
+    }
+
+    fn request_requires_tool(user_msg: &str) -> Option<&'static str> {
+        let lower = user_msg.to_ascii_lowercase();
+        if lower.contains("git diff")
+            || lower.contains("what changed")
+            || lower.contains("show diff")
+        {
+            return Some("git_diff");
+        }
+        if lower.contains("git status") || lower.contains("status of repo") {
+            return Some("git_status");
+        }
+        if (lower.contains("read ")
+            || lower.contains("show ")
+            || lower.contains("open ")
+            || lower.contains("view ")
+            || lower.contains("look at "))
+            && (lower.contains(".rs")
+                || lower.contains(".md")
+                || lower.contains(".toml")
+                || lower.contains("file"))
+        {
+            return Some("read_file");
+        }
+        if (lower.contains("fix ")
+            || lower.contains("edit ")
+            || lower.contains("change ")
+            || lower.contains("update "))
+            && (lower.contains("file") || lower.contains(".rs") || lower.contains(".md"))
+        {
+            return Some("search_replace");
+        }
+        if lower.contains("run ")
+            || lower.contains("execute ")
+            || lower.contains("make ")
+            || lower.contains("cargo ")
+            || lower.contains("grep ")
+            || lower.contains("rg ")
+        {
+            return Some("run_command");
+        }
+        None
+    }
+
+    fn forced_tool_retry_target<'b>(
+        user_msg: &'b str,
+        model_response: &str,
+        forced_tool_retry: bool,
+    ) -> Option<&'b str> {
+        if forced_tool_retry || Self::tool_call_signature(model_response).is_some() {
+            return None;
+        }
+        Self::request_requires_tool(user_msg)
     }
 
     fn sanitize_model_response(response: &str) -> String {
@@ -988,6 +1243,7 @@ impl<'a> ChatService<'a> {
                 &self.exec_policy,
                 Some(&audit_ctx),
                 self.approver.clone(),
+                self.runtime_events.clone(),
             )
             .await?;
             if output.trim().is_empty() {
@@ -1148,6 +1404,14 @@ impl<'a> ChatService<'a> {
             role: "user".to_string(),
             content: content.to_string(),
         });
+        let user_message_count = history
+            .iter()
+            .filter(|message| message.role == "user")
+            .count();
+        if user_message_count == 1 {
+            let title = Self::derive_session_title(content);
+            let _ = crate::memory::storage::update_session_title(self.conn, session_id, &title);
+        }
         crate::memory::storage::save_message(self.conn, session_id, "user", content)
     }
 
@@ -1177,6 +1441,25 @@ impl<'a> ChatService<'a> {
     /// Save session
     fn save_session(&self, session_id: &str) -> Result<(), HarperError> {
         crate::memory::storage::save_session(self.conn, session_id)
+    }
+
+    fn derive_session_title(content: &str) -> String {
+        let single_line = content
+            .lines()
+            .find(|line| !line.trim().is_empty())
+            .unwrap_or(content)
+            .trim();
+        let normalized = single_line.split_whitespace().collect::<Vec<_>>().join(" ");
+        if normalized.is_empty() {
+            return "New session".to_string();
+        }
+        const MAX_LEN: usize = 48;
+        if normalized.chars().count() <= MAX_LEN {
+            normalized
+        } else {
+            let truncated = normalized.chars().take(MAX_LEN).collect::<String>();
+            format!("{}...", truncated.trim_end())
+        }
     }
 
     /// Load custom prompt
@@ -1444,5 +1727,65 @@ mod tests {
         assert!(err
             .to_string()
             .contains("Status filter specified multiple times"));
+    }
+
+    #[test]
+    fn request_needs_plan_for_multi_step_work() {
+        assert!(ChatService::request_needs_plan(
+            "fix the HTTP tool path and then wire the UI refresh too"
+        ));
+        assert!(ChatService::request_needs_plan(
+            "implement storage, update the prompt, and add tests"
+        ));
+        assert!(!ChatService::request_needs_plan("run git status"));
+        assert!(!ChatService::request_needs_plan("fix typo"));
+    }
+
+    #[test]
+    fn forced_tool_retry_targets_prose_when_tool_is_required() {
+        let user_msg = "read lib/harper-core/src/agent/chat.rs";
+        let prose = "Sorry, I cannot inspect files directly from here.";
+        assert_eq!(
+            ChatService::forced_tool_retry_target(user_msg, prose, false),
+            Some("read_file")
+        );
+    }
+
+    #[test]
+    fn forced_tool_retry_skips_real_tool_calls() {
+        let user_msg = "read lib/harper-core/src/agent/chat.rs";
+        let tool_call =
+            r#"{"tool":"read_file","args":{"path":"lib/harper-core/src/agent/chat.rs"}}"#;
+        assert_eq!(
+            ChatService::forced_tool_retry_target(user_msg, tool_call, false),
+            None
+        );
+    }
+
+    #[test]
+    fn forced_tool_retry_runs_only_once() {
+        let user_msg = "run cargo test";
+        let prose = "I would run tests to verify the change.";
+        assert_eq!(
+            ChatService::forced_tool_retry_target(user_msg, prose, true),
+            None
+        );
+    }
+
+    #[test]
+    fn derive_session_title_uses_first_meaningful_line() {
+        let title = ChatService::derive_session_title(
+            "\n\nfix the tui spinner visibility\nand session names",
+        );
+        assert_eq!(title, "fix the tui spinner visibility");
+    }
+
+    #[test]
+    fn derive_session_title_truncates_long_input() {
+        let title = ChatService::derive_session_title(
+            "this is a very long request title that should be shortened for the session list display",
+        );
+        assert!(title.ends_with("..."));
+        assert!(title.len() <= 51);
     }
 }

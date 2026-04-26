@@ -17,9 +17,12 @@
 //! This module provides functions for storing and retrieving chat sessions
 //! and messages using SQLite as the backend.
 
+use crate::core::agents::ResolvedAgents;
 use crate::core::error::HarperResult;
+use crate::core::plan::{PlanRuntime, PlanState};
 use crate::core::Message;
 use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 
 /// Create a new database connection
 pub fn create_connection(path: &str) -> HarperResult<Connection> {
@@ -121,6 +124,41 @@ pub fn init_db(conn: &Connection) -> HarperResult<()> {
         "CREATE INDEX IF NOT EXISTS idx_command_logs_session_id ON command_logs(session_id)",
         [],
     )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS pending_tools (
+             id TEXT PRIMARY KEY,
+             session_id TEXT,
+             tool TEXT NOT NULL,
+             args TEXT NOT NULL,
+             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+         )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS session_plans (
+             session_id TEXT PRIMARY KEY,
+             explanation TEXT,
+             items_json TEXT NOT NULL,
+             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+         )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS session_plan_runtime (
+             session_id TEXT PRIMARY KEY,
+             runtime_json TEXT NOT NULL,
+             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+         )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS session_agents (
+             session_id TEXT PRIMARY KEY,
+             sources_json TEXT NOT NULL,
+             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+         )",
+        [],
+    )?;
     Ok(())
 }
 
@@ -167,6 +205,14 @@ pub fn save_session(conn: &Connection, session_id: &str) -> HarperResult<()> {
     Ok(())
 }
 
+pub fn update_session_title(conn: &Connection, session_id: &str, title: &str) -> HarperResult<()> {
+    conn.execute(
+        "UPDATE sessions SET title = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
+        params![session_id, title],
+    )?;
+    Ok(())
+}
+
 /// Load conversation history for a session
 ///
 /// Retrieves all messages for a given session from the database,
@@ -196,6 +242,126 @@ pub fn load_history(conn: &Connection, session_id: &str) -> HarperResult<Vec<Mes
         messages.push(message?);
     }
     Ok(messages)
+}
+
+pub fn save_plan_state(conn: &Connection, session_id: &str, plan: &PlanState) -> HarperResult<()> {
+    let items_json = serde_json::to_string(&plan.items)
+        .map_err(|e| crate::core::error::HarperError::Database(e.to_string()))?;
+    conn.execute(
+        "INSERT INTO session_plans (session_id, explanation, items_json, updated_at)
+         VALUES (?1, ?2, ?3, CURRENT_TIMESTAMP)
+         ON CONFLICT(session_id) DO UPDATE SET
+             explanation = excluded.explanation,
+             items_json = excluded.items_json,
+             updated_at = CURRENT_TIMESTAMP",
+        params![session_id, plan.explanation, items_json],
+    )?;
+    save_plan_runtime(conn, session_id, plan.runtime.as_ref())?;
+    Ok(())
+}
+
+pub fn load_plan_state(conn: &Connection, session_id: &str) -> HarperResult<Option<PlanState>> {
+    let mut stmt = conn.prepare(
+        "SELECT explanation, items_json, updated_at FROM session_plans WHERE session_id = ?1",
+    )?;
+    let mut rows = stmt.query(params![session_id])?;
+
+    if let Some(row) = rows.next()? {
+        let explanation = row.get(0)?;
+        let items_json: String = row.get(1)?;
+        let updated_at = row.get(2)?;
+        let runtime = load_plan_runtime(conn, session_id)?;
+        let items = serde_json::from_str(&items_json)
+            .map_err(|e| crate::core::error::HarperError::Database(e.to_string()))?;
+        Ok(Some(PlanState {
+            explanation,
+            items,
+            runtime,
+            updated_at: Some(updated_at),
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn save_plan_runtime(
+    conn: &Connection,
+    session_id: &str,
+    runtime: Option<&PlanRuntime>,
+) -> HarperResult<()> {
+    if let Some(runtime) = runtime {
+        let runtime_json = serde_json::to_string(runtime)
+            .map_err(|e| crate::core::error::HarperError::Database(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO session_plan_runtime (session_id, runtime_json, updated_at)
+             VALUES (?1, ?2, CURRENT_TIMESTAMP)
+             ON CONFLICT(session_id) DO UPDATE SET
+                 runtime_json = excluded.runtime_json,
+                 updated_at = CURRENT_TIMESTAMP",
+            params![session_id, runtime_json],
+        )?;
+    } else {
+        conn.execute(
+            "DELETE FROM session_plan_runtime WHERE session_id = ?1",
+            params![session_id],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn load_plan_runtime(conn: &Connection, session_id: &str) -> HarperResult<Option<PlanRuntime>> {
+    let mut stmt =
+        conn.prepare("SELECT runtime_json FROM session_plan_runtime WHERE session_id = ?1")?;
+    let mut rows = stmt.query(params![session_id])?;
+    if let Some(row) = rows.next()? {
+        let runtime_json: String = row.get(0)?;
+        let runtime = serde_json::from_str(&runtime_json)
+            .map_err(|e| crate::core::error::HarperError::Database(e.to_string()))?;
+        Ok(Some(runtime))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn save_active_agents(
+    conn: &Connection,
+    session_id: &str,
+    agents: Option<&ResolvedAgents>,
+) -> HarperResult<()> {
+    if let Some(agents) = agents {
+        let sources_json = serde_json::to_string(agents)
+            .map_err(|e| crate::core::error::HarperError::Database(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO session_agents (session_id, sources_json, updated_at)
+             VALUES (?1, ?2, CURRENT_TIMESTAMP)
+             ON CONFLICT(session_id) DO UPDATE SET
+                 sources_json = excluded.sources_json,
+                 updated_at = CURRENT_TIMESTAMP",
+            params![session_id, sources_json],
+        )?;
+    } else {
+        conn.execute(
+            "DELETE FROM session_agents WHERE session_id = ?1",
+            params![session_id],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn load_active_agents(
+    conn: &Connection,
+    session_id: &str,
+) -> HarperResult<Option<ResolvedAgents>> {
+    let mut stmt = conn.prepare("SELECT sources_json FROM session_agents WHERE session_id = ?1")?;
+    let mut rows = stmt.query(params![session_id])?;
+    if let Some(row) = rows.next()? {
+        let sources_json: String = row.get(0)?;
+        let agents = serde_json::from_str(&sources_json)
+            .map_err(|e| crate::core::error::HarperError::Database(e.to_string()))?;
+        Ok(Some(agents))
+    } else {
+        Ok(None)
+    }
 }
 
 /// List all session IDs in the database
@@ -233,6 +399,73 @@ pub fn list_sessions(conn: &Connection) -> HarperResult<Vec<String>> {
 #[allow(dead_code)]
 pub fn delete_messages(conn: &Connection, session_id: &str) -> HarperResult<()> {
     conn.execute("DELETE FROM messages WHERE session_id = ?", [session_id])?;
+    Ok(())
+}
+
+#[derive(Debug)]
+pub struct PendingToolRecord {
+    pub id: String,
+    pub session_id: String,
+    pub tool: String,
+    pub args: String,
+}
+
+pub fn insert_pending_tool(
+    conn: &Connection,
+    id: &str,
+    session_id: &str,
+    tool: &str,
+    args: &str,
+) -> HarperResult<()> {
+    conn.execute(
+        "INSERT INTO pending_tools (id, session_id, tool, args) VALUES (?1, ?2, ?3, ?4)",
+        params![id, session_id, tool, args],
+    )?;
+    Ok(())
+}
+
+pub fn get_pending_tools(
+    conn: &Connection,
+    session_id: &str,
+) -> HarperResult<Vec<PendingToolRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, session_id, tool, args FROM pending_tools WHERE session_id = ?1 ORDER BY created_at",
+    )?;
+    let rows = stmt.query_map(params![session_id], |row| {
+        Ok(PendingToolRecord {
+            id: row.get(0)?,
+            session_id: row.get(1)?,
+            tool: row.get(2)?,
+            args: row.get(3)?,
+        })
+    })?;
+
+    let mut tools = Vec::new();
+    for row in rows {
+        tools.push(row?);
+    }
+    Ok(tools)
+}
+
+pub fn get_pending_tool(conn: &Connection, id: &str) -> HarperResult<Option<PendingToolRecord>> {
+    let mut stmt =
+        conn.prepare("SELECT id, session_id, tool, args FROM pending_tools WHERE id = ?1")?;
+    let mut rows = stmt.query(params![id])?;
+
+    if let Some(row) = rows.next()? {
+        Ok(Some(PendingToolRecord {
+            id: row.get(0)?,
+            session_id: row.get(1)?,
+            tool: row.get(2)?,
+            args: row.get(3)?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn delete_pending_tool(conn: &Connection, id: &str) -> HarperResult<()> {
+    conn.execute("DELETE FROM pending_tools WHERE id = ?1", params![id])?;
     Ok(())
 }
 
@@ -411,6 +644,16 @@ pub struct CommandLogEntry {
     pub created_at: String,
 }
 
+/// Pending approval entry for the API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingCommandLogEntry {
+    pub id: i64,
+    pub command: String,
+    pub source: String,
+    pub status: String,
+    pub created_at: String,
+}
+
 /// Load recent command logs for a given session
 pub fn load_command_logs_for_session(
     conn: &Connection,
@@ -442,6 +685,61 @@ pub fn load_command_logs_for_session(
             exit_code: row.get(5)?,
             duration_ms: row.get(6)?,
             created_at: row.get(7)?,
+        })
+    })?;
+
+    let mut entries = Vec::new();
+    for row in rows {
+        entries.push(row?);
+    }
+    Ok(entries)
+}
+
+/// Update approval status for a command log entry
+pub fn update_command_log_approval(
+    conn: &Connection,
+    session_id: &str,
+    approved: bool,
+) -> HarperResult<()> {
+    conn.execute(
+        "UPDATE command_logs SET approved = ?1, status = ?2 WHERE session_id = ?3 AND status = 'pending' AND requires_approval = 1 ORDER BY id DESC LIMIT 1",
+        params![approved as i32, if approved { "completed" } else { "rejected" }, session_id],
+    )?;
+    Ok(())
+}
+
+/// Update approval status by ID
+pub fn update_command_log_approval_by_id(
+    conn: &Connection,
+    id: i64,
+    approved: bool,
+) -> HarperResult<()> {
+    conn.execute(
+        "UPDATE command_logs SET approved = ?1, status = ?2 WHERE id = ?3 AND status = 'pending' AND requires_approval = 1",
+        params![approved as i32, if approved { "completed" } else { "rejected" }, id],
+    )?;
+    Ok(())
+}
+
+/// Load pending command logs requiring approval for a session
+pub fn load_pending_command_logs(
+    conn: &Connection,
+    session_id: &str,
+) -> HarperResult<Vec<PendingCommandLogEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, command, source, status, created_at
+         FROM command_logs
+         WHERE session_id = ?1 AND status = 'pending' AND requires_approval = 1
+         ORDER BY id DESC",
+    )?;
+
+    let rows = stmt.query_map(params![session_id], |row| {
+        Ok(PendingCommandLogEntry {
+            id: row.get(0)?,
+            command: row.get(1)?,
+            source: row.get(2)?,
+            status: row.get(3)?,
+            created_at: row.get(4)?,
         })
     })?;
 

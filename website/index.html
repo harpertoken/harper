@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Terminal AI</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
 <body>
     <div class="page">
@@ -25,7 +26,7 @@
         <main class="surface">
             <div class="content-container">
                 <h1 class="hero-title">Terminal workflows<br/><span>without ceremony.</span></h1>
-                <p class="hero-lede">Natural language → shell commands. Prompt approval before execution. Full audit trail.</p>
+                <p class="hero-lede">Natural language for code and shell work, with visible commands, approvals when needed, and an audit trail.</p>
 
                 <div class="actions">
                     <a class="button primary" href="https://github.com/harpertoken/harper">GitHub</a>
@@ -33,18 +34,18 @@
                 </div>
 
                 <h2>How it works</h2>
-                <p>You describe what you want in plain text. Harper generates shell commands, shows them to you, and waits for approval before running anything.</p>
+                <p>You describe what you want in plain text. Harper can inspect files, edit code, run commands, and keep track of multi-step work while still showing you the concrete actions it plans to take.</p>
 
                 <h2>Features</h2>
                 <ul>
-                    <li>Preview every command before execution</li>
-                    <li>Full audit trail of all sessions</li>
-                    <li>Sandbox isolation (bubblewrap/linux, sandbox-exec/macos)</li>
+                    <li>Preview commands before execution</li>
+                    <li>Approval gates for sensitive operations</li>
+                    <li>Session history with readable titles, plan tracking, and audit logs</li>
                     <li>Works with OpenAI, Gemini, SambaNova, Cerebras, or Ollama</li>
                 </ul>
 
                 <h2>Sandbox</h2>
-                <p>Commands run in isolation. On Linux, bubblewrap creates a minimal namespace. On macOS, sandbox-exec provides App Sandbox profiles. No network unless you allow it.</p>
+                <p>Commands can run in isolation. On Linux, bubblewrap creates a minimal namespace. On macOS, sandbox-exec provides App Sandbox profiles. Networked or higher-risk actions can stay behind explicit approval.</p>
             </div>
         </main>
 

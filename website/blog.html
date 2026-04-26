@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Blog</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
 <body>
     <div class="page">
@@ -24,22 +25,42 @@
 
         <main class="surface">
             <div class="content-container">
-                <h1 class="hero-title">Notes from the console.</h1>
-                <p class="hero-lede">Release commentary and design discussions.</p>
+                <h1 class="hero-title">Notes from the codebase.</h1>
+                <p class="hero-lede">Short product and engineering notes from Harper. This page stays high level. The <a href="changelog.html">changelog</a> keeps the version-by-version detail.</p>
 
-                <h2>Release recap</h2>
-                <p>Ollama offline path, deterministic list-changed-files intent, and the quiet UI you see above.</p>
+                <article>
+                    <h2>April 2026 · Planning became real state</h2>
+                    <p>Harper now treats planning as part of the session model instead of something implied in prompt text. Plans persist with the session, show up in the TUI, and can be updated through the tool loop and HTTP chat path. That matters because longer tasks need visible progress, not just a good initial answer.</p>
+                    <p>The product implication is straightforward: once plan state is real, the UI can show what is pending, what is active, and what just changed. It also means future automation can attach tool execution and job status to actual steps instead of relying on the model to narrate everything correctly.</p>
+                </article>
 
-                <h2>Provider swap</h2>
-                <p>Harper flips between OpenAI, SambaNova, Gemini, Cerebras, or any REST-compatible endpoint without UI changes.</p>
+                <article>
+                    <h2>April 2026 · <code>AGENTS.md</code> stopped being a flat append</h2>
+                    <p>Earlier builds treated <code>AGENTS.md</code> as one static block of prompt text. Harper now resolves applicable files from repo root down to the target path, merges rules with deeper precedence, and keeps both the raw sources and the effective rendered view available to the UI and API.</p>
+                    <p>That changes the system from “some instructions were probably present” to a more inspectable model where the user can see which file supplied which active rule. For code-editing tools, that is a practical improvement, not just a prompt refinement.</p>
+                </article>
 
-                <h2>Initial release</h2>
-                <p>Approvals, audit logs, persistent sessions, and the first iteration of the TUI.</p>
+                <article>
+                    <h2>April 2026 · The TUI started showing work in progress</h2>
+                    <p>One of the bigger gaps in earlier Harper builds was responsiveness during a turn. The assistant could be working, but the interface did not make that state obvious enough. The TUI now carries explicit activity status, a visible pending assistant row, live plan updates, and command-output panels for shell work.</p>
+                    <p>The goal is not cosmetic animation. The goal is to remove ambiguity: thinking, waiting for approval, running a command, and returning a final reply are different states, and the interface should show them as different states.</p>
+                </article>
+
+                <article>
+                    <h2>April 2026 · Session state is getting unified across interfaces</h2>
+                    <p>Harper has both a TUI and an API, and those surfaces drift if they do not read from the same shape. Recent work moved messages, plans, and effective agent guidance into a shared session-state view so the TUI and HTTP layer stop assembling overlapping payloads in different ways.</p>
+                    <p>This is less visible than a UI change, but it is important architecture. A stable shared state model reduces mismatches between what the API knows, what the TUI renders, and what future clients can depend on.</p>
+                </article>
+
+                <article>
+                    <h2>How to read this page</h2>
+                    <p>This blog is intentionally small. It is not meant to be a marketing feed or a dumping ground for every merged patch. Use it to understand direction. Use the <a href="changelog.html">changelog</a> for release detail, the <a href="server.html">API server</a> page for integration work, and the main docs for day-to-day usage.</p>
+                </article>
             </div>
         </main>
 
         <footer class="footnote">
-            <a class="button secondary" href="index.html">← Back</a> · v2
+            <a class="button secondary" href="index.html">← Back</a>
         </footer>
     </div>
     <script>

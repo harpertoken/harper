@@ -35,11 +35,20 @@ pub mod crypto;
 /// # Errors
 /// Returns `HarperError::WebSearch` if the API request fails
 pub async fn web_search(query: &str) -> HarperResult<String> {
+    if let Ok(mock_response) = std::env::var("HARPER_WEB_SEARCH_MOCK_RESPONSE") {
+        return Ok(mock_response);
+    }
+
     let client = reqwest::Client::builder()
         .timeout(timeouts::WEB_SEARCH)
         .build()?;
-    let url = format!("https://api.duckduckgo.com/?q={}&format=json", query);
-    let response = client.get(&url).send().await?;
+    let search_url = std::env::var("HARPER_WEB_SEARCH_URL")
+        .unwrap_or_else(|_| "https://api.duckduckgo.com/".to_string());
+    let response = client
+        .get(search_url)
+        .query(&[("q", query), ("format", "json")])
+        .send()
+        .await?;
 
     if !response.status().is_success() {
         let error_text = format!(

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Installation</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
 <body>
     <div class="page">
@@ -25,7 +26,18 @@
         <main class="surface">
             <div class="content-container">
                 <h1 class="hero-title">Installation</h1>
-                <p class="hero-lede">Harper can be installed via Homebrew or Bazel.</p>
+                <p class="hero-lede">Install a packaged build, or run Harper from source during development.</p>
+
+                <h2>Run from source</h2>
+                <p>For development or local use, the simplest path is to run the TUI directly from the workspace.</p>
+                <div class="code-wrapper">
+                    <pre><code>git clone https://github.com/harpertoken/harper.git
+cd harper
+cp .env.example .env
+cargo harper</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p><code>cargo harper</code> is a workspace alias for the normal TUI launch path. If you want the longer explicit form, it still maps to <code>cargo run -p harper-ui --bin harper -- --no-server</code>.</p>
 
                 <h2>Homebrew</h2>
                 <p>Add the tap and install.</p>
@@ -43,7 +55,7 @@
                 </div>
 
                 <h2>Bazel</h2>
-                <p>Build from source with Bazel.</p>
+                <p>Use Bazel if you want the repository's Bazel-based build flow.</p>
                 <div class="code-wrapper">
                     <pre><code>brew install bazel</code></pre>
                     <button class="copy-btn"></button>
@@ -72,7 +84,7 @@
                 </div>
 
                 <h2>Local fix</h2>
-                <p>Fix corrupted caches - WARNING: takes 10-15 min initially:</p>
+                <p>If Bazel caches are corrupted, repinning and rebuilding usually fixes it. This is slower the first time:</p>
                 <div class="code-wrapper">
                     <pre><code>bazel shutdown</code></pre>
                     <button class="copy-btn"></button>
@@ -91,8 +103,8 @@
                 </div>
                 <p>After repinning, use <code>bazel build //:harper_bin</code> for fast ~30-60 second builds.</p>
 
-                <h2>Packages</h2>
-                <p>Harper is split into multiple crates:</p>
+                <h2>Workspace crates</h2>
+                <p>The repository is split into multiple crates:</p>
                 <ul>
                     <li><code>harper-core</code> - AI logic, prompts, LLM clients</li>
                     <li><code>harper-ui</code> - Terminal UI (TUI)</li>
@@ -101,25 +113,25 @@
                     <li><code>harper-firmware</code> - Device firmware control (ESP32, STM32)</li>
                 </ul>
 
-                <h2>Cargo</h2>
-                <p>Install individual packages via Cargo:</p>
+                <h2>Working on one crate</h2>
+                <p>For this repository, the reliable path is to run a workspace package directly rather than assuming every crate is published as a standalone Cargo install target.</p>
                 <div class="code-wrapper">
-                    <pre><code>cargo install harper-core</code></pre>
+                    <pre><code>cargo run -p harper-ui --bin harper -- --no-server</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <div class="code-wrapper">
-                    <pre><code>cargo install harper-ui</code></pre>
+                    <pre><code>cargo test -p harper-core</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <div class="code-wrapper">
-                    <pre><code>cargo install harper-mcp-server</code></pre>
+                    <pre><code>cargo run -p harper-mcp-server</code></pre>
                     <button class="copy-btn"></button>
                 </div>
             </div>
         </main>
 
         <footer class="footnote">
-            <a class="button secondary" href="index.html">← Back</a> · v2
+            <a class="button secondary" href="index.html">← Back</a>
         </footer>
     </div>
     <script>

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Changelog</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
 <body>
     <div class="page">
@@ -25,16 +26,19 @@
         <main class="surface">
             <div class="content-container">
                 <h1 class="hero-title">Changelog</h1>
-                <p class="hero-lede">Every release. No marketing prose.</p>
+                <p class="hero-lede">Release history from GitHub, with a plain fallback when the live fetch is unavailable.</p>
 
                 <div id="releases">
                     <p class="loading">Fetching releases...</p>
+                    <noscript>
+                        <p>JavaScript is disabled. Use <a href="https://github.com/harpertoken/harper/releases" target="_blank" rel="noreferrer">the GitHub releases page</a>.</p>
+                    </noscript>
                 </div>
             </div>
         </main>
 
         <footer class="footnote">
-            <a class="button secondary" href="index.html">← Back</a> · v2
+            <a class="button secondary" href="index.html">← Back</a>
         </footer>
     </div>
     <script>
@@ -55,13 +59,21 @@
             }
             container.innerHTML = releases.slice(0, 5).map(rel => {
                 const date = rel.published_at ? new Date(rel.published_at).toLocaleDateString() : '';
+                const body = rel.body
+                    ? rel.body.split('\n').filter(Boolean).slice(0, 3).join(' ').slice(0, 360)
+                    : 'No description.';
                 return `<h2>${rel.tag_name}${date ? ' <span>' + date + '</span>' : ''}</h2>
-                <p>${rel.body ? rel.body.slice(0, 300) + (rel.body.length > 300 ? '...' : '') : 'No description.'}</p>
-                <p><a href="${rel.html_url}" target="_blank">View on GitHub →</a></p>`;
+                <p>${body}${rel.body && body.length < rel.body.length ? '…' : ''}</p>
+                <p><a href="${rel.html_url}" target="_blank" rel="noreferrer">View on GitHub →</a></p>`;
             }).join('') + '<h2>All releases</h2><p><a href="https://github.com/harpertoken/harper/releases" target="_blank">github.com/harpertoken/harper/releases →</a></p>';
         })
         .catch(() => {
-            document.getElementById('releases').innerHTML = '<p>Could not load releases. <a href="https://github.com/harpertoken/harper/releases" target="_blank">View on GitHub</a></p>';
+            document.getElementById('releases').innerHTML = `
+                <h2>Fallback</h2>
+                <p>Could not load the live release feed from GitHub in this browser.</p>
+                <p>Use the canonical release history here:</p>
+                <p><a href="https://github.com/harpertoken/harper/releases" target="_blank" rel="noreferrer">github.com/harpertoken/harper/releases →</a></p>
+            `;
         });
     </script>
 </body>

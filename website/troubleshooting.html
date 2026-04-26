@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Troubleshooting</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
 <body>
     <div class="page">
@@ -25,7 +26,7 @@
         <main class="surface">
             <div class="content-container">
                 <h1 class="hero-title">Troubleshooting</h1>
-                <p class="hero-lede">Solutions for common issues.</p>
+                <p class="hero-lede">Common fixes for install, version, API, and runtime problems.</p>
 
                 <h2>Wrong version</h2>
                 <p>Check your installed version and location.</p>
@@ -48,11 +49,37 @@
                     <pre><code>find /usr/local/bin ~/.local/bin $HOME -name "harper" 2>/dev/null</code></pre>
                     <button class="copy-btn"></button>
                 </div>
+
+                <h2>Server is not reachable</h2>
+                <p>If editor integrations or API requests fail, confirm the local server is actually running and listening on the expected port.</p>
+                <div class="code-wrapper">
+                    <pre><code>curl http://127.0.0.1:8081/health</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>If that fails, start Harper with the server enabled in config, then run the TUI normally.</p>
+
+                <h2>Wrong provider or missing responses</h2>
+                <p>If requests hang or fail immediately, check provider settings in <code>config/local.toml</code> and make sure the selected model endpoint is reachable from your machine. For offline mode, confirm Ollama is running before starting Harper.</p>
+
+                <h2>No visible reply indicator</h2>
+                <p>If the assistant looks idle after you send a message, update to a recent build. Current TUI builds show a visible in-thread <code>Thinking...</code> row while the worker is waiting on a reply, plus header activity state for longer tool and approval flows.</p>
+
+                <h2>Sandbox or command approval confusion</h2>
+                <p>If a command does not run, check whether it was blocked by policy, waiting for approval, or denied by sandbox rules. Harper is designed to stop rather than silently escalate.</p>
+
+                <h2>Build issues while developing</h2>
+                <p>For local development problems, run the standard Rust loop first:</p>
+                <div class="code-wrapper">
+                    <pre><code>cargo fmt
+cargo clippy --all-targets --all-features
+cargo test</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
             </div>
         </main>
 
         <footer class="footnote">
-            <a class="button secondary" href="index.html">← Back</a> · v2
+            <a class="button secondary" href="index.html">← Back</a>
         </footer>
     </div>
     <script>
