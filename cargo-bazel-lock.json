@@ -1,5 +1,5 @@
 {
-  "checksum": "8f6d7e6348c2029e66ded5ab70f4fa46db6655dfd6e199c55286f503376fdbfc",
+  "checksum": "3dedc85d2c1bae12e29a235708f6814bf409cd6dbdab512ef8c158f98446ffd3",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -10516,9 +10516,9 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "harper-core 0.11.0": {
+    "harper-core 0.12.0": {
       "name": "harper-core",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -10734,7 +10734,7 @@
           ],
           "selects": {}
         },
-        "version": "0.11.0"
+        "version": "0.12.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -10947,9 +10947,9 @@
       ],
       "license_file": null
     },
-    "harper-ui 0.10.0": {
+    "harper-ui 0.11.0": {
       "name": "harper-ui",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -11010,6 +11010,14 @@
               "target": "rustyline"
             },
             {
+              "id": "serde 1.0.228",
+              "target": "serde"
+            },
+            {
+              "id": "serde_json 1.0.149",
+              "target": "serde_json"
+            },
+            {
               "id": "syntect 5.3.0",
               "target": "syntect"
             },
@@ -11038,7 +11046,7 @@
           ],
           "selects": {}
         },
-        "version": "0.10.0"
+        "version": "0.11.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -20298,14 +20306,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "plist 1.8.0": {
+    "plist 1.9.0": {
       "name": "plist",
-      "version": "1.8.0",
+      "version": "1.9.0",
       "package_url": "https://github.com/ebarnard/rust-plist/",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/plist/1.8.0/download",
-          "sha256": "740ebea15c5d1428f910cd1a5f52cebf8d25006245ed8ade92702f4943d91e07"
+          "url": "https://static.crates.io/crates/plist/1.9.0/download",
+          "sha256": "092791278e026273c1b65bbdcfbba3a300f2994c896bd01ab01da613c29c46f1"
         }
       },
       "targets": [
@@ -20345,7 +20353,7 @@
               "target": "indexmap"
             },
             {
-              "id": "quick-xml 0.38.4",
+              "id": "quick-xml 0.39.2",
               "target": "quick_xml"
             },
             {
@@ -20360,7 +20368,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "1.8.0"
+        "version": "1.9.0"
       },
       "license": "MIT",
       "license_ids": [
@@ -21630,14 +21638,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "quick-xml 0.38.4": {
+    "quick-xml 0.39.2": {
       "name": "quick-xml",
-      "version": "0.38.4",
+      "version": "0.39.2",
       "package_url": "https://github.com/tafia/quick-xml",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/quick-xml/0.38.4/download",
-          "sha256": "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
+          "url": "https://static.crates.io/crates/quick-xml/0.39.2/download",
+          "sha256": "958f21e8e7ceb5a1aa7fa87fab28e7c75976e0bfe7e23ff069e0a260f894067d"
         }
       },
       "targets": [
@@ -21675,7 +21683,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.38.4"
+        "version": "0.39.2"
       },
       "license": "MIT",
       "license_ids": [
@@ -27887,7 +27895,7 @@
               "target": "onig"
             },
             {
-              "id": "plist 1.8.0",
+              "id": "plist 1.9.0",
               "target": "plist"
             },
             {
@@ -38574,11 +38582,11 @@
   },
   "binary_crates": [],
   "workspace_members": {
-    "harper-core 0.11.0": "lib/harper-core",
+    "harper-core 0.12.0": "lib/harper-core",
     "harper-firmware 0.1.3": "lib/harper-firmware",
     "harper-mcp-server 0.1.2": "lib/harper-mcp-server",
     "harper-sandbox 0.1.3": "lib/harper-sandbox",
-    "harper-ui 0.10.0": "lib/harper-ui",
+    "harper-ui 0.11.0": "lib/harper-ui",
     "harper-workspace 0.7.0": ""
   },
   "conditions": {
