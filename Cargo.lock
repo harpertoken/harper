@@ -1820,6 +1820,8 @@ dependencies = [
  "ratatui",
  "rusqlite",
  "rustyline",
+ "serde",
+ "serde_json",
  "syntect",
  "tokio",
  "turul-mcp-client",

@@ -1,0 +1,9 @@
+{
+  "explanation": "Build the first real live execution UX so running work is visible while a turn is still active.",
+  "items": [
+    { "step": "Design command event model", "status": "pending" },
+    { "step": "Stream command output chunks", "status": "pending" },
+    { "step": "Add live output panel", "status": "pending" },
+    { "step": "Show job status summary", "status": "pending" }
+  ]
+}

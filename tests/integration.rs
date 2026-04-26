@@ -363,25 +363,24 @@ fn test_message_creation() {
 async fn test_web_search_mock() {
     use harper_workspace::utils::web_search;
 
-    // Skip this test in CI environments where network access might be restricted
-    if std::env::var("CI").is_ok() {
-        println!("Skipping web search test in CI environment");
-        return;
-    }
+    std::env::set_var(
+        "HARPER_WEB_SEARCH_MOCK_RESPONSE",
+        "{\"AbstractText\":\"Rust is a systems programming language.\"}",
+    );
 
-    // Test with a simple query - this will actually hit DuckDuckGo API
-    // In local environments, we expect this to work
     let result = web_search("rust programming").await;
 
-    // In local development, we expect the search to succeed
+    std::env::remove_var("HARPER_WEB_SEARCH_MOCK_RESPONSE");
+
     match result {
         Ok(response) => {
-            // If successful, should contain some content
-            assert!(!response.is_empty(), "Search response should not be empty");
+            assert!(
+                response.contains("Rust is a systems programming language."),
+                "Unexpected mocked search response: {response}"
+            );
         }
         Err(e) => {
-            // If it fails locally, it's unexpected - fail the test
-            panic!("Web search failed unexpectedly: {e:?}");
+            panic!("Mocked web search failed unexpectedly: {e:?}");
         }
     }
 }

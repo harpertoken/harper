@@ -24,15 +24,20 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
+use crate::agent::intent::route_intent;
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::llm_client::call_llm;
 use crate::core::{ApiConfig, Message};
+use crate::memory::storage::{save_message, CommandLogRecord};
+use crate::runtime::config::ExecPolicyConfig;
+use rusqlite::params;
 
 #[derive(Clone)]
 pub struct ServerState {
     pub conn: Arc<Mutex<Connection>>,
     pub api_config: ApiConfig,
     pub client: Client,
+    pub exec_policy: ExecPolicyConfig,
 }
 
 #[derive(Serialize)]
@@ -59,6 +64,30 @@ pub struct ChatRequest {
 pub struct ChatResponse {
     pub message: String,
     pub session_id: String,
+    pub status: String,
+    pub pending_id: Option<String>,
+    pub pending_tools: Option<Vec<PendingTool>>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PendingTool {
+    pub id: String,
+    pub tool: String,
+    pub args: serde_json::Value,
+}
+
+#[derive(Serialize)]
+pub struct PendingApproval {
+    pub id: i64,
+    pub command: String,
+    pub source: String,
+    pub session_id: String,
+    pub created_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct ApprovalRequest {
+    pub approved: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -148,21 +177,11 @@ pub async fn get_session(
         .conn
         .lock()
         .expect("Failed to lock database connection");
-
-    let mut stmt = conn
-        .prepare("SELECT messages FROM sessions WHERE id = ?")
+    let session_service = crate::memory::session_service::SessionService::new(&conn);
+    let session_view = session_service
+        .load_session_state_view(&session_id)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let messages: Option<String> = stmt.query_row([&session_id], |row| row.get(0)).ok();
-
-    match messages {
-        Some(msgs) => {
-            let parsed: serde_json::Value =
-                serde_json::from_str(&msgs).unwrap_or(serde_json::json!({ "messages": [] }));
-            Ok(Json(parsed))
-        }
-        None => Err(StatusCode::NOT_FOUND),
-    }
+    Ok(Json(serde_json::json!(session_view)))
 }
 
 pub async fn delete_session(
@@ -180,7 +199,7 @@ pub async fn delete_session(
     }
 }
 
-pub async fn chat(
+pub async fn chat_endpoint(
     State(state): State<Arc<ServerState>>,
     Json(payload): Json<ChatRequest>,
 ) -> Result<Json<ChatResponse>, (StatusCode, String)> {
@@ -190,19 +209,12 @@ pub async fn chat(
         .clone()
         .unwrap_or_else(|| "api".to_string());
 
-    let system_prompt = r#"You are Harper, a CLI assistant that helps users run shell commands.
-
-User Intent Recognition:
-- read a file -> use read_file
-- run a command -> use run_command
-- list or show files -> use run_command (ls)
-- create a new file -> use write_file
-- update or fix a file -> use search_replace
-- understand how something works -> use codebase_investigator
-
-When user asks to run a command, return ONLY the command they should run.
-Example: "list files" -> "ls"
-Example: "check the README" -> "cat README.md"#;
+    let system_prompt = r#"You are Harper, a CLI assistant. Use JSON for commands:
+{"tool": "run_command", "args": {"command": "ls -la"}}
+{"tool": "read_file", "args": {"filePath": "/path/to/file"}}
+{"tool": "write_file", "args": {"filePath": "/path", "content": "text"}}
+{"tool": "grep", "args": {"pattern": "search", "path": "."}}
+{"tool": "update_plan", "args": {"explanation": "optional note", "items": [{"step": "Inspect files", "status": "in_progress"}]}}"#;
 
     let history = vec![
         Message {
@@ -211,7 +223,7 @@ Example: "check the README" -> "cat README.md"#;
         },
         Message {
             role: "user".to_string(),
-            content: message,
+            content: message.clone(),
         },
     ];
 
@@ -219,9 +231,346 @@ Example: "check the README" -> "cat README.md"#;
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    if let Some(intent) = route_intent(&message) {
+        match intent {
+            crate::agent::intent::DeterministicIntent::ListChangedFiles(intent_args) => {
+                let mut git_cmd = std::process::Command::new("git");
+                git_cmd.arg("diff");
+
+                if let Some(since) = intent_args.since {
+                    git_cmd.arg(format!("--since={}", since));
+                }
+                git_cmd.arg("--name-only");
+
+                if intent_args.ext.is_some() {
+                    git_cmd.arg("--");
+                    git_cmd.arg("*");
+                }
+
+                let output = git_cmd
+                    .output()
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                let files = String::from_utf8_lossy(&output.stdout);
+
+                let result = if files.trim().is_empty() {
+                    "No changed files found".to_string()
+                } else {
+                    format!("Changed files:\n{}", files)
+                };
+
+                let conn = state.conn.lock().map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Lock error: {:?}", e),
+                    )
+                })?;
+                let _ = save_message(&conn, &session_id, "user", &message);
+                let _ = save_message(&conn, &session_id, "assistant", &result);
+                drop(conn);
+
+                return Ok(Json(ChatResponse {
+                    message: result,
+                    session_id,
+                    status: "completed".to_string(),
+                    pending_id: None,
+                    pending_tools: None,
+                }));
+            }
+        }
+    }
+
+    let conn = state.conn.lock().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Lock error: {:?}", e),
+        )
+    })?;
+    let _ = save_message(&conn, &session_id, "user", &message);
+    drop(conn);
+
+    let final_response = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&response) {
+        if let Some(tool) = json.get("tool").and_then(|t| t.as_str()) {
+            let args = json.get("args").and_then(|a| a.as_object());
+
+            if tool == "run_command" {
+                if let Some(cmd) = args.and_then(|a| a.get("command")).and_then(|c| c.as_str()) {
+                    let cmd_str = cmd.to_string();
+                    let session_clone = session_id.clone();
+
+                    let output = std::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(&cmd_str)
+                        .output()
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+                    let stdout = output.stdout.clone();
+                    let stderr = output.stderr.clone();
+                    let exit_code = output.status.code();
+
+                    let output_str = if exit_code == Some(0) {
+                        format!("$ {}\n{}", cmd_str, String::from_utf8_lossy(&stdout))
+                    } else {
+                        format!(
+                            "$ {}\nError (exit {:?}):\n{}",
+                            cmd_str,
+                            exit_code,
+                            String::from_utf8_lossy(&stderr)
+                        )
+                    };
+
+                    let conn = state.conn.lock().map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Lock error: {:?}", e),
+                        )
+                    })?;
+                    let _ = save_message(&conn, &session_clone, "assistant", &output_str);
+                    let record = CommandLogRecord {
+                        session_id: Some(session_clone),
+                        command: cmd_str,
+                        source: "api_chat".to_string(),
+                        requires_approval: false,
+                        approved: true,
+                        status: "completed".to_string(),
+                        exit_code,
+                        duration_ms: None,
+                        stdout_preview: Some(String::from_utf8_lossy(&stdout).to_string()),
+                        stderr_preview: Some(String::from_utf8_lossy(&stderr).to_string()),
+                        error_message: None,
+                    };
+                    let _ = crate::memory::storage::insert_command_log(&conn, &record);
+                    drop(conn);
+
+                    return Ok(Json(ChatResponse {
+                        message: output_str,
+                        session_id,
+                        status: "completed".to_string(),
+                        pending_id: None,
+                        pending_tools: None,
+                    }));
+                }
+            }
+
+            if tool == "read_file" {
+                if let Some(path) = args
+                    .and_then(|a| a.get("filePath"))
+                    .and_then(|p| p.as_str())
+                {
+                    let path_str = path.to_string();
+                    let content = std::fs::read_to_string(&path_str).map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Read error: {}", e),
+                        )
+                    })?;
+
+                    let truncated = if content.len() > 50000 {
+                        format!(
+                            "{}...\n(truncated {} bytes)",
+                            &content[..50000],
+                            content.len()
+                        )
+                    } else {
+                        content
+                    };
+
+                    let conn = state.conn.lock().map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Lock error: {:?}", e),
+                        )
+                    })?;
+                    let _ = save_message(&conn, &session_id, "assistant", &truncated);
+                    let record = CommandLogRecord {
+                        session_id: Some(session_id.clone()),
+                        command: format!("read_file {}", path_str),
+                        source: "api_chat".to_string(),
+                        requires_approval: false,
+                        approved: true,
+                        status: "completed".to_string(),
+                        exit_code: Some(0),
+                        duration_ms: None,
+                        stdout_preview: Some(truncated.clone()),
+                        stderr_preview: None,
+                        error_message: None,
+                    };
+                    let _ = crate::memory::storage::insert_command_log(&conn, &record);
+                    drop(conn);
+
+                    return Ok(Json(ChatResponse {
+                        message: truncated,
+                        session_id,
+                        status: "completed".to_string(),
+                        pending_id: None,
+                        pending_tools: None,
+                    }));
+                }
+            }
+
+            if tool == "write_file" {
+                if let Some(path) = args
+                    .and_then(|a| a.get("filePath"))
+                    .and_then(|p| p.as_str())
+                {
+                    if let Some(content) =
+                        args.and_then(|a| a.get("content")).and_then(|c| c.as_str())
+                    {
+                        let path_str = path.to_string();
+                        let content_str = content.to_string();
+
+                        std::fs::write(&path_str, &content_str).map_err(|e| {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Write error: {}", e),
+                            )
+                        })?;
+
+                        let output_str =
+                            format!("Written {} bytes to {}", content_str.len(), path_str);
+
+                        let conn = state.conn.lock().map_err(|e| {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Lock error: {:?}", e),
+                            )
+                        })?;
+                        let _ = save_message(&conn, &session_id, "assistant", &output_str);
+                        let record = CommandLogRecord {
+                            session_id: Some(session_id.clone()),
+                            command: format!("write_file {}", path_str),
+                            source: "api_chat".to_string(),
+                            requires_approval: false,
+                            approved: true,
+                            status: "completed".to_string(),
+                            exit_code: Some(0),
+                            duration_ms: None,
+                            stdout_preview: Some(output_str.clone()),
+                            stderr_preview: None,
+                            error_message: None,
+                        };
+                        let _ = crate::memory::storage::insert_command_log(&conn, &record);
+                        drop(conn);
+
+                        return Ok(Json(ChatResponse {
+                            message: output_str,
+                            session_id,
+                            status: "completed".to_string(),
+                            pending_id: None,
+                            pending_tools: None,
+                        }));
+                    }
+                }
+            }
+
+            if tool == "grep" {
+                if let Some(pattern) = args.and_then(|a| a.get("pattern")).and_then(|p| p.as_str())
+                {
+                    if let Some(path) = args.and_then(|a| a.get("path")).and_then(|p| p.as_str()) {
+                        let pattern_str = pattern.to_string();
+                        let path_str = path.to_string();
+
+                        let output = std::process::Command::new("grep")
+                            .arg("-n")
+                            .arg("-r")
+                            .arg(&pattern_str)
+                            .arg(&path_str)
+                            .output()
+                            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        let exit_code = output.status.code();
+
+                        let output_str = if stdout.is_empty() {
+                            format!("No matches found for '{}' in {}", pattern_str, path_str)
+                        } else {
+                            format!("{}\n(matched {} lines)", stdout, stdout.lines().count())
+                        };
+
+                        let conn = state.conn.lock().map_err(|e| {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Lock error: {:?}", e),
+                            )
+                        })?;
+                        let _ = save_message(&conn, &session_id, "assistant", &output_str);
+                        let stderr_str = stderr.to_string();
+                        let record = CommandLogRecord {
+                            session_id: Some(session_id.clone()),
+                            command: format!("grep {} {}", pattern_str, path_str),
+                            source: "api_chat".to_string(),
+                            requires_approval: false,
+                            approved: true,
+                            status: "completed".to_string(),
+                            exit_code,
+                            duration_ms: None,
+                            stdout_preview: Some(stdout.to_string()),
+                            stderr_preview: if stderr_str.is_empty() {
+                                None
+                            } else {
+                                Some(stderr_str)
+                            },
+                            error_message: None,
+                        };
+                        let _ = crate::memory::storage::insert_command_log(&conn, &record);
+                        drop(conn);
+
+                        return Ok(Json(ChatResponse {
+                            message: output_str,
+                            session_id,
+                            status: "completed".to_string(),
+                            pending_id: None,
+                            pending_tools: None,
+                        }));
+                    }
+                }
+            }
+
+            if tool == "update_plan" {
+                let args_json = json
+                    .get("args")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({}));
+                let conn = state.conn.lock().map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Lock error: {:?}", e),
+                    )
+                })?;
+                let output_str = crate::tools::plan::update_plan(&conn, &session_id, &args_json)
+                    .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+                let _ = save_message(&conn, &session_id, "assistant", &output_str);
+                drop(conn);
+
+                return Ok(Json(ChatResponse {
+                    message: output_str,
+                    session_id,
+                    status: "completed".to_string(),
+                    pending_id: None,
+                    pending_tools: None,
+                }));
+            }
+        }
+        response.trim().to_string()
+    } else {
+        response.trim().to_string()
+    };
+
+    let conn = state.conn.lock().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Lock error: {:?}", e),
+        )
+    })?;
+    let _ = save_message(&conn, &session_id, "assistant", &final_response);
+    drop(conn);
+
     Ok(Json(ChatResponse {
-        message: response,
+        message: final_response,
         session_id,
+        status: "completed".to_string(),
+        pending_id: None,
+        pending_tools: None,
     }))
 }
 
@@ -423,11 +772,16 @@ fn into_http_error(error: HarperError) -> (StatusCode, String) {
 }
 
 /// Creates the Axum router with all API routes configured
-pub fn create_router(conn: Arc<Mutex<Connection>>, api_config: ApiConfig) -> Router {
+pub fn create_router(
+    conn: Arc<Mutex<Connection>>,
+    api_config: ApiConfig,
+    exec_policy: ExecPolicyConfig,
+) -> Router {
     let state = Arc::new(ServerState {
         conn,
         api_config,
         client: Client::new(),
+        exec_policy,
     });
 
     Router::new()
@@ -435,7 +789,10 @@ pub fn create_router(conn: Arc<Mutex<Connection>>, api_config: ApiConfig) -> Rou
         .route("/api/sessions", get(list_sessions))
         .route("/api/sessions/{id}", get(get_session))
         .route("/api/sessions/{id}", delete(delete_session))
-        .route("/api/chat", post(chat))
+        .route("/api/chat", post(chat_endpoint))
+        .route("/api/approvals/{session_id}", get(list_pending_approvals))
+        .route("/api/approvals/{session_id}", post(approve_command))
+        .route("/api/chat/approve/{pending_id}", post(approve_pending_tool))
         .route("/api/review", post(review_code))
         .with_state(state)
 }
@@ -444,14 +801,228 @@ pub async fn run_server(
     addr: &str,
     conn: Arc<Mutex<Connection>>,
     api_config: ApiConfig,
+    exec_policy: ExecPolicyConfig,
 ) -> HarperResult<()> {
-    let router = create_router(conn, api_config);
+    let router = create_router(conn, api_config, exec_policy);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     log::info!("Harper API server running on {}", addr);
 
     axum::serve(listener, router).await?;
     Ok(())
+}
+
+pub async fn list_pending_approvals(
+    State(state): State<Arc<ServerState>>,
+    Path(session_id): Path<String>,
+) -> Result<Json<Vec<serde_json::Value>>, (StatusCode, String)> {
+    let conn = state.conn.lock().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Lock error: {:?}", e),
+        )
+    })?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, command, source, created_at FROM command_logs WHERE session_id = ?1 AND status = 'pending' AND requires_approval = 1"
+    ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let rows = stmt
+        .query_map([&session_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "command": row.get::<_, String>(1)?,
+                "source": row.get::<_, String>(2)?,
+                "created_at": row.get::<_, String>(3)?,
+            }))
+        })
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let results: Vec<serde_json::Value> = rows.filter_map(|r| r.ok()).collect();
+
+    Ok(Json(results))
+}
+
+pub async fn approve_command(
+    State(state): State<Arc<ServerState>>,
+    Path(session_id): Path<String>,
+    Json(payload): Json<ApprovalRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let conn = state.conn.lock().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Lock error: {:?}", e),
+        )
+    })?;
+
+    let status = if payload.approved {
+        "completed"
+    } else {
+        "rejected"
+    };
+
+    conn.execute(
+        "UPDATE command_logs SET approved = ?1, status = ?2 WHERE session_id = ?3 AND status = 'pending' AND requires_approval = 1 ORDER BY id DESC LIMIT 1",
+        params![payload.approved as i32, status, session_id],
+    ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "session_id": session_id,
+        "approved": payload.approved,
+    })))
+}
+
+pub async fn approve_pending_tool(
+    State(state): State<Arc<ServerState>>,
+    Path(pending_id): Path<String>,
+    Json(payload): Json<ApprovalRequest>,
+) -> Result<Json<ChatResponse>, (StatusCode, String)> {
+    let conn = state.conn.lock().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Lock error: {:?}", e),
+        )
+    })?;
+
+    let tool = crate::memory::storage::get_pending_tool(&conn, &pending_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Pending tool not found".to_string()))?;
+    let session_id = tool.session_id.clone();
+
+    if !payload.approved {
+        crate::memory::storage::delete_pending_tool(&conn, &pending_id)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let _ = save_message(&conn, &session_id, "assistant", "Tool execution rejected");
+        drop(conn);
+        return Ok(Json(ChatResponse {
+            message: "Tool execution rejected".to_string(),
+            session_id,
+            status: "rejected".to_string(),
+            pending_id: None,
+            pending_tools: None,
+        }));
+    }
+
+    let args: serde_json::Value = serde_json::from_str(&tool.args)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let result = match tool.tool.as_str() {
+        "run_command" => {
+            if let Some(cmd) = args.get("command").and_then(|c| c.as_str()) {
+                let output = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(cmd)
+                    .output()
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                let exit_code = output.status.code();
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let output_str = if exit_code == Some(0) {
+                    format!("$ {}\n{}", cmd, stdout)
+                } else {
+                    format!("$ {}\nError (exit {:?}):\n{}", cmd, exit_code, stderr)
+                };
+                let record = CommandLogRecord {
+                    session_id: Some(session_id.clone()),
+                    command: cmd.to_string(),
+                    source: "http".to_string(),
+                    requires_approval: true,
+                    approved: true,
+                    status: "completed".to_string(),
+                    exit_code,
+                    duration_ms: None,
+                    stdout_preview: Some(stdout.to_string()),
+                    stderr_preview: if stderr.is_empty() {
+                        None
+                    } else {
+                        Some(stderr.to_string())
+                    },
+                    error_message: None,
+                };
+                let _ = crate::memory::storage::insert_command_log(&conn, &record);
+                output_str
+            } else {
+                "Invalid command".to_string()
+            }
+        }
+        "read_file" => {
+            if let Some(path) = args.get("filePath").and_then(|p| p.as_str()) {
+                let content = std::fs::read_to_string(path).map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Read error: {}", e),
+                    )
+                })?;
+                let truncated = if content.len() > 50000 {
+                    format!(
+                        "{}...\n(truncated {} bytes)",
+                        &content[..50000],
+                        content.len()
+                    )
+                } else {
+                    content
+                };
+                truncated
+            } else {
+                "Invalid path".to_string()
+            }
+        }
+        "write_file" => {
+            if let Some(path) = args.get("filePath").and_then(|p| p.as_str()) {
+                if let Some(content) = args.get("content").and_then(|c| c.as_str()) {
+                    std::fs::write(path, content).map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Write error: {}", e),
+                        )
+                    })?;
+                    format!("Written {} bytes to {}", content.len(), path)
+                } else {
+                    "Invalid content".to_string()
+                }
+            } else {
+                "Invalid path".to_string()
+            }
+        }
+        "grep" => {
+            if let Some(pattern) = args.get("pattern").and_then(|p| p.as_str()) {
+                if let Some(path) = args.get("path").and_then(|p| p.as_str()) {
+                    let output = std::process::Command::new("grep")
+                        .arg("-n")
+                        .arg("-r")
+                        .arg(pattern)
+                        .arg(path)
+                        .output()
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    if stdout.is_empty() {
+                        format!("No matches found for '{}' in {}", pattern, path)
+                    } else {
+                        format!("{}\n(matched {} lines)", stdout, stdout.lines().count())
+                    }
+                } else {
+                    "Invalid path".to_string()
+                }
+            } else {
+                "Invalid pattern".to_string()
+            }
+        }
+        _ => "Unknown tool".to_string(),
+    };
+
+    crate::memory::storage::delete_pending_tool(&conn, &pending_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let _ = save_message(&conn, &session_id, "assistant", &result);
+    drop(conn);
+
+    Ok(Json(ChatResponse {
+        message: result,
+        session_id,
+        status: "completed".to_string(),
+        pending_id: None,
+        pending_tools: None,
+    }))
 }
 
 #[cfg(test)]
@@ -516,6 +1087,7 @@ mod tests {
                 model_name: "gpt-4".to_string(),
             },
             client: Client::new(),
+            exec_policy: crate::runtime::config::ExecPolicyConfig::default(),
         });
 
         let request = ReviewRequest {

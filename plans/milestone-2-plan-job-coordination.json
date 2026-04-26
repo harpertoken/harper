@@ -1,0 +1,9 @@
+{
+  "explanation": "Tie plan progress to actual runtime state so steps reflect real execution instead of only model intent.",
+  "items": [
+    { "step": "Link steps to jobs", "status": "pending" },
+    { "step": "Advance steps on success", "status": "pending" },
+    { "step": "Handle blocked and failed runs", "status": "pending" },
+    { "step": "Refine plan transition rules", "status": "pending" }
+  ]
+}

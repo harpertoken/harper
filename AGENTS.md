@@ -1,82 +1,93 @@
-<!--
-Copyright 2026 harpertoken
+# Harper Agent Rules
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+These rules apply to the whole repository unless a deeper `AGENTS.md` overrides them.
 
-    http://www.apache.org/licenses/LICENSE-2.0
+## Priority
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
--->
+Follow instructions in this order:
+1. system / developer / user instructions
+2. nearest applicable `AGENTS.md`
+3. broader parent `AGENTS.md`
 
-# Harper AI Agent Guidelines
+Do not invent capabilities that Harper does not implement.
 
-## User Intent Recognition
+## Working Style
 
-Map user requests to the correct tool:
+- Be direct and technical.
+- Explain the next concrete action before running commands or changing files.
+- Prefer small, reversible changes over broad refactors.
+- Fix root causes, not surface symptoms.
+- Do not touch unrelated files just because they are nearby.
 
-| User Says | Action | Tool |
-|----------|--------|------|
-| "check/view/read/look at <file>" | Read file content | `read_file` |
-| "update/fix/change/edit <file>" | Modify file | `search_replace` |
-| "create/new/make <file>" | Write new file | `write_file` |
-| "delete/remove <file>" | Remove file (ask first) | `run_command` with `rm` |
-| "run/execute <command>" | Run shell command | `run_command` |
-| "search/find <pattern>" | Search code | `run_command` with `grep` |
-| "list/show <stuff>" | List items | `run_command` or list tool |
-| "commit/push changes" | Git operations | `git_*` tools |
-| "understand how <x> works" | Investigate code | `codebase_investigator` |
-| "what changed?" | Show diffs | `git_diff` or `list_changed_files` |
+## Repository Expectations
 
-## File Operations
+- This is a Rust workspace with `harper-core` and `harper-ui`.
+- Keep changes minimal and consistent with existing code style.
+- Prefer extending existing services, models, and state flows over adding parallel systems.
+- When a feature is visible in both core and TUI, keep data flow explicit: storage -> service -> worker/event -> UI state -> widget.
 
-### Allowed
-- Read/write files within current project directory
-- Run commands in project scope
-- Search code with grep/find
+## AGENTS.md Handling
 
-### Forbidden (always ask for confirmation)
-- Delete operations: "use git rm instead"
-- System file modifications
-- Files outside project workspace
-- Sensitive files: `/etc/passwd`, `~/.ssh/*`, `.env`, secrets
+When changing AGENTS support itself:
 
-### Validation
-- Reject paths with `..` (directory traversal)
-- Reject paths outside current working directory
-- Limit file reads to 1MB
+- Treat `AGENTS.md` as scoped repository policy, not generic prompt text.
+- Preserve ancestor-based resolution and deeper-path precedence.
+- Prefer structured state and explicit propagation over prompt-only behavior.
+- When a tool call targets files, use the actual target paths for rule resolution.
+- Keep UI/API visibility aligned with the resolved source set shown to the model.
 
-## Command Execution
+Override syntax supported by Harper's structured merge layer:
 
-### Require Confirmation
-- Any destructive command (rm, mv of critical files)
-- Commands that modify git history
-- Commands that could break the build
-- Network operations
+- `Delete: Ask first` defines or overrides the `Delete` rule
+- `replace: Delete: Use git rm instead` explicitly replaces the `Delete` rule
+- `remove: Delete` removes the inherited `Delete` rule
+- `! Delete` is shorthand for removing the inherited `Delete` rule
 
-### Safety Rules
-- Always show the command before execution
-- Explain what the command will do
-- Never hide commands from the user
+## Tool Mapping
 
-## Codebase Conventions
+Map user intent to Harper capabilities precisely:
 
-When working with this Rust codebase:
+- inspect/read file -> `read_file`
+- edit existing file -> `search_replace`
+- create file -> `write_file`
+- run command -> `run_command`
+- inspect changes -> `git_diff`, `git_status`, `list_changed_files`
+- investigate code flow -> `codebase_investigator`
+- update execution plan -> `update_plan`
 
-- **Conventional commits**: `type: message` (feat, fix, docs, refactor, etc.)
-- **Error handling**: Use `Result`/`Option`, avoid `unwrap()`
-- **PR format**: `[scope] description`
-- **Max commit message**: 72 chars first line
+Do not claim a dedicated tool exists if Harper only supports the behavior through another path.
 
-## Response Style
+## File Safety
 
-- Be concise and direct
-- Explain before acting
-- Confirm destructive actions
-- Show command output when relevant
-- Ask for clarification if intent is unclear
+- Stay inside the repository unless the user explicitly asks otherwise.
+- Reject traversal-style paths like `..` when implementing file tools.
+- Treat secrets, `.env` files, SSH material, and system paths as sensitive.
+- Do not delete files unless the user explicitly asks for it.
+- Prefer `git rm` over raw `rm` when the intent is tracked deletion.
+
+## Command Safety
+
+- Show the exact command before running it.
+- Request approval for destructive, networked, or history-rewriting commands.
+- Do not hide shell behavior behind vague summaries.
+- Prefer focused validation commands first, then broader test/build commands.
+
+## Coding Rules
+
+- Use `Result` / `Option` cleanly; avoid `unwrap()` in production paths.
+- Keep public state models serializable when they cross storage, API, or UI boundaries.
+- Reuse existing types before adding new ones.
+- Avoid one-off helpers when the logic belongs in an existing service.
+- Add tests near the behavior you changed when the codebase already has adjacent tests.
+
+## Validation
+
+- Run the narrowest useful tests first.
+- If a compile or test failure is caused by your change, fix it before moving on.
+- Do not “solve” unrelated failing tests unless the user asked for that.
+
+## Response Rules
+
+- Report what changed, where it changed, and what you validated.
+- Be explicit about remaining limitations.
+- If a next step is obvious, suggest one concrete next step.

@@ -1,0 +1,9 @@
+{
+  "explanation": "Move from basic reactive execution toward a planner-quality agent with scoped repo instructions and stronger orchestration.",
+  "items": [
+    { "step": "Resolve scoped AGENTS rules", "status": "pending" },
+    { "step": "Add planner checkpoints", "status": "pending" },
+    { "step": "Improve retry and recovery", "status": "pending" },
+    { "step": "Summarize execution state cleanly", "status": "pending" }
+  ]
+}

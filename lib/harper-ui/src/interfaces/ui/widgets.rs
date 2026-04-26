@@ -16,26 +16,33 @@ use ratatui::prelude::*;
 use ratatui::style::Modifier;
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap};
 
-use super::app::{AppState, ApprovalState, SessionInfo, TuiApp, UiMessage};
+use super::app::{
+    AppState, ApprovalState, CommandOutputState, ReviewState, SessionInfo, TuiApp, UiMessage,
+};
 use super::theme::Theme;
+use harper_core::{PlanRuntime, PlanState, PlanStepStatus, ResolvedAgents};
 
 // Refined shortcuts for a cleaner footer
-const FOOTER_SHORTCUTS: [[(&str, &str); 6]; 2] = [
+const FOOTER_SHORTCUTS: [[(&str, &str); 8]; 2] = [
     [
         ("G", "Help"),
-        ("O", "Export"),
         ("W", "Search"),
-        ("K", "Cut"),
         ("B", "Sidebar"),
+        ("A", "Agents"),
+        ("F", "Findings"),
+        ("M", "Msgs"),
         ("C", "ID"),
+        ("O", "Export"),
     ],
     [
         ("X", "Exit"),
         ("R", "Load"),
+        ("L", "Preview"),
         ("U", "Paste"),
         ("T", "Enter"),
         ("Y", "Prev"),
         ("V", "Next"),
+        ("Esc", "Back"),
     ],
 ];
 
@@ -126,10 +133,56 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 main_area
             };
 
+            let has_plan = chat_state
+                .active_plan
+                .as_ref()
+                .is_some_and(|plan| !plan.items.is_empty() || plan.explanation.is_some());
+            let has_agents = chat_state
+                .active_agents
+                .as_ref()
+                .is_some_and(|agents| !agents.sources.is_empty());
+            let has_review = chat_state.active_review.is_some();
+            let has_command_output = chat_state.command_output.is_some();
+            let plan_height = chat_state
+                .active_plan
+                .as_ref()
+                .map(plan_panel_height)
+                .unwrap_or(0);
+            let command_output_height = chat_state
+                .command_output
+                .as_ref()
+                .map(command_output_panel_height)
+                .unwrap_or(0);
+            let agents_height = chat_state
+                .active_agents
+                .as_ref()
+                .map(|agents| agents_panel_height(agents, chat_state.agents_panel_expanded))
+                .unwrap_or(0);
+            let review_height = chat_state
+                .active_review
+                .as_ref()
+                .map(|review| review_panel_height(review, chat_state.review_selected))
+                .unwrap_or(0);
+            let mut constraints = vec![Constraint::Length(3), Constraint::Min(5)];
+            if has_review {
+                constraints.push(Constraint::Length(review_height));
+            }
+            if has_command_output {
+                constraints.push(Constraint::Length(command_output_height));
+            }
+            if has_plan {
+                constraints.push(Constraint::Length(plan_height));
+            }
+            if has_agents {
+                constraints.push(Constraint::Length(agents_height));
+            }
+            constraints.push(Constraint::Length(3));
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Min(5), Constraint::Length(3)])
+                .constraints(constraints)
                 .split(chat_area);
+
+            draw_chat_summary(frame, app, chat_state, theme, chunks[0]);
 
             // Messages area - Typography focused
             let safe_scroll_offset = chat_state.scroll_offset.min(chat_state.messages.len());
@@ -178,6 +231,27 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 message_lines.push(Line::raw("")); // Breathing room
             }
 
+            if chat_state.awaiting_response {
+                message_lines.push(Line::from(vec![Span::styled(
+                    "Harper ›",
+                    Style::default()
+                        .fg(theme.title)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+                message_lines.push(Line::from(vec![
+                    Span::styled(
+                        activity_spinner_frame(app),
+                        Style::default().fg(theme.accent),
+                    ),
+                    Span::raw(" "),
+                    Span::styled(
+                        "Thinking...",
+                        theme.muted_style().add_modifier(Modifier::ITALIC),
+                    ),
+                ]));
+                message_lines.push(Line::raw(""));
+            }
+
             let chat_block = Block::default()
                 .borders(Borders::NONE) // No noise
                 .padding(Padding::uniform(1));
@@ -186,7 +260,54 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .block(chat_block)
                 .wrap(Wrap { trim: false });
 
-            frame.render_widget(messages_widget, chunks[0]);
+            frame.render_widget(messages_widget, chunks[1]);
+
+            let mut next_panel_index = 2;
+            if has_review {
+                if let Some(review) = &chat_state.active_review {
+                    draw_review_panel(
+                        frame,
+                        review,
+                        chat_state.review_selected,
+                        matches!(
+                            chat_state.navigation_focus,
+                            super::app::NavigationFocus::Review
+                        ),
+                        theme,
+                        chunks[next_panel_index],
+                    );
+                }
+                next_panel_index += 1;
+            }
+            if has_command_output {
+                if let Some(output) = &chat_state.command_output {
+                    draw_command_output_panel(frame, output, theme, chunks[next_panel_index]);
+                }
+                next_panel_index += 1;
+            }
+
+            if has_plan {
+                if let Some(plan) = &chat_state.active_plan {
+                    draw_plan_panel(frame, plan, theme, chunks[next_panel_index]);
+                }
+                next_panel_index += 1;
+            }
+            if has_agents {
+                if let Some(agents) = &chat_state.active_agents {
+                    draw_agents_panel(
+                        frame,
+                        agents,
+                        theme,
+                        chunks[next_panel_index],
+                        chat_state.agents_panel_expanded,
+                        chat_state.agents_scroll_offset,
+                        matches!(
+                            chat_state.navigation_focus,
+                            super::app::NavigationFocus::Agents
+                        ),
+                    );
+                }
+            }
 
             // Input area - Minimalist
             let input_block = Block::default()
@@ -208,7 +329,12 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
 
             let input_widget = Paragraph::new(input_text).block(input_block);
 
-            frame.render_widget(input_widget, chunks[1]);
+            let input_index = 2
+                + usize::from(has_review)
+                + usize::from(has_command_output)
+                + usize::from(has_plan)
+                + usize::from(has_agents);
+            frame.render_widget(input_widget, chunks[input_index]);
         }
         AppState::Sessions(sessions, selected) => {
             draw_sessions(frame, sessions, *selected, theme, main_area)
@@ -232,6 +358,532 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     if let Some(msg) = &app.message {
         draw_message_overlay(frame, msg, theme);
     }
+}
+
+fn review_panel_height(review: &ReviewState, selected: usize) -> u16 {
+    let findings = review.findings.len().min(3);
+    let model_line = usize::from(review.model.is_some());
+    let detail_lines = review
+        .findings
+        .get(selected)
+        .map(|finding| 2 + finding.message.lines().count().min(3))
+        .unwrap_or(0);
+    (findings + model_line + detail_lines + 4) as u16
+}
+
+fn draw_chat_summary(
+    frame: &mut Frame,
+    app: &TuiApp,
+    chat_state: &super::app::ChatState,
+    theme: &Theme,
+    area: Rect,
+) {
+    let plan_status = chat_state
+        .active_plan
+        .as_ref()
+        .map_or("plan: none".to_string(), |plan| {
+            let total = plan.items.len();
+            let completed = plan
+                .items
+                .iter()
+                .filter(|item| matches!(item.status, PlanStepStatus::Completed))
+                .count();
+            let in_progress = plan
+                .items
+                .iter()
+                .any(|item| matches!(item.status, PlanStepStatus::InProgress));
+            if total == 0 {
+                "plan: empty".to_string()
+            } else if in_progress {
+                format!("plan: {}/{} done, active", completed, total)
+            } else {
+                format!("plan: {}/{} done", completed, total)
+            }
+        });
+    let agents_status = chat_state
+        .active_agents
+        .as_ref()
+        .map_or("agents: none".to_string(), |agents| {
+            format!("agents: {} sections", agents.effective_rule_sections.len())
+        });
+    let web_status = if chat_state.web_search_enabled {
+        "web: on"
+    } else {
+        "web: off"
+    };
+    let focus_status = format!("focus: {}", chat_state.navigation_focus_label());
+    let model_status = if app.model_label.is_empty() {
+        None
+    } else {
+        Some(format!("model: {}", app.model_label))
+    };
+    let approval_status = if app.pending_approval.is_some() {
+        Some("approval: pending")
+    } else {
+        None
+    };
+    let activity_status = app.activity_status.as_ref().map(|status| {
+        let spinner = activity_spinner_frame(app);
+        format!(
+            "activity: {} {}",
+            spinner,
+            truncate_chat_summary(status, 32)
+        )
+    });
+    let agents_panel_status = if chat_state.agents_panel_expanded {
+        Some("agents panel: open")
+    } else {
+        None
+    };
+    let last_action = latest_action_summary(app, chat_state);
+    let last_rule_source = latest_rule_source(chat_state);
+
+    let mut spans = vec![
+        Span::styled("session ", theme.muted_style()),
+        Span::styled(
+            truncate_chat_summary(&chat_state.session_id, 12),
+            Style::default()
+                .fg(theme.foreground)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("  "),
+        Span::styled(plan_status, theme.muted_style()),
+        Span::raw("  "),
+        Span::styled(agents_status, theme.muted_style()),
+        Span::raw("  "),
+        Span::styled(web_status, theme.muted_style()),
+        Span::raw("  "),
+        Span::styled(focus_status, theme.muted_style()),
+    ];
+    if let Some(status) = approval_status {
+        spans.push(Span::raw("  "));
+        spans.push(Span::styled(
+            status,
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+    if let Some(status) = activity_status {
+        spans.push(Span::raw("  "));
+        spans.push(Span::styled(
+            status,
+            Style::default()
+                .fg(theme.output)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+    if let Some(status) = model_status {
+        spans.push(Span::raw("  "));
+        spans.push(Span::styled(status, theme.muted_style()));
+    }
+    if let Some(status) = agents_panel_status {
+        spans.push(Span::raw("  "));
+        spans.push(Span::styled(status, theme.muted_style()));
+    }
+    let line = Line::from(spans);
+    let mut detail_spans = Vec::new();
+    if let Some(action) = last_action {
+        detail_spans.push(Span::styled("last ", theme.muted_style()));
+        detail_spans.push(Span::styled(
+            truncate_chat_summary(&action, 36),
+            Style::default().fg(theme.foreground),
+        ));
+    }
+    if let Some(source) = last_rule_source {
+        if !detail_spans.is_empty() {
+            detail_spans.push(Span::raw("  "));
+        }
+        detail_spans.push(Span::styled("rule src ", theme.muted_style()));
+        detail_spans.push(Span::styled(
+            truncate_chat_summary(&source, 24),
+            theme.muted_style().add_modifier(Modifier::ITALIC),
+        ));
+    }
+
+    let block = Block::default()
+        .borders(Borders::BOTTOM)
+        .border_style(theme.muted_style())
+        .padding(Padding::horizontal(1));
+    let mut lines = vec![line];
+    if !detail_spans.is_empty() {
+        lines.push(Line::from(detail_spans));
+    }
+    let widget = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+    frame.render_widget(widget, area);
+}
+
+fn truncate_chat_summary(value: &str, max_len: usize) -> String {
+    if value.len() <= max_len {
+        value.to_string()
+    } else {
+        format!("{}...", &value[..max_len])
+    }
+}
+
+fn activity_spinner_frame(app: &TuiApp) -> &'static str {
+    const FRAMES: [&str; 4] = ["·", "◜", "◝", "◞"];
+    let elapsed = app
+        .activity_started_at
+        .map(|started| started.elapsed().as_millis() / 120)
+        .unwrap_or(0);
+    FRAMES[(elapsed as usize) % FRAMES.len()]
+}
+
+fn latest_action_summary(app: &TuiApp, chat_state: &super::app::ChatState) -> Option<String> {
+    if let Some(approval) = &app.pending_approval {
+        return Some(approval.command.clone());
+    }
+
+    for msg in chat_state.messages.iter().rev() {
+        for line in msg.content.lines().rev() {
+            let trimmed = line.trim();
+            if let Some(command) = trimmed.strip_prefix("$ ") {
+                return Some(command.to_string());
+            }
+        }
+    }
+
+    chat_state
+        .messages
+        .iter()
+        .rev()
+        .find(|msg| msg.role != "system" && !msg.content.trim().is_empty())
+        .map(|msg| {
+            msg.content
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        })
+        .filter(|line| !line.is_empty())
+}
+
+fn latest_rule_source(chat_state: &super::app::ChatState) -> Option<String> {
+    chat_state.active_agents.as_ref().and_then(|agents| {
+        agents
+            .effective_rule_sections
+            .iter()
+            .rev()
+            .find_map(|section| {
+                section
+                    .rules
+                    .last()
+                    .map(|rule| rule.source_path.display().to_string())
+            })
+    })
+}
+
+fn plan_panel_height(plan: &PlanState) -> u16 {
+    let mut lines = plan.items.len().min(4) + 2;
+    if plan.explanation.is_some() {
+        lines += 1;
+    }
+    if plan.runtime.is_some() {
+        lines += 1;
+    }
+    lines as u16
+}
+
+fn command_output_panel_height(output: &CommandOutputState) -> u16 {
+    let line_count = output.content.lines().count().clamp(1, 5);
+    (line_count + 3) as u16
+}
+
+fn draw_command_output_panel(
+    frame: &mut Frame,
+    output: &CommandOutputState,
+    theme: &Theme,
+    area: Rect,
+) {
+    let status = if output.done { "done" } else { "live" };
+    let title = format!(" Command Output ({}) ", status);
+    let color = if output.has_error {
+        Color::Rgb(245, 158, 11)
+    } else {
+        theme.output
+    };
+    let mut lines = vec![Line::styled(
+        truncate_chat_summary(&output.command, 96),
+        theme.muted_style().add_modifier(Modifier::ITALIC),
+    )];
+    let content = if output.content.trim().is_empty() {
+        "No output yet"
+    } else {
+        output.content.trim_end()
+    };
+    for line in content
+        .lines()
+        .rev()
+        .take(4)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+    {
+        lines.push(Line::styled(line.to_string(), Style::default().fg(color)));
+    }
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::TOP)
+        .border_style(theme.muted_style())
+        .padding(Padding::horizontal(1));
+    let widget = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+    frame.render_widget(widget, area);
+}
+
+fn draw_review_panel(
+    frame: &mut Frame,
+    review: &ReviewState,
+    selected: usize,
+    focused: bool,
+    theme: &Theme,
+    area: Rect,
+) {
+    let mut lines = Vec::new();
+    lines.push(Line::styled(review.summary.as_str(), theme.muted_style()));
+    if let Some(model) = &review.model {
+        lines.push(Line::styled(
+            format!("model {}", model),
+            theme.muted_style().add_modifier(Modifier::ITALIC),
+        ));
+    }
+    for (index, finding) in review.findings.iter().take(3).enumerate() {
+        let severity_color = match finding.severity.as_str() {
+            "error" => Color::Rgb(239, 68, 68),
+            "warning" => Color::Rgb(245, 158, 11),
+            _ => theme.accent,
+        };
+        let marker = if index == selected { "▸" } else { "•" };
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(severity_color)),
+            Span::raw(" "),
+            Span::styled(
+                format!("{}: {}", finding.severity, finding.title),
+                if index == selected {
+                    Style::default()
+                        .fg(theme.foreground)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(theme.foreground)
+                },
+            ),
+        ]));
+        if index == selected {
+            for detail_line in finding.message.lines().take(3) {
+                lines.push(Line::styled(
+                    format!("    {}", truncate_chat_summary(detail_line, 88)),
+                    theme.muted_style(),
+                ));
+            }
+        } else {
+            lines.push(Line::styled(
+                format!("  {}", truncate_chat_summary(&finding.message, 88)),
+                theme.muted_style(),
+            ));
+        }
+    }
+    if review.findings.len() > 3 {
+        lines.push(Line::styled(
+            format!("{} more findings", review.findings.len() - 3),
+            theme.muted_style(),
+        ));
+    }
+
+    let title = if focused {
+        " Review Findings (focused • Y/V or ↑/↓) "
+    } else {
+        " Review Findings (Ctrl+F focus) "
+    };
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::TOP)
+        .border_style(theme.muted_style())
+        .padding(Padding::horizontal(1));
+    let widget = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+    frame.render_widget(widget, area);
+}
+
+fn draw_plan_panel(frame: &mut Frame, plan: &PlanState, theme: &Theme, area: Rect) {
+    let mut lines = Vec::new();
+
+    if let Some(explanation) = &plan.explanation {
+        lines.push(Line::styled(explanation.as_str(), theme.muted_style()));
+    }
+    if let Some(runtime) = &plan.runtime {
+        lines.push(Line::styled(
+            format_plan_runtime(runtime),
+            theme.muted_style().add_modifier(Modifier::ITALIC),
+        ));
+    }
+
+    for item in plan.items.iter().take(4) {
+        let (marker, color) = match item.status {
+            PlanStepStatus::Pending => ("○", theme.muted),
+            PlanStepStatus::InProgress => ("◐", theme.accent),
+            PlanStepStatus::Completed => ("●", theme.output),
+        };
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(color)),
+            Span::raw(" "),
+            Span::styled(item.step.as_str(), Style::default().fg(theme.foreground)),
+        ]));
+    }
+
+    if plan.items.len() > 4 {
+        lines.push(Line::styled(
+            format!("{} more steps", plan.items.len() - 4),
+            theme.muted_style(),
+        ));
+    }
+
+    let block = Block::default()
+        .title(" Plan ")
+        .borders(Borders::TOP)
+        .border_style(theme.muted_style())
+        .padding(Padding::horizontal(1));
+    let widget = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+    frame.render_widget(widget, area);
+}
+
+fn agents_panel_height(agents: &ResolvedAgents, expanded: bool) -> u16 {
+    if expanded {
+        return 10;
+    }
+
+    let section_lines: usize = agents
+        .effective_rule_sections
+        .iter()
+        .take(2)
+        .map(|section| 2 + usize::from(!section.rules.is_empty()))
+        .sum();
+    let overflow_lines = usize::from(agents.effective_rule_sections.len() > 2);
+    (section_lines + overflow_lines + 2) as u16
+}
+
+fn draw_agents_panel(
+    frame: &mut Frame,
+    agents: &ResolvedAgents,
+    theme: &Theme,
+    area: Rect,
+    expanded: bool,
+    scroll_offset: usize,
+    focused: bool,
+) {
+    let lines = if expanded {
+        expanded_agents_lines(agents, theme, scroll_offset, area.height)
+    } else {
+        compact_agents_lines(agents, theme)
+    };
+
+    let title = if expanded && focused {
+        " AGENTS (focused • Y/V or ↑/↓) "
+    } else if expanded {
+        " AGENTS (expanded • Ctrl+A focus) "
+    } else {
+        " AGENTS (Ctrl+A open) "
+    };
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::TOP)
+        .border_style(theme.muted_style())
+        .padding(Padding::horizontal(1));
+    let widget = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+    frame.render_widget(widget, area);
+}
+
+fn compact_agents_lines(agents: &ResolvedAgents, theme: &Theme) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    for section in agents.effective_rule_sections.iter().take(2) {
+        lines.push(Line::from(vec![
+            Span::styled("•", Style::default().fg(theme.accent)),
+            Span::raw(" "),
+            Span::styled(
+                section
+                    .heading
+                    .clone()
+                    .unwrap_or_else(|| "General".to_string()),
+                Style::default().fg(theme.foreground),
+            ),
+        ]));
+        if let Some(preview) = section.rules.first() {
+            lines.push(Line::styled(
+                format!("  {}", truncate_agents_rule(&preview.text)),
+                theme.muted_style(),
+            ));
+        }
+    }
+    if agents.effective_rule_sections.len() > 2 {
+        lines.push(Line::styled(
+            format!("{} more sections", agents.effective_rule_sections.len() - 2),
+            theme.muted_style(),
+        ));
+    }
+    lines
+}
+
+fn expanded_agents_lines(
+    agents: &ResolvedAgents,
+    theme: &Theme,
+    scroll_offset: usize,
+    panel_height: u16,
+) -> Vec<Line<'static>> {
+    let mut full_lines = Vec::new();
+    for section in &agents.effective_rule_sections {
+        full_lines.push(Line::from(vec![
+            Span::styled("•", Style::default().fg(theme.accent)),
+            Span::raw(" "),
+            Span::styled(
+                section
+                    .heading
+                    .clone()
+                    .unwrap_or_else(|| "General".to_string()),
+                Style::default()
+                    .fg(theme.foreground)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]));
+        for rule in section.rules.iter().take(5) {
+            full_lines.push(Line::styled(
+                format!("  {}", rule.text),
+                theme.muted_style(),
+            ));
+            full_lines.push(Line::styled(
+                format!("    source: {}", rule.source_path.display()),
+                theme.muted_style().add_modifier(Modifier::ITALIC),
+            ));
+        }
+        full_lines.push(Line::raw(""));
+    }
+
+    let visible_height = panel_height.saturating_sub(2) as usize;
+    let max_offset = full_lines.len().saturating_sub(visible_height.max(1));
+    let offset = scroll_offset.min(max_offset);
+    let end = (offset + visible_height.max(1)).min(full_lines.len());
+    full_lines[offset..end].to_vec()
+}
+
+fn truncate_agents_rule(rule: &str) -> String {
+    const MAX_LEN: usize = 72;
+    if rule.len() <= MAX_LEN {
+        rule.to_string()
+    } else {
+        format!("{}...", &rule[..MAX_LEN])
+    }
+}
+
+fn format_plan_runtime(runtime: &PlanRuntime) -> String {
+    let status = runtime
+        .active_status
+        .as_deref()
+        .unwrap_or("running")
+        .replace('_', " ");
+    let target = runtime
+        .active_command
+        .as_deref()
+        .or(runtime.active_tool.as_deref())
+        .unwrap_or("task");
+    format!("{}: {}", status, target)
 }
 
 fn draw_stats(
@@ -408,7 +1060,8 @@ fn draw_zen_footer(frame: &mut Frame, _app: &TuiApp, theme: &Theme, area: Rect) 
     let area = block.inner(area);
     frame.render_widget(block, frame.area()); // Render border on full area
 
-    let col_width = area.width / 6;
+    let num_cols = FOOTER_SHORTCUTS[0].len().max(1) as u16;
+    let col_width = (area.width / num_cols).max(1);
     for (row_idx, row) in FOOTER_SHORTCUTS.iter().enumerate() {
         for (col_idx, (key, label)) in row.iter().enumerate() {
             let shortcut_area = Rect {
@@ -430,7 +1083,7 @@ fn draw_zen_footer(frame: &mut Frame, _app: &TuiApp, theme: &Theme, area: Rect) 
 
 fn draw_approval(frame: &mut Frame, state: &ApprovalState, theme: &Theme) {
     let content = format!(
-        "{}\n\n{}\n\n[Y] Approve  [N] Reject",
+        "{}\n\nCommand:\n{}\n\nControls: Y approve • N reject • Esc reject • ↑/↓ or J/K scroll",
         state.prompt, state.command
     );
     let area = frame.area();
@@ -449,13 +1102,13 @@ fn draw_approval(frame: &mut Frame, state: &ApprovalState, theme: &Theme) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(theme.muted_style())
-        .title(" Security ")
+        .title(" Approval Required ")
         .title_style(theme.warning_style())
         .style(Style::default().bg(theme.background));
 
     let paragraph = Paragraph::new(content)
         .block(block)
-        .alignment(Alignment::Center)
+        .alignment(Alignment::Left)
         .wrap(Wrap { trim: true })
         .scroll((state.scroll_offset, 0));
 
@@ -481,13 +1134,24 @@ fn draw_sessions(
             } else {
                 Style::default().fg(theme.foreground)
             };
-            ListItem::new(format!("{} › {}", session.name, session.created_at)).style(style)
+            ListItem::new(vec![
+                Line::from(vec![
+                    Span::styled(session.name.clone(), style),
+                    Span::styled("  ", theme.muted_style()),
+                    Span::styled(session.created_at.clone(), theme.muted_style()),
+                ]),
+                Line::from(vec![Span::styled(
+                    truncate_chat_summary(&session.id, 48),
+                    theme.muted_style(),
+                )]),
+            ])
+            .style(style)
         })
         .collect();
 
     let sessions_list = List::new(items).block(
         Block::default()
-            .title(" Sessions ")
+            .title(" Sessions (Enter resume • → preview) ")
             .padding(Padding::uniform(1)),
     );
 
@@ -561,25 +1225,49 @@ fn draw_view_session(
 ) {
     let safe_scroll_offset = selected.min(messages.len());
     let displayed_messages = &messages[safe_scroll_offset..];
-    let message_lines: Vec<Line> = displayed_messages
-        .iter()
-        .flat_map(|msg| {
-            let default_color = if msg.role == "user" {
-                theme.input
-            } else {
-                theme.output
-            };
-            msg.content
-                .lines()
-                .map(|line| Line::styled(line, default_color))
-                .collect::<Vec<_>>()
-        })
-        .collect();
+    let mut message_lines: Vec<Line> = Vec::new();
+    for msg in displayed_messages.iter().filter(|msg| msg.role != "system") {
+        let label = match msg.role.as_str() {
+            "user" => "User ›",
+            "assistant" => "Harper ›",
+            _ => "System ›",
+        };
+        let label_style = match msg.role.as_str() {
+            "user" => Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+            "assistant" => Style::default()
+                .fg(theme.title)
+                .add_modifier(Modifier::BOLD),
+            _ => theme.muted_style(),
+        };
+        message_lines.push(Line::from(vec![Span::styled(label, label_style)]));
+        let default_color = if msg.role == "user" {
+            theme.input
+        } else {
+            theme.output
+        };
+        if msg.content.contains("```") {
+            let spans = parse_content_with_code(
+                &theme.syntax_set,
+                &theme.theme_set,
+                &msg.content,
+                default_color,
+                &theme.syntax_theme,
+            );
+            message_lines.push(Line::from(spans));
+        } else {
+            for line in msg.content.lines() {
+                message_lines.push(Line::styled(line, default_color));
+            }
+        }
+        message_lines.push(Line::raw(""));
+    }
 
     let view = Paragraph::new(message_lines)
         .block(
             Block::default()
-                .title(format!(" {} ", name))
+                .title(format!(" Preview {} (Enter resume • Esc back) ", name))
                 .padding(Padding::uniform(1)),
         )
         .wrap(Wrap { trim: false });

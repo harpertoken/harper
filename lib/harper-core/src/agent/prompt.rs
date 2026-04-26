@@ -27,6 +27,9 @@ pub struct PromptBuilder<'a> {
 }
 
 impl<'a> PromptBuilder<'a> {
+    const IGNORED_CONTEXT_FILES: [&'static str; 2] = ["README.md", "README"];
+    const IGNORED_CONTEXT_DIRS: [&'static str; 3] = ["target", "node_modules", "website"];
+
     pub fn new(
         config: &'a ApiConfig,
         prompt_id: Option<String>,
@@ -68,11 +71,13 @@ Capabilities: File I/O, shell execution, and persistent memory{}.",
 
         prompt.push_str(
             "\n\nInterface via JSON tool commands. Analysis should be concise and direct.
+For multi-step work, call update_plan early, keep exactly one step in_progress when active work remains, and update the plan as progress changes.
 
 User Intent Recognition:
 - read a file -> use read_file
 - update or fix a file -> use search_replace or write_file
 - run a command -> use run_command
+- manage a multi-step task -> use update_plan
 - list or show files -> use run_command or list tool
 - search or find something -> use run_command with grep
 - create a new file -> use write_file
@@ -85,12 +90,15 @@ User Intent Recognition:
 Use this JSON shape for built-in tools:
 {\"tool\":\"tool_name\",\"args\":{...}}
 
+If the user asks for a file read, file edit, search, diff, git inspection, or command execution, do not answer with an apology or a capability disclaimer. Emit the correct tool JSON immediately.
+
 Core Tools:
 - read_file(args: {\"path\": \"src/main.rs\"})
 - write_file(args: {\"path\": \"src/main.rs\", \"content\": \"...\"})
 - search_replace(args: {\"path\": \"src/main.rs\", \"old_string\": \"old\", \"new_string\": \"new\"})
 - run_command(args: {\"command\": \"git status\"})
 - todo(args: {\"action\": \"add|list|remove|clear\", \"description\": \"...\", \"index\": 1})
+- update_plan(args: {\"explanation\": \"optional context\", \"items\": [{\"step\": \"Inspect files\", \"status\": \"in_progress\"}]})
 - list_changed_files(args: {\"ext\": \"rs\", \"tracked_only\": true, \"since\": \"HEAD~1\"})
 - git_status(args: {})
 - git_diff(args: {})
@@ -109,8 +117,10 @@ Example: {\"tool\":\"read_file\",\"args\":{\"path\":\"src/main.rs\"}}",
             prompt.push_str(&mcp_tools);
         }
 
-        if let Ok(guidelines) = std::fs::read_to_string("AGENTS.md") {
-            prompt.push_str(&format!("\n\nGuidelines:\n{}\n", guidelines));
+        if let Ok(guidelines) = self.resolve_agents_guidelines() {
+            if let Some(rendered) = guidelines.render_for_prompt() {
+                prompt.push_str(&format!("\n\nGuidelines:\n{}\n", rendered));
+            }
         }
 
         if web_search_enabled {
@@ -155,8 +165,8 @@ Example: {\"tool\":\"read_file\",\"args\":{\"path\":\"src/main.rs\"}}",
                 Ok(Some(entry)) => {
                     if let Ok(file_name) = entry.file_name().into_string() {
                         if !file_name.starts_with('.')
-                            && file_name != "target"
-                            && file_name != "node_modules"
+                            && !Self::IGNORED_CONTEXT_FILES.contains(&file_name.as_str())
+                            && !Self::IGNORED_CONTEXT_DIRS.contains(&file_name.as_str())
                         {
                             let metadata = entry.metadata().await.map_err(|e| {
                                 HarperError::Command(format!("Failed to get metadata: {}", e))
@@ -191,6 +201,14 @@ Example: {\"tool\":\"read_file\",\"args\":{\"path\":\"src/main.rs\"}}",
         }
 
         Ok(context)
+    }
+
+    fn resolve_agents_guidelines(
+        &self,
+    ) -> Result<crate::core::agents::ResolvedAgents, HarperError> {
+        let current_dir = std::env::current_dir()
+            .map_err(|e| HarperError::Command(format!("Failed to get current dir: {}", e)))?;
+        crate::core::agents::resolve_agents_for_dir(&current_dir)
     }
 
     /// Get MCP tools text

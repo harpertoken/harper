@@ -90,6 +90,22 @@ pub struct ExecPolicyConfig {
     pub sandbox: Option<SandboxConfig>,
 }
 
+impl Default for ExecPolicyConfig {
+    fn default() -> Self {
+        Self {
+            allowed_commands: None,
+            blocked_commands: None,
+            sandbox: Some(SandboxConfig {
+                enabled: Some(false),
+                allowed_dirs: None,
+                network_access: Some(true),
+                readonly_home: Some(false),
+                max_execution_time_secs: None,
+            }),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct SandboxConfig {
     pub enabled: Option<bool>,

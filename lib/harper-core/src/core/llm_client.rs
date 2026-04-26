@@ -186,6 +186,39 @@ pub async fn call_llm(
                         }
                     },
                     {
+                        "name": "update_plan",
+                        "description": "Update the current execution plan for the active session",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "explanation": {
+                                    "type": "string",
+                                    "description": "Optional note explaining the current plan or why it changed"
+                                },
+                                "items": {
+                                    "type": "array",
+                                    "description": "Ordered plan steps",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "step": {
+                                                "type": "string",
+                                                "description": "Short step description"
+                                            },
+                                            "status": {
+                                                "type": "string",
+                                                "enum": ["pending", "in_progress", "completed"],
+                                                "description": "Current status of the step"
+                                            }
+                                        },
+                                        "required": ["step", "status"]
+                                    }
+                                }
+                            },
+                            "required": ["items"]
+                        }
+                    },
+                    {
                         "name": "git_status",
                         "description": "Get the current git status",
                         "parameters": {

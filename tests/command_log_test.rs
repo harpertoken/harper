@@ -51,6 +51,7 @@ async fn test_command_logging() {
         &exec_policy,
         Some(&audit_ctx),
         None,
+        None,
     )
     .await
     .expect("command should succeed");

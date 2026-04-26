@@ -17,12 +17,15 @@
 //! This module provides functionality for managing chat sessions,
 //! including listing, viewing, and exporting sessions.
 
+use crate::core::agents::ResolvedAgents;
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::io_traits::{Input, Output};
+use crate::core::plan::PlanState;
 use crate::core::Message;
 use crate::memory::cache::CacheAlignedBuffer;
 use crate::memory::storage::{
-    load_command_logs_for_session, load_history, load_latest_command_log,
+    load_active_agents, load_command_logs_for_session, load_history, load_latest_command_log,
+    load_plan_state,
 };
 use chrono::Local;
 use colored::*;
@@ -34,6 +37,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct Session {
     pub id: String,
+    pub title: Option<String>,
     pub created_at: String,
 }
 
@@ -44,6 +48,16 @@ pub struct GlobalStats {
     pub total_commands: usize,
     pub approved_commands: usize,
     pub avg_command_duration_ms: f64,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct SessionStateView {
+    pub session_id: String,
+    pub messages: Vec<Message>,
+    pub plan: Option<PlanState>,
+    pub agents: Option<ResolvedAgents>,
+    pub agents_rendered: Option<String>,
+    pub agents_effective_rendered: Option<String>,
 }
 
 /// Service for managing chat sessions
@@ -114,13 +128,14 @@ impl<'a> SessionService<'a> {
 
     /// List all previous sessions (returns data)
     pub fn list_sessions_data(&self) -> HarperResult<Vec<Session>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, created_at FROM sessions ORDER BY created_at DESC")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT id, title, created_at FROM sessions ORDER BY updated_at DESC, created_at DESC",
+        )?;
         let rows = stmt.query_map([], |row| {
             Ok(Session {
                 id: row.get(0)?,
-                created_at: row.get(1)?,
+                title: row.get(1)?,
+                created_at: row.get(2)?,
             })
         })?;
         let sessions = rows.collect::<Result<Vec<_>, _>>()?;
@@ -182,6 +197,38 @@ impl<'a> SessionService<'a> {
         Ok(history)
     }
 
+    pub fn view_session_plan_data(&self, session_id: &str) -> HarperResult<Option<PlanState>> {
+        load_plan_state(self.conn, session_id)
+    }
+
+    pub fn view_session_agents_data(
+        &self,
+        session_id: &str,
+    ) -> HarperResult<Option<ResolvedAgents>> {
+        load_active_agents(self.conn, session_id)
+    }
+
+    pub fn load_session_state_view(&self, session_id: &str) -> HarperResult<SessionStateView> {
+        let messages = load_history(self.conn, session_id)?;
+        let plan = load_plan_state(self.conn, session_id)?;
+        let agents = load_active_agents(self.conn, session_id)?;
+        let agents_rendered = agents
+            .as_ref()
+            .and_then(|resolved| resolved.render_for_prompt());
+        let agents_effective_rendered = agents
+            .as_ref()
+            .and_then(|resolved| resolved.render_effective_for_display());
+
+        Ok(SessionStateView {
+            session_id: session_id.to_string(),
+            messages,
+            plan,
+            agents,
+            agents_rendered,
+            agents_effective_rendered,
+        })
+    }
+
     /// View a specific session's history
     pub fn view_session(&self) -> HarperResult<()> {
         self.output.print("Enter session ID to view: ")?;
@@ -222,6 +269,8 @@ impl<'a> SessionService<'a> {
             ))?;
         }
 
+        self.print_plan_summary(&session_id)?;
+        self.print_agents_summary(&session_id)?;
         self.print_audit_summary(&session_id, Self::AUDIT_SUMMARY_LIMIT)?;
 
         Ok(())
@@ -262,11 +311,17 @@ impl<'a> SessionService<'a> {
         };
 
         if is_json {
-            let json = serde_json::to_string_pretty(&history)?;
+            let plan = load_plan_state(self.conn, &session_id)?;
+            let json = serde_json::json!({
+                "messages": history,
+                "plan": plan,
+            });
+            let json = serde_json::to_string_pretty(&json)?;
             std::fs::write(&output_path, json)?;
         } else {
             let mut buffer = CacheAlignedBuffer::with_capacity(history.len() * 128);
             self.write_transcript(&mut buffer, &history)?;
+            self.write_plan_section(&mut buffer, &session_id)?;
             self.write_audit_section(&mut buffer, &session_id)?;
             std::fs::write(&output_path, buffer.as_slice())?;
         }
@@ -295,6 +350,7 @@ impl<'a> SessionService<'a> {
 
         let mut buffer = CacheAlignedBuffer::with_capacity(history.len() * 128);
         self.write_transcript(&mut buffer, &history)?;
+        self.write_plan_section(&mut buffer, session_id)?;
         self.write_audit_section(&mut buffer, session_id)?;
         std::fs::write(&output_path, buffer.as_slice())?;
 
@@ -356,6 +412,28 @@ impl<'a> SessionService<'a> {
         Ok(())
     }
 
+    fn print_plan_summary(&self, session_id: &str) -> HarperResult<()> {
+        if let Some(plan) = load_plan_state(self.conn, session_id)? {
+            self.output
+                .println(&format!("\n{}", "Plan:".bold().yellow()))?;
+            if let Some(explanation) = plan.explanation {
+                self.output.println(&format!("  {}", explanation))?;
+            }
+            for item in plan.items {
+                self.output.println(&format!(
+                    "  - [{}] {}",
+                    match item.status {
+                        crate::core::plan::PlanStepStatus::Pending => "pending",
+                        crate::core::plan::PlanStepStatus::InProgress => "in_progress",
+                        crate::core::plan::PlanStepStatus::Completed => "completed",
+                    },
+                    item.step
+                ))?;
+            }
+        }
+        Ok(())
+    }
+
     fn write_audit_section<W: Write>(&self, writer: &mut W, session_id: &str) -> HarperResult<()> {
         let entries =
             load_command_logs_for_session(self.conn, session_id, Self::AUDIT_EXPORT_LIMIT)?;
@@ -397,6 +475,40 @@ impl<'a> SessionService<'a> {
                 exit,
                 duration
             )?;
+        }
+        Ok(())
+    }
+
+    fn write_plan_section<W: Write>(&self, writer: &mut W, session_id: &str) -> HarperResult<()> {
+        if let Some(plan) = load_plan_state(self.conn, session_id)? {
+            writeln!(writer, "\n---\nPlan:")?;
+            if let Some(explanation) = plan.explanation {
+                writeln!(writer, "{}", explanation)?;
+            }
+            for item in plan.items {
+                let status = match item.status {
+                    crate::core::plan::PlanStepStatus::Pending => "pending",
+                    crate::core::plan::PlanStepStatus::InProgress => "in_progress",
+                    crate::core::plan::PlanStepStatus::Completed => "completed",
+                };
+                writeln!(writer, "- [{}] {}", status, item.step)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn print_agents_summary(&self, session_id: &str) -> HarperResult<()> {
+        if let Some(agents) = load_active_agents(self.conn, session_id)? {
+            if !agents.sources.is_empty() {
+                self.output.println(&format!(
+                    "\n{}",
+                    "Active AGENTS.md Sources:".bold().yellow()
+                ))?;
+                for source in agents.sources {
+                    self.output
+                        .println(&format!("  - {}", source.path.display()))?;
+                }
+            }
         }
         Ok(())
     }

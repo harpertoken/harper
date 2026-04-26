@@ -14,7 +14,9 @@
 
 //! I/O traits for abstracting user interaction
 
+use crate::core::agents::ResolvedAgents;
 use crate::core::error::HarperResult;
+use crate::core::plan::PlanState;
 use async_trait::async_trait;
 
 /// Trait for obtaining user approval for sensitive operations
@@ -29,6 +31,61 @@ pub trait UserApproval: Send + Sync {
     /// # Returns
     /// `true` if approved, `false` otherwise
     async fn approve(&self, prompt: &str, command: &str) -> HarperResult<bool>;
+}
+
+#[async_trait]
+pub trait RuntimeEventSink: Send + Sync {
+    async fn plan_updated(&self, session_id: &str, plan: Option<PlanState>) -> HarperResult<()>;
+    async fn agents_updated(
+        &self,
+        session_id: &str,
+        agents: Option<ResolvedAgents>,
+    ) -> HarperResult<()>;
+    async fn activity_updated(&self, session_id: &str, status: Option<String>) -> HarperResult<()>;
+    async fn command_output_updated(
+        &self,
+        session_id: &str,
+        command: String,
+        chunk: String,
+        is_error: bool,
+        done: bool,
+    ) -> HarperResult<()>;
+}
+
+pub struct NoopRuntimeEventSink;
+
+#[async_trait]
+impl RuntimeEventSink for NoopRuntimeEventSink {
+    async fn plan_updated(&self, _session_id: &str, _plan: Option<PlanState>) -> HarperResult<()> {
+        Ok(())
+    }
+
+    async fn agents_updated(
+        &self,
+        _session_id: &str,
+        _agents: Option<ResolvedAgents>,
+    ) -> HarperResult<()> {
+        Ok(())
+    }
+
+    async fn activity_updated(
+        &self,
+        _session_id: &str,
+        _status: Option<String>,
+    ) -> HarperResult<()> {
+        Ok(())
+    }
+
+    async fn command_output_updated(
+        &self,
+        _session_id: &str,
+        _command: String,
+        _chunk: String,
+        _is_error: bool,
+        _done: bool,
+    ) -> HarperResult<()> {
+        Ok(())
+    }
 }
 
 /// A default implementation that uses standard I/O (blocking)

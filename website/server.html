@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · API Server</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
 <body>
     <div class="page">
@@ -25,7 +26,7 @@
         <main class="surface">
             <div class="content-container">
                 <h1 class="hero-title">API Server</h1>
-                <p class="hero-lede">Run Harper as a REST API.</p>
+                <p class="hero-lede">Run Harper with an HTTP API for session access and editor review workflows.</p>
 
                 <h2>Config</h2>
                 <p>Enable the server in your config.</p>
@@ -37,16 +38,17 @@ port = 8081</code></pre>
                     <button class="copy-btn"></button>
                 </div>
 
-                <h2>Run both TUI and server</h2>
-                <p>You can run the server in one terminal and the TUI in another:</p>
+                <h2>Run Harper with the server enabled</h2>
+                <p>Start Harper normally after enabling the server in config. If you only want the TUI, disable server startup with the flag below.</p>
                 <div class="code-wrapper">
-                    <pre><code># Terminal 1 - server + TUI
+                    <pre><code># TUI + server
 cargo run -p harper-ui --bin harper
 
-# Terminal 2 - TUI only (no server)
-cargo run -p harper-ui --bin harper -- --no-server</code></pre>
+# TUI only
+cargo harper</code></pre>
                     <button class="copy-btn"></button>
                 </div>
+                <p>The short form <code>cargo harper</code> is the recommended local TUI entry point. It expands to the no-server path.</p>
 
                 <h2>Endpoints</h2>
                 <ul>
@@ -72,23 +74,34 @@ curl http://127.0.0.1:8081/api/sessions</code></pre>
 
                 <h3>Health response</h3>
                 <div class="code-wrapper">
-                    <pre><code>{"status":"ok","version":"0.10.0"}</code></pre>
+                    <pre><code>{"status":"ok","version":"0.11.0"}</code></pre>
                 </div>
 
                 <h3>Sessions response</h3>
                 <div class="code-wrapper">
-                    <pre><code>{"sessions":[]}</code></pre>
+                    <pre><code>[
+  {
+    "id": "9b548837-495e-4051-a11e-0a6f24d1a64f",
+    "created_at": "2026-04-26 19:23:32",
+    "updated_at": "2026-04-26 19:23:40",
+    "title": "fix the tui spinner visibility"
+  }
+]</code></pre>
                 </div>
 
-                <h2>Example</h2>
+                <h2>Chat example</h2>
                 <div class="code-wrapper">
-                    <pre><code>curl http://127.0.0.1:8081/health</code></pre>
+                    <pre><code>curl -X POST http://127.0.0.1:8081/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Review the latest session state",
+    "session_id": "demo-session"
+  }'</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <div class="code-wrapper">
-                    <pre><code>curl http://127.0.0.1:8081/api/sessions</code></pre>
-                    <button class="copy-btn"></button>
-                </div>
+                <p>The session endpoint returns messages plus any active plan and resolved AGENTS context for that session. Session list items also include a human-readable <code>title</code> derived from the first user message when available.</p>
+
+                <h2>Review example</h2>
                 <div class="code-wrapper">
                     <pre><code>curl -X POST http://127.0.0.1:8081/api/review \
   -H "Content-Type: application/json" \
@@ -119,7 +132,7 @@ curl http://127.0.0.1:8081/api/sessions</code></pre>
                 </div>
 
                 <h2>Editor integration</h2>
-                <p>Harper now ships a VS Code extension scaffold that consumes <code>/api/review</code> and turns findings into diagnostics and quick fixes.</p>
+                <p>Harper includes a VS Code extension scaffold that consumes <code>/api/review</code> and turns findings into diagnostics and quick fixes.</p>
                 <p>Run the review with <strong>Cmd+Shift+P</strong> → "Harper: Review Current File", or bind a custom shortcut:</p>
                 <pre><code class="language-json">{
   "key": "cmd+shift+r",
@@ -163,11 +176,11 @@ vsce package --out harper-review.vsix</code></pre>
                 </div>
                 <p>Then reinstall: <strong>Extensions</strong> → <strong>...</strong> → <strong>Install from VSIX...</strong></p>
 
-                <h3>Troubleshooting</h3>
+                <h2>Troubleshooting</h2>
                 <h4>Server not running</h4>
                 <div class="code-wrapper">
                     <pre><code>curl http://127.0.0.1:8081/health
-# {"status":"ok","version":"0.10.0"}</code></pre>
+# {"status":"ok","version":"0.11.0"}</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <p>If it fails, start the server: <code>cargo run -p harper-ui --bin harper</code></p>
@@ -180,37 +193,20 @@ vsce package --out harper-review.vsix</code></pre>
                 </ul>
 
                 <h4>Port already in use</h4>
-                <p>If you get "Address already in use", stop existing server or use different port:</p>
+                <p>If you get "Address already in use", stop the existing process or pick a different port:</p>
                 <div class="code-wrapper">
-                    <pre><code>pkill -f harper
-# Or change port in config/local.toml:
+                    <pre><code># Change the port in config/local.toml:
 [server]
 port = 8082</code></pre>
                 </div>
 
-                <h3>Change port</h3>
-                <p>To use a different port, update these files:</p>
-                <h4>Code (backend)</h4>
-                <ul>
-                    <li><code>config/local.toml</code> - main config</li>
-                    <li><code>lib/harper-ui/src/main.rs</code> - line 147, fallback default</li>
-                </ul>
-                <h4>VS Code extension</h4>
-                <ul>
-                    <li><code>extension.js</code> - server URL</li>
-                    <li><code>package.json</code> - default serverUrl</li>
-                </ul>
-                <h4>Docs</h4>
-                <ul>
-                    <li><code>website/server.html</code> - curl commands</li>
-                    <li><code>docs/user-guide/server.md</code> - curl commands</li>
-                    <li><code>extensions/README.md</code> - config example</li>
-                </ul>
+                <h4>Change port</h4>
+                <p>If you move the server off <code>8081</code>, update the local config first, then make sure any editor extension or scripted client points at the same host and port.</p>
             </div>
         </main>
 
         <footer class="footnote">
-            <a class="button secondary" href="index.html">← Back</a> · v2
+            <a class="button secondary" href="index.html">← Back</a>
         </footer>
     </div>
     <script>

@@ -1,0 +1,15 @@
+{
+  "explanation": "Finish Harper's planner/runtime system from live execution visibility through planner-quality orchestration.",
+  "items": [
+    { "step": "Add live output panel", "status": "pending" },
+    { "step": "Introduce job model", "status": "pending" },
+    { "step": "Build job list UI", "status": "pending" },
+    { "step": "Link steps to jobs", "status": "pending" },
+    { "step": "Auto-advance on job finish", "status": "pending" },
+    { "step": "Handle blocked and failed states", "status": "pending" },
+    { "step": "Expose runtime over HTTP", "status": "pending" },
+    { "step": "Add UI plan editing", "status": "pending" },
+    { "step": "Resolve scoped AGENTS rules", "status": "pending" },
+    { "step": "Improve planner orchestration", "status": "pending" }
+  ]
+}
