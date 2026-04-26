@@ -29,5 +29,4 @@ jobs:
       run-benchmarks: false
       create-release: true
       release-tag: nightly
-      release-draft: false
       release-prerelease: true
