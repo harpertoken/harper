@@ -456,8 +456,10 @@ mod tests {
                     .path
                     .strip_prefix(&repo)
                     .expect("strip")
-                    .display()
-                    .to_string()
+                    .components()
+                    .map(|component| component.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("/")
             })
             .collect();
 
