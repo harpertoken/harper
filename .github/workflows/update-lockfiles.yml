@@ -15,7 +15,7 @@ name: Update Rust lockfiles
 
 on:
   schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sunday
+    - cron: "0 0 * * 0" # Weekly on Sunday
   workflow_dispatch:
 
 jobs:
@@ -55,8 +55,8 @@ jobs:
       - name: Create PR
         uses: peter-evans/create-pull-request@v7
         with:
-          commit-message: 'chore(deps): update Rust lockfiles'
-          title: 'chore(deps): update Rust lockfiles'
+          commit-message: "chore: update rust lockfiles"
+          title: "[chore] update rust lockfiles"
           body: |
             ## Summary
             - update `Cargo.lock`
