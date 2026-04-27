@@ -81,6 +81,7 @@ After installation, you'll need to configure your AI API key:
 1. Create a config file:
    ```bash
    mkdir -p config
+   cp config/local.example.toml config/local.toml
    nano config/local.toml
    ```
 

@@ -26,7 +26,7 @@
         <main class="surface">
             <div class="content-container">
                 <h1 class="hero-title">API Server</h1>
-                <p class="hero-lede">Run Harper with an HTTP API for session access and editor review workflows.</p>
+                <p class="hero-lede">Run Harper with an HTTP API for session access, review workflows, and local authenticated sign-in.</p>
 
                 <h2>Config</h2>
                 <p>Enable the server in your config.</p>
@@ -42,13 +42,13 @@ port = 8081</code></pre>
                 <p>Start Harper normally after enabling the server in config. If you only want the TUI, disable server startup with the flag below.</p>
                 <div class="code-wrapper">
                     <pre><code># TUI + server
-cargo run -p harper-ui --bin harper
+cargo harper
 
 # TUI only
-cargo harper</code></pre>
+cargo run -p harper-ui --bin harper -- --no-server</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p>The short form <code>cargo harper</code> is the recommended local TUI entry point. It expands to the no-server path.</p>
+                <p>The short form <code>cargo harper</code> is now the normal local entry point. It starts the TUI and the local API server together, so auth commands and local API routes work without extra flags. If it fails with <code>Address already in use</code>, stop the old Harper process on port <code>8081</code> or change the local server port in <code>config/local.toml</code>.</p>
 
                 <h2>Endpoints</h2>
                 <ul>
@@ -58,6 +58,13 @@ cargo harper</code></pre>
                     <li>DELETE /api/sessions/{id} - delete</li>
                     <li>POST /api/chat - send message</li>
                     <li>POST /api/review - inline code review findings and fix suggestions</li>
+                    <li>GET /auth/login/{provider} - browser auth entry point</li>
+                    <li>GET /auth/tui/start/{provider} - start a TUI-owned auth flow</li>
+                    <li>GET /auth/tui/flow/{flow_id} - poll TUI auth completion</li>
+                    <li>GET /auth/callback - OAuth callback target</li>
+                    <li>GET /auth/me - resolve the current signed-in user</li>
+                    <li>GET /auth/status - browser status page backed by /auth/me</li>
+                    <li>GET /auth/logout - clear Harper auth cookies</li>
                 </ul>
 
                 <h2>Test the server</h2>
@@ -74,7 +81,7 @@ curl http://127.0.0.1:8081/api/sessions</code></pre>
 
                 <h3>Health response</h3>
                 <div class="code-wrapper">
-                    <pre><code>{"status":"ok","version":"0.11.0"}</code></pre>
+                    <pre><code>{"status":"ok","version":"0.12.0"}</code></pre>
                 </div>
 
                 <h3>Sessions response</h3>
@@ -99,7 +106,43 @@ curl http://127.0.0.1:8081/api/sessions</code></pre>
   }'</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p>The session endpoint returns messages plus any active plan and resolved AGENTS context for that session. Session list items also include a human-readable <code>title</code> derived from the first user message when available.</p>
+                <p>The session endpoint returns messages plus any active plan and resolved AGENTS context for that session. Session list items also include a human-readable <code>title</code> derived from the first user message when available. When Supabase auth is enabled, session list, load, and delete operations are scoped to the signed-in user.</p>
+
+                <h2>Auth</h2>
+                <p>Harper can use Supabase Auth for local browser or TUI sign-in. The current supported local pattern is GitHub-backed login through Supabase, with the authenticated session then available to the local API server.</p>
+                <div class="code-wrapper">
+                    <pre><code>[auth]
+enabled = true</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>Keep the secret values in <code>.env</code>, not tracked config.</p>
+                <div class="code-wrapper">
+                    <pre><code>SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key
+SUPABASE_JWT_SECRET=your-supabase-jwt-secret
+SUPABASE_REDIRECT_URL=http://127.0.0.1:8081/auth/callback
+SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>For browser auth, send the user to <code>/auth/login/github</code>. For the TUI flow, Harper uses <code>/auth/tui/start/github</code> and then polls <code>/auth/tui/flow/{flow_id}</code> until the session is ready.</p>
+                <div class="code-wrapper">
+                    <pre><code># Current signed-in user
+curl http://127.0.0.1:8081/auth/me
+
+# Browser auth entry point
+open http://127.0.0.1:8081/auth/login/github</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+
+                <h3>TUI auth commands</h3>
+                <p>The TUI does not require a separate auth menu. Start a normal conversation and type one of the slash commands below into the message input.</p>
+                <div class="code-wrapper">
+                    <pre><code>/auth login github
+/auth status
+/auth logout</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p><code>/auth login github</code> starts a local flow, opens the browser, and then stores the resulting TUI session once Harper sees the completed callback. <code>/auth status</code> reports the local TUI auth state. <code>/auth logout</code> clears the local stored TUI session.</p>
 
                 <h2>Review example</h2>
                 <div class="code-wrapper">
@@ -180,7 +223,7 @@ vsce package --out harper-review.vsix</code></pre>
                 <h4>Server not running</h4>
                 <div class="code-wrapper">
                     <pre><code>curl http://127.0.0.1:8081/health
-# {"status":"ok","version":"0.11.0"}</code></pre>
+# {"status":"ok","version":"0.12.0"}</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <p>If it fails, start the server: <code>cargo run -p harper-ui --bin harper</code></p>

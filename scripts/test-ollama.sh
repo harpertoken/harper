@@ -45,8 +45,11 @@ echo ""
 echo "[4/6] Testing harper with config..."
 cd /Users/niladri/harper
 if [ -f config/local.toml ]; then
-    echo "OK: Config exists"
+    echo "OK: Local config exists"
     cat config/local.toml | grep "provider\|model"
+elif [ -f config/local.example.toml ]; then
+    echo "OK: Example config exists"
+    cat config/local.example.toml | grep "provider\|model"
 else
     echo "WARN: Config not found"
 fi

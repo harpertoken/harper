@@ -33,11 +33,13 @@ const MAX_APPROVAL_HISTORY: usize = 6;
 pub enum EventResult {
     Continue,
     SendMessage(String),
+    LoadSessions,
+    OpenSession { session_id: String, preview: bool },
     GatherSidebarEntries,
     Quit,
 }
 
-fn create_chat_state(
+pub(crate) fn create_chat_state(
     session_id: String,
     messages: Vec<harper_core::core::Message>,
     active_plan: Option<harper_core::PlanState>,
@@ -75,25 +77,6 @@ fn record_approval_history(app: &mut TuiApp, command: &str, approved: bool) {
     if app.approval_history.len() > MAX_APPROVAL_HISTORY {
         let excess = app.approval_history.len() - MAX_APPROVAL_HISTORY;
         app.approval_history.drain(0..excess);
-    }
-}
-
-fn load_sessions_into_state(app: &mut TuiApp, session_service: &SessionService) {
-    match session_service.list_sessions_data() {
-        Ok(sessions) => {
-            let session_infos: Vec<SessionInfo> = sessions
-                .into_iter()
-                .map(|s| SessionInfo {
-                    id: s.id.clone(),
-                    name: s.title.unwrap_or(s.id),
-                    created_at: s.created_at,
-                })
-                .collect();
-            app.state = AppState::Sessions(session_infos, 0);
-        }
-        Err(e) => {
-            app.set_error_message(format!("Error loading sessions: {}", e));
-        }
     }
 }
 
@@ -200,8 +183,7 @@ pub fn handle_event(
                         return EventResult::Continue;
                     }
                     KeyCode::Char('r') => {
-                        load_sessions_into_state(app, session_service);
-                        return EventResult::Continue;
+                        return EventResult::LoadSessions;
                     }
                     KeyCode::Char('w') => {
                         if let AppState::Chat(chat_state) = &mut app.state {
@@ -386,9 +368,7 @@ pub fn handle_event(
                     }
                 }
                 KeyCode::Enter => return handle_enter(app, session_service),
-                KeyCode::Right if preview_selected_session(app, session_service) => {
-                    return EventResult::Continue;
-                }
+                KeyCode::Right => return preview_selected_session(app, session_service),
                 KeyCode::Tab => handle_tab(app),
                 KeyCode::Char(c) => {
                     // Handle q for quitting/returning only in non-input states
@@ -400,8 +380,12 @@ pub fn handle_event(
                             return EventResult::Continue;
                         }
                     }
-                    if c == 'l' && preview_selected_session(app, session_service) {
-                        return EventResult::Continue;
+                    if c == 'l' {
+                        if matches!(app.state, AppState::Chat(_)) {
+                            handle_char_input(app, 'l');
+                            return EventResult::Continue;
+                        }
+                        return preview_selected_session(app, session_service);
                     }
                     handle_char_input(app, c)
                 }
@@ -430,7 +414,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                     )));
                     return EventResult::GatherSidebarEntries;
                 } // Start Chat
-                1 => load_sessions_into_state(app, session_service),
+                1 => return EventResult::LoadSessions,
                 2 => load_export_sessions_into_state(app, session_service),
                 3 => match session_service.get_global_stats() {
                     Ok(stats) => app.state = AppState::Stats(stats),
@@ -450,20 +434,10 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             if !sessions.is_empty() && *selected < sessions.len() =>
         {
             let session = &sessions[*selected];
-            match session_service.load_session_state_view(&session.id) {
-                Ok(session_view) => {
-                    app.state = AppState::Chat(Box::new(create_chat_state(
-                        session_view.session_id,
-                        session_view.messages,
-                        session_view.plan,
-                        session_view.agents,
-                    )));
-                    return EventResult::GatherSidebarEntries;
-                }
-                Err(e) => {
-                    app.set_error_message(format!("Error loading session: {}", e));
-                }
-            }
+            return EventResult::OpenSession {
+                session_id: session.id.clone(),
+                preview: false,
+            };
         }
         AppState::ExportSessions(sessions, selected)
             if !sessions.is_empty() && *selected < sessions.len() =>
@@ -501,22 +475,29 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
     EventResult::Continue
 }
 
-fn preview_selected_session(app: &mut TuiApp, session_service: &SessionService) -> bool {
+fn preview_selected_session(app: &mut TuiApp, session_service: &SessionService) -> EventResult {
     let AppState::Sessions(sessions, selected) = &app.state else {
-        return false;
+        return EventResult::Continue;
     };
     if sessions.is_empty() || *selected >= sessions.len() {
-        return false;
+        return EventResult::Continue;
     }
     let session = &sessions[*selected];
-    match session_service.view_session_data(&session.id) {
-        Ok(messages) => {
-            app.state = AppState::ViewSession(session.id.clone(), messages, 0);
-            true
+    if app.auth_session.is_some() && app.auth_server_base_url.is_some() {
+        EventResult::OpenSession {
+            session_id: session.id.clone(),
+            preview: true,
         }
-        Err(e) => {
-            app.set_error_message(format!("Error loading session preview: {}", e));
-            true
+    } else {
+        match session_service.view_session_data(&session.id) {
+            Ok(messages) => {
+                app.state = AppState::ViewSession(session.id.clone(), messages, 0);
+                EventResult::Continue
+            }
+            Err(e) => {
+                app.set_error_message(format!("Error loading session preview: {}", e));
+                EventResult::Continue
+            }
         }
     }
 }
@@ -831,7 +812,18 @@ fn handle_tab(app: &mut TuiApp) {
         } else if chat_state.input.starts_with('/') {
             // Command completion
             if chat_state.completion_candidates.is_empty() {
-                let commands = vec!["/help", "/quit", "/clear", "/exit", "/audit"];
+                let commands = vec![
+                    "/help",
+                    "/quit",
+                    "/clear",
+                    "/exit",
+                    "/audit",
+                    "/auth login github",
+                    "/auth login google",
+                    "/auth login apple",
+                    "/auth logout",
+                    "/auth status",
+                ];
                 for cmd in commands {
                     if cmd.starts_with(&chat_state.input) {
                         chat_state.completion_candidates.push(cmd.to_string());
@@ -901,8 +893,8 @@ mod tests {
             &mut app,
             &session_service,
         );
-        assert!(matches!(result, EventResult::Continue));
-        assert!(matches!(app.state, AppState::Sessions(_, 0)));
+        assert!(matches!(result, EventResult::LoadSessions));
+        assert!(matches!(app.state, AppState::Menu(1)));
     }
 
     #[test]
@@ -920,5 +912,47 @@ mod tests {
         );
         assert!(matches!(result, EventResult::Continue));
         assert!(matches!(app.state, AppState::ExportSessions(_, 0)));
+    }
+
+    #[test]
+    fn chat_mode_treats_l_as_text_input() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Chat(Box::new(create_chat_state(
+            "session".to_string(),
+            vec![],
+            None,
+            None,
+        )));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Char('l').into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        match &app.state {
+            AppState::Chat(chat_state) => assert_eq!(chat_state.input, "l"),
+            _ => panic!("expected chat state"),
+        }
+    }
+
+    #[test]
+    fn test_enter_menu_load_sessions_returns_async_event() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Menu(1); // Sessions
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::LoadSessions));
+        assert!(matches!(app.state, AppState::Menu(1)));
     }
 }

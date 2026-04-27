@@ -78,12 +78,16 @@ pub fn init_db(conn: &Connection) -> HarperResult<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY,
+            user_id TEXT,
             title TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
         [],
     )?;
+    if !column_exists(conn, "sessions", "user_id")? {
+        conn.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT", [])?;
+    }
     conn.execute(
         "CREATE TABLE IF NOT EXISTS messages (
              id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,6 +166,19 @@ pub fn init_db(conn: &Connection) -> HarperResult<()> {
     Ok(())
 }
 
+fn column_exists(conn: &Connection, table: &str, column: &str) -> HarperResult<bool> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+
+    for row in rows {
+        if row? == column {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 /// Save a message to the database
 ///
 /// Stores a message in the database associated with a specific session.
@@ -203,6 +220,39 @@ pub fn save_session(conn: &Connection, session_id: &str) -> HarperResult<()> {
         params![session_id],
     )?;
     Ok(())
+}
+
+pub fn save_session_for_user(
+    conn: &Connection,
+    session_id: &str,
+    user_id: &str,
+) -> HarperResult<bool> {
+    conn.execute(
+        "INSERT OR IGNORE INTO sessions (id, user_id) VALUES (?1, ?2)",
+        params![session_id, user_id],
+    )?;
+
+    let updated = conn.execute(
+        "UPDATE sessions
+         SET user_id = ?2, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?1 AND (user_id IS NULL OR user_id = ?2)",
+        params![session_id, user_id],
+    )?;
+
+    Ok(updated > 0)
+}
+
+pub fn session_belongs_to_user(
+    conn: &Connection,
+    session_id: &str,
+    user_id: &str,
+) -> HarperResult<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sessions WHERE id = ?1 AND user_id = ?2",
+        params![session_id, user_id],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
 }
 
 pub fn update_session_title(conn: &Connection, session_id: &str, title: &str) -> HarperResult<()> {
@@ -629,6 +679,30 @@ pub fn insert_command_log(conn: &Connection, record: &CommandLogRecord) -> Harpe
         ],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn init_db_adds_session_user_id_column() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        init_db(&conn).expect("db init");
+
+        assert!(column_exists(&conn, "sessions", "user_id").expect("column lookup"));
+    }
+
+    #[test]
+    fn save_session_for_user_claims_once_and_blocks_reassignment() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        init_db(&conn).expect("db init");
+
+        assert!(save_session_for_user(&conn, "session-1", "user-a").expect("first claim"));
+        assert!(session_belongs_to_user(&conn, "session-1", "user-a").expect("ownership lookup"));
+        assert!(!save_session_for_user(&conn, "session-1", "user-b").expect("second claim denied"));
+        assert!(!session_belongs_to_user(&conn, "session-1", "user-b").expect("other owner lookup"));
+    }
 }
 
 /// Simplified view of an audit record for presentation

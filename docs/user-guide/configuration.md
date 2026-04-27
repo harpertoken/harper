@@ -2,6 +2,8 @@
 
 Harper uses configuration files to customize its behavior, including API settings, model selection, and application preferences. This guide covers all configuration options.
 
+Keep tracked config files as placeholders. Store real secrets such as API keys and Supabase credentials in `.env`, which Harper loads automatically at startup.
+
 ## Config File Location
 
 Harper looks for configuration in the following locations (in order of priority):
@@ -12,11 +14,11 @@ Harper looks for configuration in the following locations (in order of priority)
 
 ## Creating a Config File
 
-Create a `config/local.toml` file in the Harper directory:
+Create a local config from the example:
 
 ```bash
 mkdir -p config
-touch config/local.toml
+cp config/local.example.toml config/local.toml
 ```
 
 ## API Configuration

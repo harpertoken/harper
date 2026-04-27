@@ -17,6 +17,7 @@
 //! This module contains the fundamental types and services used throughout the application.
 
 pub mod agents;
+pub mod auth;
 pub mod cache;
 pub mod constants;
 pub mod error;

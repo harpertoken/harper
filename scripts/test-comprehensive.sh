@@ -26,8 +26,8 @@ target/release/harper --version >/dev/null 2>&1 && pass "Binary runs" || fail "B
 echo ""
 echo "=== CONFIG TESTS ==="
 
-grep -q 'provider = "Cerebras"' config/local.toml && pass "Config: Cerebras provider" || fail "Config: Cerebras"
-grep -q 'qwen-3-32b-a4b' config/local.toml && pass "Config: Cerebras model" || fail "Config: Cerebras model"
+grep -q 'provider = "Cerebras"' config/local.example.toml && pass "Config: Cerebras provider" || fail "Config: Cerebras"
+grep -q 'qwen-3-32b-a4b' config/local.example.toml && pass "Config: Cerebras model" || fail "Config: Cerebras model"
 [ -f config/default.toml ] && pass "Config: default.toml exists" || fail "Config: default.toml"
 [ -f config/env.example ] && pass "Config: env.example exists" || fail "Config: env.example"
 

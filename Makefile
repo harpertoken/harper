@@ -12,8 +12,7 @@ help: ## Show available targets
 		awk 'BEGIN {FS = ":.*?##"} {printf "  %-14s %s\n", $$1, $$2}'
 
 test: ## Run tests (unit + integration)
-	@cargo test --lib --workspace
-	@cargo test --tests --workspace
+	@cargo test --all-features --workspace
 
 test-release: ## Run tests in release mode
 	@cargo test --release --workspace

@@ -64,7 +64,7 @@ if echo "$LOG" | grep -q "Ollama\|Cerebras\|OpenAI"; then
     pass "Provider detected in logs"
 else
     # Check config instead
-    grep -q "provider = " config/local.toml && pass "Provider config works" || fail "Provider config"
+    grep -q "provider = " config/local.example.toml && pass "Provider config works" || fail "Provider config"
 fi
 
 # Test 6: Database persistence

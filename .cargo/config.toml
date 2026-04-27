@@ -15,7 +15,7 @@
 rustflags = ["-D", "warnings"]
 
 [alias]
-harper = "run -p harper-ui --bin harper -- --no-server"
+harper = "run -p harper-ui --bin harper"
 
 [env]
 RUST_BACKTRACE = { value = "1", condition = { env_not_set = "RUST_BACKTRACE" } }

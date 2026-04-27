@@ -12,24 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod auth;
+
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
-    response::Json,
+    response::{Html, IntoResponse, Json, Redirect, Response},
     routing::{delete, get, post},
     Router,
 };
+use base64::Engine;
 use reqwest::Client;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::agent::intent::route_intent;
+use crate::core::auth::{AuthSession, AuthenticatedUser, UserAuthProvider};
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::llm_client::call_llm;
 use crate::core::{ApiConfig, Message};
-use crate::memory::storage::{save_message, CommandLogRecord};
+use crate::memory::storage::{save_message, save_session, save_session_for_user, CommandLogRecord};
 use crate::runtime::config::ExecPolicyConfig;
+use crate::runtime::config::SupabaseAuthConfig;
 use rusqlite::params;
 
 #[derive(Clone)]
@@ -38,6 +45,23 @@ pub struct ServerState {
     pub api_config: ApiConfig,
     pub client: Client,
     pub exec_policy: ExecPolicyConfig,
+    pub supabase_auth: Option<SupabaseAuthConfig>,
+    pub oauth_states: Arc<Mutex<HashMap<String, PendingOauthState>>>,
+    pub tui_auth_flows: Arc<Mutex<HashMap<String, TuiAuthFlowState>>>,
+}
+
+#[derive(Clone)]
+pub struct PendingOauthState {
+    pub provider: UserAuthProvider,
+    pub code_verifier: String,
+    pub created_at: Instant,
+    pub tui_flow_id: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct TuiAuthFlowState {
+    pub session: Option<AuthSession>,
+    pub created_at: Instant,
 }
 
 #[derive(Serialize)]
@@ -49,9 +73,10 @@ pub struct HealthResponse {
 #[derive(Serialize)]
 pub struct SessionListItem {
     pub id: String,
+    pub user_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub title: String,
+    pub title: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -88,6 +113,58 @@ pub struct PendingApproval {
 #[derive(Deserialize)]
 pub struct ApprovalRequest {
     pub approved: bool,
+}
+
+#[derive(Deserialize)]
+pub struct AuthCallbackQuery {
+    pub code: Option<String>,
+    pub harper_flow: Option<String>,
+    pub error: Option<String>,
+    pub error_description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SupabaseTokenResponse {
+    access_token: String,
+    refresh_token: Option<String>,
+    expires_in: Option<i64>,
+    user: Option<SupabaseUser>,
+}
+
+#[derive(serde::Serialize)]
+struct SupabasePkceTokenRequest<'a> {
+    auth_code: &'a str,
+    code_verifier: &'a str,
+    redirect_to: &'a str,
+}
+
+#[derive(serde::Serialize)]
+struct SupabaseRefreshTokenRequest<'a> {
+    refresh_token: &'a str,
+}
+
+#[derive(Debug, Deserialize)]
+struct SupabaseUser {
+    id: String,
+    email: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AuthMeResponse {
+    pub authenticated: bool,
+    pub user: Option<AuthenticatedUser>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TuiAuthStartResponse {
+    pub flow_id: String,
+    pub login_url: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TuiAuthPollResponse {
+    pub status: String,
+    pub session: Option<AuthSession>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -144,63 +221,480 @@ pub async fn health() -> Json<HealthResponse> {
     })
 }
 
-pub async fn list_sessions(State(state): State<Arc<ServerState>>) -> Json<Vec<SessionListItem>> {
-    let conn = state
-        .conn
-        .lock()
-        .expect("Failed to lock database connection");
-    let mut stmt = conn
-        .prepare("SELECT id, created_at, updated_at, title FROM sessions ORDER BY updated_at DESC LIMIT 50")
-        .expect("Failed to prepare SQL statement");
-
-    let sessions: Vec<SessionListItem> = stmt
-        .query_map([], |row| {
-            Ok(SessionListItem {
-                id: row.get(0)?,
-                created_at: row.get(1)?,
-                updated_at: row.get(2)?,
-                title: row.get(3)?,
-            })
-        })
-        .expect("Failed to execute query")
-        .filter_map(|r| r.ok())
-        .collect();
-
-    Json(sessions)
-}
-
-pub async fn get_session(
+pub async fn list_sessions(
     State(state): State<Arc<ServerState>>,
-    Path(session_id): Path<String>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
+    headers: axum::http::HeaderMap,
+) -> Result<Json<Vec<SessionListItem>>, StatusCode> {
+    let auth_user = optional_authenticated_user_from_headers(&state, &headers)
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
     let conn = state
         .conn
         .lock()
         .expect("Failed to lock database connection");
     let session_service = crate::memory::session_service::SessionService::new(&conn);
-    let session_view = session_service
-        .load_session_state_view(&session_id)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let sessions = match auth_user {
+        Some(user) => session_service
+            .list_sessions_data_for_user(&user.user_id)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        None => session_service
+            .list_sessions_data()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    };
+
+    Ok(Json(
+        sessions
+            .into_iter()
+            .take(50)
+            .map(|session| SessionListItem {
+                id: session.id,
+                user_id: session.user_id,
+                created_at: session.created_at,
+                updated_at: session.updated_at,
+                title: session.title,
+            })
+            .collect(),
+    ))
+}
+
+pub async fn auth_login(
+    State(state): State<Arc<ServerState>>,
+    Path(provider): Path<String>,
+) -> Result<Redirect, (StatusCode, String)> {
+    let authorize_url = build_authorize_url(&state, &provider, None)?;
+    Ok(Redirect::to(&authorize_url))
+}
+
+pub async fn auth_tui_start(
+    State(state): State<Arc<ServerState>>,
+    Path(provider): Path<String>,
+) -> Result<Json<TuiAuthStartResponse>, (StatusCode, String)> {
+    let flow_id = random_urlsafe(24)?;
+    let login_url = build_authorize_url(&state, &provider, Some(flow_id.clone()))?;
+    {
+        let mut flows = state.tui_auth_flows.lock().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "TUI auth flow lock failed".to_string(),
+            )
+        })?;
+        flows.retain(|_, flow| flow.created_at.elapsed() < Duration::from_secs(600));
+        flows.insert(
+            flow_id.clone(),
+            TuiAuthFlowState {
+                session: None,
+                created_at: Instant::now(),
+            },
+        );
+    }
+
+    Ok(Json(TuiAuthStartResponse { flow_id, login_url }))
+}
+
+pub async fn auth_tui_poll(
+    State(state): State<Arc<ServerState>>,
+    Path(flow_id): Path<String>,
+) -> Result<Json<TuiAuthPollResponse>, (StatusCode, String)> {
+    let mut flows = state.tui_auth_flows.lock().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "TUI auth flow lock failed".to_string(),
+        )
+    })?;
+    let Some(flow) = flows.get(&flow_id).cloned() else {
+        return Err((StatusCode::NOT_FOUND, "Unknown TUI auth flow".to_string()));
+    };
+    if let Some(session) = flow.session {
+        flows.remove(&flow_id);
+        return Ok(Json(TuiAuthPollResponse {
+            status: "complete".to_string(),
+            session: Some(session),
+        }));
+    }
+
+    Ok(Json(TuiAuthPollResponse {
+        status: "pending".to_string(),
+        session: None,
+    }))
+}
+
+fn build_authorize_url(
+    state: &ServerState,
+    provider: &str,
+    tui_flow_id: Option<String>,
+) -> Result<String, (StatusCode, String)> {
+    let supabase = state.supabase_auth.as_ref().ok_or_else(|| {
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            "Supabase auth is not configured".to_string(),
+        )
+    })?;
+
+    let provider = parse_user_provider(provider)?;
+    ensure_provider_allowed(supabase, provider)?;
+
+    let project_url = supabase.project_url.as_deref().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Supabase project URL is not configured".to_string(),
+        )
+    })?;
+    let redirect_url = supabase.redirect_url.as_deref().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Supabase redirect URL is not configured".to_string(),
+        )
+    })?;
+
+    let flow_token = random_urlsafe(24)?;
+    let code_verifier = random_urlsafe(48)?;
+    let code_challenge = pkce_code_challenge(&code_verifier);
+    let callback_url = append_callback_query_param(redirect_url, "harper_flow", &flow_token);
+
+    {
+        let mut oauth_states = state.oauth_states.lock().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "OAuth state lock failed".to_string(),
+            )
+        })?;
+        oauth_states.retain(|_, pending| pending.created_at.elapsed() < Duration::from_secs(600));
+        oauth_states.insert(
+            flow_token.clone(),
+            PendingOauthState {
+                provider,
+                code_verifier,
+                created_at: Instant::now(),
+                tui_flow_id,
+            },
+        );
+    }
+
+    Ok(format!(
+        "{}/auth/v1/authorize?provider={}&redirect_to={}&code_challenge={}&code_challenge_method=S256",
+        project_url.trim_end_matches('/'),
+        provider.as_str(),
+        urlencoding::encode(&callback_url),
+        urlencoding::encode(&code_challenge),
+    ))
+}
+
+pub async fn auth_callback(
+    State(state): State<Arc<ServerState>>,
+    Query(query): Query<AuthCallbackQuery>,
+) -> Result<Response, (StatusCode, String)> {
+    if let Some(error) = query.error {
+        let message = query
+            .error_description
+            .unwrap_or_else(|| "Authentication failed".to_string());
+        return Ok(Html(render_auth_message(
+            "Sign-in failed",
+            &format!("{}: {}", error, message),
+        ))
+        .into_response());
+    }
+
+    let code = query.code.ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Missing auth code in callback".to_string(),
+        )
+    })?;
+    let flow_token = query.harper_flow.ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Missing Harper flow token in callback".to_string(),
+        )
+    })?;
+
+    let supabase = state.supabase_auth.as_ref().ok_or_else(|| {
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            "Supabase auth is not configured".to_string(),
+        )
+    })?;
+    let project_url = supabase.project_url.as_deref().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Supabase project URL is not configured".to_string(),
+        )
+    })?;
+    let redirect_url = supabase.redirect_url.as_deref().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Supabase redirect URL is not configured".to_string(),
+        )
+    })?;
+
+    let pending = {
+        let mut oauth_states = state.oauth_states.lock().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "OAuth state lock failed".to_string(),
+            )
+        })?;
+        oauth_states.remove(&flow_token)
+    }
+    .ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Unknown or expired Harper flow token".to_string(),
+        )
+    })?;
+
+    let token_url = format!(
+        "{}/auth/v1/token?grant_type=pkce",
+        project_url.trim_end_matches('/')
+    );
+
+    let token_response = state
+        .client
+        .post(&token_url)
+        .header("apikey", supabase.anon_key.clone().unwrap_or_default())
+        .json(&SupabasePkceTokenRequest {
+            auth_code: code.as_str(),
+            code_verifier: pending.code_verifier.as_str(),
+            redirect_to: redirect_url,
+        })
+        .send()
+        .await
+        .map_err(|err| {
+            (
+                StatusCode::BAD_GATEWAY,
+                format!("Supabase token exchange failed: {}", err),
+            )
+        })?;
+
+    if !token_response.status().is_success() {
+        let body = token_response.text().await.unwrap_or_default();
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            format!("Supabase token exchange rejected callback: {}", body),
+        ));
+    }
+
+    let token_payload: SupabaseTokenResponse = token_response.json().await.map_err(|err| {
+        (
+            StatusCode::BAD_GATEWAY,
+            format!("Supabase token response was invalid: {}", err),
+        )
+    })?;
+
+    let auth_session = auth_session_from_supabase_tokens(token_payload, Some(pending.provider));
+    if let Some(flow_id) = pending.tui_flow_id.clone() {
+        let mut flows = state.tui_auth_flows.lock().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "TUI auth flow lock failed".to_string(),
+            )
+        })?;
+        if let Some(flow) = flows.get_mut(&flow_id) {
+            flow.session = Some(auth_session.clone());
+        }
+    }
+
+    let body = render_auth_success(&auth_session);
+    let mut response = Html(body).into_response();
+    append_auth_session_cookies(response.headers_mut(), &auth_session);
+
+    Ok(response)
+}
+
+pub async fn auth_me(
+    State(state): State<Arc<ServerState>>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    let Some(supabase) = state.supabase_auth.as_ref() else {
+        return (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(AuthMeResponse {
+                authenticated: false,
+                user: None,
+            }),
+        )
+            .into_response();
+    };
+
+    match auth::authenticate_request_with_client(&headers, Some(supabase), &state.client).await {
+        Ok(user) => Json(AuthMeResponse {
+            authenticated: true,
+            user: Some(user),
+        })
+        .into_response(),
+        Err(auth::AuthError::ExpiredToken) => {
+            let Some(refresh_token) = auth::refresh_token(&headers) else {
+                let mut response = (
+                    StatusCode::UNAUTHORIZED,
+                    Json(AuthMeResponse {
+                        authenticated: false,
+                        user: None,
+                    }),
+                )
+                    .into_response();
+                clear_auth_cookies(response.headers_mut());
+                return response;
+            };
+
+            match refresh_supabase_session(&state, refresh_token).await {
+                Ok(session) => {
+                    let mut response = Json(AuthMeResponse {
+                        authenticated: true,
+                        user: Some(session.user.clone()),
+                    })
+                    .into_response();
+                    append_auth_session_cookies(response.headers_mut(), &session);
+                    response
+                }
+                Err(_) => {
+                    let mut response = (
+                        StatusCode::UNAUTHORIZED,
+                        Json(AuthMeResponse {
+                            authenticated: false,
+                            user: None,
+                        }),
+                    )
+                        .into_response();
+                    clear_auth_cookies(response.headers_mut());
+                    response
+                }
+            }
+        }
+        Err(auth::AuthError::MissingToken) => (
+            StatusCode::UNAUTHORIZED,
+            Json(AuthMeResponse {
+                authenticated: false,
+                user: None,
+            }),
+        )
+            .into_response(),
+        Err(error) => {
+            let mut response = (
+                StatusCode::UNAUTHORIZED,
+                Json(AuthMeResponse {
+                    authenticated: false,
+                    user: None,
+                }),
+            )
+                .into_response();
+            if auth::cookie_value(&headers, auth::ACCESS_TOKEN_COOKIE).is_some()
+                || auth::refresh_token(&headers).is_some()
+            {
+                clear_auth_cookies(response.headers_mut());
+            }
+            let _ = error;
+            response
+        }
+    }
+}
+
+pub async fn auth_status_page() -> Html<String> {
+    Html(render_auth_status_page())
+}
+
+pub async fn auth_logout() -> Response {
+    let mut response = Html(render_auth_message(
+        "Signed out",
+        "Harper auth cookies were cleared.",
+    ))
+    .into_response();
+    clear_auth_cookies(response.headers_mut());
+    response
+}
+
+async fn authenticated_user_from_headers(
+    state: &ServerState,
+    headers: &axum::http::HeaderMap,
+) -> Result<crate::core::auth::AuthenticatedUser, (StatusCode, String)> {
+    auth::authenticate_request_with_client(headers, state.supabase_auth.as_ref(), &state.client)
+        .await
+        .map_err(auth::AuthError::into_http_error)
+}
+
+async fn optional_authenticated_user_from_headers(
+    state: &ServerState,
+    headers: &axum::http::HeaderMap,
+) -> Result<Option<AuthenticatedUser>, (StatusCode, String)> {
+    if state.supabase_auth.is_some() {
+        authenticated_user_from_headers(state, headers)
+            .await
+            .map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+fn claim_or_verify_session_access(
+    conn: &Connection,
+    session_id: &str,
+    user: Option<&AuthenticatedUser>,
+) -> Result<(), StatusCode> {
+    match user {
+        Some(user) => match save_session_for_user(conn, session_id, &user.user_id) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(StatusCode::FORBIDDEN),
+            Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        },
+        None => save_session(conn, session_id).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+pub async fn get_session(
+    State(state): State<Arc<ServerState>>,
+    headers: axum::http::HeaderMap,
+    Path(session_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let user = optional_authenticated_user_from_headers(&state, &headers)
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let conn = state
+        .conn
+        .lock()
+        .expect("Failed to lock database connection");
+    let session_service = crate::memory::session_service::SessionService::new(&conn);
+    let session_view = match user.as_ref() {
+        Some(user) => session_service
+            .load_session_state_view_for_user(&session_id, &user.user_id)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::NOT_FOUND)?,
+        None => session_service
+            .load_session_state_view(&session_id)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    };
     Ok(Json(serde_json::json!(session_view)))
 }
 
 pub async fn delete_session(
     State(state): State<Arc<ServerState>>,
+    headers: axum::http::HeaderMap,
     Path(session_id): Path<String>,
 ) -> StatusCode {
+    let user = match optional_authenticated_user_from_headers(&state, &headers).await {
+        Ok(user) => user,
+        Err(_) => return StatusCode::UNAUTHORIZED,
+    };
     let conn = state
         .conn
         .lock()
         .expect("Failed to lock database connection");
+    let session_service = crate::memory::session_service::SessionService::new(&conn);
 
-    match conn.execute("DELETE FROM sessions WHERE id = ?", [&session_id]) {
-        Ok(_) => StatusCode::NO_CONTENT,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    match user.as_ref() {
+        Some(user) => match session_service.delete_session_for_user(&session_id, &user.user_id) {
+            Ok(true) => StatusCode::NO_CONTENT,
+            Ok(false) => StatusCode::NOT_FOUND,
+            Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        },
+        None => match session_service.delete_session(&session_id) {
+            Ok(true) => StatusCode::NO_CONTENT,
+            Ok(false) => StatusCode::NOT_FOUND,
+            Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        },
     }
 }
 
 pub async fn chat_endpoint(
     State(state): State<Arc<ServerState>>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<ChatRequest>,
 ) -> Result<Json<ChatResponse>, (StatusCode, String)> {
     let message = payload.message.clone();
@@ -208,6 +702,7 @@ pub async fn chat_endpoint(
         .session_id
         .clone()
         .unwrap_or_else(|| "api".to_string());
+    let auth_user = optional_authenticated_user_from_headers(&state, &headers).await?;
 
     let system_prompt = r#"You are Harper, a CLI assistant. Use JSON for commands:
 {"tool": "run_command", "args": {"command": "ls -la"}}
@@ -264,6 +759,8 @@ pub async fn chat_endpoint(
                         format!("Lock error: {:?}", e),
                     )
                 })?;
+                claim_or_verify_session_access(&conn, &session_id, auth_user.as_ref())
+                    .map_err(|status| (status, "Session access denied".to_string()))?;
                 let _ = save_message(&conn, &session_id, "user", &message);
                 let _ = save_message(&conn, &session_id, "assistant", &result);
                 drop(conn);
@@ -285,6 +782,8 @@ pub async fn chat_endpoint(
             format!("Lock error: {:?}", e),
         )
     })?;
+    claim_or_verify_session_access(&conn, &session_id, auth_user.as_ref())
+        .map_err(|status| (status, "Session access denied".to_string()))?;
     let _ = save_message(&conn, &session_id, "user", &message);
     drop(conn);
 
@@ -776,16 +1275,27 @@ pub fn create_router(
     conn: Arc<Mutex<Connection>>,
     api_config: ApiConfig,
     exec_policy: ExecPolicyConfig,
+    supabase_auth: Option<SupabaseAuthConfig>,
 ) -> Router {
     let state = Arc::new(ServerState {
         conn,
         api_config,
         client: Client::new(),
         exec_policy,
+        supabase_auth,
+        oauth_states: Arc::new(Mutex::new(HashMap::new())),
+        tui_auth_flows: Arc::new(Mutex::new(HashMap::new())),
     });
 
     Router::new()
         .route("/health", get(health))
+        .route("/auth/login/{provider}", get(auth_login))
+        .route("/auth/tui/start/{provider}", get(auth_tui_start))
+        .route("/auth/tui/flow/{flow_id}", get(auth_tui_poll))
+        .route("/auth/callback", get(auth_callback))
+        .route("/auth/me", get(auth_me))
+        .route("/auth/status", get(auth_status_page))
+        .route("/auth/logout", get(auth_logout))
         .route("/api/sessions", get(list_sessions))
         .route("/api/sessions/{id}", get(get_session))
         .route("/api/sessions/{id}", delete(delete_session))
@@ -797,13 +1307,312 @@ pub fn create_router(
         .with_state(state)
 }
 
+fn parse_user_provider(provider: &str) -> Result<UserAuthProvider, (StatusCode, String)> {
+    match provider.trim().to_lowercase().as_str() {
+        "github" => Ok(UserAuthProvider::Github),
+        "google" => Ok(UserAuthProvider::Google),
+        "apple" => Ok(UserAuthProvider::Apple),
+        other => Err((
+            StatusCode::BAD_REQUEST,
+            format!("Unsupported auth provider '{}'", other),
+        )),
+    }
+}
+
+fn ensure_provider_allowed(
+    config: &SupabaseAuthConfig,
+    provider: UserAuthProvider,
+) -> Result<(), (StatusCode, String)> {
+    let Some(allowed) = &config.allowed_providers else {
+        return Ok(());
+    };
+
+    if allowed
+        .iter()
+        .any(|candidate| candidate.eq_ignore_ascii_case(provider.as_str()))
+    {
+        Ok(())
+    } else {
+        Err((
+            StatusCode::FORBIDDEN,
+            format!("Provider '{}' is not enabled", provider.as_str()),
+        ))
+    }
+}
+
+fn random_urlsafe(num_bytes: usize) -> Result<String, (StatusCode, String)> {
+    let mut bytes = vec![0_u8; num_bytes];
+    getrandom::fill(&mut bytes).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to generate secure random bytes: {}", err),
+        )
+    })?;
+    Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+}
+
+fn pkce_code_challenge(code_verifier: &str) -> String {
+    let digest = ring::digest::digest(&ring::digest::SHA256, code_verifier.as_bytes());
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest.as_ref())
+}
+
+fn append_callback_query_param(base: &str, key: &str, value: &str) -> String {
+    let separator = if base.contains('?') { '&' } else { '?' };
+    format!(
+        "{}{}{}={}",
+        base,
+        separator,
+        urlencoding::encode(key),
+        urlencoding::encode(value)
+    )
+}
+
+fn render_auth_success(session: &AuthSession) -> String {
+    let email = session
+        .user
+        .email
+        .clone()
+        .unwrap_or_else(|| "signed-in user".to_string());
+    render_auth_status_page_with_message(
+        "Sign-in complete",
+        &format!(
+            "Harper stored your session cookies for {}. Verifying active session with /auth/me...",
+            email
+        ),
+    )
+}
+
+fn auth_session_from_supabase_tokens(
+    token_payload: SupabaseTokenResponse,
+    provider: Option<UserAuthProvider>,
+) -> AuthSession {
+    let authenticated_user = AuthenticatedUser {
+        user_id: token_payload
+            .user
+            .as_ref()
+            .map(|user| user.id.clone())
+            .unwrap_or_default(),
+        email: token_payload
+            .user
+            .as_ref()
+            .and_then(|user| user.email.clone()),
+        display_name: None,
+        provider,
+    };
+
+    AuthSession {
+        access_token: token_payload.access_token,
+        refresh_token: token_payload.refresh_token,
+        expires_at: token_payload
+            .expires_in
+            .map(|seconds| chrono::Utc::now().timestamp() + seconds),
+        user: authenticated_user,
+    }
+}
+
+async fn refresh_supabase_session(
+    state: &ServerState,
+    refresh_token: String,
+) -> Result<AuthSession, (StatusCode, String)> {
+    let supabase = state.supabase_auth.as_ref().ok_or_else(|| {
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            "Supabase auth is not configured".to_string(),
+        )
+    })?;
+    let project_url = supabase.project_url.as_deref().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Supabase project URL is not configured".to_string(),
+        )
+    })?;
+
+    let token_url = format!(
+        "{}/auth/v1/token?grant_type=refresh_token",
+        project_url.trim_end_matches('/')
+    );
+    let token_response = state
+        .client
+        .post(&token_url)
+        .header("apikey", supabase.anon_key.clone().unwrap_or_default())
+        .json(&SupabaseRefreshTokenRequest {
+            refresh_token: refresh_token.as_str(),
+        })
+        .send()
+        .await
+        .map_err(|err| {
+            (
+                StatusCode::BAD_GATEWAY,
+                format!("Supabase refresh failed: {}", err),
+            )
+        })?;
+
+    if !token_response.status().is_success() {
+        let body = token_response.text().await.unwrap_or_default();
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            format!("Supabase refresh rejected session: {}", body),
+        ));
+    }
+
+    let token_payload: SupabaseTokenResponse = token_response.json().await.map_err(|err| {
+        (
+            StatusCode::BAD_GATEWAY,
+            format!("Supabase refresh response was invalid: {}", err),
+        )
+    })?;
+
+    Ok(auth_session_from_supabase_tokens(token_payload, None))
+}
+
+fn append_auth_session_cookies(headers: &mut axum::http::HeaderMap, session: &AuthSession) {
+    headers.append(
+        axum::http::header::SET_COOKIE,
+        format!(
+            "{}={}; Path=/; HttpOnly; SameSite=Lax",
+            auth::ACCESS_TOKEN_COOKIE,
+            session.access_token
+        )
+        .parse()
+        .expect("valid access token cookie"),
+    );
+    if let Some(refresh_token) = &session.refresh_token {
+        headers.append(
+            axum::http::header::SET_COOKIE,
+            format!(
+                "{}={}; Path=/; HttpOnly; SameSite=Lax",
+                auth::REFRESH_TOKEN_COOKIE,
+                refresh_token
+            )
+            .parse()
+            .expect("valid refresh token cookie"),
+        );
+    }
+}
+
+fn clear_auth_cookies(headers: &mut axum::http::HeaderMap) {
+    headers.append(
+        axum::http::header::SET_COOKIE,
+        format!(
+            "{}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax",
+            auth::ACCESS_TOKEN_COOKIE
+        )
+        .parse()
+        .expect("valid access token clear cookie"),
+    );
+    headers.append(
+        axum::http::header::SET_COOKIE,
+        format!(
+            "{}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax",
+            auth::REFRESH_TOKEN_COOKIE
+        )
+        .parse()
+        .expect("valid refresh token clear cookie"),
+    );
+}
+
+fn render_auth_message(title: &str, body: &str) -> String {
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>{}</title></head><body><h1>{}</h1><p>{}</p></body></html>",
+        title, title, body
+    )
+}
+
+fn render_auth_status_page() -> String {
+    render_auth_status_page_with_message(
+        "Auth status",
+        "Checking current Harper session via /auth/me...",
+    )
+}
+
+fn render_auth_status_page_with_message(title: &str, message: &str) -> String {
+    format!(
+        r#"<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{title}</title>
+    <style>
+      body {{
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 2rem;
+        color: #111827;
+        background: #f9fafb;
+      }}
+      .card {{
+        max-width: 48rem;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+      }}
+      code {{
+        background: #f3f4f6;
+        padding: 0.1rem 0.3rem;
+        border-radius: 6px;
+      }}
+      pre {{
+        overflow-x: auto;
+        background: #111827;
+        color: #f9fafb;
+        padding: 1rem;
+        border-radius: 10px;
+      }}
+      .muted {{ color: #6b7280; }}
+      .ok {{ color: #065f46; }}
+      .bad {{ color: #991b1b; }}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>{title}</h1>
+      <p id="status" class="muted">{message}</p>
+      <pre id="payload">{{}}</pre>
+    </div>
+    <script>
+      async function loadAuthState() {{
+        const status = document.getElementById('status');
+        const payload = document.getElementById('payload');
+        try {{
+          const response = await fetch('/auth/me', {{
+            method: 'GET',
+            credentials: 'include',
+            headers: {{ 'Accept': 'application/json' }}
+          }});
+          const body = await response.json();
+          payload.textContent = JSON.stringify(body, null, 2);
+          if (response.ok && body.authenticated) {{
+            const email = body.user && body.user.email ? body.user.email : body.user && body.user.user_id;
+            status.textContent = `Signed in as ${{email}}`;
+            status.className = 'ok';
+          }} else {{
+            status.textContent = 'No active Harper session';
+            status.className = 'bad';
+          }}
+        }} catch (error) {{
+          payload.textContent = JSON.stringify({{ error: String(error) }}, null, 2);
+          status.textContent = 'Failed to query /auth/me';
+          status.className = 'bad';
+        }}
+      }}
+      loadAuthState();
+    </script>
+  </body>
+</html>"#,
+        title = title,
+        message = message
+    )
+}
+
 pub async fn run_server(
     addr: &str,
     conn: Arc<Mutex<Connection>>,
     api_config: ApiConfig,
     exec_policy: ExecPolicyConfig,
+    supabase_auth: Option<SupabaseAuthConfig>,
 ) -> HarperResult<()> {
-    let router = create_router(conn, api_config, exec_policy);
+    let router = create_router(conn, api_config, exec_policy, supabase_auth);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     log::info!("Harper API server running on {}", addr);
@@ -1028,14 +1837,24 @@ pub async fn approve_pending_tool(
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_json_payload, normalize_finding_range, review_code, CodeReviewFinding,
-        CodeSuggestion, ReviewRange, ReviewRequest, ServerState,
+        auth_me, auth_tui_poll, build_authorize_url, delete_session, extract_json_payload,
+        get_session, list_sessions, normalize_finding_range, render_auth_status_page,
+        render_auth_success, review_code, CodeReviewFinding, CodeSuggestion, ReviewRange,
+        ReviewRequest, ServerState, SupabaseAuthConfig, TuiAuthFlowState,
     };
+    use crate::core::auth::{AuthSession, AuthenticatedUser, UserAuthProvider};
     use crate::core::{ApiConfig, ApiProvider};
-    use axum::extract::State;
+    use crate::memory::storage::{save_message, save_session, save_session_for_user};
+    use crate::runtime::config::ExecPolicyConfig;
+    use axum::body::to_bytes;
+    use axum::extract::{Path, State};
+    use axum::http::{header::AUTHORIZATION, HeaderMap, HeaderValue, StatusCode};
     use axum::Json;
+    use chrono::{Duration, Utc};
+    use jsonwebtoken::{encode, EncodingKey, Header};
     use reqwest::Client;
     use rusqlite::Connection;
+    use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
     #[test]
@@ -1073,6 +1892,50 @@ mod tests {
         assert_eq!(finding.range.end_column, 1);
     }
 
+    #[test]
+    fn auth_status_page_uses_auth_me_on_load() {
+        let html = render_auth_status_page();
+        assert!(html.contains("fetch('/auth/me'"));
+        assert!(html.contains("Checking current Harper session via /auth/me"));
+    }
+
+    #[test]
+    fn auth_success_page_verifies_session_with_auth_me() {
+        let html = render_auth_success(&AuthSession {
+            access_token: "token".to_string(),
+            refresh_token: Some("refresh".to_string()),
+            expires_at: None,
+            user: AuthenticatedUser {
+                user_id: "user-a".to_string(),
+                email: Some("user-a@example.com".to_string()),
+                display_name: None,
+                provider: Some(UserAuthProvider::Github),
+            },
+        });
+        assert!(html.contains("Verifying active session with /auth/me"));
+        assert!(html.contains("fetch('/auth/me'"));
+    }
+
+    #[test]
+    fn authorize_url_uses_redirect_param_for_harper_flow() {
+        let state = test_server_state(Some(SupabaseAuthConfig {
+            project_url: Some("https://project.supabase.co".to_string()),
+            anon_key: Some("anon".to_string()),
+            jwt_secret: Some("secret".to_string()),
+            redirect_url: Some("http://127.0.0.1:8081/auth/callback".to_string()),
+            allowed_providers: Some(vec!["github".to_string()]),
+        }));
+
+        let authorize_url =
+            build_authorize_url(&state, "github", Some("tui-flow".to_string())).expect("url");
+        let parsed = reqwest::Url::parse(&authorize_url).expect("valid authorize url");
+        let params: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+
+        assert!(!params.contains_key("state"));
+        let redirect_to = params.get("redirect_to").expect("redirect_to");
+        assert!(redirect_to.contains("/auth/callback?harper_flow="));
+    }
+
     #[tokio::test]
     async fn review_endpoint_rejects_empty_content() {
         let conn = Connection::open_in_memory().expect("in-memory db");
@@ -1088,6 +1951,9 @@ mod tests {
             },
             client: Client::new(),
             exec_policy: crate::runtime::config::ExecPolicyConfig::default(),
+            supabase_auth: None,
+            oauth_states: Arc::new(Mutex::new(HashMap::new())),
+            tui_auth_flows: Arc::new(Mutex::new(HashMap::new())),
         });
 
         let request = ReviewRequest {
@@ -1104,5 +1970,259 @@ mod tests {
         let error = result.expect_err("request should be rejected");
         assert_eq!(error.0, axum::http::StatusCode::BAD_REQUEST);
         assert!(error.1.contains("content must not be empty"));
+    }
+
+    fn test_server_state(supabase_auth: Option<SupabaseAuthConfig>) -> Arc<ServerState> {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+
+        Arc::new(ServerState {
+            conn: Arc::new(Mutex::new(conn)),
+            api_config: ApiConfig {
+                provider: ApiProvider::OpenAI,
+                api_key: "test-key".to_string(),
+                base_url: "https://api.openai.com/v1/chat/completions".to_string(),
+                model_name: "gpt-4".to_string(),
+            },
+            client: Client::new(),
+            exec_policy: ExecPolicyConfig::default(),
+            supabase_auth,
+            oauth_states: Arc::new(Mutex::new(HashMap::new())),
+            tui_auth_flows: Arc::new(Mutex::new(HashMap::new())),
+        })
+    }
+
+    fn auth_headers(secret: &str, user_id: &str, email: &str) -> HeaderMap {
+        auth_headers_with_exp(secret, user_id, email, Utc::now() + Duration::hours(1))
+    }
+
+    fn auth_headers_with_exp(
+        secret: &str,
+        user_id: &str,
+        email: &str,
+        exp: chrono::DateTime<Utc>,
+    ) -> HeaderMap {
+        #[derive(serde::Serialize)]
+        struct TestClaims {
+            sub: String,
+            email: Option<String>,
+            role: Option<String>,
+            aud: Option<String>,
+            exp: usize,
+        }
+
+        let token = encode(
+            &Header::default(),
+            &TestClaims {
+                sub: user_id.to_string(),
+                email: Some(email.to_string()),
+                role: Some("authenticated".to_string()),
+                aud: Some("authenticated".to_string()),
+                exp: exp.timestamp() as usize,
+            },
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .expect("jwt encode");
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", token)).expect("bearer header"),
+        );
+        headers
+    }
+
+    async fn response_json(response: axum::response::Response) -> serde_json::Value {
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read response body");
+        serde_json::from_slice(&body).expect("json body")
+    }
+
+    #[tokio::test]
+    async fn local_mode_get_session_allows_unowned_session_without_auth() {
+        let state = test_server_state(None);
+        {
+            let conn = state.conn.lock().expect("db lock");
+            save_session(&conn, "local-session").expect("save session");
+            save_message(&conn, "local-session", "user", "hello").expect("save message");
+        }
+
+        let response = get_session(
+            State(state),
+            HeaderMap::new(),
+            Path("local-session".to_string()),
+        )
+        .await
+        .expect("local session should be readable");
+
+        let body = response.0;
+        assert_eq!(body["session_id"], "local-session");
+        assert_eq!(body["messages"].as_array().map(Vec::len), Some(1));
+        assert!(body["user_id"].is_null());
+    }
+
+    #[tokio::test]
+    async fn authenticated_list_sessions_returns_only_owned_sessions() {
+        let secret = "test-secret";
+        let state = test_server_state(Some(SupabaseAuthConfig {
+            jwt_secret: Some(secret.to_string()),
+            ..SupabaseAuthConfig::default()
+        }));
+        {
+            let conn = state.conn.lock().expect("db lock");
+            save_session_for_user(&conn, "session-a", "user-a").expect("session a");
+            save_session_for_user(&conn, "session-b", "user-b").expect("session b");
+        }
+
+        let response = list_sessions(
+            State(state),
+            auth_headers(secret, "user-a", "user-a@example.com"),
+        )
+        .await
+        .expect("list should succeed");
+
+        let sessions = response.0;
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].id, "session-a");
+        assert_eq!(sessions[0].user_id.as_deref(), Some("user-a"));
+    }
+
+    #[tokio::test]
+    async fn authenticated_get_session_denies_other_users_session() {
+        let secret = "test-secret";
+        let state = test_server_state(Some(SupabaseAuthConfig {
+            jwt_secret: Some(secret.to_string()),
+            ..SupabaseAuthConfig::default()
+        }));
+        {
+            let conn = state.conn.lock().expect("db lock");
+            save_session_for_user(&conn, "session-a", "owner").expect("owned session");
+            save_message(&conn, "session-a", "user", "hello").expect("save message");
+        }
+
+        let error = get_session(
+            State(state),
+            auth_headers(secret, "intruder", "intruder@example.com"),
+            Path("session-a".to_string()),
+        )
+        .await
+        .expect_err("other user should not read session");
+
+        assert_eq!(error, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn authenticated_delete_session_denies_other_users_session() {
+        let secret = "test-secret";
+        let state = test_server_state(Some(SupabaseAuthConfig {
+            jwt_secret: Some(secret.to_string()),
+            ..SupabaseAuthConfig::default()
+        }));
+        {
+            let conn = state.conn.lock().expect("db lock");
+            save_session_for_user(&conn, "session-a", "owner").expect("owned session");
+        }
+
+        let status = delete_session(
+            State(state.clone()),
+            auth_headers(secret, "intruder", "intruder@example.com"),
+            Path("session-a".to_string()),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::NOT_FOUND);
+
+        let conn = state.conn.lock().expect("db lock");
+        let still_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sessions WHERE id = ?1",
+                ["session-a"],
+                |row| row.get(0),
+            )
+            .expect("session count");
+        assert_eq!(still_exists, 1);
+    }
+
+    #[tokio::test]
+    async fn auth_me_returns_authenticated_user_for_valid_token() {
+        let secret = "test-secret";
+        let state = test_server_state(Some(SupabaseAuthConfig {
+            jwt_secret: Some(secret.to_string()),
+            ..SupabaseAuthConfig::default()
+        }));
+
+        let response = auth_me(
+            State(state),
+            auth_headers(secret, "user-a", "user-a@example.com"),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        assert_eq!(body["authenticated"], true);
+        assert_eq!(body["user"]["user_id"], "user-a");
+        assert_eq!(body["user"]["email"], "user-a@example.com");
+    }
+
+    #[tokio::test]
+    async fn auth_me_clears_invalid_auth_cookies() {
+        let secret = "test-secret";
+        let state = test_server_state(Some(SupabaseAuthConfig {
+            jwt_secret: Some(secret.to_string()),
+            ..SupabaseAuthConfig::default()
+        }));
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::COOKIE,
+            HeaderValue::from_static(
+                "harper_access_token=broken-token; harper_refresh_token=refresh-token",
+            ),
+        );
+
+        let response = auth_me(State(state), headers).await;
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let set_cookies: Vec<_> = response
+            .headers()
+            .get_all(axum::http::header::SET_COOKIE)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .collect();
+        assert!(
+            set_cookies
+                .iter()
+                .any(|cookie| cookie.contains("harper_access_token=;")
+                    && cookie.contains("Max-Age=0"))
+        );
+        assert!(set_cookies.iter().any(
+            |cookie| cookie.contains("harper_refresh_token=;") && cookie.contains("Max-Age=0")
+        ));
+
+        let body = response_json(response).await;
+        assert_eq!(body["authenticated"], false);
+        assert!(body["user"].is_null());
+    }
+
+    #[tokio::test]
+    async fn tui_auth_poll_returns_pending_for_unfinished_flow() {
+        let state = test_server_state(None);
+        {
+            let mut flows = state.tui_auth_flows.lock().expect("flow lock");
+            flows.insert(
+                "flow-1".to_string(),
+                TuiAuthFlowState {
+                    session: None,
+                    created_at: std::time::Instant::now(),
+                },
+            );
+        }
+
+        let response = auth_tui_poll(State(state), Path("flow-1".to_string()))
+            .await
+            .expect("poll should succeed");
+        assert_eq!(response.0.status, "pending");
+        assert!(response.0.session.is_none());
     }
 }

@@ -28,6 +28,23 @@ model_name = "gpt-5.5"
 # base_url = "https://api.cerebras.ai/v1/chat/completions"
 # model_name = "qwen-3-32b-a4b"
 
+[auth]
+enabled = false
+
+[auth.supabase]
+# Keep real Supabase values in `.env`, not in tracked config files.
+# Supported env vars:
+# SUPABASE_URL
+# SUPABASE_ANON_KEY
+# SUPABASE_JWT_SECRET
+# SUPABASE_REDIRECT_URL
+# SUPABASE_ALLOWED_PROVIDERS
+# project_url = "https://your-project-id.supabase.co"
+# anon_key = "your-supabase-publishable-key"
+# jwt_secret = "your-supabase-jwt-secret"
+# redirect_url = "http://127.0.0.1:8081/auth/callback"
+# allowed_providers = ["github", "google", "apple"]
+
 [database]
 path = ".harper/sessions.db"
 

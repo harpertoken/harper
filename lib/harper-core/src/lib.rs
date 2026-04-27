@@ -24,6 +24,7 @@ pub use crate::core::error;
 
 // Re-export core types
 pub use crate::core::agents::{AgentsSource, ResolvedAgents};
+pub use crate::core::auth::{AuthSession, AuthenticatedUser, UserAuthClaims, UserAuthProvider};
 pub use crate::core::constants::VERSION;
 pub use crate::core::error::{HarperError, HarperResult};
 pub use crate::core::llm_client::call_llm;
@@ -52,7 +53,7 @@ pub use crate::memory::storage::{
 pub use crate::runtime::utils;
 
 // Re-export runtime
-pub use crate::runtime::config::ExecPolicyConfig;
+pub use crate::runtime::config::{ExecPolicyConfig, SupabaseAuthConfig};
 pub use crate::runtime::scheduler::TaskScheduler;
 
 #[cfg(test)]

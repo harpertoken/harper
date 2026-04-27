@@ -29,6 +29,12 @@
                 <p class="hero-lede">Short product and engineering notes from Harper. This page stays high level. The <a href="changelog.html">changelog</a> keeps the version-by-version detail.</p>
 
                 <article>
+                    <h2>April 2026 · Local sign-in now works through Supabase</h2>
+                    <p>Harper now has a real local sign-in path instead of only provider API keys. The local server can start a browser-based Supabase login, complete the callback, verify the returned session, and expose the signed-in user through <code>/auth/me</code>. The TUI can also start and poll that same auth flow without depending on browser cookies directly.</p>
+                    <p>This changed more than one route. The final shape includes callback handling, PKCE code exchange, user-scoped session access, and asymmetric JWT verification against Supabase signing keys. That matters because local auth is only useful if the session is actually enforced everywhere the server exposes user data.</p>
+                </article>
+
+                <article>
                     <h2>April 2026 · Planning became real state</h2>
                     <p>Harper now treats planning as part of the session model instead of something implied in prompt text. Plans persist with the session, show up in the TUI, and can be updated through the tool loop and HTTP chat path. That matters because longer tasks need visible progress, not just a good initial answer.</p>
                     <p>The product implication is straightforward: once plan state is real, the UI can show what is pending, what is active, and what just changed. It also means future automation can attach tool execution and job status to actual steps instead of relying on the model to narrate everything correctly.</p>

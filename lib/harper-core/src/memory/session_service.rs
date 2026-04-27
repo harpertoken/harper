@@ -37,8 +37,10 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct Session {
     pub id: String,
+    pub user_id: Option<String>,
     pub title: Option<String>,
     pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -53,6 +55,7 @@ pub struct GlobalStats {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct SessionStateView {
     pub session_id: String,
+    pub user_id: Option<String>,
     pub messages: Vec<Message>,
     pub plan: Option<PlanState>,
     pub agents: Option<ResolvedAgents>,
@@ -128,18 +131,11 @@ impl<'a> SessionService<'a> {
 
     /// List all previous sessions (returns data)
     pub fn list_sessions_data(&self) -> HarperResult<Vec<Session>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, title, created_at FROM sessions ORDER BY updated_at DESC, created_at DESC",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            Ok(Session {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                created_at: row.get(2)?,
-            })
-        })?;
-        let sessions = rows.collect::<Result<Vec<_>, _>>()?;
-        Ok(sessions)
+        self.list_sessions_data_inner(None)
+    }
+
+    pub fn list_sessions_data_for_user(&self, user_id: &str) -> HarperResult<Vec<Session>> {
+        self.list_sessions_data_inner(Some(user_id))
     }
 
     /// List all previous sessions
@@ -209,6 +205,76 @@ impl<'a> SessionService<'a> {
     }
 
     pub fn load_session_state_view(&self, session_id: &str) -> HarperResult<SessionStateView> {
+        self.load_session_state_view_inner(session_id, None)
+    }
+
+    pub fn load_session_state_view_for_user(
+        &self,
+        session_id: &str,
+        user_id: &str,
+    ) -> HarperResult<Option<SessionStateView>> {
+        self.load_session_state_view_inner(session_id, Some(user_id))
+            .map(Some)
+            .or_else(|err| match err {
+                HarperError::Validation(message) if message == "session not found" => Ok(None),
+                other => Err(other),
+            })
+    }
+
+    pub fn delete_session_for_user(&self, session_id: &str, user_id: &str) -> HarperResult<bool> {
+        let deleted = self.conn.execute(
+            "DELETE FROM sessions WHERE id = ?1 AND user_id = ?2",
+            [session_id, user_id],
+        )?;
+        Ok(deleted > 0)
+    }
+
+    pub fn delete_session(&self, session_id: &str) -> HarperResult<bool> {
+        let deleted = self
+            .conn
+            .execute("DELETE FROM sessions WHERE id = ?1", [session_id])?;
+        Ok(deleted > 0)
+    }
+
+    fn list_sessions_data_inner(&self, user_id: Option<&str>) -> HarperResult<Vec<Session>> {
+        let mut stmt = if user_id.is_some() {
+            self.conn.prepare(
+                "SELECT id, user_id, title, created_at, updated_at
+                 FROM sessions
+                 WHERE user_id = ?1
+                 ORDER BY updated_at DESC, created_at DESC",
+            )?
+        } else {
+            self.conn.prepare(
+                "SELECT id, user_id, title, created_at, updated_at
+                 FROM sessions
+                 ORDER BY updated_at DESC, created_at DESC",
+            )?
+        };
+        let rows = if let Some(user_id) = user_id {
+            stmt.query_map([user_id], Self::map_session_row)?
+        } else {
+            stmt.query_map([], Self::map_session_row)?
+        };
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    fn map_session_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Session> {
+        Ok(Session {
+            id: row.get(0)?,
+            user_id: row.get(1)?,
+            title: row.get(2)?,
+            created_at: row.get(3)?,
+            updated_at: row.get(4)?,
+        })
+    }
+
+    fn load_session_state_view_inner(
+        &self,
+        session_id: &str,
+        user_id: Option<&str>,
+    ) -> HarperResult<SessionStateView> {
+        let session = self.load_session_metadata(session_id, user_id)?;
         let messages = load_history(self.conn, session_id)?;
         let plan = load_plan_state(self.conn, session_id)?;
         let agents = load_active_agents(self.conn, session_id)?;
@@ -221,11 +287,45 @@ impl<'a> SessionService<'a> {
 
         Ok(SessionStateView {
             session_id: session_id.to_string(),
+            user_id: session.user_id,
             messages,
             plan,
             agents,
             agents_rendered,
             agents_effective_rendered,
+        })
+    }
+
+    fn load_session_metadata(
+        &self,
+        session_id: &str,
+        user_id: Option<&str>,
+    ) -> HarperResult<Session> {
+        let mut stmt = if user_id.is_some() {
+            self.conn.prepare(
+                "SELECT id, user_id, title, created_at, updated_at
+                 FROM sessions
+                 WHERE id = ?1 AND user_id = ?2",
+            )?
+        } else {
+            self.conn.prepare(
+                "SELECT id, user_id, title, created_at, updated_at
+                 FROM sessions
+                 WHERE id = ?1",
+            )?
+        };
+
+        let session = if let Some(user_id) = user_id {
+            stmt.query_row([session_id, user_id], Self::map_session_row)
+        } else {
+            stmt.query_row([session_id], Self::map_session_row)
+        };
+
+        session.map_err(|err| match err {
+            rusqlite::Error::QueryReturnedNoRows => {
+                HarperError::Validation("session not found".to_string())
+            }
+            other => HarperError::Database(other.to_string()),
         })
     }
 
