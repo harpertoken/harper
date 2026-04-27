@@ -140,6 +140,8 @@ async fn main() -> Result<(), HarperError> {
     let args: Vec<String> = std::env::args().collect();
     let no_server = args.iter().any(|a| a == "--no-server");
 
+    let mut server_task = None;
+
     // Check for server mode
     let server_enabled = config.server.enabled.unwrap_or(false) && !no_server;
     if server_enabled {
@@ -163,24 +165,20 @@ async fn main() -> Result<(), HarperError> {
         let conn_clone = conn.clone();
         let api_config_clone = api_config.clone();
         let exec_policy_clone = exec_policy.clone();
-        tokio::spawn(async move {
+        let supabase_auth_clone = config.auth.supabase.clone();
+        server_task = Some(tokio::spawn(async move {
             if let Err(e) = harper_core::server::run_server(
                 &addr,
                 conn_clone,
                 api_config_clone,
                 exec_policy_clone,
+                supabase_auth_clone,
             )
             .await
             {
                 eprintln!("Server error: {}", e);
             }
-        });
-
-        // Wait for Ctrl+C
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Failed to listen for Ctrl+C");
-        return Ok(());
+        }));
     }
 
     // MCP client initialization
@@ -290,6 +288,17 @@ async fn main() -> Result<(), HarperError> {
 
     // Try TUI first, fall back to text menu if TUI fails
     let custom_commands = config.custom_commands.commands.clone().unwrap_or_default();
+    let server_base_url = config.server.enabled.unwrap_or(false).then(|| {
+        format!(
+            "http://{}:{}",
+            config
+                .server
+                .host
+                .clone()
+                .unwrap_or_else(|| "127.0.0.1".to_string()),
+            config.server.port.unwrap_or(8081)
+        )
+    });
 
     let mut run_tui_success = false;
     if std::io::stdout().is_terminal()
@@ -300,7 +309,7 @@ async fn main() -> Result<(), HarperError> {
             &theme,
             custom_commands.clone(),
             &exec_policy,
-            mcp_client.as_ref(),
+            server_base_url,
         )
         .await
         .is_ok()
@@ -323,6 +332,10 @@ async fn main() -> Result<(), HarperError> {
             exec_policy.clone(),
         )
         .await;
+    }
+
+    if let Some(server_task) = server_task {
+        server_task.abort();
     }
 
     Ok(())

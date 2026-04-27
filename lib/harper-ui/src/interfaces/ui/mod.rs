@@ -14,6 +14,7 @@
 
 // UI interface for Harper
 pub mod app;
+pub mod auth;
 pub mod events;
 pub mod theme;
 pub mod tui;

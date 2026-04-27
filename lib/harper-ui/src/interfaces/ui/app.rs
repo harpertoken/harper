@@ -14,8 +14,8 @@
 
 use harper_core::core::Message;
 use harper_core::memory::session_service::GlobalStats;
-use harper_core::PlanState;
 use harper_core::ResolvedAgents;
+use harper_core::{AuthSession, PlanState};
 use serde::Deserialize;
 use std::fs;
 use std::sync::{Arc, Mutex};
@@ -313,6 +313,10 @@ pub struct TuiApp {
     pub cut_buffer: String,
     pub approval_history: Vec<String>,
     pub model_label: String,
+    pub auth_session: Option<AuthSession>,
+    pub auth_flow_id: Option<String>,
+    pub auth_server_base_url: Option<String>,
+    pub auth_last_poll_at: Option<Instant>,
 }
 
 impl Default for TuiApp {
@@ -327,6 +331,10 @@ impl Default for TuiApp {
             cut_buffer: String::new(),
             approval_history: Vec::new(),
             model_label: String::new(),
+            auth_session: None,
+            auth_flow_id: None,
+            auth_server_base_url: None,
+            auth_last_poll_at: None,
         }
     }
 }
@@ -366,6 +374,17 @@ impl TuiApp {
 
     pub fn clear_message(&mut self) {
         self.message = None;
+    }
+
+    pub fn auth_status_label(&self) -> String {
+        match &self.auth_session {
+            Some(session) => session
+                .user
+                .email
+                .clone()
+                .unwrap_or_else(|| format!("signed in: {}", session.user.user_id)),
+            None => "auth: signed out".to_string(),
+        }
     }
 
     pub fn set_activity_status(&mut self, status: Option<String>) {

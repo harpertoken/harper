@@ -23,6 +23,11 @@ use crossterm::{cursor, execute};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
+use super::app::{AppState, ApprovalState, ChatState, CommandOutputState, TuiApp};
+use super::auth;
+use super::events::{self, EventResult};
+use super::theme::Theme;
+use super::widgets;
 use harper_core::agent::chat::ChatService;
 use harper_core::core::io_traits::{RuntimeEventSink, UserApproval};
 use harper_core::core::ApiConfig;
@@ -30,12 +35,6 @@ use harper_core::memory::session_service::SessionService;
 use harper_core::runtime::config::ExecPolicyConfig;
 use harper_core::{PlanState, ResolvedAgents, SessionStateView};
 use rusqlite::Connection;
-use turul_mcp_client::McpClient;
-
-use super::app::{AppState, ApprovalState, ChatState, CommandOutputState, TuiApp};
-use super::events::{self, EventResult};
-use super::theme::Theme;
-use super::widgets;
 
 use async_trait::async_trait;
 use harper_core::core::error::HarperResult;
@@ -209,7 +208,7 @@ pub async fn run_tui(
     theme: &Theme,
     custom_commands: HashMap<String, String>,
     exec_policy: &ExecPolicyConfig,
-    _mcp_client: Option<&McpClient>,
+    server_base_url: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Set up terminal
     enable_raw_mode()?;
@@ -220,6 +219,9 @@ pub async fn run_tui(
 
     let mut app = TuiApp::new();
     app.model_label = format!("{:?} / {}", api_config.provider, api_config.model_name);
+    app.auth_session = auth::load_auth_session();
+    app.auth_server_base_url = server_base_url.clone();
+    let auth_client = reqwest::Client::new();
 
     // Set up channels for background worker
     let (worker_tx, mut worker_rx) = mpsc::channel::<WorkerMsg>(10);
@@ -298,6 +300,7 @@ pub async fn run_tui(
                                     .load_session_state_view(&session_id)
                                     .unwrap_or_else(|_| SessionStateView {
                                         session_id: session_id.clone(),
+                                        user_id: None,
                                         messages: history.clone(),
                                         plan: None,
                                         agents: None,
@@ -338,6 +341,50 @@ pub async fn run_tui(
                         EventResult::Quit => break,
                         EventResult::SendMessage(msg) => {
                             if let AppState::Chat(chat_state) = &mut app.state {
+                                if let Some(command) = auth::parse_tui_auth_command(&msg) {
+                                    match command {
+                                        auth::TuiAuthCommand::Login { provider } => {
+                                            let Some(base_url) = app.auth_server_base_url.clone() else {
+                                                app.set_error_message("TUI auth requires the Harper server to be enabled".to_string());
+                                                continue;
+                                            };
+                                            match auth::start_tui_auth_flow(&auth_client, &base_url, &provider).await {
+                                                Ok(flow) => {
+                                                    app.auth_flow_id = Some(flow.flow_id.clone());
+                                                    app.auth_last_poll_at = None;
+                                                    match auth::launch_browser(&flow.login_url) {
+                                                        Ok(_) => app.set_status_message(format!("Opened browser for {} sign-in", provider)),
+                                                        Err(_) => app.set_info_message(format!(
+                                                            "Open this URL to sign in:\n{}",
+                                                            flow.login_url
+                                                        )),
+                                                    }
+                                                    app.set_activity_status(Some("waiting for browser sign-in".to_string()));
+                                                }
+                                                Err(err) => app.set_error_message(format!("Auth login failed: {}", err)),
+                                            }
+                                            continue;
+                                        }
+                                        auth::TuiAuthCommand::Logout => {
+                                            if let Err(err) = auth::clear_auth_session() {
+                                                app.set_error_message(format!("Auth logout failed: {}", err));
+                                            } else {
+                                                app.auth_session = None;
+                                                app.auth_flow_id = None;
+                                                app.auth_last_poll_at = None;
+                                                app.set_status_message("Cleared local TUI auth session".to_string());
+                                            }
+                                            continue;
+                                        }
+                                        auth::TuiAuthCommand::Status => {
+                                            let status = app.auth_session.as_ref().map(|session| {
+                                                session.user.email.clone().unwrap_or_else(|| session.user.user_id.clone())
+                                            }).unwrap_or_else(|| "not signed in".to_string());
+                                            app.set_info_message(format!("TUI auth status: {}", status));
+                                            continue;
+                                        }
+                                    }
+                                }
                                 let session_id = chat_state.session_id.clone();
                                 let web_search = chat_state.web_search_enabled;
 
@@ -355,6 +402,90 @@ pub async fn run_tui(
                                     session_id,
                                     web_search,
                                 }).await;
+                            }
+                        }
+                        EventResult::LoadSessions => {
+                            if let (Some(base_url), Some(session)) = (
+                                app.auth_server_base_url.clone(),
+                                app.auth_session.clone(),
+                            ) {
+                                match auth::fetch_remote_sessions(&auth_client, &base_url, &session).await {
+                                    Ok(sessions) => {
+                                        let session_infos = sessions
+                                            .into_iter()
+                                            .map(|s| super::app::SessionInfo {
+                                                id: s.id.clone(),
+                                                name: s.title.unwrap_or(s.id),
+                                                created_at: s.created_at,
+                                            })
+                                            .collect();
+                                        app.state = AppState::Sessions(session_infos, 0);
+                                    }
+                                    Err(err) => app.set_error_message(format!("Error loading remote sessions: {}", err)),
+                                }
+                            } else {
+                                match session_service.list_sessions_data() {
+                                    Ok(sessions) => {
+                                        let session_infos = sessions
+                                            .into_iter()
+                                            .map(|s| super::app::SessionInfo {
+                                                id: s.id.clone(),
+                                                name: s.title.unwrap_or(s.id),
+                                                created_at: s.created_at,
+                                            })
+                                            .collect();
+                                        app.state = AppState::Sessions(session_infos, 0);
+                                    }
+                                    Err(e) => app.set_error_message(format!("Error loading sessions: {}", e)),
+                                }
+                            }
+                        }
+                        EventResult::OpenSession { session_id, preview } => {
+                            if let (Some(base_url), Some(session)) = (
+                                app.auth_server_base_url.clone(),
+                                app.auth_session.clone(),
+                            ) {
+                                match auth::fetch_remote_session_state(&auth_client, &base_url, &session, &session_id).await {
+                                    Ok(session_view) => {
+                                        if preview {
+                                            app.state = AppState::ViewSession(
+                                                session_view.session_id,
+                                                session_view.messages,
+                                                0,
+                                            );
+                                        } else {
+                                            app.state = AppState::Chat(Box::new(events::create_chat_state(
+                                                session_view.session_id,
+                                                session_view.messages,
+                                                session_view.plan,
+                                                session_view.agents,
+                                            )));
+                                            if let AppState::Chat(chat_state) = &mut app.state {
+                                                spawn_sidebar_gathering(chat_state, &ui_tx);
+                                            }
+                                        }
+                                    }
+                                    Err(err) => app.set_error_message(format!("Error loading remote session: {}", err)),
+                                }
+                            } else if preview {
+                                if let Ok(messages) = session_service.view_session_data(&session_id) {
+                                    app.state = AppState::ViewSession(session_id, messages, 0);
+                                }
+                            } else {
+                                match session_service.load_session_state_view(&session_id) {
+                                    Ok(session_view) => {
+                                        app.state = AppState::Chat(Box::new(events::create_chat_state(
+                                            session_view.session_id,
+                                            session_view.messages,
+                                            session_view.plan,
+                                            session_view.agents,
+                                        )));
+                                        if let AppState::Chat(chat_state) = &mut app.state {
+                                            spawn_sidebar_gathering(chat_state, &ui_tx);
+                                        }
+                                    }
+                                    Err(e) => app.set_error_message(format!("Error loading session: {}", e)),
+                                }
                             }
                         }
                         EventResult::Continue => {}
@@ -473,6 +604,48 @@ pub async fn run_tui(
                         tx,
                         scroll_offset: 0,
                     });
+                }
+            }
+        }
+
+        if let (Some(base_url), Some(flow_id)) =
+            (app.auth_server_base_url.clone(), app.auth_flow_id.clone())
+        {
+            let should_poll = app
+                .auth_last_poll_at
+                .is_none_or(|last| last.elapsed() >= std::time::Duration::from_millis(750));
+            if should_poll {
+                app.auth_last_poll_at = Some(std::time::Instant::now());
+                match auth::poll_tui_auth_flow(&auth_client, &base_url, &flow_id).await {
+                    Ok(flow) if flow.status == "complete" => {
+                        if let Some(session) = flow.session {
+                            match auth::save_auth_session(&session) {
+                                Ok(_) => {
+                                    let status = session
+                                        .user
+                                        .email
+                                        .clone()
+                                        .unwrap_or_else(|| session.user.user_id.clone());
+                                    app.auth_session = Some(session);
+                                    app.auth_flow_id = None;
+                                    app.auth_last_poll_at = None;
+                                    app.set_activity_status(None);
+                                    app.set_status_message(format!("Signed in as {}", status));
+                                }
+                                Err(err) => app.set_error_message(format!(
+                                    "Failed to save TUI auth session: {}",
+                                    err
+                                )),
+                            }
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(err) => {
+                        app.auth_flow_id = None;
+                        app.auth_last_poll_at = None;
+                        app.set_activity_status(None);
+                        app.set_error_message(format!("Auth polling failed: {}", err));
+                    }
                 }
             }
         }

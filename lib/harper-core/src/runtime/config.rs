@@ -23,6 +23,7 @@ use std::path::Path;
 #[derive(Debug, Deserialize)]
 pub struct HarperConfig {
     pub api: ApiConfig,
+    pub auth: AuthConfig,
     pub database: DatabaseConfig,
     pub mcp: McpConfig,
     pub prompts: PromptConfig,
@@ -40,6 +41,21 @@ pub struct ApiConfig {
     pub api_key: String,
     pub base_url: String,
     pub model_name: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct AuthConfig {
+    pub enabled: Option<bool>,
+    pub supabase: Option<SupabaseAuthConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct SupabaseAuthConfig {
+    pub project_url: Option<String>,
+    pub anon_key: Option<String>,
+    pub jwt_secret: Option<String>,
+    pub redirect_url: Option<String>,
+    pub allowed_providers: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -175,8 +191,6 @@ impl HarperConfig {
         builder: &mut ConfigBuilder<config::builder::DefaultState>,
     ) -> HarperResult<()> {
         let mut temp_builder = std::mem::take(builder);
-
-        // Map OPENAI_API_KEY to api settings
         if let Ok(key) = env::var("OPENAI_API_KEY") {
             if !key.trim().is_empty() {
                 temp_builder = temp_builder.set_override("api.api_key", key)?;
@@ -185,13 +199,8 @@ impl HarperConfig {
                     temp_builder.set_override("api.base_url", ProviderModels::OPENAI.base_url)?;
                 temp_builder = temp_builder
                     .set_override("api.model_name", ProviderModels::OPENAI.default_model)?;
-                *builder = temp_builder;
-                return Ok(());
             }
-        }
-
-        // Map SAMBASTUDIO_API_KEY
-        if let Ok(key) = env::var("SAMBASTUDIO_API_KEY") {
+        } else if let Ok(key) = env::var("SAMBASTUDIO_API_KEY") {
             if !key.trim().is_empty() {
                 temp_builder = temp_builder.set_override("api.api_key", key)?;
                 temp_builder = temp_builder.set_override("api.provider", "Sambanova")?;
@@ -199,13 +208,8 @@ impl HarperConfig {
                     .set_override("api.base_url", ProviderModels::SAMBANOVA.base_url)?;
                 temp_builder = temp_builder
                     .set_override("api.model_name", ProviderModels::SAMBANOVA.default_model)?;
-                *builder = temp_builder;
-                return Ok(());
             }
-        }
-
-        // Map GEMINI_API_KEY
-        if let Ok(key) = env::var("GEMINI_API_KEY") {
+        } else if let Ok(key) = env::var("GEMINI_API_KEY") {
             if !key.trim().is_empty() {
                 temp_builder = temp_builder.set_override("api.api_key", key)?;
                 temp_builder = temp_builder.set_override("api.provider", "Gemini")?;
@@ -213,14 +217,8 @@ impl HarperConfig {
                     temp_builder.set_override("api.base_url", ProviderModels::GEMINI.base_url)?;
                 temp_builder = temp_builder
                     .set_override("api.model_name", ProviderModels::GEMINI.default_model)?;
-                *builder = temp_builder;
-                return Ok(());
             }
-        }
-
-        // Map OLLAMA_HOST/OLLAMA_BASE_URL
-        let ollama_host = env::var("OLLAMA_HOST").or_else(|_| env::var("OLLAMA_BASE_URL"));
-        if let Ok(host) = ollama_host {
+        } else if let Ok(host) = env::var("OLLAMA_HOST").or_else(|_| env::var("OLLAMA_BASE_URL")) {
             if !host.trim().is_empty() {
                 let mut normalized = host.trim().trim_end_matches('/').to_string();
                 if !normalized.starts_with("http://") && !normalized.starts_with("https://") {
@@ -236,13 +234,8 @@ impl HarperConfig {
                 temp_builder = temp_builder.set_override("api.base_url", base_url)?;
                 temp_builder = temp_builder.set_override("api.model_name", model)?;
                 temp_builder = temp_builder.set_override("api.api_key", "")?;
-                *builder = temp_builder;
-                return Ok(());
             }
-        }
-
-        // Map CEREBRAS_API_KEY
-        if let Ok(key) = env::var("CEREBRAS_API_KEY") {
+        } else if let Ok(key) = env::var("CEREBRAS_API_KEY") {
             if !key.trim().is_empty() {
                 temp_builder = temp_builder.set_override("api.api_key", key)?;
                 temp_builder = temp_builder.set_override("api.provider", "Cerebras")?;
@@ -250,8 +243,6 @@ impl HarperConfig {
                     temp_builder.set_override("api.base_url", ProviderModels::CEREBRAS.base_url)?;
                 temp_builder = temp_builder
                     .set_override("api.model_name", ProviderModels::CEREBRAS.default_model)?;
-                *builder = temp_builder;
-                return Ok(());
             }
         }
 
@@ -259,6 +250,50 @@ impl HarperConfig {
         if let Ok(path) = env::var("DATABASE_PATH") {
             if !path.trim().is_empty() {
                 temp_builder = temp_builder.set_override("database.path", path)?;
+            }
+        }
+
+        // Map Supabase auth env names into Harper auth config
+        if let Ok(url) = env::var("SUPABASE_URL") {
+            if !url.trim().is_empty() {
+                temp_builder = temp_builder.set_override("auth.enabled", true)?;
+                temp_builder = temp_builder.set_override("auth.supabase.project_url", url)?;
+            }
+        }
+
+        if let Ok(key) = env::var("SUPABASE_ANON_KEY") {
+            if !key.trim().is_empty() {
+                temp_builder = temp_builder.set_override("auth.enabled", true)?;
+                temp_builder = temp_builder.set_override("auth.supabase.anon_key", key)?;
+            }
+        }
+
+        if let Ok(secret) = env::var("SUPABASE_JWT_SECRET") {
+            if !secret.trim().is_empty() {
+                temp_builder = temp_builder.set_override("auth.enabled", true)?;
+                temp_builder = temp_builder.set_override("auth.supabase.jwt_secret", secret)?;
+            }
+        }
+
+        if let Ok(redirect_url) = env::var("SUPABASE_REDIRECT_URL") {
+            if !redirect_url.trim().is_empty() {
+                temp_builder = temp_builder.set_override("auth.enabled", true)?;
+                temp_builder =
+                    temp_builder.set_override("auth.supabase.redirect_url", redirect_url)?;
+            }
+        }
+
+        if let Ok(providers) = env::var("SUPABASE_ALLOWED_PROVIDERS") {
+            let providers = providers
+                .split(',')
+                .map(str::trim)
+                .filter(|provider| !provider.is_empty())
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>();
+            if !providers.is_empty() {
+                temp_builder = temp_builder.set_override("auth.enabled", true)?;
+                temp_builder =
+                    temp_builder.set_override("auth.supabase.allowed_providers", providers)?;
             }
         }
 
@@ -422,5 +457,144 @@ impl CustomCommandsConfig {
     fn validate(&self) -> HarperResult<()> {
         // Basic validation
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HarperConfig;
+    use config::ConfigBuilder;
+    use std::env;
+    use std::path::Path;
+
+    #[test]
+    fn loads_supabase_auth_from_harper_env_names() {
+        let original_url = env::var("SUPABASE_URL").ok();
+        let original_anon = env::var("SUPABASE_ANON_KEY").ok();
+        let original_jwt = env::var("SUPABASE_JWT_SECRET").ok();
+        let original_redirect = env::var("SUPABASE_REDIRECT_URL").ok();
+        let original_providers = env::var("SUPABASE_ALLOWED_PROVIDERS").ok();
+
+        env::set_var("SUPABASE_URL", "https://example.supabase.co");
+        env::set_var("SUPABASE_ANON_KEY", "anon-key");
+        env::set_var("SUPABASE_JWT_SECRET", "jwt-secret");
+        env::set_var(
+            "SUPABASE_REDIRECT_URL",
+            "http://127.0.0.1:8081/auth/callback",
+        );
+        env::set_var("SUPABASE_ALLOWED_PROVIDERS", "github, google");
+
+        let mut builder = ConfigBuilder::<config::builder::DefaultState>::default()
+            .set_override("api.provider", "OpenAI")
+            .expect("api.provider")
+            .set_override("api.api_key", "test-key")
+            .expect("api.api_key")
+            .set_override("api.base_url", "https://api.openai.com/v1/chat/completions")
+            .expect("api.base_url")
+            .set_override("api.model_name", "gpt-5")
+            .expect("api.model_name")
+            .set_override("database.path", ".harper/test.db")
+            .expect("database.path")
+            .set_override("mcp.enabled", false)
+            .expect("mcp.enabled")
+            .set_override("mcp.server_url", "http://127.0.0.1:3001")
+            .expect("mcp.server_url")
+            .set_override("prompts.system_prompt_id", "default")
+            .expect("prompts.system_prompt_id")
+            .set_override("firmware.enabled", false)
+            .expect("firmware.enabled")
+            .set_override("server.enabled", false)
+            .expect("server.enabled");
+        HarperConfig::apply_env_overrides(&mut builder).expect("apply env overrides");
+        let config = builder.build().expect("builder builds");
+
+        assert_eq!(config.get_bool("auth.enabled").ok(), Some(true));
+        assert_eq!(
+            config
+                .get_string("auth.supabase.project_url")
+                .ok()
+                .as_deref(),
+            Some("https://example.supabase.co")
+        );
+        assert_eq!(
+            config.get_string("auth.supabase.anon_key").ok().as_deref(),
+            Some("anon-key")
+        );
+        assert_eq!(
+            config
+                .get_string("auth.supabase.jwt_secret")
+                .ok()
+                .as_deref(),
+            Some("jwt-secret")
+        );
+        assert_eq!(
+            config
+                .get_string("auth.supabase.redirect_url")
+                .ok()
+                .as_deref(),
+            Some("http://127.0.0.1:8081/auth/callback")
+        );
+        assert_eq!(
+            config
+                .get_array("auth.supabase.allowed_providers")
+                .expect("providers array")
+                .iter()
+                .filter_map(|value| value.clone().into_string().ok())
+                .collect::<Vec<_>>(),
+            vec!["github".to_string(), "google".to_string()]
+        );
+
+        restore_env_var("SUPABASE_URL", original_url);
+        restore_env_var("SUPABASE_ANON_KEY", original_anon);
+        restore_env_var("SUPABASE_JWT_SECRET", original_jwt);
+        restore_env_var("SUPABASE_REDIRECT_URL", original_redirect);
+        restore_env_var("SUPABASE_ALLOWED_PROVIDERS", original_providers);
+    }
+
+    fn restore_env_var(key: &str, value: Option<String>) {
+        if let Some(value) = value {
+            env::set_var(key, value);
+        } else {
+            env::remove_var(key);
+        }
+    }
+
+    #[test]
+    fn local_dotenv_exposes_supabase_settings() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        if !repo_root.join(".env").exists() {
+            return;
+        }
+        std::env::set_current_dir(repo_root).expect("set current dir to workspace root");
+        let _ = dotenvy::dotenv();
+        let config = HarperConfig::new().expect("config loads from local files and env");
+        let supabase = config
+            .auth
+            .supabase
+            .as_ref()
+            .expect("supabase config should exist");
+
+        assert!(
+            supabase
+                .project_url
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty() && !value.contains("your-project-id")),
+            "project_url should be loaded from .env"
+        );
+        assert!(
+            supabase.anon_key.as_deref().is_some_and(
+                |value| !value.trim().is_empty() && !value.contains("your-supabase-anon-key")
+            ),
+            "anon_key should be loaded from .env"
+        );
+        assert!(
+            supabase.jwt_secret.as_deref().is_some_and(
+                |value| !value.trim().is_empty() && !value.contains("your-supabase-jwt-secret")
+            ),
+            "jwt_secret should be loaded from .env"
+        );
     }
 }

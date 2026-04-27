@@ -37,7 +37,52 @@ cp .env.example .env
 cargo harper</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p><code>cargo harper</code> is a workspace alias for the normal TUI launch path. If you want the longer explicit form, it still maps to <code>cargo run -p harper-ui --bin harper -- --no-server</code>.</p>
+                <p><code>cargo harper</code> is a workspace alias for the normal local run: TUI plus the local HTTP server. If you want the TUI without starting the server, use <code>cargo run -p harper-ui --bin harper -- --no-server</code>.</p>
+
+                <h2>Local config split</h2>
+                <p>Use <code>config/local.toml</code> for local non-secret settings like provider choice, model, theme, and server port. Keep API keys and Supabase auth secrets in <code>.env</code>.</p>
+                <div class="code-wrapper">
+                    <pre><code>cp config/local.example.toml config/local.toml</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+
+                <h2>Optional auth-enabled setup</h2>
+                <p>If you want browser or TUI sign-in through Supabase, keep the local server enabled and fill the auth values in <code>.env</code>.</p>
+                <div class="code-wrapper">
+                    <pre><code>SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key
+SUPABASE_JWT_SECRET=your-supabase-jwt-secret
+SUPABASE_REDIRECT_URL=http://127.0.0.1:8081/auth/callback
+SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>Then run Harper normally:</p>
+                <div class="code-wrapper">
+                    <pre><code>cargo harper</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+
+                <h2>Slash commands in the TUI</h2>
+                <p>Harper accepts slash commands directly in the chat input. Start a conversation, place focus in the message box, type <code>/</code>, and then enter a command just like a normal message.</p>
+                <div class="code-wrapper">
+                    <pre><code>/help
+/auth login github
+/auth status
+/auth logout</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>For auth commands, <code>/auth login github</code> opens the browser, Harper polls the local server for completion, and <code>/auth status</code> reports the currently stored local TUI session.</p>
+
+                <h2>File references and Tab completion</h2>
+                <p>Type <code>@</code> in the chat input to start a file or directory reference. Press <code>Tab</code> to autocomplete matching paths and keep pressing <code>Tab</code> to cycle through candidates.</p>
+                <div class="code-wrapper">
+                    <pre><code>@src/main.rs
+@lib/harper-core/
+@docs/
+Tab</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>This is the normal way to point Harper at workspace files directly from the TUI input. Pasted images can also be inserted as <code>@path</code> references.</p>
 
                 <h2>Homebrew</h2>
                 <p>Add the tap and install.</p>

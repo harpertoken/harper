@@ -5,7 +5,7 @@ Harper is a terminal assistant for code and shell work. It turns natural-languag
 The goal isn’t to replace the shell with chat. It’s to make command-driven work faster while keeping control visible.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png?v=2" width="600" alt="Harper interface" style="border-radius: 14px;" />
+  <img src="https://raw.githubusercontent.com/harpertoken/harper/main/website/harper.png?v=3" width="600" alt="Harper interface" style="border-radius: 14px;" />
 </div>
 
 Harper works with OpenAI, SambaNova, Gemini, and Cerebras, or fully offline using Ollama. It keeps session history, supports planner-style task tracking, and exposes an optional HTTP review API for editor integrations.
@@ -21,7 +21,7 @@ cargo harper
 
 You can use Harper to inspect files, patch code, run commands, and manage multi-step work without losing track of what’s happening. Commands stay explicit, risky actions can require approval, and every session keeps both an audit log and active plan state. If you want to plug it into an editor workflow, the HTTP review API is there for that.
 
-Configuration is straightforward. Pick your model provider in `config/local.toml`, set UI options under `[ui]`, and point Harper to Ollama if you want offline mode. Sandboxed execution is supported on Linux (bubblewrap) and macOS (sandbox-exec), so commands can run in isolation when configured.
+Configuration is straightforward. Copy `config/local.example.toml` to `config/local.toml` for local non-secret settings like provider choice, model, theme, and server port, and keep real secrets in `.env`. Sandboxed execution is supported on Linux (bubblewrap) and macOS (sandbox-exec), so commands can run in isolation when configured.
 
 If you are working on Harper itself, the normal development loop is:
 

@@ -411,6 +411,7 @@ fn draw_chat_summary(
     } else {
         "web: off"
     };
+    let auth_status = app.auth_status_label();
     let focus_status = format!("focus: {}", chat_state.navigation_focus_label());
     let model_status = if app.model_label.is_empty() {
         None
@@ -452,6 +453,8 @@ fn draw_chat_summary(
         Span::styled(agents_status, theme.muted_style()),
         Span::raw("  "),
         Span::styled(web_status, theme.muted_style()),
+        Span::raw("  "),
+        Span::styled(auth_status, theme.muted_style()),
         Span::raw("  "),
         Span::styled(focus_status, theme.muted_style()),
     ];
