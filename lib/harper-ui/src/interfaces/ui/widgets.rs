@@ -19,6 +19,7 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph
 use super::app::{
     AppState, ApprovalState, CommandOutputState, ReviewState, SessionInfo, TuiApp, UiMessage,
 };
+use super::settings;
 use super::theme::Theme;
 use harper_core::core::plan::{PlanJobRecord, PlanJobStatus};
 use harper_core::{PlanRuntime, PlanState, PlanStepStatus, ResolvedAgents};
@@ -361,6 +362,9 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         }
         AppState::Tools(selected) => draw_tools(frame, *selected, theme, main_area),
         AppState::Profile(selected) => draw_profile(frame, app, *selected, theme, main_area),
+        AppState::ExecutionPolicy(selected) => {
+            draw_execution_policy(frame, app, *selected, theme, main_area)
+        }
         AppState::ViewSession(name, messages, selected) => {
             draw_view_session(frame, name, messages, *selected, theme, main_area)
         }
@@ -1454,7 +1458,14 @@ fn display_session_name(session: &SessionInfo) -> String {
 }
 
 fn draw_tools(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
-    let tools = ["Profile", "Search", "System", "Processes", "Git"];
+    let tools = [
+        "Profile",
+        "Execution Policy",
+        "Search",
+        "System",
+        "Processes",
+        "Git",
+    ];
     let items: Vec<ListItem> = tools
         .iter()
         .enumerate()
@@ -1477,6 +1488,113 @@ fn draw_tools(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
     );
 
     frame.render_widget(tools_list, area);
+}
+
+fn draw_execution_policy(
+    frame: &mut Frame,
+    app: &TuiApp,
+    selected: usize,
+    theme: &Theme,
+    area: Rect,
+) {
+    let allowed = if app.allowed_commands.is_empty() {
+        "(none)".to_string()
+    } else {
+        app.allowed_commands.join(", ")
+    };
+    let blocked = if app.blocked_commands.is_empty() {
+        "(none)".to_string()
+    } else {
+        app.blocked_commands.join(", ")
+    };
+    let rows = [
+        format!(
+            "Approval Profile: {}",
+            settings::approval_profile_name(app.approval_profile)
+        ),
+        format!(
+            "Sandbox Profile: {}",
+            settings::sandbox_profile_name(app.sandbox_profile)
+        ),
+        format!("Allowed Commands: {allowed}"),
+        format!("Blocked Commands: {blocked}"),
+        "Save and Apply".to_string(),
+    ];
+    let items: Vec<ListItem> = rows
+        .iter()
+        .enumerate()
+        .map(|(index, label)| {
+            let style = if index == selected {
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.foreground)
+            };
+            ListItem::new(label.clone()).style(style)
+        })
+        .collect();
+
+    let help = Paragraph::new(vec![
+        Line::styled(
+            "Approval profiles control whether commands auto-run or require approval.",
+            theme.muted_style(),
+        ),
+        Line::styled(
+            "Sandbox profiles control workspace/network restrictions for command execution.",
+            theme.muted_style(),
+        ),
+        Line::styled(
+            "Saved values are written to config/local.toml and apply to future commands in this TUI session.",
+            theme.muted_style(),
+        ),
+        Line::styled(
+            "Allowed/blocked command lists are comma-separated and refine the selected approval profile.",
+            theme.muted_style(),
+        ),
+    ])
+    .block(Block::default().padding(Padding::uniform(1)))
+    .wrap(Wrap { trim: true });
+
+    let editor_height = if app.execution_policy_editor.is_some() {
+        4
+    } else {
+        0
+    };
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(9),
+            Constraint::Min(8),
+            Constraint::Length(editor_height),
+        ])
+        .split(area);
+
+    frame.render_widget(help, chunks[0]);
+    frame.render_widget(
+        List::new(items).block(
+            Block::default()
+                .title(" Execution Policy ")
+                .padding(Padding::uniform(1)),
+        ),
+        chunks[1],
+    );
+    if let Some(editor) = &app.execution_policy_editor {
+        let label = match editor.field {
+            super::app::ExecutionPolicyListField::AllowedCommands => {
+                "Edit Allowed Commands (comma-separated)"
+            }
+            super::app::ExecutionPolicyListField::BlockedCommands => {
+                "Edit Blocked Commands (comma-separated)"
+            }
+        };
+        let editor_widget = Paragraph::new(editor.input.as_str()).block(
+            Block::default()
+                .title(format!(" {label} "))
+                .padding(Padding::horizontal(1)),
+        );
+        frame.render_widget(editor_widget, chunks[2]);
+    }
 }
 
 fn draw_profile(frame: &mut Frame, app: &TuiApp, selected: usize, theme: &Theme, area: Rect) {

@@ -889,8 +889,10 @@ Full output:
 
         // Create exec policy
         let exec_policy = ExecPolicyConfig {
+            approval_profile: None,
             allowed_commands: None,
             blocked_commands: None,
+            sandbox_profile: None,
             sandbox: None,
         };
 

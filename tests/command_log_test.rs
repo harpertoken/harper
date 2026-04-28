@@ -40,8 +40,10 @@ async fn test_command_logging() {
     };
 
     let exec_policy = ExecPolicyConfig {
+        approval_profile: None,
         allowed_commands: Some(vec!["echo".to_string()]),
         blocked_commands: None,
+        sandbox_profile: None,
         sandbox: None,
     };
 
@@ -49,6 +51,7 @@ async fn test_command_logging() {
         "[RUN_COMMAND echo audit-log]",
         &api_config,
         &exec_policy,
+        None,
         Some(&audit_ctx),
         None,
         None,

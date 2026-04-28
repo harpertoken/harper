@@ -157,6 +157,24 @@ pub async fn call_llm(
                                 "command": {
                                     "type": "string",
                                     "description": "The command to run"
+                                },
+                                "declared_read_paths": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "description": "Optional explicit paths the command will read"
+                                },
+                                "declared_write_paths": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "description": "Optional explicit paths the command will write"
+                                },
+                                "requires_network": {
+                                    "type": "boolean",
+                                    "description": "Set true if the command needs network access"
                                 }
                             },
                             "required": ["command"]

@@ -12,57 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::process::Stdio;
-use thiserror::Error;
-use tokio::process::Command;
+mod backend;
+mod errors;
+mod policy;
+mod request;
 
-#[derive(Debug, Error)]
-pub enum SandboxError {
-    #[error("Sandbox not available: {0}")]
-    NotAvailable(String),
-    #[error("Command execution failed: {0}")]
-    ExecutionFailed(String),
-    #[error("Configuration error: {0}")]
-    ConfigError(String),
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
-}
-
-pub type Result<T> = std::result::Result<T, SandboxError>;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SandboxConfig {
-    pub enabled: bool,
-    pub allowed_dirs: Vec<PathBuf>,
-    pub allowed_commands: Option<Vec<String>>,
-    pub blocked_commands: Option<Vec<String>>,
-    pub readonly_home: bool,
-    pub network_access: bool,
-    pub max_execution_time_secs: Option<u64>,
-}
-
-impl Default for SandboxConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            allowed_dirs: vec![],
-            allowed_commands: None,
-            blocked_commands: None,
-            readonly_home: true,
-            network_access: false,
-            max_execution_time_secs: Some(30),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SandboxBackend {
-    Bubblewrap,
-    SandboxExec,
-    None,
-}
+pub use backend::SandboxBackend;
+pub use errors::{Result, SandboxError};
+pub use policy::SandboxConfig;
+pub use request::{SandboxExecutionResult, SandboxRequest};
 
 /// Sandbox execution environment for secure command running
 ///
@@ -75,325 +33,106 @@ pub struct Sandbox {
 
 impl Sandbox {
     /// Create a new sandbox with the given configuration
-    ///
-    /// Automatically detects the available backend (Bubblewrap, `SandboxExec`, or None).
-    ///
-    /// # Arguments
-    /// * `config` - Sandbox configuration settings
-    ///
-    /// # Example
-    /// ```text
-    /// // let config = SandboxConfig::default();
-    /// // let sandbox = Sandbox::new(config);
-    /// ```
     #[must_use]
     pub fn new(config: SandboxConfig) -> Self {
-        let backend = Self::detect_backend();
+        let backend = backend::detect_backend();
         Self { config, backend }
     }
 
-    fn detect_backend() -> SandboxBackend {
-        #[cfg(target_os = "linux")]
-        {
-            if std::path::Path::new("/usr/bin/bwrap").exists()
-                || std::path::Path::new("/bin/bwrap").exists()
-            {
-                return SandboxBackend::Bubblewrap;
-            }
-        }
-        #[cfg(target_os = "macos")]
-        {
-            return SandboxBackend::SandboxExec;
-        }
-        #[allow(unreachable_code)]
-        SandboxBackend::None
-    }
-
-    /// Check if sandbox execution is available on this system
-    ///
-    /// Returns true if a supported sandbox backend is detected and available.
-    ///
-    /// # Returns
-    /// true if sandboxing is supported, false otherwise
     #[must_use]
     pub fn is_available(&self) -> bool {
         self.backend != SandboxBackend::None
     }
 
-    /// Get the name of the detected sandbox backend
-    ///
-    /// # Returns
-    /// A string describing the backend: "bubblewrap (bwrap)", "sandbox-exec (macOS)", or "none"
     #[must_use]
     pub fn backend_name(&self) -> &str {
-        match self.backend {
-            SandboxBackend::Bubblewrap => "bubblewrap (bwrap)",
-            SandboxBackend::SandboxExec => "sandbox-exec (macOS)",
-            SandboxBackend::None => "none",
-        }
+        backend::backend_name(self.backend)
     }
 
-    /// Execute a command in the sandbox environment
-    ///
-    /// Runs the specified command with arguments, applying sandbox restrictions
-    /// based on the configuration. If sandboxing is disabled, executes directly.
-    ///
-    /// # Arguments
-    /// * `command` - The command to execute
-    /// * `args` - Command arguments as string slices
-    ///
-    /// # Returns
-    /// The command output including stdout, stderr, and exit status
-    ///
-    /// # Errors
-    /// Returns `SandboxError` for execution failures, timeouts, or unavailable sandbox
-    ///
-    /// # Example
-    /// ```text
-    /// // let output = sandbox.execute("echo", &["hello", "world"]).await?;
-    /// // println!("Output: {}", String::from_utf8_lossy(&output.stdout));
-    /// ```
     pub async fn execute(&self, command: &str, args: &[&str]) -> Result<std::process::Output> {
-        if !self.config.enabled {
-            return self.execute_direct(command, args).await;
-        }
-
-        match self.backend {
-            SandboxBackend::Bubblewrap => self.execute_bwrap(command, args).await,
-            SandboxBackend::SandboxExec => self.execute_sandbox_exec(command, args).await,
-            SandboxBackend::None => {
-                log::warn!("Sandbox disabled - executing directly");
-                self.execute_direct(command, args).await
-            }
-        }
+        let request = SandboxRequest::new(command, args)?;
+        let result = self.execute_request(request).await?;
+        Ok(result.output)
     }
 
-    async fn execute_direct(&self, command: &str, args: &[&str]) -> Result<std::process::Output> {
-        let mut cmd = Command::new(command);
-        cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
-
-        if let Some(timeout) = self.config.max_execution_time_secs {
-            match tokio::time::timeout(std::time::Duration::from_secs(timeout), cmd.output()).await
-            {
-                Ok(result) => result.map_err(|e| SandboxError::ExecutionFailed(e.to_string())),
-                Err(_) => Err(SandboxError::ExecutionFailed(format!(
-                    "Command timed out after {timeout} seconds"
-                ))),
-            }
-        } else {
-            cmd.output()
-                .await
-                .map_err(|e| SandboxError::ExecutionFailed(e.to_string()))
-        }
+    pub async fn execute_request(&self, request: SandboxRequest) -> Result<SandboxExecutionResult> {
+        self.execute_request_streaming(request, |_chunk, _is_error| {})
+            .await
     }
 
-    #[cfg(target_os = "linux")]
-    async fn execute_bwrap(&self, command: &str, args: &[&str]) -> Result<std::process::Output> {
-        let mut bwrap_args = vec!["--unshare-pid".to_string()];
-
-        if !self.config.network_access {
-            bwrap_args.push("--unshare-net".to_string());
-        }
-
-        bpush(&mut bwrap_args, "--ro-bind", "/usr".to_string());
-        bpush(&mut bwrap_args, "--ro-bind", "/bin".to_string());
-        bpush(&mut bwrap_args, "--ro-bind", "/lib".to_string());
-        bpush(&mut bwrap_args, "--ro-bind", "/lib64".to_string());
-
-        for dir in &self.config.allowed_dirs {
-            if dir.exists() {
-                bpush(&mut bwrap_args, "--ro-bind", dir.display().to_string());
-            }
-        }
-
-        if self.config.readonly_home {
-            if let Ok(home) = std::env::var("HOME") {
-                bpush(&mut bwrap_args, "--ro-bind", home);
-            }
-        } else if let Ok(home) = std::env::var("HOME") {
-            bpush(&mut bwrap_args, "--ro-bind", home);
-        }
-
-        bpush(
-            &mut bwrap_args,
-            "--chdir",
-            std::env::current_dir()?.display().to_string(),
-        );
-
-        bwrap_args.push("--".to_string());
-        bwrap_args.push(command.to_string());
-        bwrap_args.extend(args.iter().map(|s| s.to_string()));
-
-        log::debug!("Executing with bwrap: {:?}", bwrap_args);
-
-        let mut cmd = Command::new("bwrap");
-        cmd.args(&bwrap_args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
-        if let Some(timeout) = self.config.max_execution_time_secs {
-            match tokio::time::timeout(std::time::Duration::from_secs(timeout), cmd.output()).await
-            {
-                Ok(result) => result.map_err(|e| SandboxError::ExecutionFailed(e.to_string())),
-                Err(_) => Err(SandboxError::ExecutionFailed(format!(
-                    "Command timed out after {timeout} seconds"
-                ))),
-            }
-        } else {
-            cmd.output()
-                .await
-                .map_err(|e| SandboxError::ExecutionFailed(e.to_string()))
-        }
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    async fn execute_bwrap(&self, _command: &str, _args: &[&str]) -> Result<std::process::Output> {
-        Err(SandboxError::NotAvailable(
-            "Bubblewrap only available on Linux".to_string(),
-        ))
-    }
-
-    #[cfg(target_os = "macos")]
-    async fn execute_sandbox_exec(
+    pub async fn execute_request_streaming<C>(
         &self,
-        command: &str,
-        args: &[&str],
-    ) -> Result<std::process::Output> {
-        let mut sandbox_rules = vec!["(version 1)".to_string()];
+        request: SandboxRequest,
+        on_output: C,
+    ) -> Result<SandboxExecutionResult>
+    where
+        C: FnMut(String, bool) + Send + 'static,
+    {
+        self.validate_request(&request)?;
 
-        if !self.config.network_access {
-            sandbox_rules.push("(deny network*)\n(allow default)".to_string());
-        }
-
-        sandbox_rules.push("(allow process-exec)".to_string());
-
-        for dir in &self.config.allowed_dirs {
-            if dir.exists() {
-                sandbox_rules.push(format!(
-                    "(allow file-read* (subpath \"{}\"))",
-                    dir.display()
-                ));
-            }
-        }
-
-        let sandbox_profile = sandbox_rules.join("\n");
-
-        let mut cmd = Command::new("sandbox-exec");
-        cmd.arg("-p")
-            .arg(&sandbox_profile)
-            .arg(command)
-            .args(args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
-        if let Some(timeout) = self.config.max_execution_time_secs {
-            match tokio::time::timeout(std::time::Duration::from_secs(timeout), cmd.output()).await
-            {
-                Ok(result) => result.map_err(|e| SandboxError::ExecutionFailed(e.to_string())),
-                Err(_) => Err(SandboxError::ExecutionFailed(format!(
-                    "Command timed out after {timeout} seconds"
-                ))),
-            }
+        let backend = if !self.config.enabled {
+            log::warn!("Sandbox disabled - executing directly");
+            SandboxBackend::None
         } else {
-            cmd.output()
-                .await
-                .map_err(|e| SandboxError::ExecutionFailed(e.to_string()))
-        }
+            self.backend
+        };
+
+        let output =
+            backend::execute_with_backend_streaming(backend, &self.config, &request, on_output)
+                .await?;
+
+        Ok(SandboxExecutionResult {
+            request,
+            backend,
+            output,
+        })
     }
 
-    #[cfg(not(target_os = "macos"))]
-    async fn execute_sandbox_exec(
-        &self,
-        _command: &str,
-        _args: &[&str],
-    ) -> Result<std::process::Output> {
-        Err(SandboxError::NotAvailable(
-            "sandbox-exec only available on macOS".to_string(),
-        ))
-    }
-
-    /// Check if a command is allowed to run based on configured restrictions
-    ///
-    /// Commands are allowed if they match the allowed list (if specified) and
-    /// don't match the blocked list.
-    ///
-    /// # Arguments
-    /// * `command` - The command string to check
-    ///
-    /// # Returns
-    /// true if the command is permitted, false otherwise
-    ///
-    /// # Example
-    /// ```text
-    /// // if sandbox.is_command_allowed("ls") {
-    /// //     println!("ls command is allowed");
-    /// // }
-    /// ```
     #[must_use]
     pub fn is_command_allowed(&self, command: &str) -> bool {
-        if let Some(allowed) = &self.config.allowed_commands {
-            if !allowed.is_empty() && allowed.iter().any(|c| command.contains(c)) {
-                return true;
-            }
+        policy::is_command_allowed(&self.config, command)
+    }
+
+    pub fn validate_command(&self, command: &str) -> Result<()> {
+        policy::validate_command(&self.config, command)
+    }
+
+    pub fn validate_working_dir(&self, path: &std::path::Path) -> Result<()> {
+        policy::validate_working_dir(&self.config, path)
+    }
+
+    pub fn validate_requested_paths(
+        &self,
+        args: &[&str],
+        base_dir: &std::path::Path,
+    ) -> Result<()> {
+        policy::validate_requested_paths(&self.config, args, base_dir)
+    }
+
+    pub fn validate_request(&self, request: &SandboxRequest) -> Result<()> {
+        self.validate_command(&request.command)?;
+        self.validate_working_dir(&request.working_dir)?;
+        policy::validate_network_request(&self.config, request.requires_network)?;
+
+        for path in &request.declared_read_paths {
+            policy::validate_read_path_access(&self.config, path, &request.working_dir)?;
         }
-        if let Some(blocked) = &self.config.blocked_commands {
-            if blocked.iter().any(|b| command.contains(b)) {
-                return false;
-            }
+        for path in &request.declared_write_paths {
+            policy::validate_write_path_access(&self.config, path, &request.working_dir)?;
         }
-        self.config.allowed_commands.is_none()
+
+        if request.declared_read_paths.is_empty() && request.declared_write_paths.is_empty() {
+            let arg_refs: Vec<&str> = request.args.iter().map(String::as_str).collect();
+            self.validate_requested_paths(&arg_refs, &request.working_dir)?;
+        }
+        Ok(())
     }
 }
 
 #[allow(dead_code)]
-fn bpush(args: &mut Vec<String>, flag: &str, val: impl Into<String>) {
-    args.push(flag.to_string());
-    args.push(val.into());
-}
-// }
-#[allow(dead_code)]
-mod config {
-    pub use super::SandboxConfig;
-
-    use std::path::PathBuf;
-
-    pub fn from_env() -> SandboxConfig {
-        let enabled = std::env::var("HARPER_SANDBOX_ENABLED")
-            .map(|v| v == "true")
-            .unwrap_or(false);
-
-        let allowed_dirs: Vec<PathBuf> = std::env::var("HARPER_SANDBOX_ALLOWED_DIRS")
-            .map(|v| v.split(':').map(PathBuf::from).collect())
-            .unwrap_or_default();
-
-        let allowed_commands: Option<Vec<String>> =
-            std::env::var("HARPER_SANDBOX_ALLOWED_COMMANDS")
-                .map(|v| v.split(':').map(String::from).collect())
-                .ok();
-
-        let blocked_commands: Option<Vec<String>> =
-            std::env::var("HARPER_SANDBOX_BLOCKED_COMMANDS")
-                .map(|v| v.split(':').map(String::from).collect())
-                .ok();
-
-        let network_access = std::env::var("HARPER_SANDBOX_NETWORK")
-            .map(|v| v == "true")
-            .unwrap_or(false);
-
-        let readonly_home = std::env::var("HARPER_SANDBOX_READONLY_HOME")
-            .map(|v| v != "false")
-            .unwrap_or(true);
-
-        SandboxConfig {
-            enabled,
-            allowed_dirs,
-            allowed_commands,
-            blocked_commands,
-            network_access,
-            readonly_home,
-            max_execution_time_secs: Some(30),
-        }
-    }
+pub mod config {
+    pub use crate::policy::from_env;
+    pub use crate::SandboxConfig;
 }
 
 #[cfg(test)]
@@ -406,6 +145,7 @@ mod tests {
         assert!(!config.enabled);
         assert!(config.readonly_home);
         assert!(!config.network_access);
+        assert!(config.writable_dirs.is_empty());
         assert_eq!(config.max_execution_time_secs, Some(30));
     }
 
@@ -421,7 +161,6 @@ mod tests {
     fn test_sandbox_new() {
         let config = SandboxConfig::default();
         let sandbox = Sandbox::new(config);
-        // Backend detection depends on platform, but new() should work
         assert!(matches!(
             sandbox.backend,
             SandboxBackend::Bubblewrap | SandboxBackend::SandboxExec | SandboxBackend::None
@@ -445,7 +184,6 @@ mod tests {
     fn test_is_available() {
         let config = SandboxConfig::default();
         let sandbox = Sandbox::new(config);
-        // Availability depends on backend detection
         let available = sandbox.is_available();
         assert_eq!(available, sandbox.backend != SandboxBackend::None);
     }
@@ -484,5 +222,284 @@ mod tests {
         assert!(sandbox.is_command_allowed("ls"));
         assert!(sandbox.is_command_allowed("cat file.txt"));
         assert!(!sandbox.is_command_allowed("rm -rf /"));
+    }
+
+    #[test]
+    fn test_command_matching_is_exact() {
+        let config = SandboxConfig {
+            blocked_commands: Some(vec!["rm".to_string()]),
+            ..Default::default()
+        };
+        let sandbox = Sandbox::new(config);
+
+        assert!(!sandbox.is_command_allowed("rm -rf /"));
+        assert!(!sandbox.is_command_allowed("/bin/rm -rf /"));
+        assert!(sandbox.is_command_allowed("rmdir tmp"));
+        assert!(sandbox.is_command_allowed("arm-none-eabi-gcc --version"));
+    }
+
+    #[test]
+    fn test_blocked_commands_override_allowed_commands() {
+        let config = SandboxConfig {
+            allowed_commands: Some(vec!["rm".to_string(), "ls".to_string()]),
+            blocked_commands: Some(vec!["rm".to_string()]),
+            ..Default::default()
+        };
+        let sandbox = Sandbox::new(config);
+
+        assert!(sandbox.is_command_allowed("ls"));
+        assert!(!sandbox.is_command_allowed("rm -rf /"));
+    }
+
+    #[test]
+    fn test_validate_requested_paths_blocks_traversal_outside_allowed_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let allowed = temp_dir.path().join("allowed");
+        let outside = temp_dir.path().join("outside");
+        std::fs::create_dir_all(&allowed).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+
+        let config = SandboxConfig {
+            allowed_dirs: vec![allowed.clone()],
+            ..Default::default()
+        };
+        let sandbox = Sandbox::new(config);
+
+        let nested = allowed.join("nested");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let result = sandbox.validate_requested_paths(&["../../outside/file.txt"], &nested);
+        assert!(matches!(result, Err(SandboxError::PathBlocked { .. })));
+    }
+
+    #[test]
+    fn test_validate_working_dir_blocks_disallowed_directory() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let allowed = temp_dir.path().join("allowed");
+        let disallowed = temp_dir.path().join("disallowed");
+        std::fs::create_dir_all(&allowed).unwrap();
+        std::fs::create_dir_all(&disallowed).unwrap();
+
+        let config = SandboxConfig {
+            allowed_dirs: vec![allowed],
+            ..Default::default()
+        };
+        let sandbox = Sandbox::new(config);
+
+        let result = sandbox.validate_working_dir(&disallowed);
+        assert!(matches!(result, Err(SandboxError::PathBlocked { .. })));
+    }
+
+    #[test]
+    fn test_validate_request_blocks_disallowed_command() {
+        let config = SandboxConfig {
+            blocked_commands: Some(vec!["rm".to_string()]),
+            ..Default::default()
+        };
+        let sandbox = Sandbox::new(config);
+        let request = SandboxRequest {
+            command: "rm".to_string(),
+            args: vec!["-rf".to_string(), "/tmp/demo".to_string()],
+            working_dir: std::env::current_dir().unwrap(),
+            env: vec![],
+            declared_read_paths: vec![],
+            declared_write_paths: vec![],
+            requires_network: false,
+        };
+
+        let result = sandbox.validate_request(&request);
+        assert!(matches!(result, Err(SandboxError::CommandBlocked { .. })));
+    }
+
+    #[test]
+    fn test_validate_request_blocks_declared_path_outside_allowed_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let allowed = temp_dir.path().join("allowed");
+        let disallowed = temp_dir.path().join("disallowed");
+        std::fs::create_dir_all(&allowed).unwrap();
+        std::fs::create_dir_all(&disallowed).unwrap();
+
+        let config = SandboxConfig {
+            allowed_dirs: vec![allowed.clone()],
+            ..Default::default()
+        };
+        let sandbox = Sandbox::new(config);
+        let request = SandboxRequest {
+            command: "cat".to_string(),
+            args: vec!["visible.txt".to_string()],
+            working_dir: allowed,
+            env: vec![],
+            declared_read_paths: vec![disallowed.join("secret.txt")],
+            declared_write_paths: vec![],
+            requires_network: false,
+        };
+
+        let result = sandbox.validate_request(&request);
+        assert!(matches!(result, Err(SandboxError::PathBlocked { .. })));
+    }
+
+    #[test]
+    fn test_validate_request_blocks_network_when_disabled() {
+        let sandbox = Sandbox::new(SandboxConfig::default());
+        let request = SandboxRequest {
+            command: "curl".to_string(),
+            args: vec!["https://example.com".to_string()],
+            working_dir: std::env::current_dir().unwrap(),
+            env: vec![],
+            declared_read_paths: vec![],
+            declared_write_paths: vec![],
+            requires_network: true,
+        };
+
+        let result = sandbox.validate_request(&request);
+        assert!(matches!(result, Err(SandboxError::NetworkBlocked)));
+    }
+
+    #[test]
+    fn test_validate_request_blocks_write_path_in_readonly_home() {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        let home_path = std::path::PathBuf::from(&home);
+        let sandbox = Sandbox::new(SandboxConfig {
+            readonly_home: true,
+            allowed_dirs: vec![home_path.clone()],
+            ..Default::default()
+        });
+        let request = SandboxRequest {
+            command: "touch".to_string(),
+            args: vec!["notes.txt".to_string()],
+            working_dir: std::env::current_dir().unwrap(),
+            env: vec![],
+            declared_read_paths: vec![],
+            declared_write_paths: vec![home_path.join("notes.txt")],
+            requires_network: false,
+        };
+
+        let result = sandbox.validate_request(&request);
+        assert!(matches!(result, Err(SandboxError::PathBlocked { .. })));
+    }
+
+    #[test]
+    fn test_validate_request_blocks_write_outside_writable_dirs() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let allowed = temp_dir.path().join("allowed");
+        let writable = allowed.join("writable");
+        let readonly = allowed.join("readonly");
+        std::fs::create_dir_all(&writable).unwrap();
+        std::fs::create_dir_all(&readonly).unwrap();
+
+        let sandbox = Sandbox::new(SandboxConfig {
+            allowed_dirs: vec![allowed.clone()],
+            writable_dirs: vec![writable],
+            readonly_home: false,
+            ..Default::default()
+        });
+        let request = SandboxRequest {
+            command: "touch".to_string(),
+            args: vec!["blocked.txt".to_string()],
+            working_dir: allowed,
+            env: vec![],
+            declared_read_paths: vec![],
+            declared_write_paths: vec![readonly.join("blocked.txt")],
+            requires_network: false,
+        };
+
+        let result = sandbox.validate_request(&request);
+        assert!(matches!(result, Err(SandboxError::PathBlocked { .. })));
+    }
+
+    #[test]
+    fn test_validate_request_falls_back_to_heuristic_path_detection() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let allowed = temp_dir.path().join("allowed");
+        let disallowed = temp_dir.path().join("disallowed");
+        let nested = allowed.join("nested");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::create_dir_all(&disallowed).unwrap();
+
+        let config = SandboxConfig {
+            allowed_dirs: vec![allowed],
+            ..Default::default()
+        };
+        let sandbox = Sandbox::new(config);
+        let request = SandboxRequest {
+            command: "cat".to_string(),
+            args: vec!["../../disallowed/file.txt".to_string()],
+            working_dir: nested,
+            env: vec![],
+            declared_read_paths: vec![],
+            declared_write_paths: vec![],
+            requires_network: false,
+        };
+
+        let result = sandbox.validate_request(&request);
+        assert!(matches!(result, Err(SandboxError::PathBlocked { .. })));
+    }
+
+    #[test]
+    fn test_execute_request_returns_output_and_backend() {
+        let sandbox = Sandbox::new(SandboxConfig::default());
+        let request = SandboxRequest {
+            command: "echo".to_string(),
+            args: vec!["hello".to_string()],
+            working_dir: std::env::current_dir().unwrap(),
+            env: vec![],
+            declared_read_paths: vec![],
+            declared_write_paths: vec![],
+            requires_network: false,
+        };
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let result = runtime.block_on(sandbox.execute_request(request)).unwrap();
+        assert_eq!(result.backend, SandboxBackend::None);
+        assert_eq!(
+            String::from_utf8_lossy(&result.output.stdout).trim(),
+            "hello"
+        );
+    }
+
+    #[test]
+    fn test_execute_request_streaming_emits_chunks() {
+        let sandbox = Sandbox::new(SandboxConfig::default());
+        let request = SandboxRequest {
+            command: "sh".to_string(),
+            args: vec!["-c".to_string(), "printf 'alpha\\nbeta\\n'".to_string()],
+            working_dir: std::env::current_dir().unwrap(),
+            env: vec![],
+            declared_read_paths: vec![],
+            declared_write_paths: vec![],
+            requires_network: false,
+        };
+        let chunks = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(String, bool)>::new()));
+        let collected = chunks.clone();
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let result = runtime
+            .block_on(
+                sandbox.execute_request_streaming(request, move |chunk, is_error| {
+                    collected
+                        .lock()
+                        .expect("chunks lock")
+                        .push((chunk, is_error));
+                }),
+            )
+            .unwrap();
+
+        let chunks = chunks.lock().expect("chunks lock");
+        assert!(chunks
+            .iter()
+            .any(|(chunk, is_error)| !is_error && chunk == "alpha\n"));
+        assert!(chunks
+            .iter()
+            .any(|(chunk, is_error)| !is_error && chunk == "beta\n"));
+        assert_eq!(
+            String::from_utf8_lossy(&result.output.stdout),
+            "alpha\nbeta\n"
+        );
     }
 }

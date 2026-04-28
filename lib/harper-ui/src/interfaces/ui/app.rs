@@ -15,7 +15,7 @@
 use harper_core::core::Message;
 use harper_core::memory::session_service::GlobalStats;
 use harper_core::ResolvedAgents;
-use harper_core::{AuthSession, PlanState};
+use harper_core::{ApprovalProfile, AuthSession, PlanState, SandboxProfile};
 use serde::Deserialize;
 use std::fs;
 use std::sync::{Arc, Mutex};
@@ -305,8 +305,21 @@ pub enum AppState {
     ExportSessions(Vec<SessionInfo>, usize), // sessions, selected for export
     Tools(usize),                            // selected tool
     Profile(usize),
+    ExecutionPolicy(usize),
     ViewSession(String, Vec<Message>, usize), // name, messages, selected
     Stats(GlobalStats),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionPolicyListField {
+    AllowedCommands,
+    BlockedCommands,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutionPolicyEditorState {
+    pub field: ExecutionPolicyListField,
+    pub input: String,
 }
 
 #[derive(Clone)]
@@ -328,6 +341,7 @@ pub enum MessageType {
 pub struct UiMessage {
     pub content: String,
     pub message_type: MessageType,
+    pub expires_at: Option<Instant>,
 }
 
 #[derive(Clone)]
@@ -345,6 +359,11 @@ pub struct TuiApp {
     pub auth_flow_id: Option<String>,
     pub auth_server_base_url: Option<String>,
     pub auth_last_poll_at: Option<Instant>,
+    pub approval_profile: ApprovalProfile,
+    pub sandbox_profile: SandboxProfile,
+    pub allowed_commands: Vec<String>,
+    pub blocked_commands: Vec<String>,
+    pub execution_policy_editor: Option<ExecutionPolicyEditorState>,
 }
 
 impl Default for TuiApp {
@@ -363,11 +382,29 @@ impl Default for TuiApp {
             auth_flow_id: None,
             auth_server_base_url: None,
             auth_last_poll_at: None,
+            approval_profile: ApprovalProfile::AllowListed,
+            sandbox_profile: SandboxProfile::Disabled,
+            allowed_commands: Vec::new(),
+            blocked_commands: Vec::new(),
+            execution_policy_editor: None,
         }
     }
 }
 
 impl TuiApp {
+    fn set_message(
+        &mut self,
+        content: String,
+        message_type: MessageType,
+        expires_after: Option<Duration>,
+    ) {
+        self.message = Some(UiMessage {
+            content,
+            message_type,
+            expires_at: expires_after.map(|duration| Instant::now() + duration),
+        });
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -380,36 +417,39 @@ impl TuiApp {
         }
     }
 
+    pub fn execution_policy_row_count(&self) -> usize {
+        5
+    }
+
     pub fn set_error_message(&mut self, content: String) {
-        self.message = Some(UiMessage {
-            content,
-            message_type: MessageType::Error,
-        });
+        self.set_message(content, MessageType::Error, None);
     }
 
     pub fn set_help_message(&mut self, content: String) {
-        self.message = Some(UiMessage {
-            content,
-            message_type: MessageType::Help,
-        });
+        self.set_message(content, MessageType::Help, None);
     }
 
     pub fn set_status_message(&mut self, content: String) {
-        self.message = Some(UiMessage {
-            content,
-            message_type: MessageType::Status,
-        });
+        self.set_message(content, MessageType::Status, Some(Duration::from_secs(2)));
     }
 
     pub fn set_info_message(&mut self, content: String) {
-        self.message = Some(UiMessage {
-            content,
-            message_type: MessageType::Info,
-        });
+        self.set_message(content, MessageType::Info, Some(Duration::from_secs(3)));
     }
 
     pub fn clear_message(&mut self) {
         self.message = None;
+    }
+
+    pub fn refresh_message(&mut self) {
+        if self
+            .message
+            .as_ref()
+            .and_then(|message| message.expires_at)
+            .is_some_and(|expires_at| Instant::now() >= expires_at)
+        {
+            self.message = None;
+        }
     }
 
     pub fn auth_status_label(&self) -> String {
@@ -470,6 +510,7 @@ impl TuiApp {
         }
 
         let profile_action_count = self.profile_action_count();
+        let execution_policy_row_count = self.execution_policy_row_count();
         match &mut self.state {
             AppState::Menu(sel) => *sel = (*sel + 1) % 6,
             AppState::Chat(chat_state) => {
@@ -516,6 +557,7 @@ impl TuiApp {
             }
             AppState::Tools(sel) => *sel = (*sel + 1) % 5,
             AppState::Profile(sel) => *sel = (*sel + 1) % profile_action_count,
+            AppState::ExecutionPolicy(sel) => *sel = (*sel + 1) % execution_policy_row_count,
             AppState::ExportSessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = (*sel + 1) % sessions.len();
@@ -537,6 +579,7 @@ impl TuiApp {
         }
 
         let profile_action_count = self.profile_action_count();
+        let execution_policy_row_count = self.execution_policy_row_count();
         match &mut self.state {
             AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
             AppState::Chat(chat_state) => {
@@ -580,6 +623,13 @@ impl TuiApp {
                 } else {
                     *sel - 1
                 };
+            }
+            AppState::ExecutionPolicy(sel) => {
+                *sel = if *sel == 0 {
+                    execution_policy_row_count - 1
+                } else {
+                    *sel - 1
+                }
             }
             AppState::ExportSessions(sessions, sel) => {
                 if !sessions.is_empty() {
@@ -631,4 +681,46 @@ fn parse_review_state(content: &str) -> Option<ReviewState> {
         return None;
     }
     serde_json::from_value(value).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MessageType, TuiApp, UiMessage};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn status_messages_expire() {
+        let mut app = TuiApp::new();
+        app.set_status_message("Signed in".to_string());
+
+        assert!(matches!(
+            app.message.as_ref().map(|message| &message.message_type),
+            Some(MessageType::Status)
+        ));
+        assert!(app
+            .message
+            .as_ref()
+            .and_then(|message| message.expires_at)
+            .is_some());
+
+        if let Some(message) = &mut app.message {
+            message.expires_at = Some(Instant::now() - Duration::from_millis(1));
+        }
+
+        app.refresh_message();
+        assert!(app.message.is_none());
+    }
+
+    #[test]
+    fn help_messages_do_not_expire() {
+        let mut app = TuiApp::new();
+        app.message = Some(UiMessage {
+            content: "Help".to_string(),
+            message_type: MessageType::Help,
+            expires_at: None,
+        });
+
+        app.refresh_message();
+        assert!(app.message.is_some());
+    }
 }

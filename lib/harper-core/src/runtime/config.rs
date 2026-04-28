@@ -99,21 +99,26 @@ pub struct ToolsConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExecPolicyConfig {
+    pub approval_profile: Option<ApprovalProfile>,
     #[allow(dead_code)]
     pub allowed_commands: Option<Vec<String>>,
     #[allow(dead_code)]
     pub blocked_commands: Option<Vec<String>>,
+    pub sandbox_profile: Option<SandboxProfile>,
     pub sandbox: Option<SandboxConfig>,
 }
 
 impl Default for ExecPolicyConfig {
     fn default() -> Self {
         Self {
+            approval_profile: Some(ApprovalProfile::AllowListed),
             allowed_commands: None,
             blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Disabled),
             sandbox: Some(SandboxConfig {
                 enabled: Some(false),
                 allowed_dirs: None,
+                writable_dirs: None,
                 network_access: Some(true),
                 readonly_home: Some(false),
                 max_execution_time_secs: None,
@@ -122,10 +127,27 @@ impl Default for ExecPolicyConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalProfile {
+    Strict,
+    AllowListed,
+    AllowAll,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxProfile {
+    Disabled,
+    Workspace,
+    NetworkedWorkspace,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct SandboxConfig {
     pub enabled: Option<bool>,
     pub allowed_dirs: Option<Vec<String>>,
+    pub writable_dirs: Option<Vec<String>>,
     pub network_access: Option<bool>,
     pub readonly_home: Option<bool>,
     pub max_execution_time_secs: Option<u64>,
@@ -451,8 +473,68 @@ impl ToolsConfig {
 impl ExecPolicyConfig {
     /// Validate exec policy configuration
     fn validate(&self) -> HarperResult<()> {
-        // Basic validation
         Ok(())
+    }
+
+    pub fn effective_approval_profile(&self) -> ApprovalProfile {
+        self.approval_profile
+            .unwrap_or(ApprovalProfile::AllowListed)
+    }
+
+    pub fn effective_sandbox_profile(&self) -> SandboxProfile {
+        self.sandbox_profile.unwrap_or(SandboxProfile::Disabled)
+    }
+
+    pub fn effective_sandbox_config(&self) -> SandboxConfig {
+        let mut effective = match self.effective_sandbox_profile() {
+            SandboxProfile::Disabled => SandboxConfig {
+                enabled: Some(false),
+                allowed_dirs: Some(vec![]),
+                writable_dirs: Some(vec![]),
+                network_access: Some(true),
+                readonly_home: Some(false),
+                max_execution_time_secs: None,
+            },
+            SandboxProfile::Workspace => SandboxConfig {
+                enabled: Some(true),
+                allowed_dirs: Some(vec![".".to_string()]),
+                writable_dirs: Some(vec![".".to_string()]),
+                network_access: Some(false),
+                readonly_home: Some(true),
+                max_execution_time_secs: Some(30),
+            },
+            SandboxProfile::NetworkedWorkspace => SandboxConfig {
+                enabled: Some(true),
+                allowed_dirs: Some(vec![".".to_string()]),
+                writable_dirs: Some(vec![".".to_string()]),
+                network_access: Some(true),
+                readonly_home: Some(true),
+                max_execution_time_secs: Some(30),
+            },
+        };
+
+        if let Some(raw) = &self.sandbox {
+            if raw.enabled.is_some() {
+                effective.enabled = raw.enabled;
+            }
+            if raw.allowed_dirs.is_some() {
+                effective.allowed_dirs = raw.allowed_dirs.clone();
+            }
+            if raw.writable_dirs.is_some() {
+                effective.writable_dirs = raw.writable_dirs.clone();
+            }
+            if raw.network_access.is_some() {
+                effective.network_access = raw.network_access;
+            }
+            if raw.readonly_home.is_some() {
+                effective.readonly_home = raw.readonly_home;
+            }
+            if raw.max_execution_time_secs.is_some() {
+                effective.max_execution_time_secs = raw.max_execution_time_secs;
+            }
+        }
+
+        effective
     }
 }
 
@@ -466,7 +548,10 @@ impl CustomCommandsConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{should_enable_server, HarperConfig, ServerConfig};
+    use super::{
+        should_enable_server, ApprovalProfile, ExecPolicyConfig, HarperConfig, SandboxConfig,
+        SandboxProfile, ServerConfig,
+    };
     use config::ConfigBuilder;
     use std::env;
     use std::path::Path;
@@ -633,5 +718,66 @@ mod tests {
             &["harper".to_string(), "--no-server".to_string()]
         ));
         assert!(!should_enable_server(false, &[]));
+    }
+
+    #[test]
+    fn exec_policy_profiles_default_to_current_behavior() {
+        let config = ExecPolicyConfig::default();
+        assert_eq!(
+            config.effective_approval_profile(),
+            ApprovalProfile::AllowListed
+        );
+        assert_eq!(config.effective_sandbox_profile(), SandboxProfile::Disabled);
+
+        let sandbox = config.effective_sandbox_config();
+        assert_eq!(sandbox.enabled, Some(false));
+        assert_eq!(sandbox.writable_dirs, Some(vec![]));
+        assert_eq!(sandbox.network_access, Some(true));
+        assert_eq!(sandbox.readonly_home, Some(false));
+    }
+
+    #[test]
+    fn workspace_sandbox_profile_sets_safe_defaults() {
+        let config = ExecPolicyConfig {
+            approval_profile: None,
+            allowed_commands: None,
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Workspace),
+            sandbox: None,
+        };
+
+        let sandbox = config.effective_sandbox_config();
+        assert_eq!(sandbox.enabled, Some(true));
+        assert_eq!(sandbox.allowed_dirs, Some(vec![".".to_string()]));
+        assert_eq!(sandbox.writable_dirs, Some(vec![".".to_string()]));
+        assert_eq!(sandbox.network_access, Some(false));
+        assert_eq!(sandbox.readonly_home, Some(true));
+        assert_eq!(sandbox.max_execution_time_secs, Some(30));
+    }
+
+    #[test]
+    fn explicit_sandbox_fields_override_profile_defaults() {
+        let config = ExecPolicyConfig {
+            approval_profile: None,
+            allowed_commands: None,
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Workspace),
+            sandbox: Some(SandboxConfig {
+                enabled: None,
+                allowed_dirs: Some(vec!["/tmp".to_string()]),
+                writable_dirs: Some(vec!["/tmp/work".to_string()]),
+                network_access: Some(true),
+                readonly_home: None,
+                max_execution_time_secs: Some(5),
+            }),
+        };
+
+        let sandbox = config.effective_sandbox_config();
+        assert_eq!(sandbox.enabled, Some(true));
+        assert_eq!(sandbox.allowed_dirs, Some(vec!["/tmp".to_string()]));
+        assert_eq!(sandbox.writable_dirs, Some(vec!["/tmp/work".to_string()]));
+        assert_eq!(sandbox.network_access, Some(true));
+        assert_eq!(sandbox.readonly_home, Some(true));
+        assert_eq!(sandbox.max_execution_time_secs, Some(5));
     }
 }

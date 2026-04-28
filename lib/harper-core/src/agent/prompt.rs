@@ -97,6 +97,7 @@ Core Tools:
 - write_file(args: {\"path\": \"src/main.rs\", \"content\": \"...\"})
 - search_replace(args: {\"path\": \"src/main.rs\", \"old_string\": \"old\", \"new_string\": \"new\"})
 - run_command(args: {\"command\": \"git status\"})
+- run_command(args: {\"command\": \"cp ./src.txt ./build/out.txt\", \"declared_read_paths\": [\"./src.txt\"], \"declared_write_paths\": [\"./build/out.txt\"]})
 - todo(args: {\"action\": \"add|list|remove|clear\", \"description\": \"...\", \"index\": 1})
 - update_plan(args: {\"explanation\": \"optional context\", \"items\": [{\"step\": \"Inspect files\", \"status\": \"in_progress\"}]})
 - list_changed_files(args: {\"ext\": \"rs\", \"tracked_only\": true, \"since\": \"HEAD~1\"})

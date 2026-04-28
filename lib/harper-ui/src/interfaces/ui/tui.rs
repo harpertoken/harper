@@ -26,6 +26,7 @@ use ratatui::Terminal;
 use super::app::{AppState, ApprovalState, ChatState, CommandOutputState, TuiApp};
 use super::auth;
 use super::events::{self, EventResult};
+use super::settings;
 use super::theme::Theme;
 use super::widgets;
 use harper_core::agent::chat::ChatService;
@@ -222,6 +223,10 @@ pub async fn run_tui(
     app.model_label = format!("{:?} / {}", api_config.provider, api_config.model_name);
     app.auth_session = auth::load_auth_session();
     app.auth_server_base_url = server_base_url.clone();
+    app.approval_profile = exec_policy.effective_approval_profile();
+    app.sandbox_profile = exec_policy.effective_sandbox_profile();
+    app.allowed_commands = exec_policy.allowed_commands.clone().unwrap_or_default();
+    app.blocked_commands = exec_policy.blocked_commands.clone().unwrap_or_default();
     let auth_client = reqwest::Client::new();
 
     // Set up channels for background worker
@@ -232,7 +237,8 @@ pub async fn run_tui(
     // Clone data for worker
     let worker_api_config = api_config.clone();
     let worker_custom_commands = custom_commands.clone();
-    let worker_exec_policy = exec_policy.clone();
+    let worker_exec_policy = Arc::new(Mutex::new(exec_policy.clone()));
+    let ui_exec_policy = worker_exec_policy.clone();
     let db_path = conn
         .path()
         .and_then(|p| Path::new(p).to_str().map(|s| s.to_string()));
@@ -282,7 +288,10 @@ pub async fn run_tui(
                             Some(&mut api_cache),
                             None,
                             worker_custom_commands.clone(),
-                            worker_exec_policy.clone(),
+                            worker_exec_policy
+                                .lock()
+                                .expect("worker exec policy lock")
+                                .clone(),
                         )
                         .with_approver(approver.clone())
                         .with_runtime_events(runtime_events.clone());
@@ -348,6 +357,7 @@ pub async fn run_tui(
 
     loop {
         app.refresh_activity_status();
+        app.refresh_message();
         terminal.draw(|f| widgets::draw(f, &app, theme))?;
 
         // Handle both UI events and worker updates
@@ -660,6 +670,40 @@ pub async fn run_tui(
                                 }
                             } else {
                                 app.set_error_message("No signed-in auth session to refresh".to_string());
+                            }
+                        }
+                        EventResult::SaveExecutionPolicy => {
+                            match settings::save_execution_policy_settings(
+                                app.approval_profile,
+                                app.sandbox_profile,
+                                &app.allowed_commands,
+                                &app.blocked_commands,
+                            ) {
+                                Ok(()) => {
+                                    if let Ok(mut policy) = ui_exec_policy.lock() {
+                                        policy.approval_profile = Some(app.approval_profile);
+                                        policy.sandbox_profile = Some(app.sandbox_profile);
+                                        policy.allowed_commands = if app.allowed_commands.is_empty()
+                                        {
+                                            None
+                                        } else {
+                                            Some(app.allowed_commands.clone())
+                                        };
+                                        policy.blocked_commands = if app.blocked_commands.is_empty()
+                                        {
+                                            None
+                                        } else {
+                                            Some(app.blocked_commands.clone())
+                                        };
+                                    }
+                                    app.set_status_message(
+                                        "Saved execution policy to config/local.toml".to_string(),
+                                    );
+                                }
+                                Err(err) => app.set_error_message(format!(
+                                    "Failed to save execution policy: {}",
+                                    err
+                                )),
                             }
                         }
                         EventResult::StartProfileLogin { provider } => {
