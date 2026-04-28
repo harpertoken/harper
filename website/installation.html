@@ -74,6 +74,11 @@ SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
                 </div>
                 <p>For auth commands, <code>/auth login github</code> opens the browser, Harper polls the local server for completion, and <code>/auth status</code> reports the currently stored local TUI session.</p>
                 <p>When sign-in succeeds, Harper stores the local TUI auth session in the OS credential store (macOS Keychain, Linux keyring, or Windows Credential Manager) instead of writing the active tokens to a JSON file under your home directory.</p>
+                <p>Harper also exposes the same auth state through <code>Settings -&gt; Profile</code>. When signed out, that screen offers login actions for the configured providers. When signed in, it shows the current account, plus <code>Logout</code> and <code>Refresh Session</code>.</p>
+                <p>When you are signed in, Harper scopes session data to that account. <code>History</code>, <code>Export</code>, and <code>Statistics</code> all reflect the signed-in user only. When you are not signed in, those screens continue to use local-only data.</p>
+                <p>Remote session operations refresh the TUI session automatically if the access token has expired. If refresh also fails, Harper will show the auth error directly and you will need to sign in again.</p>
+                <p>In both <code>History</code> and <code>Export</code>, press <code>D</code> or <code>Delete</code> to remove the selected session.</p>
+                <p>Empty states are explicit now: if the signed-in user has no remote sessions, <code>History</code> says so directly; if there are no exportable sessions, <code>Export</code> shows that state instead of a blank panel.</p>
 
                 <h2>File references and Tab completion</h2>
                 <p>Type <code>@</code> in the chat input to start a file or directory reference. Press <code>Tab</code> to autocomplete matching paths and keep pressing <code>Tab</code> to cycle through candidates.</p>

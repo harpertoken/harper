@@ -34,7 +34,7 @@ const FOOTER_SHORTCUTS: [[(&str, &str); 9]; 2] = [
         ("M", "Msgs"),
         ("C", "ID"),
         ("O", "Export"),
-        ("P", "Jobs"),
+        ("D", "Delete"),
     ],
     [
         ("X", "Exit"),
@@ -140,10 +140,11 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .active_plan
                 .as_ref()
                 .is_some_and(|plan| !plan.items.is_empty() || plan.explanation.is_some());
-            let has_agents = chat_state
-                .active_agents
-                .as_ref()
-                .is_some_and(|agents| !agents.sources.is_empty());
+            let has_agents = chat_state.agents_panel_expanded
+                || chat_state
+                    .active_agents
+                    .as_ref()
+                    .is_some_and(|agents| !agents.sources.is_empty());
             let has_review = chat_state.active_review.is_some();
             let has_command_output = chat_state.command_output.is_some();
             let plan_height = chat_state
@@ -160,7 +161,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .active_agents
                 .as_ref()
                 .map(|agents| agents_panel_height(agents, chat_state.agents_panel_expanded))
-                .unwrap_or(0);
+                .unwrap_or(6);
             let review_height = chat_state
                 .active_review
                 .as_ref()
@@ -306,20 +307,18 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 next_panel_index += 1;
             }
             if has_agents {
-                if let Some(agents) = &chat_state.active_agents {
-                    draw_agents_panel(
-                        frame,
-                        agents,
-                        theme,
-                        chunks[next_panel_index],
-                        chat_state.agents_panel_expanded,
-                        chat_state.agents_scroll_offset,
-                        matches!(
-                            chat_state.navigation_focus,
-                            super::app::NavigationFocus::Agents
-                        ),
-                    );
-                }
+                draw_agents_panel(
+                    frame,
+                    chat_state.active_agents.as_ref(),
+                    theme,
+                    chunks[next_panel_index],
+                    chat_state.agents_panel_expanded,
+                    chat_state.agents_scroll_offset,
+                    matches!(
+                        chat_state.navigation_focus,
+                        super::app::NavigationFocus::Agents
+                    ),
+                );
             }
 
             // Input area - Minimalist
@@ -349,13 +348,19 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 + usize::from(has_agents);
             frame.render_widget(input_widget, chunks[input_index]);
         }
-        AppState::Sessions(sessions, selected) => {
-            draw_sessions(frame, sessions, *selected, theme, main_area)
-        }
+        AppState::Sessions(sessions, selected) => draw_sessions(
+            frame,
+            sessions,
+            *selected,
+            app.auth_session.is_some() && app.auth_server_base_url.is_some(),
+            theme,
+            main_area,
+        ),
         AppState::ExportSessions(sessions, selected) => {
             draw_export_sessions(frame, sessions, *selected, theme, main_area)
         }
         AppState::Tools(selected) => draw_tools(frame, *selected, theme, main_area),
+        AppState::Profile(selected) => draw_profile(frame, app, *selected, theme, main_area),
         AppState::ViewSession(name, messages, selected) => {
             draw_view_session(frame, name, messages, *selected, theme, main_area)
         }
@@ -862,17 +867,30 @@ fn agents_panel_height(agents: &ResolvedAgents, expanded: bool) -> u16 {
 
 fn draw_agents_panel(
     frame: &mut Frame,
-    agents: &ResolvedAgents,
+    agents: Option<&ResolvedAgents>,
     theme: &Theme,
     area: Rect,
     expanded: bool,
     scroll_offset: usize,
     focused: bool,
 ) {
-    let lines = if expanded {
-        expanded_agents_lines(agents, theme, scroll_offset, area.height)
+    let lines = if let Some(agents) = agents {
+        if expanded {
+            expanded_agents_lines(agents, theme, scroll_offset, area.height)
+        } else {
+            compact_agents_lines(agents, theme)
+        }
     } else {
-        compact_agents_lines(agents, theme)
+        vec![
+            Line::styled(
+                "No active AGENTS sources yet.",
+                Style::default().fg(theme.foreground),
+            ),
+            Line::styled(
+                "Send a message or open a session with resolved AGENTS context.",
+                theme.muted_style(),
+            ),
+        ]
     };
 
     let title = if expanded && focused {
@@ -1283,9 +1301,40 @@ fn draw_sessions(
     frame: &mut Frame,
     sessions: &[SessionInfo],
     selected: usize,
+    remote_mode: bool,
     theme: &Theme,
     area: Rect,
 ) {
+    if sessions.is_empty() {
+        let detail = if remote_mode {
+            "No remote sessions were found for the signed-in user. Local-only sessions remain available under Export."
+        } else {
+            "Start a conversation first, then return here to resume it."
+        };
+        let empty = Paragraph::new(vec![
+            Line::from(vec![Span::styled(
+                "No sessions found",
+                Style::default()
+                    .fg(theme.foreground)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from(""),
+            Line::from(vec![Span::styled(detail, theme.muted_style())]),
+        ])
+        .block(
+            Block::default()
+                .title(if remote_mode {
+                    " Remote Sessions "
+                } else {
+                    " Sessions "
+                })
+                .padding(Padding::uniform(1)),
+        )
+        .wrap(Wrap { trim: true });
+        frame.render_widget(empty, area);
+        return;
+    }
+
     let items: Vec<ListItem> = sessions
         .iter()
         .enumerate()
@@ -1314,7 +1363,11 @@ fn draw_sessions(
 
     let sessions_list = List::new(items).block(
         Block::default()
-            .title(" Sessions (Enter resume • → preview) ")
+            .title(if remote_mode {
+                " Remote Sessions (Enter resume • → preview) "
+            } else {
+                " Sessions (Enter resume • → preview) "
+            })
             .padding(Padding::uniform(1)),
     );
 
@@ -1328,6 +1381,30 @@ fn draw_export_sessions(
     theme: &Theme,
     area: Rect,
 ) {
+    if sessions.is_empty() {
+        let empty = Paragraph::new(vec![
+            Line::from(vec![Span::styled(
+                "No sessions available to export",
+                Style::default()
+                    .fg(theme.foreground)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Create a conversation first, then return here to export it.",
+                theme.muted_style(),
+            )]),
+        ])
+        .block(
+            Block::default()
+                .title(" Export Sessions ")
+                .padding(Padding::uniform(1)),
+        )
+        .wrap(Wrap { trim: true });
+        frame.render_widget(empty, area);
+        return;
+    }
+
     let items: Vec<ListItem> = sessions
         .iter()
         .enumerate()
@@ -1339,21 +1416,45 @@ fn draw_export_sessions(
             } else {
                 Style::default().fg(theme.foreground)
             };
-            ListItem::new(format!("Export › {}", session.name)).style(style)
+            ListItem::new(vec![
+                Line::from(vec![
+                    Span::styled(display_session_name(session), style),
+                    Span::styled("  ", theme.muted_style()),
+                    Span::styled(session.created_at.clone(), theme.muted_style()),
+                ]),
+                Line::from(vec![Span::styled(
+                    truncate_chat_summary(&session.id, 48),
+                    theme.muted_style(),
+                )]),
+            ])
+            .style(style)
         })
         .collect();
 
     let sessions_list = List::new(items).block(
         Block::default()
-            .title(" Export ")
+            .title(" Export Local Sessions ")
             .padding(Padding::uniform(1)),
     );
 
     frame.render_widget(sessions_list, area);
 }
 
+fn display_session_name(session: &SessionInfo) -> String {
+    let trimmed = session.name.trim();
+    if !trimmed.is_empty() && trimmed != session.id {
+        return trimmed.to_string();
+    }
+
+    if session.id.len() >= 8 {
+        return format!("Session {}", &session.id[..8]);
+    }
+
+    "Untitled session".to_string()
+}
+
 fn draw_tools(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
-    let tools = ["Search", "System", "Processes", "Git"];
+    let tools = ["Profile", "Search", "System", "Processes", "Git"];
     let items: Vec<ListItem> = tools
         .iter()
         .enumerate()
@@ -1371,11 +1472,126 @@ fn draw_tools(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
 
     let tools_list = List::new(items).block(
         Block::default()
-            .title(" Tools ")
+            .title(" Settings ")
             .padding(Padding::uniform(1)),
     );
 
     frame.render_widget(tools_list, area);
+}
+
+fn draw_profile(frame: &mut Frame, app: &TuiApp, selected: usize, theme: &Theme, area: Rect) {
+    let info_lines = if let Some(session) = app.auth_session.as_ref() {
+        vec![
+            Line::from(vec![
+                Span::styled("Status: ", Style::default().fg(theme.foreground)),
+                Span::styled("Signed in", Style::default().fg(theme.accent)),
+            ]),
+            Line::from(vec![
+                Span::styled("Email: ", Style::default().fg(theme.foreground)),
+                Span::styled(
+                    session
+                        .user
+                        .email
+                        .clone()
+                        .unwrap_or_else(|| "—".to_string()),
+                    theme.muted_style(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("Name: ", Style::default().fg(theme.foreground)),
+                Span::styled(
+                    session
+                        .user
+                        .display_name
+                        .clone()
+                        .unwrap_or_else(|| "—".to_string()),
+                    theme.muted_style(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("Provider: ", Style::default().fg(theme.foreground)),
+                Span::styled(
+                    session
+                        .user
+                        .provider
+                        .as_ref()
+                        .map(|provider| format!("{provider:?}"))
+                        .unwrap_or_else(|| "—".to_string()),
+                    theme.muted_style(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("User ID: ", Style::default().fg(theme.foreground)),
+                Span::styled(session.user.user_id.clone(), theme.muted_style()),
+            ]),
+            Line::from(""),
+            Line::styled(
+                "Session storage uses the local OS keychain/keyring.",
+                theme.muted_style(),
+            ),
+            Line::styled(
+                "History, Export, and Statistics are scoped to this signed-in account.",
+                theme.muted_style(),
+            ),
+        ]
+    } else {
+        vec![
+            Line::from(vec![
+                Span::styled("Status: ", Style::default().fg(theme.foreground)),
+                Span::styled("Not signed in", theme.muted_style()),
+            ]),
+            Line::from(""),
+            Line::styled(
+                "Sign in with /auth login <provider> in chat to enable account-scoped History, Export, and Statistics.",
+                theme.muted_style(),
+            ),
+            Line::styled(
+                "Without sign-in, Harper stays in local-only mode on this machine.",
+                theme.muted_style(),
+            ),
+        ]
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(8), Constraint::Length(6)])
+        .split(area);
+
+    let profile = Paragraph::new(info_lines)
+        .block(
+            Block::default()
+                .title(" Profile ")
+                .padding(Padding::uniform(1)),
+        )
+        .wrap(Wrap { trim: true });
+    frame.render_widget(profile, chunks[0]);
+
+    let actions: Vec<&str> = if app.auth_session.is_some() {
+        vec!["Logout", "Refresh Session"]
+    } else {
+        vec!["Login with GitHub", "Login with Google", "Login with Apple"]
+    };
+    let items: Vec<ListItem> = actions
+        .iter()
+        .enumerate()
+        .map(|(index, label)| {
+            let style = if index == selected {
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.foreground)
+            };
+            ListItem::new(*label).style(style)
+        })
+        .collect();
+
+    let actions_list = List::new(items).block(
+        Block::default()
+            .title(" Actions ")
+            .padding(Padding::uniform(1)),
+    );
+    frame.render_widget(actions_list, chunks[1]);
 }
 
 fn draw_view_session(
@@ -1439,6 +1655,26 @@ fn draw_view_session(
 }
 
 fn draw_message_overlay(frame: &mut Frame, message: &UiMessage, theme: &Theme) {
+    let area = frame.area();
+    let max_overlay_width = area.width.saturating_mul(3) / 4;
+    let content_width = message
+        .content
+        .lines()
+        .map(|line| line.chars().count() as u16)
+        .max()
+        .unwrap_or(0);
+    let overlay_width = (content_width + 8).clamp(24, max_overlay_width.max(24));
+    let text_width = overlay_width.saturating_sub(4).max(1) as usize;
+    let wrapped_line_count = message
+        .content
+        .lines()
+        .map(|line| {
+            let len = line.chars().count();
+            usize::max(1, len.div_ceil(text_width))
+        })
+        .sum::<usize>() as u16;
+    let overlay_height = (wrapped_line_count + 4).clamp(5, area.height.saturating_mul(3) / 4);
+
     let overlay = Paragraph::new(message.content.as_str())
         .block(
             Block::default()
@@ -1449,11 +1685,6 @@ fn draw_message_overlay(frame: &mut Frame, message: &UiMessage, theme: &Theme) {
         .style(Style::default().bg(theme.background).fg(theme.foreground))
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
-
-    let area = frame.area();
-    let message_lines = message.content.lines().count().max(1) as u16;
-    let overlay_height = (message_lines + 4).min(area.height / 2);
-    let overlay_width = (message.content.len() as u16 + 8).min(area.width * 3 / 4);
 
     let overlay_area = Rect {
         x: (area.width - overlay_width) / 2,

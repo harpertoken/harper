@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 // Keyboard shortcut constants
 const HELP_MESSAGE: &str =
-    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | X:Exit | W:Web | B:Sidebar | A:Agents | F:Findings | P:Jobs | M:Msgs | C:ID";
+    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | D/Delete:Remove Session | X:Exit | W:Web | B:Sidebar | A:Agents | F:Findings | P:Jobs | M:Msgs | C:ID";
 
 use super::app::{AppState, ChatState, NavigationFocus, SessionInfo, TuiApp};
 use harper_core::memory::session_service::SessionService;
@@ -34,7 +34,19 @@ pub enum EventResult {
     Continue,
     SendMessage(String),
     LoadSessions,
-    OpenSession { session_id: String, preview: bool },
+    OpenSession {
+        session_id: String,
+        preview: bool,
+    },
+    RefreshAuthSession,
+    StartProfileLogin {
+        provider: String,
+    },
+    DeleteSession {
+        session_id: String,
+        remote: bool,
+        export_view: bool,
+    },
     GatherSidebarEntries,
     Quit,
 }
@@ -84,7 +96,12 @@ fn record_approval_history(app: &mut TuiApp, command: &str, approved: bool) {
 }
 
 fn load_export_sessions_into_state(app: &mut TuiApp, session_service: &SessionService) {
-    match session_service.list_sessions_data() {
+    let sessions_result = if let Some(auth_session) = app.auth_session.as_ref() {
+        session_service.list_sessions_data_for_user(&auth_session.user.user_id)
+    } else {
+        session_service.list_sessions_data()
+    };
+    match sessions_result {
         Ok(sessions) => {
             let session_infos: Vec<SessionInfo> = sessions
                 .into_iter()
@@ -271,7 +288,16 @@ pub fn handle_event(
                                     status_message = Some("Focus on AGENTS panel".to_string());
                                 }
                             } else {
-                                status_message = Some("No active AGENTS sources".to_string());
+                                if !chat_state.agents_panel_expanded {
+                                    chat_state.agents_panel_expanded = true;
+                                    chat_state.agents_scroll_offset = 0;
+                                    status_message = Some(
+                                        "AGENTS panel opened; no active sources yet".to_string(),
+                                    );
+                                } else {
+                                    chat_state.agents_panel_expanded = false;
+                                    status_message = Some("AGENTS panel collapsed".to_string());
+                                }
                             }
                         }
                         if let Some(message) = status_message {
@@ -390,6 +416,7 @@ pub fn handle_event(
                     AppState::Sessions(_, _) => app.state = AppState::Menu(0),
                     AppState::ExportSessions(_, _) => app.state = AppState::Menu(0),
                     AppState::Tools(_) => app.state = AppState::Menu(0),
+                    AppState::Profile(_) => app.state = AppState::Menu(0),
                     AppState::ViewSession(_, _, _) => app.state = AppState::Menu(0),
                     AppState::Stats(_) => app.state = AppState::Menu(0),
                 },
@@ -417,6 +444,7 @@ pub fn handle_event(
                 }
                 KeyCode::Enter => return handle_enter(app, session_service),
                 KeyCode::Right => return preview_selected_session(app, session_service),
+                KeyCode::Delete => return delete_selected_session(app),
                 KeyCode::Tab => handle_tab(app),
                 KeyCode::Char(c) => {
                     // Handle q for quitting/returning only in non-input states
@@ -434,6 +462,9 @@ pub fn handle_event(
                             return EventResult::Continue;
                         }
                         return preview_selected_session(app, session_service);
+                    }
+                    if c == 'd' && !matches!(app.state, AppState::Chat(_)) {
+                        return delete_selected_session(app);
                     }
                     handle_char_input(app, c)
                 }
@@ -464,10 +495,17 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 } // Start Chat
                 1 => return EventResult::LoadSessions,
                 2 => load_export_sessions_into_state(app, session_service),
-                3 => match session_service.get_global_stats() {
-                    Ok(stats) => app.state = AppState::Stats(stats),
-                    Err(e) => app.set_error_message(format!("Error loading stats: {}", e)),
-                },
+                3 => {
+                    let stats_result = if let Some(auth_session) = app.auth_session.as_ref() {
+                        session_service.get_global_stats_for_user(&auth_session.user.user_id)
+                    } else {
+                        session_service.get_global_stats()
+                    };
+                    match stats_result {
+                        Ok(stats) => app.state = AppState::Stats(stats),
+                        Err(e) => app.set_error_message(format!("Error loading stats: {}", e)),
+                    }
+                }
                 4 => app.state = AppState::Tools(0), // Tools
                 5 => return EventResult::Quit,       // Exit
                 _ => {}
@@ -491,17 +529,54 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             if !sessions.is_empty() && *selected < sessions.len() =>
         {
             let session = &sessions[*selected];
-            match session_service.export_session_by_id(&session.id) {
+            let export_result = if let Some(auth_session) = app.auth_session.as_ref() {
+                session_service
+                    .export_session_by_id_for_user(&session.id, &auth_session.user.user_id)
+            } else {
+                session_service.export_session_by_id(&session.id)
+            };
+            match export_result {
                 Ok(path) => app.set_info_message(format!("Session exported to {}", path)),
                 Err(e) => app.set_error_message(format!("Export failed: {}", e)),
             }
             app.state = AppState::Menu(0);
         }
         AppState::Tools(selected) => match *selected {
-            0 => handle_web_search(app),
-            1 => handle_system_info(app),
-            2 => handle_process_list(app),
-            3 => handle_git_commands(app),
+            0 => app.state = AppState::Profile(0),
+            1 => handle_web_search(app),
+            2 => handle_system_info(app),
+            3 => handle_process_list(app),
+            4 => handle_git_commands(app),
+            _ => {}
+        },
+        AppState::Profile(selected) => match *selected {
+            0 if app.auth_session.is_some() => {
+                if let Err(err) = crate::interfaces::ui::auth::clear_auth_session() {
+                    app.set_error_message(format!("Auth logout failed: {}", err));
+                } else {
+                    app.auth_session = None;
+                    app.auth_flow_id = None;
+                    app.auth_last_poll_at = None;
+                    app.set_status_message("Cleared local TUI auth session".to_string());
+                    app.state = AppState::Profile(0);
+                }
+            }
+            1 if app.auth_session.is_some() => return EventResult::RefreshAuthSession,
+            0 => {
+                return EventResult::StartProfileLogin {
+                    provider: "github".to_string(),
+                }
+            }
+            1 => {
+                return EventResult::StartProfileLogin {
+                    provider: "google".to_string(),
+                }
+            }
+            2 => {
+                return EventResult::StartProfileLogin {
+                    provider: "apple".to_string(),
+                }
+            }
             _ => {}
         },
         AppState::ViewSession(session_id, _, _) => {
@@ -547,6 +622,32 @@ fn preview_selected_session(app: &mut TuiApp, session_service: &SessionService) 
                 EventResult::Continue
             }
         }
+    }
+}
+
+fn delete_selected_session(app: &mut TuiApp) -> EventResult {
+    match &app.state {
+        AppState::Sessions(sessions, selected)
+            if !sessions.is_empty() && *selected < sessions.len() =>
+        {
+            let session = &sessions[*selected];
+            EventResult::DeleteSession {
+                session_id: session.id.clone(),
+                remote: app.auth_session.is_some() && app.auth_server_base_url.is_some(),
+                export_view: false,
+            }
+        }
+        AppState::ExportSessions(sessions, selected)
+            if !sessions.is_empty() && *selected < sessions.len() =>
+        {
+            let session = &sessions[*selected];
+            EventResult::DeleteSession {
+                session_id: session.id.clone(),
+                remote: false,
+                export_view: true,
+            }
+        }
+        _ => EventResult::Continue,
     }
 }
 
@@ -963,6 +1064,69 @@ mod tests {
     }
 
     #[test]
+    fn test_enter_settings_profile() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Tools(0); // Profile
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(app.state, AppState::Profile(0)));
+    }
+
+    #[test]
+    fn test_enter_profile_refresh_returns_async_event() {
+        let mut app = TuiApp::new();
+        app.auth_session = Some(harper_core::AuthSession {
+            access_token: "access".to_string(),
+            refresh_token: Some("refresh".to_string()),
+            expires_at: None,
+            user: harper_core::AuthenticatedUser {
+                user_id: "user-1".to_string(),
+                email: Some("user@example.com".to_string()),
+                display_name: Some("Example User".to_string()),
+                provider: Some(harper_core::UserAuthProvider::Github),
+            },
+        });
+        app.state = AppState::Profile(1); // Refresh Session
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::RefreshAuthSession));
+    }
+
+    #[test]
+    fn test_enter_profile_login_returns_async_event() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Profile(0); // Login with GitHub
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(
+            result,
+            EventResult::StartProfileLogin { provider } if provider == "github"
+        ));
+    }
+
+    #[test]
     fn chat_mode_treats_l_as_text_input() {
         let mut app = TuiApp::new();
         app.state = AppState::Chat(Box::new(create_chat_state(
@@ -1002,5 +1166,65 @@ mod tests {
         );
         assert!(matches!(result, EventResult::LoadSessions));
         assert!(matches!(app.state, AppState::Menu(1)));
+    }
+
+    #[test]
+    fn delete_key_on_sessions_returns_delete_event() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Sessions(
+            vec![SessionInfo {
+                id: "session-1".to_string(),
+                name: "Example".to_string(),
+                created_at: "2026-04-28".to_string(),
+            }],
+            0,
+        );
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Delete.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(
+            result,
+            EventResult::DeleteSession {
+                session_id,
+                remote: false,
+                export_view: false
+            } if session_id == "session-1"
+        ));
+    }
+
+    #[test]
+    fn delete_key_on_export_sessions_returns_delete_event() {
+        let mut app = TuiApp::new();
+        app.state = AppState::ExportSessions(
+            vec![SessionInfo {
+                id: "session-1".to_string(),
+                name: "Example".to_string(),
+                created_at: "2026-04-28".to_string(),
+            }],
+            0,
+        );
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Delete.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(
+            result,
+            EventResult::DeleteSession {
+                session_id,
+                remote: false,
+                export_view: true
+            } if session_id == "session-1"
+        ));
     }
 }

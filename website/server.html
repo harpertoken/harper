@@ -109,7 +109,7 @@ curl http://127.0.0.1:8081/api/sessions</code></pre>
   }'</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p>The session endpoint returns messages plus any active plan and resolved AGENTS context for that session. Session list items also include a human-readable <code>title</code> derived from the first user message when available. When Supabase auth is enabled, session list, load, and delete operations are scoped to the signed-in user.</p>
+                <p>The session endpoint returns messages plus any active plan and resolved AGENTS context for that session. Session list items also include a human-readable <code>title</code> derived from the first user message when available. When Supabase auth is enabled, session list, load, delete, export, and statistics operations are scoped to the signed-in user.</p>
 
                 <h2>Planner runtime API</h2>
                 <p>Harper exposes planner/runtime state through a pull endpoint and a server-sent events stream. Use the pull endpoint for snapshots and the SSE endpoint when a client needs to follow running jobs incrementally.</p>
@@ -178,6 +178,9 @@ open http://127.0.0.1:8081/auth/login/github</code></pre>
                 </div>
                 <p><code>/auth login github</code> starts a local flow, opens the browser, and then stores the resulting TUI session once Harper sees the completed callback. <code>/auth status</code> reports the local TUI auth state. <code>/auth logout</code> clears the local stored TUI session.</p>
                 <p>Successful TUI sign-in stores the local auth session in the system credential store (for example macOS Keychain) rather than a plain JSON token file. If you launch Harper with <code>--no-server</code>, these TUI auth commands are unavailable because the local auth callback and polling endpoints are disabled.</p>
+                <p>The same TUI session is also visible from <code>Settings -&gt; Profile</code>, which shows the signed-in account and offers <code>Logout</code> and <code>Refresh Session</code> actions.</p>
+                <p>When a remote session request returns <code>401 Unauthorized</code>, Harper automatically attempts one Supabase refresh-token exchange through the local server and retries the request once before surfacing the error.</p>
+                <p>Signed-in users see account-scoped data in <code>History</code>, <code>Export</code>, and <code>Statistics</code>. Press <code>D</code> or <code>Delete</code> in the TUI session lists to remove the selected session.</p>
 
                 <h2>Review example</h2>
                 <div class="code-wrapper">

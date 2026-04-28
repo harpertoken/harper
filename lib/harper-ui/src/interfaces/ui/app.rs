@@ -301,9 +301,10 @@ impl Clone for ApprovalState {
 pub enum AppState {
     Menu(usize),
     Chat(Box<ChatState>),
-    Sessions(Vec<SessionInfo>, usize),        // sessions, selected
-    ExportSessions(Vec<SessionInfo>, usize),  // sessions, selected for export
-    Tools(usize),                             // selected tool
+    Sessions(Vec<SessionInfo>, usize),       // sessions, selected
+    ExportSessions(Vec<SessionInfo>, usize), // sessions, selected for export
+    Tools(usize),                            // selected tool
+    Profile(usize),
     ViewSession(String, Vec<Message>, usize), // name, messages, selected
     Stats(GlobalStats),
 }
@@ -369,6 +370,14 @@ impl Default for TuiApp {
 impl TuiApp {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn profile_action_count(&self) -> usize {
+        if self.auth_session.is_some() {
+            2
+        } else {
+            3
+        }
     }
 
     pub fn set_error_message(&mut self, content: String) {
@@ -460,6 +469,7 @@ impl TuiApp {
             return;
         }
 
+        let profile_action_count = self.profile_action_count();
         match &mut self.state {
             AppState::Menu(sel) => *sel = (*sel + 1) % 6,
             AppState::Chat(chat_state) => {
@@ -504,7 +514,8 @@ impl TuiApp {
                     *sel = (*sel + 1) % sessions.len();
                 }
             }
-            AppState::Tools(sel) => *sel = (*sel + 1) % 4,
+            AppState::Tools(sel) => *sel = (*sel + 1) % 5,
+            AppState::Profile(sel) => *sel = (*sel + 1) % profile_action_count,
             AppState::ExportSessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = (*sel + 1) % sessions.len();
@@ -525,6 +536,7 @@ impl TuiApp {
             return;
         }
 
+        let profile_action_count = self.profile_action_count();
         match &mut self.state {
             AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
             AppState::Chat(chat_state) => {
@@ -561,7 +573,14 @@ impl TuiApp {
                     };
                 }
             }
-            AppState::Tools(sel) => *sel = if *sel == 0 { 3 } else { *sel - 1 },
+            AppState::Tools(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
+            AppState::Profile(sel) => {
+                *sel = if *sel == 0 {
+                    profile_action_count - 1
+                } else {
+                    *sel - 1
+                };
+            }
             AppState::ExportSessions(sessions, sel) => {
                 if !sessions.is_empty() {
                     *sel = if *sel == 0 {
