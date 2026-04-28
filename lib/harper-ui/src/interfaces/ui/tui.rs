@@ -160,6 +160,7 @@ enum WorkerMsg {
         user_msg: String,
         session_id: String,
         web_search: bool,
+        auth_user_id: Option<String>,
     },
 }
 
@@ -272,6 +273,7 @@ pub async fn run_tui(
                         user_msg,
                         session_id,
                         web_search,
+                        auth_user_id,
                     } => {
                         let mut chat_service = ChatService::new(
                             &worker_conn,
@@ -290,23 +292,46 @@ pub async fn run_tui(
                             harper_core::memory::storage::load_history(&worker_conn, &session_id)
                                 .unwrap_or_default();
 
+                        if let Some(user_id) = auth_user_id.as_deref() {
+                            let _ = harper_core::memory::storage::save_session_for_user(
+                                &worker_conn,
+                                &session_id,
+                                user_id,
+                            );
+                        }
+
                         match chat_service
                             .send_message(&user_msg, &mut history, web_search, &session_id)
                             .await
                         {
                             Ok(_) => {
                                 let session_service = SessionService::new(&worker_conn);
-                                let session_view = session_service
-                                    .load_session_state_view(&session_id)
-                                    .unwrap_or_else(|_| SessionStateView {
-                                        session_id: session_id.clone(),
-                                        user_id: None,
-                                        messages: history.clone(),
-                                        plan: None,
-                                        agents: None,
-                                        agents_rendered: None,
-                                        agents_effective_rendered: None,
-                                    });
+                                let session_view = match auth_user_id.as_deref() {
+                                    Some(user_id) => session_service
+                                        .load_session_state_view_for_user(&session_id, user_id)
+                                        .ok()
+                                        .flatten()
+                                        .unwrap_or_else(|| SessionStateView {
+                                            session_id: session_id.clone(),
+                                            user_id: Some(user_id.to_string()),
+                                            messages: history.clone(),
+                                            plan: None,
+                                            agents: None,
+                                            agents_rendered: None,
+                                            agents_effective_rendered: None,
+                                        }),
+                                    None => session_service
+                                        .load_session_state_view(&session_id)
+                                        .unwrap_or_else(|_| SessionStateView {
+                                            session_id: session_id.clone(),
+                                            user_id: None,
+                                            messages: history.clone(),
+                                            plan: None,
+                                            agents: None,
+                                            agents_rendered: None,
+                                            agents_effective_rendered: None,
+                                        }),
+                                };
                                 let _ = ui_tx_clone
                                     .send(UiUpdate::MessageProcessed(session_view))
                                     .await;
@@ -401,6 +426,10 @@ pub async fn run_tui(
                                     user_msg: msg,
                                     session_id,
                                     web_search,
+                                    auth_user_id: app
+                                        .auth_session
+                                        .as_ref()
+                                        .map(|session| session.user.user_id.clone()),
                                 }).await;
                             }
                         }
@@ -409,8 +438,10 @@ pub async fn run_tui(
                                 app.auth_server_base_url.clone(),
                                 app.auth_session.clone(),
                             ) {
-                                match auth::fetch_remote_sessions(&auth_client, &base_url, &session).await {
+                                let mut session = session;
+                                match auth::fetch_remote_sessions(&auth_client, &base_url, &mut session).await {
                                     Ok(sessions) => {
+                                        app.auth_session = Some(session);
                                         let session_infos = sessions
                                             .into_iter()
                                             .map(|s| super::app::SessionInfo {
@@ -445,8 +476,10 @@ pub async fn run_tui(
                                 app.auth_server_base_url.clone(),
                                 app.auth_session.clone(),
                             ) {
-                                match auth::fetch_remote_session_state(&auth_client, &base_url, &session, &session_id).await {
+                                let mut session = session;
+                                match auth::fetch_remote_session_state(&auth_client, &base_url, &mut session, &session_id).await {
                                     Ok(session_view) => {
+                                        app.auth_session = Some(session);
                                         if preview {
                                             app.state = AppState::ViewSession(
                                                 session_view.session_id,
@@ -486,6 +519,168 @@ pub async fn run_tui(
                                     }
                                     Err(e) => app.set_error_message(format!("Error loading session: {}", e)),
                                 }
+                            }
+                        }
+                        EventResult::DeleteSession {
+                            session_id,
+                            remote,
+                            export_view,
+                        } => {
+                            if remote {
+                                if let (Some(base_url), Some(session)) = (
+                                    app.auth_server_base_url.clone(),
+                                    app.auth_session.clone(),
+                                ) {
+                                    let mut session = session;
+                                    match auth::delete_remote_session(
+                                        &auth_client,
+                                        &base_url,
+                                        &mut session,
+                                        &session_id,
+                                    )
+                                    .await
+                                    {
+                                        Ok(()) => {
+                                            app.auth_session = Some(session);
+                                            app.set_status_message(
+                                                "Remote session deleted".to_string(),
+                                            );
+                                            match auth::fetch_remote_sessions(
+                                                &auth_client,
+                                                &base_url,
+                                                app.auth_session.as_mut().expect("session set"),
+                                            )
+                                            .await
+                                            {
+                                                Ok(sessions) => {
+                                                    let session_infos = sessions
+                                                        .into_iter()
+                                                        .map(|s| super::app::SessionInfo {
+                                                            id: s.id.clone(),
+                                                            name: s.title.unwrap_or(s.id),
+                                                            created_at: s.created_at,
+                                                        })
+                                                        .collect();
+                                                    app.state = AppState::Sessions(session_infos, 0);
+                                                }
+                                                Err(err) => app.set_error_message(format!(
+                                                    "Error reloading remote sessions: {}",
+                                                    err
+                                                )),
+                                            }
+                                        }
+                                        Err(err) => app.set_error_message(format!(
+                                            "Error deleting remote session: {}",
+                                            err
+                                        )),
+                                    }
+                                }
+                            } else {
+                                let delete_result = if export_view {
+                                    if let Some(auth_session) = app.auth_session.as_ref() {
+                                        session_service.delete_session_for_user(
+                                            &session_id,
+                                            &auth_session.user.user_id,
+                                        )
+                                    } else {
+                                        session_service.delete_session(&session_id)
+                                    }
+                                } else {
+                                    session_service.delete_session(&session_id)
+                                };
+                                match delete_result {
+                                    Ok(true) => {
+                                        app.set_status_message("Local session deleted".to_string());
+                                        let sessions_result = if export_view {
+                                            if let Some(auth_session) = app.auth_session.as_ref() {
+                                                session_service.list_sessions_data_for_user(
+                                                    &auth_session.user.user_id,
+                                                )
+                                            } else {
+                                                session_service.list_sessions_data()
+                                            }
+                                        } else {
+                                            session_service.list_sessions_data()
+                                        };
+                                        match sessions_result {
+                                            Ok(sessions) => {
+                                                let session_infos = sessions
+                                                    .into_iter()
+                                                    .map(|s| super::app::SessionInfo {
+                                                        id: s.id.clone(),
+                                                        name: s.title.unwrap_or(s.id),
+                                                        created_at: s.created_at,
+                                                    })
+                                                    .collect();
+                                                app.state = if export_view {
+                                                    AppState::ExportSessions(session_infos, 0)
+                                                } else {
+                                                    AppState::Sessions(session_infos, 0)
+                                                };
+                                            }
+                                            Err(e) => app.set_error_message(format!(
+                                                "Error reloading sessions: {}",
+                                                e
+                                            )),
+                                        }
+                                    }
+                                    Ok(false) => app.set_error_message(
+                                        "Session not found for deletion".to_string(),
+                                    ),
+                                    Err(err) => app.set_error_message(format!(
+                                        "Error deleting local session: {}",
+                                        err
+                                    )),
+                                }
+                            }
+                        }
+                        EventResult::RefreshAuthSession => {
+                            if let (Some(base_url), Some(session)) = (
+                                app.auth_server_base_url.clone(),
+                                app.auth_session.clone(),
+                            ) {
+                                let mut session = session;
+                                match auth::refresh_auth_session(&auth_client, &base_url, &mut session).await {
+                                    Ok(()) => {
+                                        let status = session
+                                            .user
+                                            .email
+                                            .clone()
+                                            .unwrap_or_else(|| session.user.user_id.clone());
+                                        app.auth_session = Some(session);
+                                        app.set_status_message(format!(
+                                            "Auth session refreshed for {}",
+                                            status
+                                        ));
+                                    }
+                                    Err(err) => app.set_error_message(format!(
+                                        "Auth session refresh failed: {}",
+                                        err
+                                    )),
+                                }
+                            } else {
+                                app.set_error_message("No signed-in auth session to refresh".to_string());
+                            }
+                        }
+                        EventResult::StartProfileLogin { provider } => {
+                            let Some(base_url) = app.auth_server_base_url.clone() else {
+                                app.set_error_message("TUI auth requires the Harper server to be enabled".to_string());
+                                continue;
+                            };
+                            match auth::start_tui_auth_flow(&auth_client, &base_url, &provider).await {
+                                Ok(flow) => {
+                                    app.auth_flow_id = Some(flow.flow_id.clone());
+                                    app.auth_last_poll_at = None;
+                                    match auth::launch_browser(&flow.login_url) {
+                                        Ok(_) => app.set_status_message(format!("Opened browser for {} sign-in", provider)),
+                                        Err(_) => app.set_info_message(format!(
+                                            "Open this URL to sign in:\n{}",
+                                            flow.login_url
+                                        )),
+                                    }
+                                    app.set_activity_status(Some("waiting for browser sign-in".to_string()));
+                                }
+                                Err(err) => app.set_error_message(format!("Auth login failed: {}", err)),
                             }
                         }
                         EventResult::Continue => {}

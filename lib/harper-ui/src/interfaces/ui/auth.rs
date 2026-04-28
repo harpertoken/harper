@@ -1,6 +1,8 @@
 use harper_core::{AuthSession, SessionStateView};
 use keyring::{Entry, Error as KeyringError};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
 
@@ -33,6 +35,11 @@ pub struct RemoteSessionListItem {
     pub created_at: String,
     pub updated_at: String,
     pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TuiRefreshRequest<'a> {
+    refresh_token: &'a str,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,7 +76,7 @@ pub async fn start_tui_auth_flow(
         .await
         .map_err(|err| err.to_string())?;
     if !response.status().is_success() {
-        return Err(response.text().await.unwrap_or_default());
+        return Err(extract_http_error(response).await);
     }
     response.json().await.map_err(|err| err.to_string())
 }
@@ -90,7 +97,7 @@ pub async fn poll_tui_auth_flow(
         .await
         .map_err(|err| err.to_string())?;
     if !response.status().is_success() {
-        return Err(response.text().await.unwrap_or_default());
+        return Err(extract_http_error(response).await);
     }
     response.json().await.map_err(|err| err.to_string())
 }
@@ -98,25 +105,16 @@ pub async fn poll_tui_auth_flow(
 pub async fn fetch_remote_sessions(
     client: &reqwest::Client,
     server_base_url: &str,
-    session: &AuthSession,
+    session: &mut AuthSession,
 ) -> Result<Vec<RemoteSessionListItem>, String> {
     let url = format!("{}/api/sessions", server_base_url.trim_end_matches('/'));
-    let response = client
-        .get(&url)
-        .bearer_auth(&session.access_token)
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.status().is_success() {
-        return Err(response.text().await.unwrap_or_default());
-    }
-    response.json().await.map_err(|err| err.to_string())
+    fetch_remote_json_with_refresh(client, &url, session).await
 }
 
 pub async fn fetch_remote_session_state(
     client: &reqwest::Client,
     server_base_url: &str,
-    session: &AuthSession,
+    session: &mut AuthSession,
     session_id: &str,
 ) -> Result<SessionStateView, String> {
     let url = format!(
@@ -124,16 +122,35 @@ pub async fn fetch_remote_session_state(
         server_base_url.trim_end_matches('/'),
         session_id
     );
-    let response = client
-        .get(&url)
-        .bearer_auth(&session.access_token)
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.status().is_success() {
-        return Err(response.text().await.unwrap_or_default());
-    }
-    response.json().await.map_err(|err| err.to_string())
+    fetch_remote_json_with_refresh(client, &url, session).await
+}
+
+pub async fn delete_remote_session(
+    client: &reqwest::Client,
+    server_base_url: &str,
+    session: &mut AuthSession,
+    session_id: &str,
+) -> Result<(), String> {
+    let url = format!(
+        "{}/api/sessions/{}",
+        server_base_url.trim_end_matches('/'),
+        session_id
+    );
+    send_remote_delete_with_refresh(client, &url, session).await
+}
+
+pub async fn refresh_auth_session(
+    client: &reqwest::Client,
+    server_base_url: &str,
+    session: &mut AuthSession,
+) -> Result<(), String> {
+    let refresh_token = session
+        .refresh_token
+        .clone()
+        .ok_or_else(|| "No refresh token available".to_string())?;
+    let refreshed = refresh_tui_auth_session(client, server_base_url, &refresh_token).await?;
+    *session = refreshed;
+    save_auth_session(session)
 }
 
 pub fn load_auth_session() -> Option<AuthSession> {
@@ -265,14 +282,197 @@ fn deserialize_auth_session(content: &str) -> Result<AuthSession, String> {
         .map_err(|err| err.to_string())
 }
 
+async fn extract_http_error(response: reqwest::Response) -> String {
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    format_http_error(status, &body)
+}
+
+async fn refresh_tui_auth_session(
+    client: &reqwest::Client,
+    server_base_url: &str,
+    refresh_token: &str,
+) -> Result<AuthSession, String> {
+    let url = format!("{}/auth/tui/refresh", server_base_url.trim_end_matches('/'));
+    let response = client
+        .post(&url)
+        .json(&TuiRefreshRequest { refresh_token })
+        .send()
+        .await
+        .map_err(|err| err.to_string())?;
+    if !response.status().is_success() {
+        return Err(extract_http_error(response).await);
+    }
+    response.json().await.map_err(|err| err.to_string())
+}
+
+async fn fetch_remote_json_with_refresh<T>(
+    client: &reqwest::Client,
+    url: &str,
+    session: &mut AuthSession,
+) -> Result<T, String>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let response = client
+        .get(url)
+        .bearer_auth(&session.access_token)
+        .send()
+        .await
+        .map_err(|err| err.to_string())?;
+    if response.status().is_success() {
+        return response.json().await.map_err(|err| err.to_string());
+    }
+
+    if response.status() == StatusCode::UNAUTHORIZED {
+        let refresh_token = session
+            .refresh_token
+            .clone()
+            .ok_or_else(|| extract_http_error_blocking(StatusCode::UNAUTHORIZED, ""))?;
+        let refreshed =
+            refresh_tui_auth_session(client, infer_base_url(url), &refresh_token).await?;
+        *session = refreshed.clone();
+        save_auth_session(session)?;
+
+        let retry = client
+            .get(url)
+            .bearer_auth(&session.access_token)
+            .send()
+            .await
+            .map_err(|err| err.to_string())?;
+        if !retry.status().is_success() {
+            return Err(extract_http_error(retry).await);
+        }
+        return retry.json().await.map_err(|err| err.to_string());
+    }
+
+    Err(extract_http_error(response).await)
+}
+
+async fn send_remote_delete_with_refresh(
+    client: &reqwest::Client,
+    url: &str,
+    session: &mut AuthSession,
+) -> Result<(), String> {
+    let response = client
+        .delete(url)
+        .bearer_auth(&session.access_token)
+        .send()
+        .await
+        .map_err(|err| err.to_string())?;
+
+    if response.status().is_success() {
+        return Ok(());
+    }
+
+    if response.status() == StatusCode::UNAUTHORIZED {
+        let refresh_token = session
+            .refresh_token
+            .clone()
+            .ok_or_else(|| extract_http_error_blocking(StatusCode::UNAUTHORIZED, ""))?;
+        let refreshed =
+            refresh_tui_auth_session(client, infer_base_url(url), &refresh_token).await?;
+        *session = refreshed;
+        save_auth_session(session)?;
+
+        let retry = client
+            .delete(url)
+            .bearer_auth(&session.access_token)
+            .send()
+            .await
+            .map_err(|err| err.to_string())?;
+        if retry.status().is_success() {
+            return Ok(());
+        }
+        return Err(extract_http_error(retry).await);
+    }
+
+    Err(extract_http_error(response).await)
+}
+
+fn infer_base_url(url: &str) -> &str {
+    url.rsplit_once("/api/")
+        .map(|(base, _)| base)
+        .unwrap_or(url)
+}
+
+fn extract_http_error_blocking(status: StatusCode, body: &str) -> String {
+    format_http_error(status, body)
+}
+
+fn format_http_error(status: StatusCode, body: &str) -> String {
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return format!(
+            "HTTP {} {}",
+            status.as_u16(),
+            status.canonical_reason().unwrap_or("Unknown")
+        );
+    }
+
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        if let Some(message) = extract_json_error_message(&value) {
+            return format!(
+                "HTTP {} {}: {}",
+                status.as_u16(),
+                status.canonical_reason().unwrap_or("Unknown"),
+                message
+            );
+        }
+    }
+
+    format!(
+        "HTTP {} {}: {}",
+        status.as_u16(),
+        status.canonical_reason().unwrap_or("Unknown"),
+        trimmed
+    )
+}
+
+fn extract_json_error_message(value: &Value) -> Option<String> {
+    match value {
+        Value::String(message) => Some(message.clone()),
+        Value::Object(map) => {
+            for key in ["error", "message", "detail"] {
+                if let Some(raw) = map.get(key) {
+                    match raw {
+                        Value::String(message) if !message.trim().is_empty() => {
+                            return Some(message.clone())
+                        }
+                        Value::Array(items) => {
+                            let joined = items
+                                .iter()
+                                .filter_map(extract_json_error_message)
+                                .collect::<Vec<_>>()
+                                .join(": ");
+                            if !joined.is_empty() {
+                                return Some(joined);
+                            }
+                        }
+                        Value::Object(_) => {
+                            if let Some(message) = extract_json_error_message(raw) {
+                                return Some(message);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        auth_session_path, clear_auth_session, load_auth_session, parse_tui_auth_command,
-        StoredAuthSession, TuiAuthCommand,
+        auth_session_path, clear_auth_session, format_http_error, infer_base_url,
+        load_auth_session, parse_tui_auth_command, StoredAuthSession, TuiAuthCommand,
     };
     use harper_core::{AuthSession, AuthenticatedUser, UserAuthProvider};
     use keyring::{mock, set_default_credential_builder};
+    use reqwest::StatusCode;
     use std::sync::Mutex;
 
     static KEYRING_TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -375,6 +575,26 @@ mod tests {
 
         restore_home(original_home);
         let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn format_http_error_uses_status_when_body_is_empty() {
+        let message = format_http_error(StatusCode::UNAUTHORIZED, "");
+        assert_eq!(message, "HTTP 401 Unauthorized");
+    }
+
+    #[test]
+    fn format_http_error_extracts_json_message() {
+        let message = format_http_error(StatusCode::BAD_REQUEST, r#"{"error":"session expired"}"#);
+        assert_eq!(message, "HTTP 400 Bad Request: session expired");
+    }
+
+    #[test]
+    fn infer_base_url_strips_api_path() {
+        assert_eq!(
+            infer_base_url("http://127.0.0.1:8081/api/sessions/session-1"),
+            "http://127.0.0.1:8081"
+        );
     }
 
     fn keyring_test_guard() -> std::sync::MutexGuard<'static, ()> {

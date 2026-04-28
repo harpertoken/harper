@@ -174,6 +174,11 @@ pub struct TuiAuthPollResponse {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct TuiRefreshRequest {
+    pub refresh_token: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ReviewRequest {
     pub file_path: String,
     pub content: String,
@@ -322,6 +327,14 @@ pub async fn auth_tui_poll(
         status: "pending".to_string(),
         session: None,
     }))
+}
+
+pub async fn auth_tui_refresh(
+    State(state): State<Arc<ServerState>>,
+    Json(request): Json<TuiRefreshRequest>,
+) -> Result<Json<AuthSession>, (StatusCode, String)> {
+    let session = refresh_supabase_session(&state, request.refresh_token).await?;
+    Ok(Json(session))
 }
 
 fn build_authorize_url(
@@ -486,7 +499,8 @@ pub async fn auth_callback(
         )
     })?;
 
-    let auth_session = auth_session_from_supabase_tokens(token_payload, Some(pending.provider));
+    let auth_session =
+        auth_session_from_supabase_tokens(&state, token_payload, Some(pending.provider)).await;
     if let Some(flow_id) = pending.tui_flow_id.clone() {
         let mut flows = state.tui_auth_flows.lock().map_err(|_| {
             (
@@ -1414,6 +1428,7 @@ pub fn create_router(
         .route("/auth/login/{provider}", get(auth_login))
         .route("/auth/tui/start/{provider}", get(auth_tui_start))
         .route("/auth/tui/flow/{flow_id}", get(auth_tui_poll))
+        .route("/auth/tui/refresh", post(auth_tui_refresh))
         .route("/auth/callback", get(auth_callback))
         .route("/auth/me", get(auth_me))
         .route("/auth/status", get(auth_status_page))
@@ -1509,7 +1524,7 @@ fn render_auth_success(session: &AuthSession) -> String {
     )
 }
 
-fn auth_session_from_supabase_tokens(
+fn fallback_auth_session_from_supabase_tokens(
     token_payload: SupabaseTokenResponse,
     provider: Option<UserAuthProvider>,
 ) -> AuthSession {
@@ -1535,6 +1550,25 @@ fn auth_session_from_supabase_tokens(
             .map(|seconds| chrono::Utc::now().timestamp() + seconds),
         user: authenticated_user,
     }
+}
+
+async fn auth_session_from_supabase_tokens(
+    state: &ServerState,
+    token_payload: SupabaseTokenResponse,
+    provider: Option<UserAuthProvider>,
+) -> AuthSession {
+    let mut session = fallback_auth_session_from_supabase_tokens(token_payload, provider);
+
+    if let Some(supabase) = state.supabase_auth.as_ref() {
+        if let Ok(user) =
+            auth::decode_access_token_with_client(&session.access_token, supabase, &state.client)
+                .await
+        {
+            session.user = user;
+        }
+    }
+
+    session
 }
 
 async fn refresh_supabase_session(
@@ -1589,7 +1623,7 @@ async fn refresh_supabase_session(
         )
     })?;
 
-    Ok(auth_session_from_supabase_tokens(token_payload, None))
+    Ok(auth_session_from_supabase_tokens(state, token_payload, None).await)
 }
 
 fn append_auth_session_cookies(headers: &mut axum::http::HeaderMap, session: &AuthSession) {
@@ -1964,11 +1998,11 @@ pub async fn approve_pending_tool(
 #[cfg(test)]
 mod tests {
     use super::{
-        auth_me, auth_tui_poll, build_authorize_url, delete_session, extract_json_payload,
-        get_session, get_session_plan, get_session_plan_stream, list_sessions,
-        normalize_finding_range, render_auth_status_page, render_auth_success, review_code,
-        CodeReviewFinding, CodeSuggestion, ReviewRange, ReviewRequest, ServerState,
-        SupabaseAuthConfig, TuiAuthFlowState,
+        auth_me, auth_tui_poll, auth_tui_refresh, build_authorize_url, delete_session,
+        extract_json_payload, get_session, get_session_plan, get_session_plan_stream,
+        list_sessions, normalize_finding_range, render_auth_status_page, render_auth_success,
+        review_code, CodeReviewFinding, CodeSuggestion, ReviewRange, ReviewRequest, ServerState,
+        SupabaseAuthConfig, TuiAuthFlowState, TuiRefreshRequest,
     };
     use crate::core::auth::{AuthSession, AuthenticatedUser, UserAuthProvider};
     use crate::core::{ApiConfig, ApiProvider};
@@ -2514,5 +2548,21 @@ mod tests {
             .expect("poll should succeed");
         assert_eq!(response.0.status, "pending");
         assert!(response.0.session.is_none());
+    }
+
+    #[tokio::test]
+    async fn auth_tui_refresh_requires_supabase_config() {
+        let state = test_server_state(None);
+        let error = auth_tui_refresh(
+            State(state),
+            Json(TuiRefreshRequest {
+                refresh_token: "refresh-token".to_string(),
+            }),
+        )
+        .await
+        .expect_err("refresh should require supabase config");
+
+        assert_eq!(error.0, StatusCode::NOT_IMPLEMENTED);
+        assert!(error.1.contains("Supabase auth is not configured"));
     }
 }

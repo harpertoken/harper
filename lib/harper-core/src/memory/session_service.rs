@@ -129,6 +129,57 @@ impl<'a> SessionService<'a> {
         })
     }
 
+    pub fn get_global_stats_for_user(&self, user_id: &str) -> HarperResult<GlobalStats> {
+        let total_sessions: usize = self.conn.query_row(
+            "SELECT COUNT(*) FROM sessions WHERE user_id = ?1",
+            [user_id],
+            |r| r.get(0),
+        )?;
+        let total_messages: usize = self.conn.query_row(
+            "SELECT COUNT(*)
+             FROM messages m
+             JOIN sessions s ON s.id = m.session_id
+             WHERE s.user_id = ?1",
+            [user_id],
+            |r| r.get(0),
+        )?;
+        let total_commands: usize = self.conn.query_row(
+            "SELECT COUNT(*)
+             FROM command_logs c
+             JOIN sessions s ON s.id = c.session_id
+             WHERE s.user_id = ?1",
+            [user_id],
+            |r| r.get(0),
+        )?;
+        let approved_commands: usize = self.conn.query_row(
+            "SELECT COUNT(*)
+             FROM command_logs c
+             JOIN sessions s ON s.id = c.session_id
+             WHERE s.user_id = ?1 AND c.approved = 1",
+            [user_id],
+            |r| r.get(0),
+        )?;
+        let avg_duration: f64 = self
+            .conn
+            .query_row(
+                "SELECT AVG(c.duration_ms)
+                 FROM command_logs c
+                 JOIN sessions s ON s.id = c.session_id
+                 WHERE s.user_id = ?1 AND c.duration_ms IS NOT NULL",
+                [user_id],
+                |r| r.get::<_, Option<f64>>(0),
+            )?
+            .unwrap_or(0.0);
+
+        Ok(GlobalStats {
+            total_sessions,
+            total_messages,
+            total_commands,
+            approved_commands,
+            avg_command_duration_ms: avg_duration,
+        })
+    }
+
     /// List all previous sessions (returns data)
     pub fn list_sessions_data(&self) -> HarperResult<Vec<Session>> {
         self.list_sessions_data_inner(None)
@@ -457,6 +508,16 @@ impl<'a> SessionService<'a> {
         Ok(output_path)
     }
 
+    pub fn export_session_by_id_for_user(
+        &self,
+        session_id: &str,
+        user_id: &str,
+    ) -> HarperResult<String> {
+        self.load_session_state_view_for_user(session_id, user_id)?
+            .ok_or_else(|| HarperError::Validation("session not found".to_string()))?;
+        self.export_session_by_id(session_id)
+    }
+
     fn write_transcript<W: Write>(&self, writer: &mut W, history: &[Message]) -> HarperResult<()> {
         for msg in history {
             writeln!(
@@ -613,5 +674,72 @@ impl<'a> SessionService<'a> {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SessionService;
+    use crate::memory::storage::{
+        init_db, insert_command_log, save_message, save_session_for_user, CommandLogRecord,
+    };
+    use rusqlite::Connection;
+
+    #[test]
+    fn user_scoped_stats_only_count_owned_sessions() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        init_db(&conn).expect("init db");
+
+        save_session_for_user(&conn, "session-a", "user-a").expect("save session a");
+        save_session_for_user(&conn, "session-b", "user-b").expect("save session b");
+
+        save_message(&conn, "session-a", "user", "hello from a").expect("message a");
+        save_message(&conn, "session-b", "user", "hello from b").expect("message b");
+
+        insert_command_log(
+            &conn,
+            &CommandLogRecord::new(
+                Some("session-a"),
+                "cargo test",
+                "tui",
+                false,
+                true,
+                "completed",
+                Some(0),
+                Some(25),
+                None,
+                None,
+                None,
+            ),
+        )
+        .expect("command a");
+        insert_command_log(
+            &conn,
+            &CommandLogRecord::new(
+                Some("session-b"),
+                "cargo check",
+                "tui",
+                false,
+                false,
+                "failed",
+                Some(1),
+                Some(50),
+                None,
+                None,
+                Some("boom".to_string()),
+            ),
+        )
+        .expect("command b");
+
+        let service = SessionService::new(&conn);
+        let stats = service
+            .get_global_stats_for_user("user-a")
+            .expect("stats for user a");
+
+        assert_eq!(stats.total_sessions, 1);
+        assert_eq!(stats.total_messages, 1);
+        assert_eq!(stats.total_commands, 1);
+        assert_eq!(stats.approved_commands, 1);
+        assert_eq!(stats.avg_command_duration_ms, 25.0);
     }
 }
