@@ -707,51 +707,95 @@ pub async fn get_session_plan_stream(
     let initial_json =
         serde_json::to_string(&initial_payload).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let last_event_id = load_latest_plan_event_id(&state, &session_id)?;
+    let has_push_listener = database_key_from_state(&state)
+        .map(|db_key| plan_events::ensure_cross_process_listener(&db_key))
+        .unwrap_or(false);
 
     let receiver = plan_events::subscribe();
     let stream = stream::unfold(
-        (state.clone(), receiver, session_id, user, last_event_id),
-        |(state, mut receiver, session_id, user, mut last_event_id)| async move {
+        (
+            state.clone(),
+            receiver,
+            session_id,
+            user,
+            last_event_id,
+            has_push_listener,
+        ),
+        |(state, mut receiver, session_id, user, mut last_event_id, has_push_listener)| async move {
             loop {
-                let sleep = tokio::time::sleep(Duration::from_millis(500));
-                tokio::pin!(sleep);
-
-                tokio::select! {
-                    recv = receiver.recv() => {
-                        match recv {
-                            Ok(update) if update.session_id == session_id => {
-                                last_event_id = Some(update.event_id);
-                                let next_json = match serde_json::to_string(&update.plan) {
-                                    Ok(json) => json,
-                                    Err(_) => return None,
-                                };
-                                let event = Event::default().event("plan").data(next_json);
-                                return Some((Ok(event), (state, receiver, session_id, user, last_event_id)));
-                            }
-                            Ok(_) => continue,
-                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                            Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
-                        }
+                let recv_result = if has_push_listener {
+                    receiver.recv().await
+                } else {
+                    let sleep = tokio::time::sleep(Duration::from_millis(500));
+                    tokio::pin!(sleep);
+                    tokio::select! {
+                        recv = receiver.recv() => recv,
+                        _ = &mut sleep => Err(tokio::sync::broadcast::error::RecvError::Lagged(0)),
                     }
-                    _ = &mut sleep => {
+                };
+
+                match recv_result {
+                    Ok(update) if update.session_id == session_id => {
+                        last_event_id = Some(update.event_id);
+                        let plan = match update.plan {
+                            Some(plan) => serde_json::json!(Some(plan)),
+                            None => {
+                                match load_session_plan_value(&state, &session_id, user.as_ref()) {
+                                    Ok(plan) => plan,
+                                    Err(_) => return None,
+                                }
+                            }
+                        };
+                        let next_json = match serde_json::to_string(&plan) {
+                            Ok(json) => json,
+                            Err(_) => return None,
+                        };
+                        let event = Event::default().event("plan").data(next_json);
+                        return Some((
+                            Ok(event),
+                            (
+                                state,
+                                receiver,
+                                session_id,
+                                user,
+                                last_event_id,
+                                has_push_listener,
+                            ),
+                        ));
+                    }
+                    Ok(_) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                         let latest_event_id = match load_latest_plan_event_id(&state, &session_id) {
                             Ok(event_id) => event_id,
                             Err(_) => return None,
                         };
                         if latest_event_id.is_some() && latest_event_id > last_event_id {
-                            let plan = match load_session_plan_value(&state, &session_id, user.as_ref()) {
-                                Ok(plan) => plan,
-                                Err(_) => return None,
-                            };
+                            let plan =
+                                match load_session_plan_value(&state, &session_id, user.as_ref()) {
+                                    Ok(plan) => plan,
+                                    Err(_) => return None,
+                                };
                             let next_json = match serde_json::to_string(&plan) {
                                 Ok(json) => json,
                                 Err(_) => return None,
                             };
                             last_event_id = latest_event_id;
                             let event = Event::default().event("plan").data(next_json);
-                            return Some((Ok(event), (state, receiver, session_id, user, last_event_id)));
+                            return Some((
+                                Ok(event),
+                                (
+                                    state,
+                                    receiver,
+                                    session_id,
+                                    user,
+                                    last_event_id,
+                                    has_push_listener,
+                                ),
+                            ));
                         }
+                        continue;
                     }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
                 }
             }
         },
@@ -775,6 +819,23 @@ fn load_latest_plan_event_id(
         .expect("Failed to lock database connection");
     crate::memory::storage::load_latest_plan_event_id(&conn, session_id)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn database_key_from_state(state: &ServerState) -> Option<String> {
+    let conn = state
+        .conn
+        .lock()
+        .expect("Failed to lock database connection");
+    let mut stmt = conn.prepare("PRAGMA database_list").ok()?;
+    let mut rows = stmt.query([]).ok()?;
+    while let Ok(Some(row)) = rows.next() {
+        let name: String = row.get(1).ok()?;
+        let path: String = row.get(2).ok()?;
+        if name == "main" && !path.trim().is_empty() {
+            return Some(path);
+        }
+    }
+    None
 }
 
 pub async fn delete_session(
@@ -2110,7 +2171,7 @@ mod tests {
                 provider: ApiProvider::OpenAI,
                 api_key: "test-key".to_string(),
                 base_url: "https://api.openai.com/v1/chat/completions".to_string(),
-                model_name: "gpt-4".to_string(),
+                model_name: "gpt-5.5".to_string(),
             },
             client: Client::new(),
             exec_policy: crate::runtime::config::ExecPolicyConfig::default(),
@@ -2145,7 +2206,7 @@ mod tests {
                 provider: ApiProvider::OpenAI,
                 api_key: "test-key".to_string(),
                 base_url: "https://api.openai.com/v1/chat/completions".to_string(),
-                model_name: "gpt-4".to_string(),
+                model_name: "gpt-5.5".to_string(),
             },
             client: Client::new(),
             exec_policy: ExecPolicyConfig::default(),
@@ -2255,6 +2316,7 @@ mod tests {
                             output_preview: Some("echo hi".to_string()),
                             has_error_output: false,
                         }],
+                        followup: None,
                     }),
                     updated_at: None,
                 },
@@ -2307,6 +2369,7 @@ mod tests {
                             output_preview: Some("echo hi".to_string()),
                             has_error_output: false,
                         }],
+                        followup: None,
                     }),
                     updated_at: None,
                 },
@@ -2358,6 +2421,7 @@ mod tests {
                             output_preview: Some("echo hi".to_string()),
                             has_error_output: false,
                         }],
+                        followup: None,
                     }),
                     updated_at: None,
                 },

@@ -175,6 +175,11 @@ pub async fn call_llm(
                                 "requires_network": {
                                     "type": "boolean",
                                     "description": "Set true if the command needs network access"
+                                },
+                                "retry_policy": {
+                                    "type": "string",
+                                    "enum": ["never", "safe"],
+                                    "description": "Optional explicit retry policy for transient-safe commands"
                                 }
                             },
                             "required": ["command"]

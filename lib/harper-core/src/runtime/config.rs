@@ -106,6 +106,9 @@ pub struct ExecPolicyConfig {
     pub blocked_commands: Option<Vec<String>>,
     pub sandbox_profile: Option<SandboxProfile>,
     pub sandbox: Option<SandboxConfig>,
+    pub retry_max_attempts: Option<u32>,
+    pub retry_network_commands: Option<Vec<String>>,
+    pub retry_write_commands: Option<Vec<String>>,
 }
 
 impl Default for ExecPolicyConfig {
@@ -123,6 +126,9 @@ impl Default for ExecPolicyConfig {
                 readonly_home: Some(false),
                 max_execution_time_secs: None,
             }),
+            retry_max_attempts: Some(1),
+            retry_network_commands: Some(vec!["curl".to_string(), "wget".to_string()]),
+            retry_write_commands: Some(vec!["mkdir".to_string(), "touch".to_string()]),
         }
     }
 }
@@ -536,6 +542,24 @@ impl ExecPolicyConfig {
 
         effective
     }
+
+    pub fn effective_retry_max_attempts(&self) -> u32 {
+        self.retry_max_attempts.unwrap_or(1)
+    }
+
+    pub fn retries_network_command(&self, command: &str) -> bool {
+        self.retry_network_commands
+            .as_ref()
+            .map(|commands| commands.iter().any(|configured| configured == command))
+            .unwrap_or_else(|| matches!(command, "curl" | "wget"))
+    }
+
+    pub fn retries_write_command(&self, command: &str) -> bool {
+        self.retry_write_commands
+            .as_ref()
+            .map(|commands| commands.iter().any(|configured| configured == command))
+            .unwrap_or_else(|| matches!(command, "mkdir" | "touch"))
+    }
 }
 
 impl CustomCommandsConfig {
@@ -744,6 +768,9 @@ mod tests {
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Workspace),
             sandbox: None,
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
         };
 
         let sandbox = config.effective_sandbox_config();
@@ -770,6 +797,9 @@ mod tests {
                 readonly_home: None,
                 max_execution_time_secs: Some(5),
             }),
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
         };
 
         let sandbox = config.effective_sandbox_config();

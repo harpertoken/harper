@@ -163,6 +163,10 @@ enum WorkerMsg {
         web_search: bool,
         auth_user_id: Option<String>,
     },
+    RetryPlanCommand {
+        command: String,
+        session_id: String,
+    },
 }
 
 /// Messages sent from the background chat worker to the UI
@@ -225,6 +229,7 @@ pub async fn run_tui(
     app.auth_server_base_url = server_base_url.clone();
     app.approval_profile = exec_policy.effective_approval_profile();
     app.sandbox_profile = exec_policy.effective_sandbox_profile();
+    app.retry_max_attempts = exec_policy.effective_retry_max_attempts();
     app.allowed_commands = exec_policy.allowed_commands.clone().unwrap_or_default();
     app.blocked_commands = exec_policy.blocked_commands.clone().unwrap_or_default();
     let auth_client = reqwest::Client::new();
@@ -348,6 +353,38 @@ pub async fn run_tui(
                             Err(e) => {
                                 let _ = ui_tx_clone.send(UiUpdate::Error(e.to_string())).await;
                             }
+                        }
+                    }
+                    WorkerMsg::RetryPlanCommand {
+                        command,
+                        session_id,
+                    } => {
+                        let exec_policy = worker_exec_policy
+                            .lock()
+                            .expect("worker exec policy lock")
+                            .clone();
+                        let audit_ctx = harper_core::tools::shell::CommandAuditContext {
+                            conn: &worker_conn,
+                            session_id: Some(&session_id),
+                            source: "ui_plan_retry",
+                        };
+                        let response = format!(
+                            r#"[RUN_COMMAND {{"command":{}}}]"#,
+                            serde_json::to_string(&command)
+                                .expect("serialize retry command payload")
+                        );
+                        let result = harper_core::tools::shell::execute_command(
+                            &response,
+                            &worker_api_config,
+                            &exec_policy,
+                            None,
+                            Some(&audit_ctx),
+                            Some(approver.clone()),
+                            Some(runtime_events.clone()),
+                        )
+                        .await;
+                        if let Err(err) = result {
+                            let _ = ui_tx_clone.send(UiUpdate::Error(err.to_string())).await;
                         }
                     }
                 }
@@ -676,6 +713,7 @@ pub async fn run_tui(
                             match settings::save_execution_policy_settings(
                                 app.approval_profile,
                                 app.sandbox_profile,
+                                app.retry_max_attempts,
                                 &app.allowed_commands,
                                 &app.blocked_commands,
                             ) {
@@ -695,6 +733,7 @@ pub async fn run_tui(
                                         } else {
                                             Some(app.blocked_commands.clone())
                                         };
+                                        policy.retry_max_attempts = Some(app.retry_max_attempts);
                                     }
                                     app.set_status_message(
                                         "Saved execution policy to config/local.toml".to_string(),
@@ -704,6 +743,140 @@ pub async fn run_tui(
                                     "Failed to save execution policy: {}",
                                     err
                                 )),
+                            }
+                        }
+                        EventResult::SetPlanStepStatus {
+                            session_id,
+                            step_index,
+                            status,
+                        } => {
+                            match harper_core::tools::plan::set_plan_step_status(
+                                conn,
+                                &session_id,
+                                step_index,
+                                status,
+                            ) {
+                                Ok(()) => {
+                                    if let AppState::Chat(chat_state) = &mut app.state {
+                                        if chat_state.session_id == session_id {
+                                            match harper_core::memory::storage::load_plan_state(
+                                                conn,
+                                                &session_id,
+                                            ) {
+                                                Ok(plan) => {
+                                                    chat_state.active_plan = plan;
+                                                    chat_state.refresh_plan_state();
+                                                }
+                                                Err(err) => app.set_error_message(format!(
+                                                    "Failed to reload plan: {}",
+                                                    err
+                                                )),
+                                            }
+                                        }
+                                    }
+                                    app.set_status_message("Plan step updated".to_string());
+                                }
+                                Err(err) => app
+                                    .set_error_message(format!("Failed to update plan step: {}", err)),
+                            }
+                        }
+                        EventResult::ClearPlan { session_id } => {
+                            match harper_core::tools::plan::clear_plan_state(conn, &session_id) {
+                                Ok(()) => {
+                                    if let AppState::Chat(chat_state) = &mut app.state {
+                                        if chat_state.session_id == session_id {
+                                            chat_state.active_plan = None;
+                                            chat_state.refresh_plan_state();
+                                        }
+                                    }
+                                    app.set_status_message("Plan cleared".to_string());
+                                }
+                                Err(err) => {
+                                    app.set_error_message(format!("Failed to clear plan: {}", err))
+                                }
+                            }
+                        }
+                        EventResult::RetryPlanFollowup {
+                            session_id,
+                            command,
+                        } => {
+                            if let AppState::Chat(chat_state) = &mut app.state {
+                                if chat_state.session_id == session_id {
+                                    chat_state.command_output = None;
+                                }
+                            }
+                            app.set_activity_status(Some(format!("retrying: {}", command)));
+                            let _ = worker_tx
+                                .send(WorkerMsg::RetryPlanCommand {
+                                    command,
+                                    session_id,
+                                })
+                                .await;
+                        }
+                        EventResult::ClearPlanFollowup { session_id } => {
+                            match harper_core::tools::plan::clear_plan_followup(conn, &session_id) {
+                                Ok(()) => {
+                                    if let AppState::Chat(chat_state) = &mut app.state {
+                                        if chat_state.session_id == session_id {
+                                            match harper_core::memory::storage::load_plan_state(
+                                                conn,
+                                                &session_id,
+                                            ) {
+                                                Ok(plan) => {
+                                                    chat_state.active_plan = plan;
+                                                    chat_state.refresh_plan_state();
+                                                }
+                                                Err(err) => app.set_error_message(format!(
+                                                    "Failed to reload plan: {}",
+                                                    err
+                                                )),
+                                            }
+                                        }
+                                    }
+                                    app.set_status_message("Planner followup cleared".to_string());
+                                }
+                                Err(err) => app.set_error_message(format!(
+                                    "Failed to clear planner followup: {}",
+                                    err
+                                )),
+                            }
+                        }
+                        EventResult::RequestPlanReplan {
+                            session_id,
+                            step_index,
+                            step,
+                        } => {
+                            match harper_core::tools::plan::replan_blocked_step(
+                                conn,
+                                &session_id,
+                                step_index,
+                            ) {
+                                Ok(()) => {
+                                    if let AppState::Chat(chat_state) = &mut app.state {
+                                        if chat_state.session_id == session_id {
+                                            match harper_core::memory::storage::load_plan_state(
+                                                conn,
+                                                &session_id,
+                                            ) {
+                                                Ok(plan) => {
+                                                    chat_state.active_plan = plan;
+                                                    chat_state.refresh_plan_state();
+                                                }
+                                                Err(err) => app.set_error_message(format!(
+                                                    "Failed to reload plan: {}",
+                                                    err
+                                                )),
+                                            }
+                                        }
+                                    }
+                                    app.set_status_message(format!(
+                                        "Planner replan created for: {}",
+                                        step
+                                    ));
+                                }
+                                Err(err) => {
+                                    app.set_error_message(format!("Failed to replan step: {}", err))
+                                }
                             }
                         }
                         EventResult::StartProfileLogin { provider } => {

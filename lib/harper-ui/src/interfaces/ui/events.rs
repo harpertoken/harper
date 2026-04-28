@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use arboard::{Clipboard, ImageData};
-use crossterm::event::{Event, KeyCode, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use harper_core;
+use harper_core::PlanStepStatus;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -22,7 +23,7 @@ use uuid::Uuid;
 
 // Keyboard shortcut constants
 const HELP_MESSAGE: &str =
-    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | D/Delete:Remove Session | X:Exit | W:Web | B:Sidebar | A:Agents | F:Findings | P:Jobs | M:Msgs | C:ID";
+    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | D/Delete:Remove Session | X:Exit | W:Web | B:Sidebar | A:Agents | F:Findings | Ctrl+S:Plan | R:Retry | U:Replan | K:Ack | P:Jobs | M:Msgs | C:ID";
 
 use super::app::{
     AppState, ChatState, ExecutionPolicyEditorState, ExecutionPolicyListField, NavigationFocus,
@@ -47,6 +48,26 @@ pub enum EventResult {
         provider: String,
     },
     SaveExecutionPolicy,
+    SetPlanStepStatus {
+        session_id: String,
+        step_index: usize,
+        status: PlanStepStatus,
+    },
+    ClearPlan {
+        session_id: String,
+    },
+    RetryPlanFollowup {
+        session_id: String,
+        command: String,
+    },
+    RequestPlanReplan {
+        session_id: String,
+        step_index: usize,
+        step: String,
+    },
+    ClearPlanFollowup {
+        session_id: String,
+    },
     DeleteSession {
         session_id: String,
         remote: bool,
@@ -70,6 +91,8 @@ pub(crate) fn create_chat_state(
         active_agents,
         active_review: None,
         review_selected: 0,
+        plan_step_selected: 0,
+        plan_steps_expanded: false,
         plan_job_selected: 0,
         plan_jobs_expanded: false,
         plan_job_output_scroll: 0,
@@ -139,6 +162,97 @@ fn start_execution_policy_editor(app: &mut TuiApp, field: ExecutionPolicyListFie
         ExecutionPolicyListField::BlockedCommands => app.blocked_commands.join(", "),
     };
     app.execution_policy_editor = Some(ExecutionPolicyEditorState { field, input });
+}
+
+fn handle_plan_step_action(key: KeyEvent, app: &mut TuiApp) -> Option<EventResult> {
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        return None;
+    }
+    let AppState::Chat(chat_state) = &mut app.state else {
+        return None;
+    };
+    if !matches!(chat_state.navigation_focus, NavigationFocus::PlanSteps) {
+        return None;
+    }
+    let Some(plan) = &chat_state.active_plan else {
+        app.set_status_message("No active plan".to_string());
+        return Some(EventResult::Continue);
+    };
+    if plan.items.is_empty() {
+        app.set_status_message("No active plan".to_string());
+        return Some(EventResult::Continue);
+    }
+
+    let session_id = chat_state.session_id.clone();
+    let step_index = chat_state.plan_step_selected.min(plan.items.len() - 1);
+    match key.code {
+        KeyCode::Char('c') => Some(EventResult::SetPlanStepStatus {
+            session_id,
+            step_index,
+            status: PlanStepStatus::Completed,
+        }),
+        KeyCode::Char('i') => Some(EventResult::SetPlanStepStatus {
+            session_id,
+            step_index,
+            status: PlanStepStatus::InProgress,
+        }),
+        KeyCode::Char('b') => Some(EventResult::SetPlanStepStatus {
+            session_id,
+            step_index,
+            status: PlanStepStatus::Blocked,
+        }),
+        KeyCode::Char('r') => plan
+            .runtime
+            .as_ref()
+            .and_then(|runtime| runtime.followup.as_ref())
+            .and_then(|followup| match followup {
+                harper_core::core::plan::PlanFollowup::RetryOrReplan {
+                    command: Some(command),
+                    ..
+                } => Some(EventResult::RetryPlanFollowup {
+                    session_id,
+                    command: command.clone(),
+                }),
+                _ => None,
+            })
+            .or_else(|| {
+                app.set_status_message("No retryable planner command".to_string());
+                Some(EventResult::Continue)
+            }),
+        KeyCode::Char('u') => plan
+            .runtime
+            .as_ref()
+            .and_then(|runtime| runtime.followup.as_ref())
+            .and_then(|followup| match followup {
+                harper_core::core::plan::PlanFollowup::RetryOrReplan { step, .. } => {
+                    Some(EventResult::RequestPlanReplan {
+                        session_id,
+                        step_index,
+                        step: step.clone(),
+                    })
+                }
+                _ => None,
+            })
+            .or_else(|| {
+                app.set_status_message("No planner retry followup to replan".to_string());
+                Some(EventResult::Continue)
+            }),
+        KeyCode::Char('k') => {
+            if plan
+                .runtime
+                .as_ref()
+                .and_then(|runtime| runtime.followup.as_ref())
+                .is_some()
+            {
+                Some(EventResult::ClearPlanFollowup { session_id })
+            } else {
+                app.set_status_message("No planner followup to acknowledge".to_string());
+                Some(EventResult::Continue)
+            }
+        }
+        KeyCode::Char('x') => Some(EventResult::ClearPlan { session_id }),
+        _ => None,
+    }
 }
 
 pub fn handle_event(
@@ -228,6 +342,10 @@ pub fn handle_event(
                     }
                     _ => return EventResult::Continue,
                 }
+            }
+
+            if let Some(result) = handle_plan_step_action(key, app) {
+                return result;
             }
 
             // Handle Ctrl shortcuts first
@@ -429,6 +547,38 @@ pub fn handle_event(
                         app.next();
                         return EventResult::Continue;
                     }
+                    KeyCode::Char('s') => {
+                        let mut status_message = None;
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            if chat_state
+                                .active_plan
+                                .as_ref()
+                                .is_some_and(|plan| !plan.items.is_empty())
+                            {
+                                if !chat_state.plan_steps_expanded {
+                                    chat_state.plan_steps_expanded = true;
+                                    chat_state.set_navigation_focus(NavigationFocus::PlanSteps);
+                                    status_message = Some("Plan browser expanded".to_string());
+                                } else if matches!(
+                                    chat_state.navigation_focus,
+                                    NavigationFocus::PlanSteps
+                                ) {
+                                    chat_state.plan_steps_expanded = false;
+                                    chat_state.set_navigation_focus(NavigationFocus::Messages);
+                                    status_message = Some("Plan browser closed".to_string());
+                                } else {
+                                    chat_state.set_navigation_focus(NavigationFocus::PlanSteps);
+                                    status_message = Some("Focus on plan steps".to_string());
+                                }
+                            } else {
+                                status_message = Some("No active plan".to_string());
+                            }
+                        }
+                        if let Some(message) = status_message {
+                            app.set_status_message(message);
+                        }
+                        return EventResult::Continue;
+                    }
                     _ => {}
                 }
             }
@@ -463,6 +613,10 @@ pub fn handle_event(
                             chat_state.plan_job_output_scroll = 0;
                             chat_state.set_navigation_focus(NavigationFocus::Messages);
                             app.set_status_message("Planner jobs browser closed".to_string());
+                        } else if chat_state.plan_steps_expanded {
+                            chat_state.plan_steps_expanded = false;
+                            chat_state.set_navigation_focus(NavigationFocus::Messages);
+                            app.set_status_message("Plan browser closed".to_string());
                         } else {
                             app.state = AppState::Menu(0);
                         }
@@ -643,9 +797,12 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             1 => {
                 app.sandbox_profile = settings::next_sandbox_profile(app.sandbox_profile);
             }
-            2 => start_execution_policy_editor(app, ExecutionPolicyListField::AllowedCommands),
-            3 => start_execution_policy_editor(app, ExecutionPolicyListField::BlockedCommands),
-            4 => return EventResult::SaveExecutionPolicy,
+            2 => {
+                app.retry_max_attempts = settings::next_retry_max_attempts(app.retry_max_attempts);
+            }
+            3 => start_execution_policy_editor(app, ExecutionPolicyListField::AllowedCommands),
+            4 => start_execution_policy_editor(app, ExecutionPolicyListField::BlockedCommands),
+            5 => return EventResult::SaveExecutionPolicy,
             _ => {}
         },
         AppState::ViewSession(session_id, _, _) => {
@@ -1215,7 +1372,7 @@ mod tests {
     #[test]
     fn test_enter_execution_policy_save_returns_async_event() {
         let mut app = TuiApp::new();
-        app.state = AppState::ExecutionPolicy(4);
+        app.state = AppState::ExecutionPolicy(5);
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
         let session_service = SessionService::new(&conn);
@@ -1232,7 +1389,7 @@ mod tests {
     fn test_enter_execution_policy_allowed_commands_opens_editor() {
         let mut app = TuiApp::new();
         app.allowed_commands = vec!["git".to_string()];
-        app.state = AppState::ExecutionPolicy(2);
+        app.state = AppState::ExecutionPolicy(3);
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
         let session_service = SessionService::new(&conn);
@@ -1249,7 +1406,7 @@ mod tests {
     #[test]
     fn test_execution_policy_editor_commits_command_list() {
         let mut app = TuiApp::new();
-        app.state = AppState::ExecutionPolicy(2);
+        app.state = AppState::ExecutionPolicy(3);
         app.execution_policy_editor = Some(super::ExecutionPolicyEditorState {
             field: super::ExecutionPolicyListField::AllowedCommands,
             input: "git, ls, cargo".to_string(),
@@ -1266,6 +1423,218 @@ mod tests {
         assert!(matches!(result, EventResult::Continue));
         assert_eq!(app.allowed_commands, vec!["git", "ls", "cargo"]);
         assert!(app.execution_policy_editor.is_none());
+    }
+
+    #[test]
+    fn test_enter_execution_policy_retry_attempts_cycles_value() {
+        let mut app = TuiApp::new();
+        app.retry_max_attempts = 1;
+        app.state = AppState::ExecutionPolicy(2);
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        assert_eq!(app.retry_max_attempts, 2);
+    }
+
+    #[test]
+    fn ctrl_s_opens_plan_steps_browser() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Chat(Box::new(create_chat_state(
+            "session".to_string(),
+            vec![],
+            Some(harper_core::PlanState {
+                explanation: None,
+                items: vec![harper_core::PlanItem {
+                    step: "First".to_string(),
+                    status: harper_core::PlanStepStatus::Pending,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            }),
+            None,
+        )));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert!(chat_state.plan_steps_expanded);
+        assert!(matches!(
+            chat_state.navigation_focus,
+            NavigationFocus::PlanSteps
+        ));
+    }
+
+    #[test]
+    fn plan_steps_focus_complete_shortcut_returns_status_update() {
+        let mut app = TuiApp::new();
+        let mut chat_state = create_chat_state(
+            "session".to_string(),
+            vec![],
+            Some(harper_core::PlanState {
+                explanation: None,
+                items: vec![harper_core::PlanItem {
+                    step: "First".to_string(),
+                    status: harper_core::PlanStepStatus::Pending,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            }),
+            None,
+        );
+        chat_state.plan_steps_expanded = true;
+        chat_state.set_navigation_focus(NavigationFocus::PlanSteps);
+        app.state = AppState::Chat(Box::new(chat_state));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Char('c').into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(
+            result,
+            EventResult::SetPlanStepStatus {
+                step_index: 0,
+                status: harper_core::PlanStepStatus::Completed,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn plan_steps_focus_retry_shortcut_returns_retry_event() {
+        let mut app = TuiApp::new();
+        let mut runtime = harper_core::core::plan::PlanRuntime::default();
+        runtime
+            .set_retry_or_replan_followup("Retry failing command", Some("cargo test".to_string()));
+        let mut chat_state = create_chat_state(
+            "session".to_string(),
+            vec![],
+            Some(harper_core::PlanState {
+                explanation: None,
+                items: vec![harper_core::PlanItem {
+                    step: "Retry failing command".to_string(),
+                    status: harper_core::PlanStepStatus::Blocked,
+                    job_id: None,
+                }],
+                runtime: Some(runtime),
+                updated_at: None,
+            }),
+            None,
+        );
+        chat_state.plan_steps_expanded = true;
+        chat_state.set_navigation_focus(NavigationFocus::PlanSteps);
+        app.state = AppState::Chat(Box::new(chat_state));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Char('r').into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(
+            result,
+            EventResult::RetryPlanFollowup {
+                command,
+                ..
+            } if command == "cargo test"
+        ));
+    }
+
+    #[test]
+    fn plan_steps_focus_ack_shortcut_returns_followup_clear() {
+        let mut app = TuiApp::new();
+        let mut runtime = harper_core::core::plan::PlanRuntime::default();
+        runtime.set_checkpoint_followup("Inspect output", Some("Patch".to_string()));
+        let mut chat_state = create_chat_state(
+            "session".to_string(),
+            vec![],
+            Some(harper_core::PlanState {
+                explanation: None,
+                items: vec![harper_core::PlanItem {
+                    step: "Inspect output".to_string(),
+                    status: harper_core::PlanStepStatus::InProgress,
+                    job_id: None,
+                }],
+                runtime: Some(runtime),
+                updated_at: None,
+            }),
+            None,
+        );
+        chat_state.plan_steps_expanded = true;
+        chat_state.set_navigation_focus(NavigationFocus::PlanSteps);
+        app.state = AppState::Chat(Box::new(chat_state));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Char('k').into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::ClearPlanFollowup { .. }));
+    }
+
+    #[test]
+    fn plan_steps_focus_replan_shortcut_returns_structured_event() {
+        let mut app = TuiApp::new();
+        let mut runtime = harper_core::core::plan::PlanRuntime::default();
+        runtime
+            .set_retry_or_replan_followup("Retry failing command", Some("cargo test".to_string()));
+        let mut chat_state = create_chat_state(
+            "session".to_string(),
+            vec![],
+            Some(harper_core::PlanState {
+                explanation: None,
+                items: vec![harper_core::PlanItem {
+                    step: "Retry failing command".to_string(),
+                    status: harper_core::PlanStepStatus::Blocked,
+                    job_id: None,
+                }],
+                runtime: Some(runtime),
+                updated_at: None,
+            }),
+            None,
+        );
+        chat_state.plan_steps_expanded = true;
+        chat_state.set_navigation_focus(NavigationFocus::PlanSteps);
+        app.state = AppState::Chat(Box::new(chat_state));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Char('u').into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(
+            result,
+            EventResult::RequestPlanReplan { step_index: 0, step, .. } if step == "Retry failing command"
+        ));
     }
 
     #[test]

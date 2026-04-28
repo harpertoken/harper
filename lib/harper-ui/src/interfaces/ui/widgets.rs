@@ -21,7 +21,7 @@ use super::app::{
 };
 use super::settings;
 use super::theme::Theme;
-use harper_core::core::plan::{PlanJobRecord, PlanJobStatus};
+use harper_core::core::plan::{PlanFollowup, PlanJobRecord, PlanJobStatus};
 use harper_core::{PlanRuntime, PlanState, PlanStepStatus, ResolvedAgents};
 
 // Refined shortcuts for a cleaner footer
@@ -296,11 +296,18 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                     draw_plan_panel(
                         frame,
                         plan,
+                        chat_state.plan_step_selected,
                         chat_state.plan_job_selected,
-                        matches!(
-                            chat_state.navigation_focus,
-                            super::app::NavigationFocus::PlanJobs
-                        ),
+                        PlanPanelFocus {
+                            focused_steps: matches!(
+                                chat_state.navigation_focus,
+                                super::app::NavigationFocus::PlanSteps
+                            ),
+                            focused_jobs: matches!(
+                                chat_state.navigation_focus,
+                                super::app::NavigationFocus::PlanJobs
+                            ),
+                        },
                         theme,
                         chunks[next_panel_index],
                     );
@@ -378,6 +385,9 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     }
 
     if let AppState::Chat(chat_state) = &app.state {
+        if chat_state.plan_steps_expanded {
+            draw_plan_steps_browser(frame, chat_state, theme);
+        }
         if chat_state.plan_jobs_expanded {
             draw_plan_jobs_browser(frame, chat_state, theme);
         }
@@ -626,6 +636,9 @@ fn plan_panel_height(plan: &PlanState) -> u16 {
         lines += 1;
     }
     if let Some(runtime) = &plan.runtime {
+        if runtime.followup.is_some() {
+            lines += 2;
+        }
         lines += runtime.jobs.len().min(3);
         if runtime.jobs.len() > 3 {
             lines += 1;
@@ -765,8 +778,9 @@ fn draw_review_panel(
 fn draw_plan_panel(
     frame: &mut Frame,
     plan: &PlanState,
+    selected_step: usize,
     selected_job: usize,
-    focused: bool,
+    focus: PlanPanelFocus,
     theme: &Theme,
     area: Rect,
 ) {
@@ -786,7 +800,13 @@ fn draw_plan_panel(
         ));
     }
     if let Some(runtime) = &plan.runtime {
-        lines.extend(plan_job_lines(runtime, selected_job, focused, theme));
+        lines.extend(plan_followup_lines(runtime, theme));
+        lines.extend(plan_job_lines(
+            runtime,
+            selected_job,
+            focus.focused_jobs,
+            theme,
+        ));
         if let Some(selected) = runtime
             .jobs
             .get(selected_job.min(runtime.jobs.len().saturating_sub(1)))
@@ -819,17 +839,32 @@ fn draw_plan_panel(
         }
     }
 
-    for item in plan.items.iter().take(4) {
+    let step_window_start = selected_step
+        .saturating_sub(1)
+        .min(plan.items.len().saturating_sub(4));
+    let step_window_end = (step_window_start + 4).min(plan.items.len());
+    for (offset, item) in plan.items[step_window_start..step_window_end]
+        .iter()
+        .enumerate()
+    {
+        let is_selected = focus.focused_steps && step_window_start + offset == selected_step;
         let (marker, color) = match item.status {
             PlanStepStatus::Pending => ("○", theme.muted),
             PlanStepStatus::InProgress => ("◐", theme.accent),
             PlanStepStatus::Completed => ("●", theme.output),
             PlanStepStatus::Blocked => ("■", Color::Rgb(245, 158, 11)),
         };
+        let text_style = if is_selected {
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme.foreground)
+        };
         lines.push(Line::from(vec![
             Span::styled(marker, Style::default().fg(color)),
             Span::raw(" "),
-            Span::styled(item.step.as_str(), Style::default().fg(theme.foreground)),
+            Span::styled(item.step.as_str(), text_style),
         ]));
     }
 
@@ -840,10 +875,12 @@ fn draw_plan_panel(
         ));
     }
 
-    let title = if focused {
-        " Plan (focused • Y/V or ↑/↓) "
+    let title = if focus.focused_steps {
+        " Plan (Ctrl+S • C complete • I in-progress • B blocked • R retry • U replan • K ack • X clear) "
+    } else if focus.focused_jobs {
+        " Plan (jobs focused • Y/V or ↑/↓) "
     } else {
-        " Plan (Ctrl+P jobs) "
+        " Plan (Ctrl+S steps • P jobs) "
     };
     let block = Block::default()
         .title(title)
@@ -852,6 +889,12 @@ fn draw_plan_panel(
         .padding(Padding::horizontal(1));
     let widget = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
     frame.render_widget(widget, area);
+}
+
+#[derive(Clone, Copy)]
+struct PlanPanelFocus {
+    focused_steps: bool,
+    focused_jobs: bool,
 }
 
 fn agents_panel_height(agents: &ResolvedAgents, expanded: bool) -> u16 {
@@ -1005,6 +1048,45 @@ fn format_plan_runtime(runtime: &PlanRuntime) -> String {
         .or(runtime.active_tool.as_deref())
         .unwrap_or("task");
     format!("{}: {}", status, target)
+}
+
+fn plan_followup_lines(runtime: &PlanRuntime, theme: &Theme) -> Vec<Line<'static>> {
+    let Some(followup) = runtime.followup.as_ref() else {
+        return vec![];
+    };
+
+    match followup {
+        PlanFollowup::Checkpoint { step, next_step } => {
+            let mut lines = vec![Line::styled(
+                format!("checkpoint: {}", truncate_chat_summary(step, 72)),
+                theme.muted_style().add_modifier(Modifier::ITALIC),
+            )];
+            if let Some(next_step) = next_step {
+                lines.push(Line::styled(
+                    format!("  next: {}", truncate_chat_summary(next_step, 72)),
+                    theme.muted_style(),
+                ));
+            }
+            lines
+        }
+        PlanFollowup::RetryOrReplan {
+            step,
+            command,
+            retry_count,
+        } => vec![
+            Line::styled(
+                format!("retry {}: {}", retry_count, truncate_chat_summary(step, 72)),
+                Style::default().fg(Color::Rgb(245, 158, 11)),
+            ),
+            Line::styled(
+                format!(
+                    "  command: {}",
+                    truncate_chat_summary(command.as_deref().unwrap_or(step), 72)
+                ),
+                theme.muted_style(),
+            ),
+        ],
+    }
 }
 
 fn plan_job_lines(
@@ -1516,6 +1598,7 @@ fn draw_execution_policy(
             "Sandbox Profile: {}",
             settings::sandbox_profile_name(app.sandbox_profile)
         ),
+        format!("Retry Attempts: {}", app.retry_max_attempts),
         format!("Allowed Commands: {allowed}"),
         format!("Blocked Commands: {blocked}"),
         "Save and Apply".to_string(),
@@ -1552,6 +1635,10 @@ fn draw_execution_policy(
             "Allowed/blocked command lists are comma-separated and refine the selected approval profile.",
             theme.muted_style(),
         ),
+        Line::styled(
+            "Retry attempts bound autonomous retry before the planner stops and requires replanning.",
+            theme.muted_style(),
+        ),
     ])
     .block(Block::default().padding(Padding::uniform(1)))
     .wrap(Wrap { trim: true });
@@ -1564,7 +1651,7 @@ fn draw_execution_policy(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(9),
+            Constraint::Length(11),
             Constraint::Min(8),
             Constraint::Length(editor_height),
         ])
@@ -1883,6 +1970,165 @@ fn draw_plan_jobs_browser(frame: &mut Frame, chat_state: &super::app::ChatState,
     frame.render_widget(detail, chunks[2]);
 }
 
+fn draw_plan_steps_browser(frame: &mut Frame, chat_state: &super::app::ChatState, theme: &Theme) {
+    let Some(plan) = &chat_state.active_plan else {
+        return;
+    };
+    if plan.items.is_empty() {
+        return;
+    }
+
+    let selected_index = chat_state
+        .plan_step_selected
+        .min(plan.items.len().saturating_sub(1));
+    let overlay_area = centered_rect(80, 70, frame.area());
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(8),
+            Constraint::Length(4),
+        ])
+        .split(overlay_area);
+
+    frame.render_widget(Clear, overlay_area);
+
+    let title = Paragraph::new(
+        "Plan Steps • Esc close • Y/V select • C complete • I in-progress • B blocked • R retry • U replan • K ack • X clear",
+    )
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(theme.muted_style())
+            .style(Style::default().bg(theme.background)),
+    )
+    .style(Style::default().fg(theme.foreground));
+    frame.render_widget(title, chunks[0]);
+
+    let items: Vec<ListItem> = plan
+        .items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let (marker, color) = match item.status {
+                PlanStepStatus::Pending => ("○", theme.muted),
+                PlanStepStatus::InProgress => ("◐", theme.accent),
+                PlanStepStatus::Completed => ("●", theme.output),
+                PlanStepStatus::Blocked => ("■", Color::Rgb(245, 158, 11)),
+            };
+            let text_style = if index == selected_index {
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.foreground)
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(marker, Style::default().fg(color)),
+                Span::raw(" "),
+                Span::styled(item.step.clone(), text_style),
+            ]))
+        })
+        .collect();
+    frame.render_widget(
+        List::new(items).block(
+            Block::default()
+                .title(" Steps ")
+                .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+                .border_style(theme.muted_style())
+                .style(Style::default().bg(theme.background))
+                .padding(Padding::horizontal(1)),
+        ),
+        chunks[1],
+    );
+
+    let selected = &plan.items[selected_index];
+    let detail = Paragraph::new(
+        vec![
+            Line::styled(
+                format!("status: {}", plan_step_status_label(selected.status)),
+                theme.muted_style(),
+            ),
+            Line::styled(
+                selected.step.as_str(),
+                Style::default().fg(theme.foreground),
+            ),
+        ]
+        .into_iter()
+        .chain(selected_step_followup_lines(
+            plan.runtime.as_ref(),
+            selected.step.as_str(),
+            theme,
+        ))
+        .collect::<Vec<_>>(),
+    )
+    .block(
+        Block::default()
+            .title(" Selected Step ")
+            .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+            .border_style(theme.muted_style())
+            .style(Style::default().bg(theme.background))
+            .padding(Padding::horizontal(1)),
+    )
+    .wrap(Wrap { trim: true });
+    frame.render_widget(detail, chunks[2]);
+}
+
+fn selected_step_followup_lines(
+    runtime: Option<&PlanRuntime>,
+    step: &str,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
+    let Some(runtime) = runtime else {
+        return vec![];
+    };
+    let Some(followup) = runtime.followup.as_ref() else {
+        return vec![];
+    };
+    match followup {
+        PlanFollowup::Checkpoint {
+            step: followup_step,
+            next_step,
+        } if followup_step == step => {
+            let mut lines = vec![Line::styled("checkpoint pending", theme.muted_style())];
+            if let Some(next_step) = next_step {
+                lines.push(Line::styled(
+                    format!("next step: {}", truncate_chat_summary(next_step, 72)),
+                    theme.muted_style(),
+                ));
+            }
+            lines
+        }
+        PlanFollowup::RetryOrReplan {
+            step: followup_step,
+            command,
+            retry_count,
+        } if followup_step == step => vec![
+            Line::styled(
+                format!("retry count: {}", retry_count),
+                Style::default().fg(Color::Rgb(245, 158, 11)),
+            ),
+            Line::styled(
+                format!(
+                    "command: {}",
+                    truncate_chat_summary(command.as_deref().unwrap_or(step), 72)
+                ),
+                theme.muted_style(),
+            ),
+        ],
+        _ => vec![],
+    }
+}
+
+fn plan_step_status_label(status: PlanStepStatus) -> &'static str {
+    match status {
+        PlanStepStatus::Pending => "pending",
+        PlanStepStatus::InProgress => "in_progress",
+        PlanStepStatus::Completed => "completed",
+        PlanStepStatus::Blocked => "blocked",
+    }
+}
+
 fn plan_job_transcript_lines(job: &PlanJobRecord, theme: &Theme) -> Vec<Line<'static>> {
     let transcript = if job.output_transcript.trim().is_empty() {
         "No output recorded yet".to_string()
@@ -1960,6 +2206,7 @@ mod tests {
                         has_error_output: false,
                     },
                 ],
+                followup: None,
             }),
             updated_at: None,
         };
@@ -2012,6 +2259,7 @@ mod tests {
                     has_error_output: false,
                 },
             ],
+            followup: None,
         };
 
         let lines = plan_job_lines(&runtime, 0, true, &Theme::default());
@@ -2062,5 +2310,41 @@ mod tests {
         assert_eq!(transcript_lines[0].to_string(), "line one");
         assert_eq!(transcript_lines[2].to_string(), "line three");
         assert_eq!(placeholder_lines[0].to_string(), "No output recorded yet");
+    }
+
+    #[test]
+    fn plan_followup_lines_render_retry_metadata() {
+        let runtime = PlanRuntime {
+            followup: Some(PlanFollowup::RetryOrReplan {
+                step: "Patch handler".to_string(),
+                command: Some("cargo test".to_string()),
+                retry_count: 2,
+            }),
+            ..Default::default()
+        };
+
+        let lines = plan_followup_lines(&runtime, &Theme::default());
+
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].to_string().contains("retry 2: Patch handler"));
+        assert!(lines[1].to_string().contains("command: cargo test"));
+    }
+
+    #[test]
+    fn selected_step_followup_lines_render_checkpoint_metadata() {
+        let runtime = PlanRuntime {
+            followup: Some(PlanFollowup::Checkpoint {
+                step: "Inspect server file".to_string(),
+                next_step: Some("Patch handler".to_string()),
+            }),
+            ..Default::default()
+        };
+
+        let lines =
+            selected_step_followup_lines(Some(&runtime), "Inspect server file", &Theme::default());
+
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].to_string().contains("checkpoint pending"));
+        assert!(lines[1].to_string().contains("next step: Patch handler"));
     }
 }

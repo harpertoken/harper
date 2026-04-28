@@ -58,7 +58,7 @@ This guide helps you resolve common issues you might encounter while using Harpe
 **Symptom**: Responses take a long time to appear.
 
 **Solutions**:
-1. Try a faster model (e.g., gpt-3.5-turbo instead of gpt-4)
+1. Try a smaller or faster configured model instead of `gpt-5.5`
 2. Reduce max_tokens setting
 3. Check your network latency
 4. Close other bandwidth-intensive applications

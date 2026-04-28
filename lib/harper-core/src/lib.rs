@@ -76,7 +76,7 @@ mod tests {
             provider: ApiProvider::OpenAI,
             api_key: "test-key".to_string(),
             base_url: "https://api.openai.com/v1/chat/completions".to_string(),
-            model_name: "gpt-4".to_string(),
+            model_name: "gpt-5.5".to_string(),
         }
     }
 
@@ -100,13 +100,13 @@ mod tests {
             provider: ApiProvider::OpenAI,
             api_key: "test-key".to_string(),
             base_url: "https://api.openai.com/v1/chat/completions".to_string(),
-            model_name: "gpt-4".to_string(),
+            model_name: "gpt-5.5".to_string(),
         };
 
         assert!(matches!(config.provider, ApiProvider::OpenAI));
         assert_eq!(config.api_key, "test-key");
         assert!(config.base_url.contains("openai.com"));
-        assert_eq!(config.model_name, "gpt-4");
+        assert_eq!(config.model_name, "gpt-5.5");
     }
 
     #[test]
@@ -163,12 +163,12 @@ mod tests {
         let chat_service = ChatService::new_test(&conn, &config);
 
         let prompt = chat_service.build_system_prompt(false).await;
-        assert!(prompt.contains("gpt-4"));
+        assert!(prompt.contains("gpt-5.5"));
         assert!(prompt.contains("run_command"));
         assert!(!prompt.contains("SEARCH:"));
 
         let prompt = chat_service.build_system_prompt(true).await;
-        assert!(prompt.contains("gpt-4"));
+        assert!(prompt.contains("gpt-5.5"));
         assert!(prompt.contains("run_command"));
         assert!(prompt.contains("SEARCH:"));
         Ok(())

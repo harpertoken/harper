@@ -150,6 +150,28 @@ pub fn update_active_plan_job(
     })
 }
 
+pub fn record_active_plan_retry_followup(
+    conn: &Connection,
+    session_id: &str,
+    command: Option<String>,
+) -> HarperResult<()> {
+    let Some(mut plan) = crate::memory::storage::load_plan_state(conn, session_id)? else {
+        return Ok(());
+    };
+    let Some(step) = plan
+        .items
+        .iter()
+        .find(|item| matches!(item.status, PlanStepStatus::InProgress))
+        .map(|item| item.step.clone())
+    else {
+        return Ok(());
+    };
+    let mut runtime = plan.runtime.unwrap_or_default();
+    runtime.set_retry_or_replan_followup(step, command);
+    plan.runtime = (!runtime.is_empty()).then_some(runtime);
+    crate::memory::storage::save_plan_state(conn, session_id, &plan)
+}
+
 pub fn finish_active_plan_job(
     conn: &Connection,
     session_id: &str,
@@ -181,20 +203,41 @@ pub fn finish_active_plan_job_with_output(
             .iter()
             .position(|item| item.job_id.as_deref() == Some(active_job_id.as_str()))
         {
+            let step_text = plan.items[item_index].step.clone();
+            let job_command = runtime
+                .jobs
+                .iter()
+                .rev()
+                .find(|job| job.job_id == active_job_id)
+                .and_then(|job| job.command.clone())
+                .or_else(|| {
+                    runtime
+                        .jobs
+                        .iter()
+                        .rev()
+                        .find(|job| job.job_id == active_job_id)
+                        .map(|job| job.tool.clone())
+                });
             plan.items[item_index].job_id = None;
             match status {
                 PlanJobStatus::Succeeded => {
                     plan.items[item_index].status = PlanStepStatus::Completed;
-                    if let Some(next_pending) = plan
+                    let next_step = if let Some(next_pending) = plan
                         .items
                         .iter_mut()
                         .find(|item| matches!(item.status, PlanStepStatus::Pending))
                     {
+                        let next_step = next_pending.step.clone();
                         next_pending.status = PlanStepStatus::InProgress;
-                    }
+                        Some(next_step)
+                    } else {
+                        None
+                    };
+                    runtime.set_checkpoint_followup(step_text, next_step);
                 }
                 PlanJobStatus::Blocked | PlanJobStatus::Failed => {
                     plan.items[item_index].status = PlanStepStatus::Blocked;
+                    runtime.set_retry_or_replan_followup(step_text, job_command);
                 }
                 PlanJobStatus::WaitingApproval | PlanJobStatus::Running => {}
             }
@@ -220,6 +263,109 @@ pub fn append_active_plan_job_output(
     update_plan_runtime(conn, session_id, |runtime| {
         runtime.append_active_job_output(chunk, is_error);
     })
+}
+
+pub fn set_plan_step_status(
+    conn: &Connection,
+    session_id: &str,
+    step_index: usize,
+    status: PlanStepStatus,
+) -> HarperResult<()> {
+    let Some(mut plan) = crate::memory::storage::load_plan_state(conn, session_id)? else {
+        return Ok(());
+    };
+    if step_index >= plan.items.len() {
+        return Err(HarperError::Validation(format!(
+            "plan step index {} is out of bounds",
+            step_index
+        )));
+    }
+
+    if matches!(status, PlanStepStatus::InProgress) {
+        for (index, item) in plan.items.iter_mut().enumerate() {
+            if index != step_index && matches!(item.status, PlanStepStatus::InProgress) {
+                item.status = PlanStepStatus::Pending;
+                item.job_id = None;
+            }
+        }
+    }
+
+    let item = &mut plan.items[step_index];
+    item.status = status;
+    item.job_id = None;
+
+    crate::memory::storage::save_plan_state(conn, session_id, &plan)
+}
+
+pub fn clear_plan_state(conn: &Connection, session_id: &str) -> HarperResult<()> {
+    crate::memory::storage::delete_plan_state(conn, session_id)
+}
+
+pub fn clear_plan_followup(conn: &Connection, session_id: &str) -> HarperResult<()> {
+    let Some(mut plan) = crate::memory::storage::load_plan_state(conn, session_id)? else {
+        return Ok(());
+    };
+    let Some(runtime) = plan.runtime.as_mut() else {
+        return Ok(());
+    };
+    runtime.clear_followup();
+    if runtime.is_empty() {
+        plan.runtime = None;
+    }
+    crate::memory::storage::save_plan_state(conn, session_id, &plan)
+}
+
+pub fn replan_blocked_step(
+    conn: &Connection,
+    session_id: &str,
+    step_index: usize,
+) -> HarperResult<()> {
+    let Some(mut plan) = crate::memory::storage::load_plan_state(conn, session_id)? else {
+        return Ok(());
+    };
+    if step_index >= plan.items.len() {
+        return Err(HarperError::Validation(format!(
+            "plan step index {} is out of bounds",
+            step_index
+        )));
+    }
+
+    let original_step = plan.items[step_index].step.clone();
+    for item in &mut plan.items {
+        if matches!(item.status, PlanStepStatus::InProgress) {
+            item.status = PlanStepStatus::Pending;
+            item.job_id = None;
+        }
+    }
+
+    plan.items[step_index] = PlanItem {
+        step: format!("Revise approach for blocked step: {}", original_step),
+        status: PlanStepStatus::InProgress,
+        job_id: None,
+    };
+    plan.items.insert(
+        step_index + 1,
+        PlanItem {
+            step: format!("Validate revised approach for: {}", original_step),
+            status: PlanStepStatus::Pending,
+            job_id: None,
+        },
+    );
+
+    let note = format!("Planner replan generated after blocker: {}", original_step);
+    plan.explanation = match plan.explanation.take() {
+        Some(existing) if !existing.trim().is_empty() => Some(format!("{} {}", existing, note)),
+        _ => Some(note),
+    };
+    if let Some(runtime) = plan.runtime.as_mut() {
+        runtime.clear_followup();
+        runtime.clear_active_state();
+        if runtime.is_empty() {
+            plan.runtime = None;
+        }
+    }
+
+    crate::memory::storage::save_plan_state(conn, session_id, &plan)
 }
 
 fn update_plan_runtime<F>(conn: &Connection, session_id: &str, mutator: F) -> HarperResult<()>
@@ -257,8 +403,9 @@ fn parse_status(value: Option<&serde_json::Value>) -> HarperResult<PlanStepStatu
 #[cfg(test)]
 mod tests {
     use super::{
-        append_active_plan_job_output, finish_active_plan_job, finish_active_plan_job_with_output,
-        start_plan_job,
+        append_active_plan_job_output, clear_plan_followup, clear_plan_state,
+        finish_active_plan_job, finish_active_plan_job_with_output, replan_blocked_step,
+        set_plan_step_status, start_plan_job,
     };
     use crate::core::plan::{PlanItem, PlanJobStatus, PlanState, PlanStepStatus};
     use rusqlite::Connection;
@@ -353,6 +500,10 @@ mod tests {
             .runtime
             .as_ref()
             .is_some_and(|rt| rt.active_job_id.is_none()));
+        assert!(matches!(
+            plan.runtime.as_ref().and_then(|rt| rt.followup.as_ref()),
+            Some(crate::core::plan::PlanFollowup::Checkpoint { .. })
+        ));
     }
 
     #[test]
@@ -391,6 +542,10 @@ mod tests {
             .expect("plan present");
         assert_eq!(plan.items[0].status, PlanStepStatus::Blocked);
         assert!(plan.items[0].job_id.is_none());
+        assert!(matches!(
+            plan.runtime.as_ref().and_then(|rt| rt.followup.as_ref()),
+            Some(crate::core::plan::PlanFollowup::RetryOrReplan { retry_count: 1, .. })
+        ));
     }
 
     #[test]
@@ -483,5 +638,153 @@ mod tests {
         assert_eq!(job.output_transcript, "line one\nline two\n");
         assert_eq!(job.output_preview.as_deref(), Some("line one\nline two"));
         assert!(job.has_error_output);
+    }
+
+    #[test]
+    fn set_plan_step_status_promotes_selected_step_to_in_progress() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "plan-edit-session",
+            &PlanState {
+                explanation: None,
+                items: vec![
+                    PlanItem {
+                        step: "First".to_string(),
+                        status: PlanStepStatus::InProgress,
+                        job_id: Some("job-1".to_string()),
+                    },
+                    PlanItem {
+                        step: "Second".to_string(),
+                        status: PlanStepStatus::Pending,
+                        job_id: None,
+                    },
+                ],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        set_plan_step_status(&conn, "plan-edit-session", 1, PlanStepStatus::InProgress)
+            .expect("set status");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "plan-edit-session")
+            .expect("load plan")
+            .expect("plan exists");
+        assert_eq!(plan.items[0].status, PlanStepStatus::Pending);
+        assert_eq!(plan.items[0].job_id, None);
+        assert_eq!(plan.items[1].status, PlanStepStatus::InProgress);
+    }
+
+    #[test]
+    fn clear_plan_state_removes_saved_plan() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "plan-clear-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "First".to_string(),
+                    status: PlanStepStatus::Pending,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        clear_plan_state(&conn, "plan-clear-session").expect("clear plan");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "plan-clear-session")
+            .expect("load plan");
+        assert!(plan.is_none());
+    }
+
+    #[test]
+    fn clear_plan_followup_keeps_plan_items() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "plan-followup-clear-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "Inspect".to_string(),
+                    status: PlanStepStatus::InProgress,
+                    job_id: None,
+                }],
+                runtime: Some({
+                    let mut runtime = crate::core::plan::PlanRuntime::default();
+                    runtime.set_checkpoint_followup("Inspect", Some("Patch".to_string()));
+                    runtime
+                }),
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        clear_plan_followup(&conn, "plan-followup-clear-session").expect("clear followup");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "plan-followup-clear-session")
+            .expect("load plan")
+            .expect("plan present");
+        assert_eq!(plan.items.len(), 1);
+        assert!(plan
+            .runtime
+            .as_ref()
+            .is_none_or(|runtime| runtime.followup.is_none()));
+    }
+
+    #[test]
+    fn replan_blocked_step_rewrites_plan_deterministically() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "plan-replan-session",
+            &PlanState {
+                explanation: Some("Original plan".to_string()),
+                items: vec![PlanItem {
+                    step: "Patch failing handler".to_string(),
+                    status: PlanStepStatus::Blocked,
+                    job_id: None,
+                }],
+                runtime: Some({
+                    let mut runtime = crate::core::plan::PlanRuntime::default();
+                    runtime.set_retry_or_replan_followup(
+                        "Patch failing handler",
+                        Some("cargo test".to_string()),
+                    );
+                    runtime
+                }),
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        replan_blocked_step(&conn, "plan-replan-session", 0).expect("replan step");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "plan-replan-session")
+            .expect("load plan")
+            .expect("plan present");
+        assert_eq!(plan.items.len(), 2);
+        assert_eq!(plan.items[0].status, PlanStepStatus::InProgress);
+        assert!(plan.items[0]
+            .step
+            .contains("Revise approach for blocked step: Patch failing handler"));
+        assert_eq!(plan.items[1].status, PlanStepStatus::Pending);
+        assert!(plan.items[1]
+            .step
+            .contains("Validate revised approach for: Patch failing handler"));
+        assert!(plan
+            .runtime
+            .as_ref()
+            .is_none_or(|runtime| runtime.followup.is_none()));
     }
 }

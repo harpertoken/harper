@@ -36,7 +36,7 @@ async fn test_command_logging() {
         provider: ApiProvider::OpenAI,
         api_key: "test-key".to_string(),
         base_url: "https://api.openai.com/v1".to_string(),
-        model_name: "gpt-4".to_string(),
+        model_name: "gpt-5.5".to_string(),
     };
 
     let exec_policy = ExecPolicyConfig {
@@ -45,6 +45,9 @@ async fn test_command_logging() {
         blocked_commands: None,
         sandbox_profile: None,
         sandbox: None,
+        retry_max_attempts: None,
+        retry_network_commands: None,
+        retry_write_commands: None,
     };
 
     let output = shell::execute_command(
