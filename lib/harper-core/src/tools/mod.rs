@@ -773,16 +773,15 @@ SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the
         if plan.items.is_empty() {
             return Ok(());
         }
+        let mut runtime = plan.runtime.unwrap_or_default();
+
         if plan
             .items
             .iter()
             .any(|item| matches!(item.status, crate::core::plan::PlanStepStatus::InProgress))
         {
-            plan.runtime = Some(crate::core::plan::PlanRuntime {
-                active_tool: Some(tool_name.to_string()),
-                active_command: None,
-                active_status: Some("running".to_string()),
-            });
+            runtime.set_active_tool_state(tool_name.to_string(), None, "running".to_string());
+            plan.runtime = Some(runtime);
             crate::memory::storage::save_plan_state(self.conn, session_id, &plan)?;
             return Ok(());
         }
@@ -794,11 +793,8 @@ SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the
         {
             first_pending.status = crate::core::plan::PlanStepStatus::InProgress;
         }
-        plan.runtime = Some(crate::core::plan::PlanRuntime {
-            active_tool: Some(tool_name.to_string()),
-            active_command: None,
-            active_status: Some("running".to_string()),
-        });
+        runtime.set_active_tool_state(tool_name.to_string(), None, "running".to_string());
+        plan.runtime = Some(runtime);
         crate::memory::storage::save_plan_state(self.conn, session_id, &plan)?;
 
         Ok(())
@@ -824,8 +820,11 @@ SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the
             return Ok(());
         };
         if !Self::is_safe_auto_advance_tool(&tool_name) {
-            if plan.runtime.is_some() {
-                plan.runtime = None;
+            if let Some(runtime) = plan.runtime.as_mut() {
+                runtime.clear_active_state();
+                if runtime.is_empty() {
+                    plan.runtime = None;
+                }
                 crate::memory::storage::save_plan_state(self.conn, session_id, &plan)?;
             }
             return Ok(());
@@ -833,8 +832,11 @@ SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the
 
         let step_text = plan.items[current_index].step.to_ascii_lowercase();
         if !Self::step_matches_safe_tool(&step_text, &tool_name) {
-            if plan.runtime.is_some() {
-                plan.runtime = None;
+            if let Some(runtime) = plan.runtime.as_mut() {
+                runtime.clear_active_state();
+                if runtime.is_empty() {
+                    plan.runtime = None;
+                }
                 crate::memory::storage::save_plan_state(self.conn, session_id, &plan)?;
             }
             return Ok(());
@@ -848,7 +850,12 @@ SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the
         {
             next_pending.status = crate::core::plan::PlanStepStatus::InProgress;
         }
-        plan.runtime = None;
+        if let Some(runtime) = plan.runtime.as_mut() {
+            runtime.clear_active_state();
+            if runtime.is_empty() {
+                plan.runtime = None;
+            }
+        }
         crate::memory::storage::save_plan_state(self.conn, session_id, &plan)?;
         Ok(())
     }
@@ -1059,10 +1066,12 @@ mod tests {
                     PlanItem {
                         step: "Inspect".to_string(),
                         status: PlanStepStatus::Pending,
+                        job_id: None,
                     },
                     PlanItem {
                         step: "Patch".to_string(),
                         status: PlanStepStatus::Pending,
+                        job_id: None,
                     },
                 ],
                 runtime: None,
@@ -1105,10 +1114,12 @@ mod tests {
                     PlanItem {
                         step: "Inspect server file".to_string(),
                         status: PlanStepStatus::InProgress,
+                        job_id: None,
                     },
                     PlanItem {
                         step: "Patch handler".to_string(),
                         status: PlanStepStatus::Pending,
+                        job_id: None,
                     },
                 ],
                 runtime: None,
@@ -1150,6 +1161,7 @@ mod tests {
                 items: vec![PlanItem {
                     step: "Patch handler".to_string(),
                     status: PlanStepStatus::InProgress,
+                    job_id: None,
                 }],
                 runtime: None,
                 updated_at: None,

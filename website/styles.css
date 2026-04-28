@@ -75,6 +75,22 @@ body {
 .nav a:hover,
 .nav a[aria-current="page"] { color: var(--text); }
 
+.nav a.has-update {
+    color: #c4c4c4;
+}
+
+.nav a.has-update::after {
+    content: "";
+    display: inline-block;
+    width: 0.38rem;
+    height: 0.38rem;
+    margin-left: 0.42rem;
+    margin-bottom: 0.08rem;
+    border-radius: 999px;
+    background: rgba(34, 211, 238, 0.55);
+    box-shadow: 0 0 8px rgba(34, 211, 238, 0.16);
+}
+
 /* Surface */
 .surface {
     flex: 1;

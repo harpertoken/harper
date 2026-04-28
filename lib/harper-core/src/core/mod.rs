@@ -25,6 +25,7 @@ pub mod io_traits;
 pub mod llm_client;
 pub mod models;
 pub mod plan;
+pub mod plan_events;
 
 /// Supported AI API providers
 #[derive(Debug, Clone, Copy)]

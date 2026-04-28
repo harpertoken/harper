@@ -17,15 +17,20 @@ mod auth;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::{Html, IntoResponse, Json, Redirect, Response},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        Html, IntoResponse, Json, Redirect, Response,
+    },
     routing::{delete, get, post},
     Router,
 };
 use base64::Engine;
+use futures_util::{stream, StreamExt};
 use reqwest::Client;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -33,6 +38,7 @@ use crate::agent::intent::route_intent;
 use crate::core::auth::{AuthSession, AuthenticatedUser, UserAuthProvider};
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::llm_client::call_llm;
+use crate::core::plan_events;
 use crate::core::{ApiConfig, Message};
 use crate::memory::storage::{save_message, save_session, save_session_for_user, CommandLogRecord};
 use crate::runtime::config::ExecPolicyConfig;
@@ -663,6 +669,100 @@ pub async fn get_session(
     Ok(Json(serde_json::json!(session_view)))
 }
 
+pub async fn get_session_plan(
+    State(state): State<Arc<ServerState>>,
+    headers: axum::http::HeaderMap,
+    Path(session_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let user = optional_authenticated_user_from_headers(&state, &headers)
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let plan = load_session_plan_value(&state, &session_id, user.as_ref())?;
+    Ok(Json(plan))
+}
+
+pub async fn get_session_plan_stream(
+    State(state): State<Arc<ServerState>>,
+    headers: axum::http::HeaderMap,
+    Path(session_id): Path<String>,
+) -> Result<Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>>, StatusCode> {
+    let user = optional_authenticated_user_from_headers(&state, &headers)
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let initial_payload = load_session_plan_value(&state, &session_id, user.as_ref())?;
+    let initial_json =
+        serde_json::to_string(&initial_payload).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let last_event_id = load_latest_plan_event_id(&state, &session_id)?;
+
+    let receiver = plan_events::subscribe();
+    let stream = stream::unfold(
+        (state.clone(), receiver, session_id, user, last_event_id),
+        |(state, mut receiver, session_id, user, mut last_event_id)| async move {
+            loop {
+                let sleep = tokio::time::sleep(Duration::from_millis(500));
+                tokio::pin!(sleep);
+
+                tokio::select! {
+                    recv = receiver.recv() => {
+                        match recv {
+                            Ok(update) if update.session_id == session_id => {
+                                last_event_id = Some(update.event_id);
+                                let next_json = match serde_json::to_string(&update.plan) {
+                                    Ok(json) => json,
+                                    Err(_) => return None,
+                                };
+                                let event = Event::default().event("plan").data(next_json);
+                                return Some((Ok(event), (state, receiver, session_id, user, last_event_id)));
+                            }
+                            Ok(_) => continue,
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
+                        }
+                    }
+                    _ = &mut sleep => {
+                        let latest_event_id = match load_latest_plan_event_id(&state, &session_id) {
+                            Ok(event_id) => event_id,
+                            Err(_) => return None,
+                        };
+                        if latest_event_id.is_some() && latest_event_id > last_event_id {
+                            let plan = match load_session_plan_value(&state, &session_id, user.as_ref()) {
+                                Ok(plan) => plan,
+                                Err(_) => return None,
+                            };
+                            let next_json = match serde_json::to_string(&plan) {
+                                Ok(json) => json,
+                                Err(_) => return None,
+                            };
+                            last_event_id = latest_event_id;
+                            let event = Event::default().event("plan").data(next_json);
+                            return Some((Ok(event), (state, receiver, session_id, user, last_event_id)));
+                        }
+                    }
+                }
+            }
+        },
+    );
+
+    let initial_event = stream::once(async move {
+        Ok::<Event, Infallible>(Event::default().event("plan").data(initial_json))
+    })
+    .chain(stream);
+
+    Ok(Sse::new(initial_event).keep_alive(KeepAlive::default()))
+}
+
+fn load_latest_plan_event_id(
+    state: &ServerState,
+    session_id: &str,
+) -> Result<Option<i64>, StatusCode> {
+    let conn = state
+        .conn
+        .lock()
+        .expect("Failed to lock database connection");
+    crate::memory::storage::load_latest_plan_event_id(&conn, session_id)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 pub async fn delete_session(
     State(state): State<Arc<ServerState>>,
     headers: axum::http::HeaderMap,
@@ -690,6 +790,28 @@ pub async fn delete_session(
             Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
         },
     }
+}
+
+fn load_session_plan_value(
+    state: &ServerState,
+    session_id: &str,
+    user: Option<&AuthenticatedUser>,
+) -> Result<serde_json::Value, StatusCode> {
+    let conn = state
+        .conn
+        .lock()
+        .expect("Failed to lock database connection");
+    let session_service = crate::memory::session_service::SessionService::new(&conn);
+    let session_view = match user {
+        Some(user) => session_service
+            .load_session_state_view_for_user(session_id, &user.user_id)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::NOT_FOUND)?,
+        None => session_service
+            .load_session_state_view(session_id)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    };
+    Ok(serde_json::json!(session_view.plan))
 }
 
 pub async fn chat_endpoint(
@@ -1298,6 +1420,11 @@ pub fn create_router(
         .route("/auth/logout", get(auth_logout))
         .route("/api/sessions", get(list_sessions))
         .route("/api/sessions/{id}", get(get_session))
+        .route("/api/sessions/{id}/plan", get(get_session_plan))
+        .route(
+            "/api/sessions/{id}/plan/stream",
+            get(get_session_plan_stream),
+        )
         .route("/api/sessions/{id}", delete(delete_session))
         .route("/api/chat", post(chat_endpoint))
         .route("/api/approvals/{session_id}", get(list_pending_approvals))
@@ -1838,9 +1965,10 @@ pub async fn approve_pending_tool(
 mod tests {
     use super::{
         auth_me, auth_tui_poll, build_authorize_url, delete_session, extract_json_payload,
-        get_session, list_sessions, normalize_finding_range, render_auth_status_page,
-        render_auth_success, review_code, CodeReviewFinding, CodeSuggestion, ReviewRange,
-        ReviewRequest, ServerState, SupabaseAuthConfig, TuiAuthFlowState,
+        get_session, get_session_plan, get_session_plan_stream, list_sessions,
+        normalize_finding_range, render_auth_status_page, render_auth_success, review_code,
+        CodeReviewFinding, CodeSuggestion, ReviewRange, ReviewRequest, ServerState,
+        SupabaseAuthConfig, TuiAuthFlowState,
     };
     use crate::core::auth::{AuthSession, AuthenticatedUser, UserAuthProvider};
     use crate::core::{ApiConfig, ApiProvider};
@@ -1849,6 +1977,7 @@ mod tests {
     use axum::body::to_bytes;
     use axum::extract::{Path, State};
     use axum::http::{header::AUTHORIZATION, HeaderMap, HeaderValue, StatusCode};
+    use axum::response::IntoResponse;
     use axum::Json;
     use chrono::{Duration, Utc};
     use jsonwebtoken::{encode, EncodingKey, Header};
@@ -2060,6 +2189,167 @@ mod tests {
         assert_eq!(body["session_id"], "local-session");
         assert_eq!(body["messages"].as_array().map(Vec::len), Some(1));
         assert!(body["user_id"].is_null());
+    }
+
+    #[tokio::test]
+    async fn get_session_includes_plan_runtime_jobs() {
+        let state = test_server_state(None);
+        {
+            let conn = state.conn.lock().expect("db lock");
+            save_session(&conn, "job-session").expect("save session");
+            crate::memory::storage::save_plan_state(
+                &conn,
+                "job-session",
+                &crate::core::plan::PlanState {
+                    explanation: Some("Track runtime".to_string()),
+                    items: vec![crate::core::plan::PlanItem {
+                        step: "Run command".to_string(),
+                        status: crate::core::plan::PlanStepStatus::InProgress,
+                        job_id: Some("job-1".to_string()),
+                    }],
+                    runtime: Some(crate::core::plan::PlanRuntime {
+                        active_tool: Some("run_command".to_string()),
+                        active_command: Some("echo hi".to_string()),
+                        active_status: Some("running".to_string()),
+                        active_job_id: Some("job-1".to_string()),
+                        jobs: vec![crate::core::plan::PlanJobRecord {
+                            job_id: "job-1".to_string(),
+                            tool: "run_command".to_string(),
+                            command: Some("echo hi".to_string()),
+                            status: crate::core::plan::PlanJobStatus::Running,
+                            output_transcript: "echo hi\n".to_string(),
+                            output_preview: Some("echo hi".to_string()),
+                            has_error_output: false,
+                        }],
+                    }),
+                    updated_at: None,
+                },
+            )
+            .expect("save plan state");
+        }
+
+        let response = get_session(
+            State(state),
+            HeaderMap::new(),
+            Path("job-session".to_string()),
+        )
+        .await
+        .expect("job session should be readable");
+
+        let body = response.0;
+        assert_eq!(body["plan"]["runtime"]["active_job_id"], "job-1");
+        assert_eq!(body["plan"]["items"][0]["job_id"], "job-1");
+        assert_eq!(body["plan"]["runtime"]["jobs"][0]["status"], "running");
+        assert_eq!(body["plan"]["runtime"]["jobs"][0]["command"], "echo hi");
+    }
+
+    #[tokio::test]
+    async fn get_session_plan_returns_runtime_jobs_only() {
+        let state = test_server_state(None);
+        {
+            let conn = state.conn.lock().expect("db lock");
+            save_session(&conn, "plan-session").expect("save session");
+            crate::memory::storage::save_plan_state(
+                &conn,
+                "plan-session",
+                &crate::core::plan::PlanState {
+                    explanation: Some("Track runtime".to_string()),
+                    items: vec![crate::core::plan::PlanItem {
+                        step: "Run command".to_string(),
+                        status: crate::core::plan::PlanStepStatus::InProgress,
+                        job_id: Some("job-1".to_string()),
+                    }],
+                    runtime: Some(crate::core::plan::PlanRuntime {
+                        active_tool: Some("run_command".to_string()),
+                        active_command: Some("echo hi".to_string()),
+                        active_status: Some("running".to_string()),
+                        active_job_id: Some("job-1".to_string()),
+                        jobs: vec![crate::core::plan::PlanJobRecord {
+                            job_id: "job-1".to_string(),
+                            tool: "run_command".to_string(),
+                            command: Some("echo hi".to_string()),
+                            status: crate::core::plan::PlanJobStatus::Running,
+                            output_transcript: "echo hi\n".to_string(),
+                            output_preview: Some("echo hi".to_string()),
+                            has_error_output: false,
+                        }],
+                    }),
+                    updated_at: None,
+                },
+            )
+            .expect("save plan state");
+        }
+
+        let response = get_session_plan(
+            State(state),
+            HeaderMap::new(),
+            Path("plan-session".to_string()),
+        )
+        .await
+        .expect("plan should be readable");
+
+        let body = response.0;
+        assert_eq!(body["runtime"]["active_job_id"], "job-1");
+        assert_eq!(body["runtime"]["jobs"][0]["output_preview"], "echo hi");
+        assert_eq!(body["items"][0]["job_id"], "job-1");
+    }
+
+    #[tokio::test]
+    async fn get_session_plan_stream_responds_with_sse() {
+        let state = test_server_state(None);
+        {
+            let conn = state.conn.lock().expect("db lock");
+            save_session(&conn, "plan-stream-session").expect("save session");
+            crate::memory::storage::save_plan_state(
+                &conn,
+                "plan-stream-session",
+                &crate::core::plan::PlanState {
+                    explanation: Some("Track runtime".to_string()),
+                    items: vec![crate::core::plan::PlanItem {
+                        step: "Run command".to_string(),
+                        status: crate::core::plan::PlanStepStatus::InProgress,
+                        job_id: Some("job-1".to_string()),
+                    }],
+                    runtime: Some(crate::core::plan::PlanRuntime {
+                        active_tool: Some("run_command".to_string()),
+                        active_command: Some("echo hi".to_string()),
+                        active_status: Some("running".to_string()),
+                        active_job_id: Some("job-1".to_string()),
+                        jobs: vec![crate::core::plan::PlanJobRecord {
+                            job_id: "job-1".to_string(),
+                            tool: "run_command".to_string(),
+                            command: Some("echo hi".to_string()),
+                            status: crate::core::plan::PlanJobStatus::Running,
+                            output_transcript: "echo hi\n".to_string(),
+                            output_preview: Some("echo hi".to_string()),
+                            has_error_output: false,
+                        }],
+                    }),
+                    updated_at: None,
+                },
+            )
+            .expect("save plan state");
+        }
+
+        let response = get_session_plan_stream(
+            State(state),
+            HeaderMap::new(),
+            Path("plan-stream-session".to_string()),
+        )
+        .await
+        .expect("stream should be readable")
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::CONTENT_TYPE)
+                .expect("content-type header")
+                .to_str()
+                .ok(),
+            Some("text/event-stream")
+        );
     }
 
     #[tokio::test]

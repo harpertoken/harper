@@ -1880,6 +1880,7 @@ dependencies = [
  "ctr",
  "dirs",
  "dotenvy",
+ "futures-util",
  "getrandom 0.4.2",
  "h2",
  "harper-firmware",

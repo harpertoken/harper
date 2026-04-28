@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · API Server</title>
+    <meta name="harper-update-version" content="2026-04-28-server" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -12,14 +13,14 @@
         <header class="site-header">
             <div class="brand"><img src="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" alt="" />HARPER<span>·AI</span></div>
             <nav class="nav">
-                <a href="index.html">Home</a>
-                <a href="installation.html">Install</a>
-                <a href="troubleshooting.html">Troubleshooting</a>
-                <a href="blog.html">Blog</a>
-                <a href="changelog.html">Changelog</a>
-                <a href="server.html" aria-current="page">API Server</a>
-                <a href="terms.html">Terms</a>
-                <a href="privacy.html">Privacy</a>
+                <a href="index.html" data-update-target="home">Home</a>
+                <a href="installation.html" data-update-target="install">Install</a>
+                <a href="troubleshooting.html" data-update-target="troubleshooting">Troubleshooting</a>
+                <a href="blog.html" data-update-target="blog">Blog</a>
+                <a href="changelog.html" data-update-target="changelog">Changelog</a>
+                <a href="server.html" data-update-target="server" aria-current="page">API Server</a>
+                <a href="terms.html" data-update-target="terms">Terms</a>
+                <a href="privacy.html" data-update-target="privacy">Privacy</a>
             </nav>
         </header>
 
@@ -55,6 +56,8 @@ cargo run -p harper-ui --bin harper -- --no-server</code></pre>
                     <li>GET /health - health check</li>
                     <li>GET /api/sessions - list sessions</li>
                     <li>GET /api/sessions/{id} - get session</li>
+                    <li>GET /api/sessions/{id}/plan - fetch the current planner/runtime state only</li>
+                    <li>GET /api/sessions/{id}/plan/stream - stream planner/runtime SSE updates</li>
                     <li>DELETE /api/sessions/{id} - delete</li>
                     <li>POST /api/chat - send message</li>
                     <li>POST /api/review - inline code review findings and fix suggestions</li>
@@ -107,6 +110,24 @@ curl http://127.0.0.1:8081/api/sessions</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <p>The session endpoint returns messages plus any active plan and resolved AGENTS context for that session. Session list items also include a human-readable <code>title</code> derived from the first user message when available. When Supabase auth is enabled, session list, load, and delete operations are scoped to the signed-in user.</p>
+
+                <h2>Planner runtime API</h2>
+                <p>Harper exposes planner/runtime state through a pull endpoint and a server-sent events stream. Use the pull endpoint for snapshots and the SSE endpoint when a client needs to follow running jobs incrementally.</p>
+                <div class="code-wrapper">
+                    <pre><code># Planner/runtime snapshot
+curl http://127.0.0.1:8081/api/sessions/demo-session/plan
+
+# Planner/runtime SSE stream
+curl -N http://127.0.0.1:8081/api/sessions/demo-session/plan/stream</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>The stream sends an initial <code>plan</code> event immediately, then emits new <code>plan</code> events whenever persisted planner state changes.</p>
+                <p>Delivery model:</p>
+                <ul>
+                    <li>Same-process updates are pushed through an in-memory broadcast channel for low-latency delivery.</li>
+                    <li>Cross-process updates are observed through a persisted SQLite plan event journal, so separate Harper server processes sharing the same database still converge on the same stream state.</li>
+                </ul>
+                <p>This is the current architectural boundary: cross-process delivery is journal-backed rather than powered by a separate external event bus.</p>
 
                 <h2>Auth</h2>
                 <p>Harper can use Supabase Auth for local browser or TUI sign-in. The current supported local pattern is GitHub-backed login through Supabase, with the authenticated session then available to the local API server.</p>
@@ -266,6 +287,7 @@ port = 8082</code></pre>
             <a class="button secondary" href="index.html">← Back</a>
         </footer>
     </div>
+    <script src="nav-updates.js"></script>
     <script>
         const header = document.querySelector('.site-header');
         window.addEventListener('scroll', () => {

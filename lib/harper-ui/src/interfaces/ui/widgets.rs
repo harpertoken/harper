@@ -20,10 +20,11 @@ use super::app::{
     AppState, ApprovalState, CommandOutputState, ReviewState, SessionInfo, TuiApp, UiMessage,
 };
 use super::theme::Theme;
+use harper_core::core::plan::{PlanJobRecord, PlanJobStatus};
 use harper_core::{PlanRuntime, PlanState, PlanStepStatus, ResolvedAgents};
 
 // Refined shortcuts for a cleaner footer
-const FOOTER_SHORTCUTS: [[(&str, &str); 8]; 2] = [
+const FOOTER_SHORTCUTS: [[(&str, &str); 9]; 2] = [
     [
         ("G", "Help"),
         ("W", "Search"),
@@ -33,6 +34,7 @@ const FOOTER_SHORTCUTS: [[(&str, &str); 8]; 2] = [
         ("M", "Msgs"),
         ("C", "ID"),
         ("O", "Export"),
+        ("P", "Jobs"),
     ],
     [
         ("X", "Exit"),
@@ -43,6 +45,7 @@ const FOOTER_SHORTCUTS: [[(&str, &str); 8]; 2] = [
         ("Y", "Prev"),
         ("V", "Next"),
         ("Esc", "Back"),
+        ("P", "Jobs"),
     ],
 ];
 
@@ -288,7 +291,17 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
 
             if has_plan {
                 if let Some(plan) = &chat_state.active_plan {
-                    draw_plan_panel(frame, plan, theme, chunks[next_panel_index]);
+                    draw_plan_panel(
+                        frame,
+                        plan,
+                        chat_state.plan_job_selected,
+                        matches!(
+                            chat_state.navigation_focus,
+                            super::app::NavigationFocus::PlanJobs
+                        ),
+                        theme,
+                        chunks[next_panel_index],
+                    );
                 }
                 next_panel_index += 1;
             }
@@ -355,6 +368,12 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         draw_approval(frame, approval, theme);
     }
 
+    if let AppState::Chat(chat_state) = &app.state {
+        if chat_state.plan_jobs_expanded {
+            draw_plan_jobs_browser(frame, chat_state, theme);
+        }
+    }
+
     if let Some(msg) = &app.message {
         draw_message_overlay(frame, msg, theme);
     }
@@ -388,12 +407,19 @@ fn draw_chat_summary(
                 .iter()
                 .filter(|item| matches!(item.status, PlanStepStatus::Completed))
                 .count();
+            let blocked = plan
+                .items
+                .iter()
+                .filter(|item| matches!(item.status, PlanStepStatus::Blocked))
+                .count();
             let in_progress = plan
                 .items
                 .iter()
                 .any(|item| matches!(item.status, PlanStepStatus::InProgress));
             if total == 0 {
                 "plan: empty".to_string()
+            } else if blocked > 0 {
+                format!("plan: {}/{} done, {} blocked", completed, total, blocked)
             } else if in_progress {
                 format!("plan: {}/{} done, active", completed, total)
             } else {
@@ -583,8 +609,28 @@ fn plan_panel_height(plan: &PlanState) -> u16 {
     if plan.explanation.is_some() {
         lines += 1;
     }
-    if plan.runtime.is_some() {
+    if plan
+        .runtime
+        .as_ref()
+        .is_some_and(PlanRuntime::has_active_state)
+    {
         lines += 1;
+    }
+    if let Some(runtime) = &plan.runtime {
+        lines += runtime.jobs.len().min(3);
+        if runtime.jobs.len() > 3 {
+            lines += 1;
+        }
+        if !runtime.jobs.is_empty() {
+            lines += 1;
+            if runtime.jobs.iter().any(|job| {
+                job.output_preview
+                    .as_ref()
+                    .is_some_and(|preview| !preview.is_empty())
+            }) {
+                lines += 2;
+            }
+        }
     }
     lines as u16
 }
@@ -707,17 +753,61 @@ fn draw_review_panel(
     frame.render_widget(widget, area);
 }
 
-fn draw_plan_panel(frame: &mut Frame, plan: &PlanState, theme: &Theme, area: Rect) {
+fn draw_plan_panel(
+    frame: &mut Frame,
+    plan: &PlanState,
+    selected_job: usize,
+    focused: bool,
+    theme: &Theme,
+    area: Rect,
+) {
     let mut lines = Vec::new();
 
     if let Some(explanation) = &plan.explanation {
         lines.push(Line::styled(explanation.as_str(), theme.muted_style()));
     }
-    if let Some(runtime) = &plan.runtime {
+    if let Some(runtime) = plan
+        .runtime
+        .as_ref()
+        .filter(|runtime| runtime.has_active_state())
+    {
         lines.push(Line::styled(
             format_plan_runtime(runtime),
             theme.muted_style().add_modifier(Modifier::ITALIC),
         ));
+    }
+    if let Some(runtime) = &plan.runtime {
+        lines.extend(plan_job_lines(runtime, selected_job, focused, theme));
+        if let Some(selected) = runtime
+            .jobs
+            .get(selected_job.min(runtime.jobs.len().saturating_sub(1)))
+        {
+            lines.push(Line::styled(
+                format!(
+                    "job {} • {}",
+                    &selected.job_id[..selected.job_id.len().min(8)],
+                    selected.tool
+                ),
+                theme.muted_style(),
+            ));
+            if let Some(preview) = selected
+                .output_preview
+                .as_ref()
+                .filter(|preview| !preview.is_empty())
+            {
+                let preview_color = if selected.has_error_output {
+                    Color::Rgb(245, 158, 11)
+                } else {
+                    theme.output
+                };
+                for line in preview.lines().take(2) {
+                    lines.push(Line::styled(
+                        format!("  {}", truncate_chat_summary(line, 88)),
+                        Style::default().fg(preview_color),
+                    ));
+                }
+            }
+        }
     }
 
     for item in plan.items.iter().take(4) {
@@ -725,6 +815,7 @@ fn draw_plan_panel(frame: &mut Frame, plan: &PlanState, theme: &Theme, area: Rec
             PlanStepStatus::Pending => ("○", theme.muted),
             PlanStepStatus::InProgress => ("◐", theme.accent),
             PlanStepStatus::Completed => ("●", theme.output),
+            PlanStepStatus::Blocked => ("■", Color::Rgb(245, 158, 11)),
         };
         lines.push(Line::from(vec![
             Span::styled(marker, Style::default().fg(color)),
@@ -740,8 +831,13 @@ fn draw_plan_panel(frame: &mut Frame, plan: &PlanState, theme: &Theme, area: Rec
         ));
     }
 
+    let title = if focused {
+        " Plan (focused • Y/V or ↑/↓) "
+    } else {
+        " Plan (Ctrl+P jobs) "
+    };
     let block = Block::default()
-        .title(" Plan ")
+        .title(title)
         .borders(Borders::TOP)
         .border_style(theme.muted_style())
         .padding(Padding::horizontal(1));
@@ -887,6 +983,70 @@ fn format_plan_runtime(runtime: &PlanRuntime) -> String {
         .or(runtime.active_tool.as_deref())
         .unwrap_or("task");
     format!("{}: {}", status, target)
+}
+
+fn plan_job_lines(
+    runtime: &PlanRuntime,
+    selected_job: usize,
+    focused: bool,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    let jobs = &runtime.jobs;
+    let selected_job = selected_job.min(jobs.len().saturating_sub(1));
+    let window_end = (selected_job + 1).max(3).min(jobs.len());
+    let window_start = window_end.saturating_sub(3);
+
+    for (index, job) in jobs
+        .iter()
+        .enumerate()
+        .skip(window_start)
+        .take(window_end.saturating_sub(window_start))
+    {
+        let (marker, color) = match job.status {
+            PlanJobStatus::WaitingApproval => ("◌", theme.muted),
+            PlanJobStatus::Running => ("◐", theme.accent),
+            PlanJobStatus::Blocked => ("■", Color::Rgb(245, 158, 11)),
+            PlanJobStatus::Succeeded => ("●", theme.output),
+            PlanJobStatus::Failed => ("✕", Color::Rgb(239, 68, 68)),
+        };
+        let is_selected = focused && index == selected_job;
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(color)),
+            Span::raw(" "),
+            Span::styled(
+                format_plan_job(job),
+                if is_selected {
+                    Style::default()
+                        .fg(theme.foreground)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    theme.muted_style().add_modifier(Modifier::ITALIC)
+                },
+            ),
+        ]));
+    }
+
+    if runtime.jobs.len() > window_end {
+        lines.push(Line::styled(
+            format!("{} more jobs", runtime.jobs.len() - window_end),
+            theme.muted_style(),
+        ));
+    }
+
+    lines
+}
+
+fn format_plan_job(job: &PlanJobRecord) -> String {
+    let target = job.command.as_deref().unwrap_or(&job.tool);
+    let status = match job.status {
+        PlanJobStatus::WaitingApproval => "waiting approval",
+        PlanJobStatus::Running => "running",
+        PlanJobStatus::Blocked => "blocked",
+        PlanJobStatus::Succeeded => "succeeded",
+        PlanJobStatus::Failed => "failed",
+    };
+    format!("{}: {}", status, truncate_chat_summary(target, 64))
 }
 
 fn draw_stats(
@@ -1306,9 +1466,95 @@ fn draw_message_overlay(frame: &mut Frame, message: &UiMessage, theme: &Theme) {
     frame.render_widget(overlay, overlay_area);
 }
 
+fn draw_plan_jobs_browser(frame: &mut Frame, chat_state: &super::app::ChatState, theme: &Theme) {
+    let Some(plan) = &chat_state.active_plan else {
+        return;
+    };
+    let Some(runtime) = &plan.runtime else {
+        return;
+    };
+    if runtime.jobs.is_empty() {
+        return;
+    }
+
+    let selected_index = chat_state
+        .plan_job_selected
+        .min(runtime.jobs.len().saturating_sub(1));
+    let selected = &runtime.jobs[selected_index];
+    let overlay_area = centered_rect(80, 70, frame.area());
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(4),
+            Constraint::Min(8),
+        ])
+        .split(overlay_area);
+
+    frame.render_widget(Clear, overlay_area);
+
+    let title = Paragraph::new(format!(
+        "Planner Jobs • job {} • {} • Esc close • Y/V select • ↑/↓ scroll",
+        &selected.job_id[..selected.job_id.len().min(8)],
+        selected.tool
+    ))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(theme.muted_style())
+            .style(Style::default().bg(theme.background)),
+    )
+    .style(Style::default().fg(theme.foreground));
+    frame.render_widget(title, chunks[0]);
+
+    let summary_lines = plan_job_lines(runtime, selected_index, true, theme);
+    let summary = Paragraph::new(summary_lines)
+        .block(
+            Block::default()
+                .title(" Recent Jobs ")
+                .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+                .border_style(theme.muted_style())
+                .style(Style::default().bg(theme.background)),
+        )
+        .wrap(Wrap { trim: true });
+    frame.render_widget(summary, chunks[1]);
+
+    let detail_lines = plan_job_transcript_lines(selected, theme);
+    let detail = Paragraph::new(detail_lines)
+        .block(
+            Block::default()
+                .title(" Output Transcript ")
+                .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+                .border_style(theme.muted_style())
+                .style(Style::default().bg(theme.background))
+                .padding(Padding::horizontal(1)),
+        )
+        .scroll((chat_state.plan_job_output_scroll as u16, 0))
+        .wrap(Wrap { trim: false });
+    frame.render_widget(detail, chunks[2]);
+}
+
+fn plan_job_transcript_lines(job: &PlanJobRecord, theme: &Theme) -> Vec<Line<'static>> {
+    let transcript = if job.output_transcript.trim().is_empty() {
+        "No output recorded yet".to_string()
+    } else {
+        job.output_transcript.clone()
+    };
+    let detail_color = if job.has_error_output {
+        Color::Rgb(245, 158, 11)
+    } else {
+        theme.output
+    };
+    transcript
+        .lines()
+        .map(|line| Line::styled(line.to_string(), Style::default().fg(detail_color)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use harper_core::PlanItem;
     use ratatui::style::Color;
 
     fn setup() -> (SyntaxSet, ThemeSet) {
@@ -1329,5 +1575,143 @@ mod tests {
             "base16-ocean.dark",
         );
         assert_eq!(spans.len(), 1);
+    }
+
+    #[test]
+    fn plan_panel_height_accounts_for_recent_jobs() {
+        let plan = PlanState {
+            explanation: Some("Track execution".to_string()),
+            items: vec![PlanItem {
+                step: "Run command".to_string(),
+                status: PlanStepStatus::InProgress,
+                job_id: None,
+            }],
+            runtime: Some(PlanRuntime {
+                active_tool: Some("run_command".to_string()),
+                active_command: Some("echo hi".to_string()),
+                active_status: Some("running".to_string()),
+                active_job_id: Some("job-1".to_string()),
+                jobs: vec![
+                    PlanJobRecord {
+                        job_id: "job-1".to_string(),
+                        tool: "run_command".to_string(),
+                        command: Some("echo hi".to_string()),
+                        status: PlanJobStatus::Running,
+                        output_transcript: "line one\nline two".to_string(),
+                        output_preview: Some("line one\nline two".to_string()),
+                        has_error_output: false,
+                    },
+                    PlanJobRecord {
+                        job_id: "job-2".to_string(),
+                        tool: "run_command".to_string(),
+                        command: Some("ls".to_string()),
+                        status: PlanJobStatus::Succeeded,
+                        output_transcript: String::new(),
+                        output_preview: None,
+                        has_error_output: false,
+                    },
+                ],
+            }),
+            updated_at: None,
+        };
+
+        assert_eq!(plan_panel_height(&plan), 10);
+    }
+
+    #[test]
+    fn plan_job_lines_show_recent_jobs_and_overflow() {
+        let runtime = PlanRuntime {
+            active_tool: None,
+            active_command: None,
+            active_status: None,
+            active_job_id: None,
+            jobs: vec![
+                PlanJobRecord {
+                    job_id: "job-1".to_string(),
+                    tool: "run_command".to_string(),
+                    command: Some("echo one".to_string()),
+                    status: PlanJobStatus::Succeeded,
+                    output_transcript: String::new(),
+                    output_preview: None,
+                    has_error_output: false,
+                },
+                PlanJobRecord {
+                    job_id: "job-2".to_string(),
+                    tool: "run_command".to_string(),
+                    command: Some("echo two".to_string()),
+                    status: PlanJobStatus::Failed,
+                    output_transcript: "boom".to_string(),
+                    output_preview: Some("boom".to_string()),
+                    has_error_output: true,
+                },
+                PlanJobRecord {
+                    job_id: "job-3".to_string(),
+                    tool: "run_command".to_string(),
+                    command: Some("echo three".to_string()),
+                    status: PlanJobStatus::Running,
+                    output_transcript: String::new(),
+                    output_preview: None,
+                    has_error_output: false,
+                },
+                PlanJobRecord {
+                    job_id: "job-4".to_string(),
+                    tool: "run_command".to_string(),
+                    command: Some("echo four".to_string()),
+                    status: PlanJobStatus::WaitingApproval,
+                    output_transcript: String::new(),
+                    output_preview: None,
+                    has_error_output: false,
+                },
+            ],
+        };
+
+        let lines = plan_job_lines(&runtime, 0, true, &Theme::default());
+
+        assert_eq!(lines.len(), 4);
+        assert!(lines[0].to_string().contains("succeeded: echo one"));
+        assert!(lines[1].to_string().contains("failed: echo two"));
+        assert!(lines[2].to_string().contains("running: echo three"));
+        assert!(lines[3].to_string().contains("1 more jobs"));
+    }
+
+    #[test]
+    fn format_plan_job_prefers_command_text() {
+        let job = PlanJobRecord {
+            job_id: "job-1".to_string(),
+            tool: "run_command".to_string(),
+            command: Some("echo hi".to_string()),
+            status: PlanJobStatus::Blocked,
+            output_transcript: String::new(),
+            output_preview: None,
+            has_error_output: false,
+        };
+
+        assert_eq!(format_plan_job(&job), "blocked: echo hi");
+    }
+
+    #[test]
+    fn plan_job_transcript_lines_use_full_transcript_and_placeholder() {
+        let theme = Theme::default();
+        let job = PlanJobRecord {
+            job_id: "job-1".to_string(),
+            tool: "run_command".to_string(),
+            command: Some("echo hi".to_string()),
+            status: PlanJobStatus::Succeeded,
+            output_transcript: "line one\nline two\nline three".to_string(),
+            output_preview: Some("line one\nline two".to_string()),
+            has_error_output: false,
+        };
+        let placeholder_job = PlanJobRecord {
+            output_transcript: String::new(),
+            ..job.clone()
+        };
+
+        let transcript_lines = plan_job_transcript_lines(&job, &theme);
+        let placeholder_lines = plan_job_transcript_lines(&placeholder_job, &theme);
+
+        assert_eq!(transcript_lines.len(), 3);
+        assert_eq!(transcript_lines[0].to_string(), "line one");
+        assert_eq!(transcript_lines[2].to_string(), "line three");
+        assert_eq!(placeholder_lines[0].to_string(), "No output recorded yet");
     }
 }
