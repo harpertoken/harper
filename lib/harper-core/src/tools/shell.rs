@@ -47,6 +47,25 @@ pub struct CommandSandboxIntent {
     pub declared_read_paths: Vec<PathBuf>,
     pub declared_write_paths: Vec<PathBuf>,
     pub requires_network: bool,
+    pub retry_policy: Option<CommandRetryPolicy>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandRetryPolicy {
+    Never,
+    Safe,
+}
+
+struct CommandAttemptResult {
+    output_text: String,
+    success: bool,
+    exit_code: Option<i32>,
+    duration_ms: i64,
+    stdout_preview: Option<String>,
+    stderr_preview: Option<String>,
+    output_preview: Option<String>,
+    has_error_output: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -58,6 +77,8 @@ struct RunCommandPayload {
     declared_write_paths: Vec<PathBuf>,
     #[serde(default)]
     requires_network: bool,
+    #[serde(default)]
+    retry_policy: Option<CommandRetryPolicy>,
 }
 
 fn parse_run_command_response(
@@ -83,6 +104,7 @@ fn parse_run_command_response(
                 declared_read_paths: parsed.declared_read_paths,
                 declared_write_paths: parsed.declared_write_paths,
                 requires_network: parsed.requires_network,
+                retry_policy: parsed.retry_policy,
             }),
         ));
     }
@@ -142,17 +164,18 @@ fn build_sandbox_request(
 
     let working_dir = std::env::current_dir().map_err(|e| HarperError::Io(e.to_string()))?;
     let rest_args: Vec<&str> = rest.iter().map(String::as_str).collect();
-    let (declared_read_paths, declared_write_paths, requires_network) = if let Some(intent) = intent
-    {
-        (
-            intent.declared_read_paths.clone(),
-            intent.declared_write_paths.clone(),
-            intent.requires_network,
-        )
-    } else {
-        let (reads, writes) = infer_path_intent(command, &rest_args);
-        (reads, writes, looks_like_network_command(command))
-    };
+    let (declared_read_paths, declared_write_paths, requires_network, _retry_policy) =
+        if let Some(intent) = intent {
+            (
+                intent.declared_read_paths.clone(),
+                intent.declared_write_paths.clone(),
+                intent.requires_network,
+                intent.retry_policy.clone(),
+            )
+        } else {
+            let (reads, writes) = infer_path_intent(command, &rest_args);
+            (reads, writes, looks_like_network_command(command), None)
+        };
 
     Ok(SandboxRequest {
         command: command.clone(),
@@ -444,6 +467,264 @@ fn approval_required_for_command(
     }
 }
 
+fn autonomous_retry_safe(
+    exec_policy: &ExecPolicyConfig,
+    command_str: &str,
+    requires_approval: bool,
+    intent: Option<&CommandSandboxIntent>,
+) -> bool {
+    if requires_approval {
+        return false;
+    }
+    let Some(intent) = intent else {
+        return true;
+    };
+    if let Some(policy) = intent.retry_policy.as_ref() {
+        return matches!(policy, CommandRetryPolicy::Safe);
+    }
+    let command = parsing::parse_quoted_args(command_str)
+        .ok()
+        .and_then(|args| args.first().cloned())
+        .map(|command| command_basename(&command).to_string())
+        .unwrap_or_else(|| command_basename(command_str).to_string());
+    let has_writes = !intent.declared_write_paths.is_empty();
+
+    if intent.requires_network {
+        return !has_writes && exec_policy.retries_network_command(&command);
+    }
+    if has_writes {
+        return writes_within_configured_writable_dirs(exec_policy, intent)
+            && exec_policy.retries_write_command(&command);
+    }
+    true
+}
+
+async fn execute_sandboxed_once(
+    sandbox: &Sandbox,
+    request: SandboxRequest,
+    runtime_events: Option<&Arc<dyn RuntimeEventSink>>,
+    audit_ctx: Option<&CommandAuditContext<'_>>,
+    command_str: &str,
+) -> crate::core::error::HarperResult<CommandAttemptResult> {
+    let (stream_tx, mut stream_rx) = mpsc::unbounded_channel::<(String, bool)>();
+    let runtime_events_clone = runtime_events.cloned();
+    let session_id_owned = audit_ctx
+        .and_then(|ctx| ctx.session_id)
+        .map(ToString::to_string);
+    let command_owned = command_str.to_string();
+    let stream_forwarder = tokio::spawn(async move {
+        while let Some((chunk, is_error)) = stream_rx.recv().await {
+            emit_command_output(
+                runtime_events_clone.as_ref(),
+                session_id_owned.as_deref(),
+                &command_owned,
+                chunk,
+                is_error,
+                false,
+            )
+            .await;
+        }
+    });
+    let start = Instant::now();
+    let result = sandbox
+        .execute_request_streaming(request, move |chunk, is_error| {
+            let _ = stream_tx.send((chunk, is_error));
+        })
+        .await?;
+    stream_forwarder
+        .await
+        .map_err(|e| HarperError::Command(format!("Sandbox output forwarding failed: {}", e)))?;
+    let duration_ms = start.elapsed().as_millis() as i64;
+    let exit_code = result.output.status.code();
+    let stdout_preview = bytes_to_preview(&result.output.stdout);
+    let stderr_preview = bytes_to_preview(&result.output.stderr);
+    let stdout_text = String::from_utf8_lossy(&result.output.stdout).into_owned();
+    let stderr_text = String::from_utf8_lossy(&result.output.stderr).into_owned();
+    let output_preview = if result.output.status.success() {
+        preview_text(&stdout_text)
+    } else if !stderr_text.trim().is_empty() {
+        preview_text(&stderr_text)
+    } else {
+        preview_text(&stdout_text)
+    };
+    let has_error_output = !result.output.status.success() || !stderr_text.trim().is_empty();
+
+    emit_command_output(
+        runtime_events,
+        audit_ctx.and_then(|ctx| ctx.session_id),
+        command_str,
+        String::new(),
+        false,
+        true,
+    )
+    .await;
+
+    Ok(CommandAttemptResult {
+        output_text: if result.output.status.success() {
+            stdout_text
+        } else {
+            stderr_text
+        },
+        success: result.output.status.success(),
+        exit_code,
+        duration_ms,
+        stdout_preview,
+        stderr_preview,
+        output_preview,
+        has_error_output,
+    })
+}
+
+async fn execute_direct_once(
+    command_str: &str,
+    runtime_events: Option<&Arc<dyn RuntimeEventSink>>,
+    audit_ctx: Option<&CommandAuditContext<'_>>,
+) -> crate::core::error::HarperResult<CommandAttemptResult> {
+    let start = Instant::now();
+    let mut child = TokioCommand::new("sh")
+        .arg("-c")
+        .arg(command_str)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| HarperError::Command(format!("Failed to execute command: {}", e)))?;
+
+    let mut stdout_task = None;
+    if let Some(stdout) = child.stdout.take() {
+        let runtime_events = runtime_events.cloned();
+        let session_id = audit_ctx.and_then(|ctx| ctx.session_id).map(str::to_string);
+        let db_path = audit_ctx.and_then(|ctx| database_path(ctx.conn));
+        let command = command_str.to_string();
+        stdout_task = Some(tokio::spawn(async move {
+            let live_conn = db_path
+                .as_deref()
+                .and_then(|path| crate::memory::storage::create_connection(path).ok());
+            let mut lines = BufReader::new(stdout).lines();
+            let mut collected = String::new();
+            while let Ok(Some(line)) = lines.next_line().await {
+                collected.push_str(&line);
+                collected.push('\n');
+                if let (Some(conn), Some(session_id)) = (&live_conn, session_id.as_deref()) {
+                    let _ = crate::tools::plan::append_active_plan_job_output(
+                        conn,
+                        session_id,
+                        &format!("{}\n", line),
+                        false,
+                    );
+                    if let Some(sink) = runtime_events.as_ref() {
+                        let plan = crate::memory::storage::load_plan_state(conn, session_id)
+                            .ok()
+                            .flatten();
+                        let _ = sink.plan_updated(session_id, plan).await;
+                    }
+                }
+                emit_command_output(
+                    runtime_events.as_ref(),
+                    session_id.as_deref(),
+                    &command,
+                    format!("{}\n", line),
+                    false,
+                    false,
+                )
+                .await;
+            }
+            collected
+        }));
+    }
+
+    let mut stderr_task = None;
+    if let Some(stderr) = child.stderr.take() {
+        let runtime_events = runtime_events.cloned();
+        let session_id = audit_ctx.and_then(|ctx| ctx.session_id).map(str::to_string);
+        let db_path = audit_ctx.and_then(|ctx| database_path(ctx.conn));
+        let command = command_str.to_string();
+        stderr_task = Some(tokio::spawn(async move {
+            let live_conn = db_path
+                .as_deref()
+                .and_then(|path| crate::memory::storage::create_connection(path).ok());
+            let mut lines = BufReader::new(stderr).lines();
+            let mut collected = String::new();
+            while let Ok(Some(line)) = lines.next_line().await {
+                collected.push_str(&line);
+                collected.push('\n');
+                if let (Some(conn), Some(session_id)) = (&live_conn, session_id.as_deref()) {
+                    let _ = crate::tools::plan::append_active_plan_job_output(
+                        conn,
+                        session_id,
+                        &format!("{}\n", line),
+                        true,
+                    );
+                    if let Some(sink) = runtime_events.as_ref() {
+                        let plan = crate::memory::storage::load_plan_state(conn, session_id)
+                            .ok()
+                            .flatten();
+                        let _ = sink.plan_updated(session_id, plan).await;
+                    }
+                }
+                emit_command_output(
+                    runtime_events.as_ref(),
+                    session_id.as_deref(),
+                    &command,
+                    format!("{}\n", line),
+                    true,
+                    false,
+                )
+                .await;
+            }
+            collected
+        }));
+    }
+
+    let status = child
+        .wait()
+        .await
+        .map_err(|e| HarperError::Command(format!("Failed to wait for command: {}", e)))?;
+    let duration_ms = start.elapsed().as_millis() as i64;
+    let stdout_text = match stdout_task {
+        Some(task) => task.await.unwrap_or_default(),
+        None => String::new(),
+    };
+    let stderr_text = match stderr_task {
+        Some(task) => task.await.unwrap_or_default(),
+        None => String::new(),
+    };
+    emit_command_output(
+        runtime_events,
+        audit_ctx.and_then(|ctx| ctx.session_id),
+        command_str,
+        String::new(),
+        false,
+        true,
+    )
+    .await;
+    let exit_code = status.code();
+    let stdout_preview = bytes_to_preview(stdout_text.as_bytes());
+    let stderr_preview = bytes_to_preview(stderr_text.as_bytes());
+    let output_preview = if status.success() {
+        preview_text(&stdout_text)
+    } else if !stderr_text.trim().is_empty() {
+        preview_text(&stderr_text)
+    } else {
+        preview_text(&stdout_text)
+    };
+    let has_error_output = !status.success() || !stderr_text.trim().is_empty();
+
+    Ok(CommandAttemptResult {
+        output_text: if status.success() {
+            stdout_text
+        } else {
+            stderr_text
+        },
+        success: status.success(),
+        exit_code,
+        duration_ms,
+        stdout_preview,
+        stderr_preview,
+        output_preview,
+        has_error_output,
+    })
+}
+
 /// Execute a shell command with safety checks
 pub async fn execute_command(
     response: &str,
@@ -658,319 +939,125 @@ pub async fn execute_command(
             Some(format!("running command: {}", command_str)),
         )
         .await;
-        let _ = crate::tools::plan::update_active_plan_job(ctx.0, ctx.1, PlanJobStatus::Running)
-            .or_else(|_| {
-                crate::tools::plan::start_plan_job(
-                    ctx.0,
-                    ctx.1,
-                    "run_command",
-                    Some(command_str.to_string()),
-                    PlanJobStatus::Running,
-                )
-            });
+        let has_active_job = crate::memory::storage::load_plan_state(ctx.0, ctx.1)
+            .ok()
+            .flatten()
+            .and_then(|plan| plan.runtime)
+            .and_then(|runtime| runtime.active_job_id)
+            .is_some();
+        let _ = if has_active_job {
+            crate::tools::plan::update_active_plan_job(ctx.0, ctx.1, PlanJobStatus::Running)
+        } else {
+            crate::tools::plan::start_plan_job(
+                ctx.0,
+                ctx.1,
+                "run_command",
+                Some(command_str.to_string()),
+                PlanJobStatus::Running,
+            )
+        };
         emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
     }
 
-    if let Some(sandbox_config) = configured_sandbox(exec_policy).filter(|config| config.enabled) {
-        let request = build_sandbox_request(command_str, resolved_intent.as_ref())?;
-        let sandbox = Sandbox::new(sandbox_config);
-        let (stream_tx, mut stream_rx) = mpsc::unbounded_channel::<(String, bool)>();
-        let runtime_events_clone = runtime_events.clone();
-        let session_id_owned = audit_ctx
-            .and_then(|ctx| ctx.session_id)
-            .map(ToString::to_string);
-        let command_owned = command_str.to_string();
-        let stream_forwarder = tokio::spawn(async move {
-            while let Some((chunk, is_error)) = stream_rx.recv().await {
-                emit_command_output(
-                    runtime_events_clone.as_ref(),
-                    session_id_owned.as_deref(),
-                    &command_owned,
-                    chunk,
-                    is_error,
-                    false,
-                )
-                .await;
+    let retry_safe = autonomous_retry_safe(
+        exec_policy,
+        command_str,
+        requires_approval,
+        resolved_intent.as_ref(),
+    );
+    let sandbox = configured_sandbox(exec_policy)
+        .filter(|config| config.enabled)
+        .map(Sandbox::new);
+    let mut attempt = 0;
+    loop {
+        let attempt_result = if let Some(sandbox) = sandbox.as_ref() {
+            let request = build_sandbox_request(command_str, resolved_intent.as_ref())?;
+            execute_sandboxed_once(
+                sandbox,
+                request,
+                runtime_events.as_ref(),
+                audit_ctx,
+                command_str,
+            )
+            .await?
+        } else {
+            execute_direct_once(command_str, runtime_events.as_ref(), audit_ctx).await?
+        };
+
+        if attempt_result.success
+            || !retry_safe
+            || attempt >= exec_policy.effective_retry_max_attempts()
+        {
+            maybe_log_command(
+                audit_ctx,
+                command_str,
+                if attempt_result.success {
+                    "succeeded"
+                } else {
+                    "failed"
+                },
+                requires_approval,
+                approved,
+                attempt_result.exit_code,
+                Some(attempt_result.duration_ms),
+                attempt_result.stdout_preview,
+                attempt_result.stderr_preview,
+                (!attempt_result.success)
+                    .then_some("Command exited with non-zero status".to_string()),
+            );
+
+            if let Some(ctx) =
+                audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
+            {
+                let _ = crate::tools::plan::finish_active_plan_job_with_output(
+                    ctx.0,
+                    ctx.1,
+                    if attempt_result.success {
+                        PlanJobStatus::Succeeded
+                    } else {
+                        PlanJobStatus::Failed
+                    },
+                    attempt_result.output_preview,
+                    attempt_result.has_error_output,
+                );
+                emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
             }
-        });
-        let start = Instant::now();
-        let result = sandbox
-            .execute_request_streaming(request, move |chunk, is_error| {
-                let _ = stream_tx.send((chunk, is_error));
-            })
-            .await?;
-        stream_forwarder.await.map_err(|e| {
-            HarperError::Command(format!("Sandbox output forwarding failed: {}", e))
-        })?;
-        let duration_ms = start.elapsed().as_millis() as i64;
-        let exit_code = result.output.status.code();
-        let stdout_preview = bytes_to_preview(&result.output.stdout);
-        let stderr_preview = bytes_to_preview(&result.output.stderr);
-        let stdout_text = String::from_utf8_lossy(&result.output.stdout).into_owned();
-        let stderr_text = String::from_utf8_lossy(&result.output.stderr).into_owned();
-        let output_preview = if result.output.status.success() {
-            preview_text(&stdout_text)
-        } else if !stderr_text.trim().is_empty() {
-            preview_text(&stderr_text)
-        } else {
-            preview_text(&stdout_text)
-        };
-        let has_error_output = !result.output.status.success() || !stderr_text.trim().is_empty();
 
-        emit_command_output(
-            runtime_events.as_ref(),
-            audit_ctx.and_then(|ctx| ctx.session_id),
+            return Ok(attempt_result.output_text);
+        }
+
+        maybe_log_command(
+            audit_ctx,
             command_str,
-            String::new(),
-            false,
-            true,
-        )
-        .await;
-
-        let output_text = if result.output.status.success() {
-            maybe_log_command(
-                audit_ctx,
-                command_str,
-                "succeeded",
-                requires_approval,
-                approved,
-                exit_code,
-                Some(duration_ms),
-                stdout_preview,
-                stderr_preview,
-                None,
-            );
-            stdout_text
-        } else {
-            maybe_log_command(
-                audit_ctx,
-                command_str,
-                "failed",
-                requires_approval,
-                approved,
-                exit_code,
-                Some(duration_ms),
-                stdout_preview,
-                stderr_preview,
-                Some("Command exited with non-zero status".to_string()),
-            );
-            stderr_text
-        };
-
+            "retrying",
+            requires_approval,
+            approved,
+            attempt_result.exit_code,
+            Some(attempt_result.duration_ms),
+            attempt_result.stdout_preview.clone(),
+            attempt_result.stderr_preview.clone(),
+            Some("Autonomous retry scheduled after first failure".to_string()),
+        );
         if let Some(ctx) =
             audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
         {
-            let _ = crate::tools::plan::finish_active_plan_job_with_output(
+            let _ = crate::tools::plan::record_active_plan_retry_followup(
                 ctx.0,
                 ctx.1,
-                if result.output.status.success() {
-                    PlanJobStatus::Succeeded
-                } else {
-                    PlanJobStatus::Failed
-                },
-                output_preview,
-                has_error_output,
+                Some(command_str.to_string()),
             );
+            let _ =
+                crate::tools::plan::update_active_plan_job(ctx.0, ctx.1, PlanJobStatus::Running);
             emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
         }
-
-        return Ok(output_text);
+        emit_activity_update(
+            runtime_events.as_ref(),
+            audit_ctx.and_then(|ctx| ctx.session_id),
+            Some(format!("retrying command: {}", command_str)),
+        )
+        .await;
+        attempt += 1;
     }
-
-    let start = Instant::now();
-    let mut child = TokioCommand::new("sh")
-        .arg("-c")
-        .arg(command_str)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            let err_msg = format!("Failed to execute command: {}", e);
-            maybe_log_command(
-                audit_ctx,
-                command_str,
-                "error",
-                requires_approval,
-                approved,
-                None,
-                None,
-                None,
-                None,
-                Some(err_msg.clone()),
-            );
-            HarperError::Command(err_msg)
-        })?;
-
-    let mut stdout_task = None;
-    if let Some(stdout) = child.stdout.take() {
-        let runtime_events = runtime_events.clone();
-        let session_id = audit_ctx.and_then(|ctx| ctx.session_id).map(str::to_string);
-        let db_path = audit_ctx.and_then(|ctx| database_path(ctx.conn));
-        let command = command_str.to_string();
-        stdout_task = Some(tokio::spawn(async move {
-            let live_conn = db_path
-                .as_deref()
-                .and_then(|path| crate::memory::storage::create_connection(path).ok());
-            let mut lines = BufReader::new(stdout).lines();
-            let mut collected = String::new();
-            while let Ok(Some(line)) = lines.next_line().await {
-                collected.push_str(&line);
-                collected.push('\n');
-                if let (Some(conn), Some(session_id)) = (&live_conn, session_id.as_deref()) {
-                    let _ = crate::tools::plan::append_active_plan_job_output(
-                        conn,
-                        session_id,
-                        &format!("{}\n", line),
-                        false,
-                    );
-                    if let Some(sink) = runtime_events.as_ref() {
-                        let plan = crate::memory::storage::load_plan_state(conn, session_id)
-                            .ok()
-                            .flatten();
-                        let _ = sink.plan_updated(session_id, plan).await;
-                    }
-                }
-                emit_command_output(
-                    runtime_events.as_ref(),
-                    session_id.as_deref(),
-                    &command,
-                    format!("{}\n", line),
-                    false,
-                    false,
-                )
-                .await;
-            }
-            collected
-        }));
-    }
-
-    let mut stderr_task = None;
-    if let Some(stderr) = child.stderr.take() {
-        let runtime_events = runtime_events.clone();
-        let session_id = audit_ctx.and_then(|ctx| ctx.session_id).map(str::to_string);
-        let db_path = audit_ctx.and_then(|ctx| database_path(ctx.conn));
-        let command = command_str.to_string();
-        stderr_task = Some(tokio::spawn(async move {
-            let live_conn = db_path
-                .as_deref()
-                .and_then(|path| crate::memory::storage::create_connection(path).ok());
-            let mut lines = BufReader::new(stderr).lines();
-            let mut collected = String::new();
-            while let Ok(Some(line)) = lines.next_line().await {
-                collected.push_str(&line);
-                collected.push('\n');
-                if let (Some(conn), Some(session_id)) = (&live_conn, session_id.as_deref()) {
-                    let _ = crate::tools::plan::append_active_plan_job_output(
-                        conn,
-                        session_id,
-                        &format!("{}\n", line),
-                        true,
-                    );
-                    if let Some(sink) = runtime_events.as_ref() {
-                        let plan = crate::memory::storage::load_plan_state(conn, session_id)
-                            .ok()
-                            .flatten();
-                        let _ = sink.plan_updated(session_id, plan).await;
-                    }
-                }
-                emit_command_output(
-                    runtime_events.as_ref(),
-                    session_id.as_deref(),
-                    &command,
-                    format!("{}\n", line),
-                    true,
-                    false,
-                )
-                .await;
-            }
-            collected
-        }));
-    }
-
-    let status = child.wait().await.map_err(|e| {
-        let err_msg = format!("Failed to wait for command: {}", e);
-        HarperError::Command(err_msg)
-    })?;
-    let duration_ms = start.elapsed().as_millis() as i64;
-    let stdout_text = match stdout_task {
-        Some(task) => task.await.unwrap_or_default(),
-        None => String::new(),
-    };
-    let stderr_text = match stderr_task {
-        Some(task) => task.await.unwrap_or_default(),
-        None => String::new(),
-    };
-    emit_command_output(
-        runtime_events.as_ref(),
-        audit_ctx.and_then(|ctx| ctx.session_id),
-        command_str,
-        String::new(),
-        false,
-        true,
-    )
-    .await;
-    let exit_code = status.code();
-    let stdout_preview = bytes_to_preview(stdout_text.as_bytes());
-    let stderr_preview = bytes_to_preview(stderr_text.as_bytes());
-    let output_preview = if status.success() {
-        preview_text(&stdout_text)
-    } else if !stderr_text.trim().is_empty() {
-        preview_text(&stderr_text)
-    } else {
-        preview_text(&stdout_text)
-    };
-    let has_error_output = !status.success() || !stderr_text.trim().is_empty();
-
-    let result = if status.success() {
-        let out = stdout_text;
-        maybe_log_command(
-            audit_ctx,
-            command_str,
-            "succeeded",
-            requires_approval,
-            approved,
-            exit_code,
-            Some(duration_ms),
-            stdout_preview,
-            stderr_preview,
-            None,
-        );
-        out
-    } else {
-        let err_output = stderr_text;
-        maybe_log_command(
-            audit_ctx,
-            command_str,
-            "failed",
-            requires_approval,
-            approved,
-            exit_code,
-            Some(duration_ms),
-            stdout_preview,
-            stderr_preview,
-            Some("Command exited with non-zero status".to_string()),
-        );
-        err_output
-    };
-
-    if let Some(ctx) =
-        audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
-    {
-        let _ = crate::tools::plan::finish_active_plan_job_with_output(
-            ctx.0,
-            ctx.1,
-            if status.success() {
-                PlanJobStatus::Succeeded
-            } else {
-                PlanJobStatus::Failed
-            },
-            output_preview,
-            has_error_output,
-        );
-        emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
-    }
-
-    Ok(result)
 }
 
 async fn emit_plan_update(
@@ -1048,13 +1135,25 @@ fn bytes_to_preview(bytes: &[u8]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        approval_required_for_command, build_sandbox_request, configured_sandbox,
-        infer_path_intent, looks_like_network_command, parse_run_command_response,
-        CommandSandboxIntent,
+        approval_required_for_command, autonomous_retry_safe, build_sandbox_request,
+        configured_sandbox, execute_command, infer_path_intent, looks_like_network_command,
+        parse_run_command_response, CommandAuditContext, CommandRetryPolicy, CommandSandboxIntent,
     };
+    use crate::core::plan::{PlanFollowup, PlanItem, PlanState, PlanStepStatus};
+    use crate::core::{ApiConfig, ApiProvider};
     use crate::runtime::config::{
         ApprovalProfile, ExecPolicyConfig, SandboxConfig as RuntimeSandboxConfig, SandboxProfile,
     };
+    use rusqlite::Connection;
+
+    fn test_config() -> ApiConfig {
+        ApiConfig {
+            provider: ApiProvider::OpenAI,
+            api_key: "test-key".to_string(),
+            base_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            model_name: "gpt-5.5".to_string(),
+        }
+    }
 
     #[test]
     fn build_sandbox_request_extracts_command_args_and_declared_paths() {
@@ -1093,6 +1192,7 @@ mod tests {
             declared_read_paths: vec![std::path::PathBuf::from("./input.txt")],
             declared_write_paths: vec![std::path::PathBuf::from("./out.txt")],
             requires_network: true,
+            retry_policy: Some(CommandRetryPolicy::Safe),
         };
         let request =
             build_sandbox_request("cat ./ignored.txt", Some(&intent)).expect("sandbox request");
@@ -1105,7 +1205,7 @@ mod tests {
     #[test]
     fn parse_run_command_response_reads_enhanced_bracket_payload() {
         let (command, intent) = parse_run_command_response(
-            r#"[RUN_COMMAND {"command":"cp ./src.txt ./out.txt","declared_read_paths":["./src.txt"],"declared_write_paths":["./out.txt"],"requires_network":true}]"#,
+            r#"[RUN_COMMAND {"command":"cp ./src.txt ./out.txt","declared_read_paths":["./src.txt"],"declared_write_paths":["./out.txt"],"requires_network":true,"retry_policy":"safe"}]"#,
             None,
         )
         .expect("parse run command");
@@ -1121,6 +1221,7 @@ mod tests {
             vec![std::path::PathBuf::from("./out.txt")]
         );
         assert!(intent.requires_network);
+        assert_eq!(intent.retry_policy, Some(CommandRetryPolicy::Safe));
     }
 
     #[test]
@@ -1129,6 +1230,7 @@ mod tests {
             declared_read_paths: vec![std::path::PathBuf::from("./input.txt")],
             declared_write_paths: vec![],
             requires_network: false,
+            retry_policy: Some(CommandRetryPolicy::Never),
         };
         let (command, intent) =
             parse_run_command_response("[RUN_COMMAND cat ./input.txt]", Some(&fallback))
@@ -1228,6 +1330,9 @@ mod tests {
                 readonly_home: Some(true),
                 max_execution_time_secs: Some(15),
             }),
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
         };
 
         let sandbox = configured_sandbox(&exec_policy).expect("sandbox config");
@@ -1252,6 +1357,9 @@ mod tests {
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Disabled),
             sandbox: None,
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
         };
         assert!(!approval_required_for_command(
             &exec_policy,
@@ -1268,6 +1376,9 @@ mod tests {
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Disabled),
             sandbox: None,
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
         };
         assert!(approval_required_for_command(
             &exec_policy,
@@ -1284,6 +1395,9 @@ mod tests {
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Disabled),
             sandbox: None,
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
         };
         assert!(!approval_required_for_command(
             &exec_policy,
@@ -1308,11 +1422,15 @@ mod tests {
                 readonly_home: Some(true),
                 max_execution_time_secs: Some(30),
             }),
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
         };
         let intent = CommandSandboxIntent {
             declared_read_paths: vec![std::path::PathBuf::from("./src.txt")],
             declared_write_paths: vec![std::path::PathBuf::from("./out.txt")],
             requires_network: false,
+            retry_policy: None,
         };
         assert!(approval_required_for_command(
             &exec_policy,
@@ -1336,11 +1454,15 @@ mod tests {
                 readonly_home: Some(true),
                 max_execution_time_secs: Some(30),
             }),
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
         };
         let intent = CommandSandboxIntent {
             declared_read_paths: vec![std::path::PathBuf::from("./src.txt")],
             declared_write_paths: vec![std::path::PathBuf::from("./safe/out.txt")],
             requires_network: false,
+            retry_policy: None,
         };
         assert!(!approval_required_for_command(
             &exec_policy,
@@ -1357,16 +1479,176 @@ mod tests {
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Disabled),
             sandbox: None,
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
         };
         let intent = CommandSandboxIntent {
             declared_read_paths: vec![],
             declared_write_paths: vec![],
             requires_network: true,
+            retry_policy: None,
         };
         assert!(approval_required_for_command(
             &exec_policy,
             "curl https://example.com",
             Some(&intent)
+        ));
+    }
+
+    #[test]
+    fn autonomous_retry_safe_allows_non_network_readonly_commands() {
+        let exec_policy = ExecPolicyConfig::default();
+        let intent = CommandSandboxIntent {
+            declared_read_paths: vec![std::path::PathBuf::from("./input.txt")],
+            declared_write_paths: vec![],
+            requires_network: false,
+            retry_policy: None,
+        };
+        assert!(autonomous_retry_safe(
+            &exec_policy,
+            "cat ./input.txt",
+            false,
+            Some(&intent)
+        ));
+        assert!(!autonomous_retry_safe(
+            &exec_policy,
+            "cp ./input.txt ./out.txt",
+            false,
+            Some(&CommandSandboxIntent {
+                declared_write_paths: vec![std::path::PathBuf::from("./out.txt")],
+                ..intent.clone()
+            })
+        ));
+    }
+
+    #[test]
+    fn autonomous_retry_safe_allows_known_network_and_write_commands() {
+        let exec_policy = ExecPolicyConfig {
+            sandbox: Some(crate::runtime::config::SandboxConfig {
+                enabled: None,
+                allowed_dirs: None,
+                writable_dirs: Some(vec![".".to_string()]),
+                network_access: None,
+                readonly_home: None,
+                max_execution_time_secs: None,
+            }),
+            ..Default::default()
+        };
+
+        assert!(autonomous_retry_safe(
+            &exec_policy,
+            "curl https://example.com",
+            false,
+            Some(&CommandSandboxIntent {
+                requires_network: true,
+                ..Default::default()
+            })
+        ));
+        assert!(autonomous_retry_safe(
+            &exec_policy,
+            "mkdir ./build",
+            false,
+            Some(&CommandSandboxIntent {
+                declared_write_paths: vec![std::path::PathBuf::from("./build")],
+                ..Default::default()
+            })
+        ));
+        assert!(!autonomous_retry_safe(
+            &exec_policy,
+            "tar -xf archive.tar ./dst",
+            false,
+            Some(&CommandSandboxIntent {
+                declared_write_paths: vec![std::path::PathBuf::from("./dst")],
+                ..Default::default()
+            })
+        ));
+    }
+
+    #[test]
+    fn autonomous_retry_safe_honors_explicit_retry_policy() {
+        let exec_policy = ExecPolicyConfig::default();
+        assert!(autonomous_retry_safe(
+            &exec_policy,
+            "custom-tool ./input",
+            false,
+            Some(&CommandSandboxIntent {
+                declared_read_paths: vec![],
+                declared_write_paths: vec![std::path::PathBuf::from("./out.txt")],
+                requires_network: true,
+                retry_policy: Some(CommandRetryPolicy::Safe),
+            })
+        ));
+        assert!(!autonomous_retry_safe(
+            &exec_policy,
+            "cat ./input",
+            false,
+            Some(&CommandSandboxIntent {
+                declared_read_paths: vec![std::path::PathBuf::from("./input.txt")],
+                declared_write_paths: vec![],
+                requires_network: false,
+                retry_policy: Some(CommandRetryPolicy::Never),
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn execute_command_retries_once_for_retry_safe_failure() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "retry-safe-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "Check failing command".to_string(),
+                    status: PlanStepStatus::InProgress,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        let exec_policy = ExecPolicyConfig {
+            approval_profile: Some(ApprovalProfile::AllowAll),
+            allowed_commands: None,
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Disabled),
+            sandbox: None,
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
+        };
+        let audit_ctx = CommandAuditContext {
+            conn: &conn,
+            session_id: Some("retry-safe-session"),
+            source: "test",
+        };
+
+        let _ = execute_command(
+            "[RUN_COMMAND false]",
+            &test_config(),
+            &exec_policy,
+            None,
+            Some(&audit_ctx),
+            None,
+            None,
+        )
+        .await
+        .expect("command execution should return stderr text");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "retry-safe-session")
+            .expect("load plan")
+            .expect("plan present");
+        assert_eq!(plan.items[0].status, PlanStepStatus::Blocked);
+        assert!(matches!(
+            plan.runtime
+                .as_ref()
+                .and_then(|runtime| runtime.followup.as_ref()),
+            Some(PlanFollowup::RetryOrReplan { retry_count: 2, .. })
         ));
     }
 }

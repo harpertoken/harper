@@ -256,6 +256,9 @@ impl<'a> ChatService<'a> {
                 blocked_commands: None,
                 sandbox_profile: None,
                 sandbox: None,
+                retry_max_attempts: None,
+                retry_network_commands: None,
+                retry_write_commands: None,
             },
             approver: None,
             runtime_events: None,
@@ -1023,8 +1026,61 @@ impl<'a> ChatService<'a> {
         });
 
         if has_active_plan {
+            if let Some(followup) = existing_plan
+                .as_ref()
+                .and_then(|plan| plan.runtime.as_ref())
+                .and_then(|runtime| runtime.followup.as_ref())
+            {
+                match followup {
+                    crate::core::plan::PlanFollowup::RetryOrReplan {
+                        step,
+                        command,
+                        retry_count,
+                    } => {
+                        let command = command.as_deref().unwrap_or(step.as_str());
+                        if *retry_count <= 1 {
+                            return Ok(Some(format!(
+                                "This multi-step task hit a failure at '{}' while running '{}'. Retry once if the issue looks transient; otherwise call update_plan to revise the remaining steps before more tool work.",
+                                step, command
+                            )));
+                        }
+                        return Ok(Some(format!(
+                            "This multi-step task has already failed {} times at '{}' while running '{}'. Do not keep retrying blindly; call update_plan to revise the plan before more tool work.",
+                            retry_count, step, command
+                        )));
+                    }
+                    crate::core::plan::PlanFollowup::Checkpoint { step, next_step } => {
+                        let next_clause = next_step
+                            .as_deref()
+                            .map(|next_step| {
+                                format!(
+                                    " Continue with '{}' only after a short checkpoint summary.",
+                                    next_step
+                                )
+                            })
+                            .unwrap_or_else(|| {
+                                " If the task is done, confirm completion instead of repeating the plan."
+                                    .to_string()
+                            });
+                        return Ok(Some(format!(
+                            "This multi-step task has an open checkpoint on '{}'. Briefly summarize what changed before more tool work.{}",
+                            step, next_clause
+                        )));
+                    }
+                }
+            }
+            if let Some(blocked_step) = existing_plan.as_ref().and_then(|plan| {
+                plan.items
+                    .iter()
+                    .find(|item| matches!(item.status, crate::core::plan::PlanStepStatus::Blocked))
+            }) {
+                return Ok(Some(format!(
+                    "This multi-step task is currently blocked at '{}'. Before more tool work, call update_plan to explain the blocker, retry, or revise the remaining steps.",
+                    blocked_step.step
+                )));
+            }
             return Ok(Some(
-                "This is an active multi-step task. Refresh the plan with update_plan if the steps or statuses have changed before continuing."
+                "This is an active multi-step task. Keep the plan current with update_plan, and add a brief checkpoint summary whenever a step finishes or the next step changes."
                     .to_string(),
             ));
         }
@@ -1672,6 +1728,16 @@ impl AuditParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::{ApiConfig, ApiProvider};
+
+    fn test_config() -> ApiConfig {
+        ApiConfig {
+            provider: ApiProvider::OpenAI,
+            api_key: "test-key".to_string(),
+            base_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            model_name: "gpt-5.5".to_string(),
+        }
+    }
 
     #[test]
     fn parse_audit_no_args() {
@@ -1743,6 +1809,103 @@ mod tests {
         ));
         assert!(!ChatService::request_needs_plan("run git status"));
         assert!(!ChatService::request_needs_plan("fix typo"));
+    }
+
+    #[test]
+    fn plan_prompt_mentions_blocked_step_when_plan_is_blocked() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "blocked-plan-session",
+            &crate::core::plan::PlanState {
+                explanation: Some("blocked".to_string()),
+                items: vec![crate::core::plan::PlanItem {
+                    step: "Fix failing migration".to_string(),
+                    status: crate::core::plan::PlanStepStatus::Blocked,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        let config = test_config();
+        let exec_policy = ExecPolicyConfig::default();
+        let chat = ChatService::new(
+            &conn,
+            &config,
+            None,
+            None,
+            Some("blocked-plan-session".to_string()),
+            HashMap::new(),
+            exec_policy,
+        );
+        let history = vec![Message {
+            role: "user".to_string(),
+            content: "fix the migration and then update the docs".to_string(),
+        }];
+
+        let prompt = chat
+            .plan_prompt_for_request(&history, "blocked-plan-session")
+            .expect("plan prompt")
+            .expect("prompt present");
+
+        assert!(prompt.contains("blocked at 'Fix failing migration'"));
+        assert!(prompt.contains("call update_plan"));
+    }
+
+    #[test]
+    fn plan_prompt_mentions_retry_limit_when_followup_requires_replan() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "retry-plan-session",
+            &crate::core::plan::PlanState {
+                explanation: Some("retry".to_string()),
+                items: vec![crate::core::plan::PlanItem {
+                    step: "Patch handler".to_string(),
+                    status: crate::core::plan::PlanStepStatus::Blocked,
+                    job_id: None,
+                }],
+                runtime: Some(crate::core::plan::PlanRuntime {
+                    followup: Some(crate::core::plan::PlanFollowup::RetryOrReplan {
+                        step: "Patch handler".to_string(),
+                        command: Some("cargo test".to_string()),
+                        retry_count: 2,
+                    }),
+                    ..Default::default()
+                }),
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        let config = test_config();
+        let exec_policy = ExecPolicyConfig::default();
+        let chat = ChatService::new(
+            &conn,
+            &config,
+            None,
+            None,
+            Some("retry-plan-session".to_string()),
+            HashMap::new(),
+            exec_policy,
+        );
+        let history = vec![Message {
+            role: "user".to_string(),
+            content: "fix the handler and then rerun the tests".to_string(),
+        }];
+
+        let prompt = chat
+            .plan_prompt_for_request(&history, "retry-plan-session")
+            .expect("plan prompt")
+            .expect("prompt present");
+
+        assert!(prompt.contains("already failed 2 times"));
+        assert!(prompt.contains("Do not keep retrying blindly"));
     }
 
     #[test]

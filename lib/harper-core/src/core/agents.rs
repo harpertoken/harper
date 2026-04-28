@@ -165,13 +165,45 @@ fn normalize_target(base_dir: &Path, target: &Path) -> HarperResult<PathBuf> {
         base_dir.join(target)
     };
 
-    joined.canonicalize().map_err(|err| {
+    if joined.exists() {
+        return joined.canonicalize().map_err(|err| {
+            HarperError::Io(format!(
+                "Failed to resolve target path '{}': {}",
+                joined.display(),
+                err
+            ))
+        });
+    }
+
+    let mut existing_ancestor = joined.as_path();
+    let mut missing_suffix = Vec::new();
+    while !existing_ancestor.exists() {
+        let Some(name) = existing_ancestor.file_name().map(|name| name.to_owned()) else {
+            return Err(HarperError::Io(format!(
+                "Failed to resolve target path '{}': no existing ancestor found",
+                joined.display()
+            )));
+        };
+        missing_suffix.push(name);
+        existing_ancestor = existing_ancestor.parent().ok_or_else(|| {
+            HarperError::Io(format!(
+                "Failed to resolve target path '{}': no existing ancestor found",
+                joined.display()
+            ))
+        })?;
+    }
+
+    let mut resolved = existing_ancestor.canonicalize().map_err(|err| {
         HarperError::Io(format!(
             "Failed to resolve target path '{}': {}",
-            joined.display(),
+            existing_ancestor.display(),
             err
         ))
-    })
+    })?;
+    for component in missing_suffix.into_iter().rev() {
+        resolved.push(component);
+    }
+    Ok(resolved)
 }
 
 fn find_repo_root(start_dir: &Path) -> HarperResult<PathBuf> {
@@ -488,6 +520,42 @@ mod tests {
         assert!(rendered.contains("root rules"));
         assert!(rendered.contains("a rules"));
         assert!(!rendered.contains("b rules"));
+    }
+
+    #[test]
+    fn resolves_agents_for_nonexistent_target_using_existing_ancestors() {
+        let temp = TempDir::new().expect("temp dir");
+        let repo = temp.path().join("repo");
+        let nested = repo.join("src/feature");
+        fs::create_dir_all(&nested).expect("mkdirs");
+        fs::create_dir(repo.join(".git")).expect("git dir");
+        write_file(&repo.join("AGENTS.md"), "root rules");
+        write_file(&repo.join("src/AGENTS.md"), "src rules");
+        write_file(&nested.join("AGENTS.md"), "feature rules");
+        let repo = repo.canonicalize().expect("canonical repo");
+
+        let nonexistent = nested.join("new_file.rs");
+        let resolved = resolve_agents_for_targets(&repo, [nonexistent.as_path()]).expect("resolve");
+
+        let paths: Vec<String> = resolved
+            .sources
+            .iter()
+            .map(|source| {
+                source
+                    .path
+                    .strip_prefix(&repo)
+                    .expect("strip")
+                    .components()
+                    .map(|component| component.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
+            .collect();
+
+        assert_eq!(
+            paths,
+            vec!["AGENTS.md", "src/AGENTS.md", "src/feature/AGENTS.md"]
+        );
     }
 
     #[test]

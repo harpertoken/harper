@@ -133,12 +133,40 @@ No silent fallback occurs.
 
 ---
 
+## `[exec_policy]`
+
+Execution approval, sandbox presets, and bounded retry behavior for `run_command`.
+
+| Key                      | Type             | Default          | Description |
+| ------------------------ | ---------------- | ---------------- | ----------- |
+| `approval_profile`       | string           | `allow_listed`   | `strict`, `allow_listed`, or `allow_all` |
+| `sandbox_profile`        | string           | `disabled`       | `disabled`, `workspace`, or `networked_workspace` |
+| `retry_max_attempts`     | integer          | `1`              | Max automatic retries for retry-safe failures |
+| `retry_network_commands` | array of strings | `["curl","wget"]`| Network command classes eligible for bounded retry |
+| `retry_write_commands`   | array of strings | `["mkdir","touch"]` | Write command classes eligible for bounded retry |
+
+### `[exec_policy.sandbox]`
+
+| Key              | Type             | Default | Description |
+| ---------------- | ---------------- | ------- | ----------- |
+| `allowed_dirs`   | array of strings | `[]`    | Readable roots inside the sandbox |
+| `writable_dirs`  | array of strings | `[]`    | Writable roots inside the sandbox |
+| `network_access` | bool             | profile | Whether sandboxed commands may reach the network |
+| `readonly_home`  | bool             | profile | Whether `$HOME` is mounted read-only |
+
+### Notes
+
+- `allow_listed` still prompts when a command declares network access or writes outside configured writable roots.
+- Retry behavior remains conservative: Harper uses declared intent plus configured command classes, not blind command replay.
+
+---
+
 ## Minimal Example
 
 ```toml
 [provider]
 name = "openai"
-model = "gpt-4.1"
+model = "gpt-5.5"
 
 [execution]
 require_approval = true

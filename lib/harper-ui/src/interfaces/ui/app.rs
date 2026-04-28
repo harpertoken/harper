@@ -45,6 +45,7 @@ pub struct ReviewState {
 pub enum NavigationFocus {
     Messages,
     Review,
+    PlanSteps,
     PlanJobs,
     Agents,
 }
@@ -58,6 +59,8 @@ pub struct ChatState {
     pub active_agents: Option<ResolvedAgents>,
     pub active_review: Option<ReviewState>,
     pub review_selected: usize,
+    pub plan_step_selected: usize,
+    pub plan_steps_expanded: bool,
     pub plan_job_selected: usize,
     pub plan_jobs_expanded: bool,
     pub plan_job_output_scroll: usize,
@@ -206,6 +209,8 @@ pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<String> {
 impl ChatState {
     pub fn refresh_plan_state(&mut self) {
         if let Some(plan) = &self.active_plan {
+            let max_steps = plan.items.len().saturating_sub(1);
+            self.plan_step_selected = self.plan_step_selected.min(max_steps);
             let max_jobs = plan
                 .runtime
                 .as_ref()
@@ -213,6 +218,8 @@ impl ChatState {
                 .unwrap_or(0);
             self.plan_job_selected = self.plan_job_selected.min(max_jobs);
         } else {
+            self.plan_step_selected = 0;
+            self.plan_steps_expanded = false;
             self.plan_job_selected = 0;
             self.plan_jobs_expanded = false;
             self.plan_job_output_scroll = 0;
@@ -236,6 +243,10 @@ impl ChatState {
             .active_review
             .as_ref()
             .is_some_and(|review| !review.findings.is_empty());
+        let has_steps = self
+            .active_plan
+            .as_ref()
+            .is_some_and(|plan| !plan.items.is_empty());
         let has_jobs = self
             .active_plan
             .as_ref()
@@ -249,6 +260,7 @@ impl ChatState {
 
         self.navigation_focus = match self.navigation_focus {
             NavigationFocus::Review if has_review => NavigationFocus::Review,
+            NavigationFocus::PlanSteps if has_steps => NavigationFocus::PlanSteps,
             NavigationFocus::PlanJobs if has_jobs => NavigationFocus::PlanJobs,
             NavigationFocus::Agents if has_agents => NavigationFocus::Agents,
             _ => NavigationFocus::Messages,
@@ -259,6 +271,7 @@ impl ChatState {
         match self.navigation_focus {
             NavigationFocus::Messages => "messages",
             NavigationFocus::Review => "findings",
+            NavigationFocus::PlanSteps => "plan",
             NavigationFocus::PlanJobs => "jobs",
             NavigationFocus::Agents => "agents",
         }
@@ -361,6 +374,7 @@ pub struct TuiApp {
     pub auth_last_poll_at: Option<Instant>,
     pub approval_profile: ApprovalProfile,
     pub sandbox_profile: SandboxProfile,
+    pub retry_max_attempts: u32,
     pub allowed_commands: Vec<String>,
     pub blocked_commands: Vec<String>,
     pub execution_policy_editor: Option<ExecutionPolicyEditorState>,
@@ -384,6 +398,7 @@ impl Default for TuiApp {
             auth_last_poll_at: None,
             approval_profile: ApprovalProfile::AllowListed,
             sandbox_profile: SandboxProfile::Disabled,
+            retry_max_attempts: 1,
             allowed_commands: Vec::new(),
             blocked_commands: Vec::new(),
             execution_policy_editor: None,
@@ -418,7 +433,7 @@ impl TuiApp {
     }
 
     pub fn execution_policy_row_count(&self) -> usize {
-        5
+        6
     }
 
     pub fn set_error_message(&mut self, content: String) {
@@ -524,6 +539,14 @@ impl TuiApp {
                             }
                         }
                     }
+                    NavigationFocus::PlanSteps => {
+                        if let Some(plan) = &chat_state.active_plan {
+                            if !plan.items.is_empty() {
+                                chat_state.plan_step_selected =
+                                    (chat_state.plan_step_selected + 1).min(plan.items.len() - 1);
+                            }
+                        }
+                    }
                     NavigationFocus::PlanJobs => {
                         if chat_state.plan_jobs_expanded {
                             chat_state.plan_job_output_scroll =
@@ -587,6 +610,10 @@ impl TuiApp {
                 match chat_state.navigation_focus {
                     NavigationFocus::Review => {
                         chat_state.review_selected = chat_state.review_selected.saturating_sub(1);
+                    }
+                    NavigationFocus::PlanSteps => {
+                        chat_state.plan_step_selected =
+                            chat_state.plan_step_selected.saturating_sub(1);
                     }
                     NavigationFocus::PlanJobs => {
                         if chat_state.plan_jobs_expanded {

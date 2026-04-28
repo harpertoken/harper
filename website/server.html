@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · API Server</title>
-    <meta name="harper-update-version" content="2026-04-28-server-v5" />
+    <meta name="harper-update-version" content="2026-04-28-server-v6" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -42,10 +42,19 @@ port = 8081</code></pre>
                 <div class="code-wrapper">
                     <pre><code>[exec_policy]
 approval_profile = "allow_listed"   # strict | allow_listed | allow_all
-sandbox_profile = "disabled"        # disabled | workspace | networked_workspace</code></pre>
+sandbox_profile = "disabled"        # disabled | workspace | networked_workspace
+retry_max_attempts = 1</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <p><code>allow_listed</code> preserves the existing default behavior for safe commands, but Harper still asks for approval when the command declares network access or writes outside the configured writable roots. <code>strict</code> requires approval for every command. <code>allow_all</code> skips approval checks. <code>workspace</code> enables sandboxing with workspace access and network disabled. <code>networked_workspace</code> enables the same workspace sandbox but allows network access.</p>
+                <p><code>retry_max_attempts</code> controls bounded automatic retries for retry-safe commands. You can also tune which command classes qualify:</p>
+                <div class="code-wrapper">
+                    <pre><code>[exec_policy]
+retry_network_commands = ["curl", "wget"]
+retry_write_commands = ["mkdir", "touch"]</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>Retries remain conservative: Harper still relies on declared command intent plus configured command classes, and it does not blindly retry networked or mutating commands outside those bounds.</p>
                 <p>For finer sandbox boundaries, add an explicit sandbox subsection:</p>
                 <div class="code-wrapper">
                     <pre><code>[exec_policy.sandbox]

@@ -20,6 +20,7 @@ use std::path::Path;
 pub fn save_execution_policy_settings(
     approval: ApprovalProfile,
     sandbox: SandboxProfile,
+    retry_max_attempts: u32,
     allowed_commands: &[String],
     blocked_commands: &[String],
 ) -> io::Result<()> {
@@ -29,6 +30,7 @@ pub fn save_execution_policy_settings(
         &existing,
         approval,
         sandbox,
+        retry_max_attempts,
         allowed_commands,
         blocked_commands,
     );
@@ -39,11 +41,13 @@ fn upsert_exec_policy_settings(
     input: &str,
     approval: ApprovalProfile,
     sandbox: SandboxProfile,
+    retry_max_attempts: u32,
     allowed_commands: &[String],
     blocked_commands: &[String],
 ) -> String {
     let approval_line = format!("approval_profile = \"{}\"", approval_profile_name(approval));
     let sandbox_line = format!("sandbox_profile = \"{}\"", sandbox_profile_name(sandbox));
+    let retry_line = format!("retry_max_attempts = {}", retry_max_attempts);
     let allowed_line = format!(
         "allowed_commands = {}",
         serde_json::to_string(allowed_commands).unwrap_or_else(|_| "[]".to_string())
@@ -72,6 +76,7 @@ fn upsert_exec_policy_settings(
                     let trimmed = line.trim_start();
                     !(trimmed.starts_with("approval_profile")
                         || trimmed.starts_with("sandbox_profile")
+                        || trimmed.starts_with("retry_max_attempts")
                         || trimmed.starts_with("allowed_commands")
                         || trimmed.starts_with("blocked_commands"))
                 })
@@ -79,6 +84,7 @@ fn upsert_exec_policy_settings(
                 .collect();
             section_body.insert(0, blocked_line);
             section_body.insert(0, allowed_line);
+            section_body.insert(0, retry_line);
             section_body.insert(0, sandbox_line);
             section_body.insert(0, approval_line);
 
@@ -91,6 +97,7 @@ fn upsert_exec_policy_settings(
             lines.push("[exec_policy]".to_string());
             lines.push(approval_line);
             lines.push(sandbox_line);
+            lines.push(retry_line);
             lines.push(allowed_line);
             lines.push(blocked_line);
         }
@@ -135,11 +142,15 @@ pub fn next_sandbox_profile(profile: SandboxProfile) -> SandboxProfile {
     }
 }
 
+pub fn next_retry_max_attempts(value: u32) -> u32 {
+    (value + 1) % 4
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        approval_profile_name, next_approval_profile, next_sandbox_profile, sandbox_profile_name,
-        upsert_exec_policy_settings,
+        approval_profile_name, next_approval_profile, next_retry_max_attempts,
+        next_sandbox_profile, sandbox_profile_name, upsert_exec_policy_settings,
     };
     use harper_core::{ApprovalProfile, SandboxProfile};
 
@@ -149,12 +160,14 @@ mod tests {
             "",
             ApprovalProfile::AllowListed,
             SandboxProfile::Workspace,
+            2,
             &["git".to_string()],
             &["rm".to_string()],
         );
         assert!(output.contains("[exec_policy]"));
         assert!(output.contains("approval_profile = \"allow_listed\""));
         assert!(output.contains("sandbox_profile = \"workspace\""));
+        assert!(output.contains("retry_max_attempts = 2"));
         assert!(output.contains("allowed_commands = [\"git\"]"));
         assert!(output.contains("blocked_commands = [\"rm\"]"));
     }
@@ -166,11 +179,13 @@ mod tests {
             input,
             ApprovalProfile::AllowAll,
             SandboxProfile::NetworkedWorkspace,
+            3,
             &["ls".to_string()],
             &["sudo".to_string()],
         );
         assert!(output.contains("approval_profile = \"allow_all\""));
         assert!(output.contains("sandbox_profile = \"networked_workspace\""));
+        assert!(output.contains("retry_max_attempts = 3"));
         assert!(output.contains("allowed_commands = [\"ls\"]"));
         assert!(output.contains("blocked_commands = [\"sudo\"]"));
         assert!(!output.contains("approval_profile = \"strict\""));
@@ -198,5 +213,7 @@ mod tests {
             next_sandbox_profile(SandboxProfile::Workspace),
             SandboxProfile::NetworkedWorkspace
         );
+        assert_eq!(next_retry_max_attempts(0), 1);
+        assert_eq!(next_retry_max_attempts(3), 0);
     }
 }

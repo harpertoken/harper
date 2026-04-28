@@ -321,8 +321,41 @@ pub fn save_plan_state(conn: &Connection, session_id: &str, plan: &PlanState) ->
     )?;
     save_plan_runtime(conn, session_id, plan.runtime.as_ref())?;
     let event_id = insert_plan_event(conn, session_id)?;
-    crate::core::plan_events::notify(event_id, session_id, plan.clone());
+    crate::core::plan_events::notify(event_id, session_id, Some(plan.clone()));
+    if let Some(db_key) = database_key(conn) {
+        crate::core::plan_events::notify_cross_process(&db_key, event_id, session_id);
+    }
     Ok(())
+}
+
+pub fn delete_plan_state(conn: &Connection, session_id: &str) -> HarperResult<()> {
+    conn.execute(
+        "DELETE FROM session_plans WHERE session_id = ?1",
+        params![session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_plan_runtime WHERE session_id = ?1",
+        params![session_id],
+    )?;
+    let event_id = insert_plan_event(conn, session_id)?;
+    crate::core::plan_events::notify(event_id, session_id, None);
+    if let Some(db_key) = database_key(conn) {
+        crate::core::plan_events::notify_cross_process(&db_key, event_id, session_id);
+    }
+    Ok(())
+}
+
+fn database_key(conn: &Connection) -> Option<String> {
+    let mut stmt = conn.prepare("PRAGMA database_list").ok()?;
+    let mut rows = stmt.query([]).ok()?;
+    while let Ok(Some(row)) = rows.next() {
+        let name: String = row.get(1).ok()?;
+        let path: String = row.get(2).ok()?;
+        if name == "main" && !path.trim().is_empty() {
+            return Some(path);
+        }
+    }
+    None
 }
 
 fn insert_plan_event(conn: &Connection, session_id: &str) -> HarperResult<i64> {

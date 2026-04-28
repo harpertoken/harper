@@ -340,7 +340,7 @@ fn test_api_config_creation() {
         provider: ApiProvider::OpenAI,
         api_key: "test-key".to_string(),
         base_url: "https://api.openai.com/v1/chat/completions".to_string(),
-        model_name: "gpt-4".to_string(),
+        model_name: "gpt-5.5".to_string(),
     };
 
     assert!(matches!(config.provider, ApiProvider::OpenAI));
@@ -407,7 +407,7 @@ mod e2e_tests {
             provider: ApiProvider::OpenAI,
             api_key: "test-key".to_string(),
             base_url: "https://api.openai.com/v1/chat/completions".to_string(),
-            model_name: "gpt-4".to_string(),
+            model_name: "gpt-5.5".to_string(),
         };
 
         // Test session creation and message handling
@@ -601,7 +601,7 @@ mod e2e_tests {
 provider = "OpenAI"
 api_key = "test-key"
 base_url = "https://api.openai.com/v1/chat/completions"
-model_name = "gpt-4"
+model_name = "gpt-5.5"
 
 [database]
 path = '{}'
@@ -884,7 +884,7 @@ Full output:
             provider: ApiProvider::OpenAI,
             api_key: "test-key".to_string(),
             base_url: "https://api.openai.com/v1/chat/completions".to_string(),
-            model_name: "gpt-4".to_string(),
+            model_name: "gpt-5.5".to_string(),
         };
 
         // Create exec policy
@@ -894,6 +894,9 @@ Full output:
             blocked_commands: None,
             sandbox_profile: None,
             sandbox: None,
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
         };
 
         // Create custom commands

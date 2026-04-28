@@ -56,6 +56,20 @@ pub struct PlanJobRecord {
     pub has_error_output: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PlanFollowup {
+    Checkpoint {
+        step: String,
+        next_step: Option<String>,
+    },
+    RetryOrReplan {
+        step: String,
+        command: Option<String>,
+        retry_count: u32,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct PlanRuntime {
     #[serde(default)]
@@ -68,6 +82,8 @@ pub struct PlanRuntime {
     pub active_job_id: Option<String>,
     #[serde(default)]
     pub jobs: Vec<PlanJobRecord>,
+    #[serde(default)]
+    pub followup: Option<PlanFollowup>,
 }
 
 impl PlanRuntime {
@@ -76,7 +92,10 @@ impl PlanRuntime {
     }
 
     pub fn is_empty(&self) -> bool {
-        !self.has_active_state() && self.active_job_id.is_none() && self.jobs.is_empty()
+        !self.has_active_state()
+            && self.active_job_id.is_none()
+            && self.jobs.is_empty()
+            && self.followup.is_none()
     }
 
     pub fn set_active_tool_state(
@@ -111,6 +130,7 @@ impl PlanRuntime {
             output_preview: None,
             has_error_output: false,
         });
+        self.followup = None;
         job_id
     }
 
@@ -183,6 +203,38 @@ impl PlanRuntime {
         self.clear_active_state();
     }
 
+    pub fn set_checkpoint_followup(&mut self, step: impl Into<String>, next_step: Option<String>) {
+        self.followup = Some(PlanFollowup::Checkpoint {
+            step: step.into(),
+            next_step,
+        });
+    }
+
+    pub fn set_retry_or_replan_followup(
+        &mut self,
+        step: impl Into<String>,
+        command: Option<String>,
+    ) {
+        let step = step.into();
+        let retry_count = match self.followup.as_ref() {
+            Some(PlanFollowup::RetryOrReplan {
+                step: existing_step,
+                retry_count,
+                ..
+            }) if existing_step == &step => retry_count.saturating_add(1),
+            _ => 1,
+        };
+        self.followup = Some(PlanFollowup::RetryOrReplan {
+            step,
+            command,
+            retry_count,
+        });
+    }
+
+    pub fn clear_followup(&mut self) {
+        self.followup = None;
+    }
+
     pub fn clear_active_state(&mut self) {
         self.active_tool = None;
         self.active_command = None;
@@ -225,7 +277,7 @@ pub struct PlanState {
 
 #[cfg(test)]
 mod tests {
-    use super::{PlanJobStatus, PlanRuntime};
+    use super::{PlanFollowup, PlanJobStatus, PlanRuntime};
 
     #[test]
     fn runtime_deserializes_legacy_shape_with_empty_jobs() {
@@ -263,5 +315,22 @@ mod tests {
         assert!(runtime.active_job_id.is_none());
         assert!(!runtime.has_active_state());
         assert_eq!(runtime.jobs[0].status, PlanJobStatus::Succeeded);
+    }
+
+    #[test]
+    fn runtime_retry_followup_counts_repeated_failures() {
+        let mut runtime = PlanRuntime::default();
+
+        runtime.set_retry_or_replan_followup("Patch handler", Some("cargo test".to_string()));
+        runtime.set_retry_or_replan_followup("Patch handler", Some("cargo test".to_string()));
+
+        assert_eq!(
+            runtime.followup,
+            Some(PlanFollowup::RetryOrReplan {
+                step: "Patch handler".to_string(),
+                command: Some("cargo test".to_string()),
+                retry_count: 2,
+            })
+        );
     }
 }

@@ -21,6 +21,31 @@ mkdir -p config
 cp config/local.example.toml config/local.toml
 ```
 
+## Execution Policy
+
+Harper separates command approval policy from sandbox policy under `[exec_policy]`. The same fields are also available in the TUI under `Settings -> Execution Policy`.
+
+```toml
+[exec_policy]
+approval_profile = "allow_listed"   # strict | allow_listed | allow_all
+sandbox_profile = "workspace"       # disabled | workspace | networked_workspace
+retry_max_attempts = 1
+retry_network_commands = ["curl", "wget"]
+retry_write_commands = ["mkdir", "touch"]
+
+[exec_policy.sandbox]
+allowed_dirs = ["."]
+writable_dirs = ["./tmp", "./build"]
+```
+
+- `approval_profile` controls when Harper asks before running commands.
+- `sandbox_profile` controls the default sandbox boundary.
+- `retry_max_attempts` controls bounded automatic retries for retry-safe failures.
+- `allowed_dirs` are readable roots.
+- `writable_dirs` are writable roots.
+
+Under `allow_listed`, Harper still asks for approval when a command declares network access or writes outside configured writable roots, even if the command itself is allowlisted.
+
 ## API Configuration
 
 ### Setting Up OpenAI
@@ -56,9 +81,9 @@ You can specify which models to use for different tasks:
 
 ```toml
 [models]
-default = "gpt-4"
-code = "gpt-4"
-chat = "gpt-3.5-turbo"
+default = "gpt-5.5"
+code = "gpt-5.5"
+chat = "gpt-5.5"
 ```
 
 ### Model Parameters
@@ -120,7 +145,7 @@ You can also configure Harper using environment variables:
 ```bash
 export HARPER_API_KEY="your-api-key"
 export HARPER_PROVIDER="OpenAI"
-export HARPER_MODEL="gpt-4"
+export HARPER_MODEL="gpt-5.5"
 export HARPER_DEBUG="false"
 ```
 

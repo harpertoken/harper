@@ -11,5 +11,7 @@ rust_library(
 rust_test(
     name = "harper_sandbox_test",
     crate = ":harper_sandbox",
-    deps = all_crate_deps(normal_dev = True),
+    deps = all_crate_deps(normal_dev = True) + [
+        "@crates//:tempfile",
+    ],
 )

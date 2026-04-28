@@ -68,6 +68,12 @@ pub struct ToolService<'a> {
     runtime_events: Option<Arc<dyn RuntimeEventSink>>,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct PlanSyncOutcome {
+    completed_step: Option<String>,
+    next_step: Option<String>,
+}
+
 impl<'a> ToolService<'a> {
     fn parse_run_command_sandbox_intent(args: &serde_json::Value) -> shell::CommandSandboxIntent {
         shell::CommandSandboxIntent {
@@ -91,6 +97,15 @@ impl<'a> ToolService<'a> {
                 .get("requires_network")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
+            retry_policy: args
+                .get("retry_policy")
+                .and_then(|v| v.as_str())
+                .and_then(|value| {
+                    serde_json::from_value::<shell::CommandRetryPolicy>(serde_json::Value::String(
+                        value.to_string(),
+                    ))
+                    .ok()
+                }),
         }
     }
 
@@ -742,7 +757,7 @@ impl<'a> ToolService<'a> {
         tool_output: &str,
     ) -> Result<String, HarperError> {
         self.emit_activity_update(Some("thinking".to_string()));
-        self.sync_plan_after_tool(tool_call_json)?;
+        let plan_sync_outcome = self.sync_plan_after_tool(tool_call_json)?;
         // Create a new history vector by cloning the existing one
         let mut new_history = history.to_vec();
 
@@ -767,7 +782,7 @@ SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the
             tool_output
         );
         if !Self::is_update_plan_call(tool_call_json) {
-            if let Some(plan_instruction) = self.plan_followup_instruction()? {
+            if let Some(plan_instruction) = self.plan_followup_instruction(&plan_sync_outcome)? {
                 system_message.push_str("\n5. ");
                 system_message.push_str(&plan_instruction);
             }
@@ -828,67 +843,74 @@ SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the
         Ok(())
     }
 
-    fn sync_plan_after_tool(&self, tool_call_json: &str) -> HarperResult<()> {
+    fn sync_plan_after_tool(&self, tool_call_json: &str) -> HarperResult<PlanSyncOutcome> {
         let Some(session_id) = self.session_id else {
-            return Ok(());
+            return Ok(PlanSyncOutcome::default());
         };
         let Some(mut plan) = crate::memory::storage::load_plan_state(self.conn, session_id)? else {
-            return Ok(());
+            return Ok(PlanSyncOutcome::default());
         };
         let Some(current_index) = plan
             .items
             .iter()
             .position(|item| matches!(item.status, crate::core::plan::PlanStepStatus::InProgress))
         else {
-            return Ok(());
+            return Ok(PlanSyncOutcome::default());
         };
 
         let tool_name = Self::tool_name_from_call(tool_call_json);
         let Some(tool_name) = tool_name else {
-            return Ok(());
+            return Ok(PlanSyncOutcome::default());
         };
         if !Self::is_safe_auto_advance_tool(&tool_name) {
-            if let Some(runtime) = plan.runtime.as_mut() {
-                runtime.clear_active_state();
-                if runtime.is_empty() {
-                    plan.runtime = None;
-                }
-                crate::memory::storage::save_plan_state(self.conn, session_id, &plan)?;
-            }
-            return Ok(());
+            let mut runtime = plan.runtime.take().unwrap_or_default();
+            runtime.clear_active_state();
+            let current_step = plan.items[current_index].step.clone();
+            runtime.set_checkpoint_followup(current_step, None);
+            plan.runtime = (!runtime.is_empty()).then_some(runtime);
+            crate::memory::storage::save_plan_state(self.conn, session_id, &plan)?;
+            return Ok(PlanSyncOutcome::default());
         }
 
         let step_text = plan.items[current_index].step.to_ascii_lowercase();
         if !Self::step_matches_safe_tool(&step_text, &tool_name) {
-            if let Some(runtime) = plan.runtime.as_mut() {
-                runtime.clear_active_state();
-                if runtime.is_empty() {
-                    plan.runtime = None;
-                }
-                crate::memory::storage::save_plan_state(self.conn, session_id, &plan)?;
-            }
-            return Ok(());
+            let mut runtime = plan.runtime.take().unwrap_or_default();
+            runtime.clear_active_state();
+            let current_step = plan.items[current_index].step.clone();
+            runtime.set_checkpoint_followup(current_step, None);
+            plan.runtime = (!runtime.is_empty()).then_some(runtime);
+            crate::memory::storage::save_plan_state(self.conn, session_id, &plan)?;
+            return Ok(PlanSyncOutcome::default());
         }
 
+        let completed_step = plan.items[current_index].step.clone();
         plan.items[current_index].status = crate::core::plan::PlanStepStatus::Completed;
-        if let Some(next_pending) = plan
+        let next_step = if let Some(next_pending) = plan
             .items
             .iter_mut()
             .find(|item| matches!(item.status, crate::core::plan::PlanStepStatus::Pending))
         {
+            let next_step = next_pending.step.clone();
             next_pending.status = crate::core::plan::PlanStepStatus::InProgress;
-        }
-        if let Some(runtime) = plan.runtime.as_mut() {
-            runtime.clear_active_state();
-            if runtime.is_empty() {
-                plan.runtime = None;
-            }
-        }
+            Some(next_step)
+        } else {
+            None
+        };
+        let mut runtime = plan.runtime.take().unwrap_or_default();
+        runtime.clear_active_state();
+        runtime.set_checkpoint_followup(completed_step.clone(), next_step.clone());
+        plan.runtime = (!runtime.is_empty()).then_some(runtime);
         crate::memory::storage::save_plan_state(self.conn, session_id, &plan)?;
-        Ok(())
+        Ok(PlanSyncOutcome {
+            completed_step: Some(completed_step),
+            next_step,
+        })
     }
 
-    fn plan_followup_instruction(&self) -> HarperResult<Option<String>> {
+    fn plan_followup_instruction(
+        &self,
+        sync_outcome: &PlanSyncOutcome,
+    ) -> HarperResult<Option<String>> {
         let Some(session_id) = self.session_id else {
             return Ok(None);
         };
@@ -904,6 +926,76 @@ SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the
             .any(|item| !matches!(item.status, crate::core::plan::PlanStepStatus::Completed));
         if !has_remaining {
             return Ok(None);
+        }
+
+        if let Some(followup) = plan
+            .runtime
+            .as_ref()
+            .and_then(|runtime| runtime.followup.as_ref())
+        {
+            match followup {
+                crate::core::plan::PlanFollowup::RetryOrReplan {
+                    step,
+                    command,
+                    retry_count,
+                } => {
+                    let command = command.as_deref().unwrap_or(step.as_str());
+                    if *retry_count <= 1 {
+                        return Ok(Some(format!(
+                            "The current plan step '{}' just failed while running '{}'. Retry once if the issue looks transient; otherwise call update_plan to revise the remaining work.",
+                            step, command
+                        )));
+                    }
+                    return Ok(Some(format!(
+                        "The current plan step '{}' has already failed {} times while running '{}'. Do not keep retrying blindly; call update_plan to revise or de-scope the remaining work.",
+                        step, retry_count, command
+                    )));
+                }
+                crate::core::plan::PlanFollowup::Checkpoint { step, next_step } => {
+                    let next_clause = next_step
+                        .as_deref()
+                        .map(|next_step| {
+                            format!(
+                                " Continue with '{}' only after summarizing what changed.",
+                                next_step
+                            )
+                        })
+                        .unwrap_or_else(|| {
+                            " If that closed the task, confirm completion instead of repeating the plan."
+                                .to_string()
+                        });
+                    return Ok(Some(format!(
+                        "Plan checkpoint: '{}' advanced. Briefly summarize what changed before continuing.{}",
+                        step, next_clause
+                    )));
+                }
+            }
+        }
+
+        if let Some(blocked_step) = plan
+            .items
+            .iter()
+            .find(|item| matches!(item.status, crate::core::plan::PlanStepStatus::Blocked))
+        {
+            return Ok(Some(format!(
+                "A session plan is blocked at step '{}'. Before more tool work, call update_plan to explain the blocker, retry, or revise the remaining steps.",
+                blocked_step.step
+            )));
+        }
+
+        if let Some(completed_step) = sync_outcome.completed_step.as_deref() {
+            let next_clause = sync_outcome
+                .next_step
+                .as_deref()
+                .map(|step| format!(" Continue with '{}' once the checkpoint is clear.", step))
+                .unwrap_or_else(|| {
+                    " If that closed the task, confirm completion instead of repeating the plan."
+                        .to_string()
+                });
+            return Ok(Some(format!(
+                "Plan checkpoint: '{}' just completed. Briefly summarize what changed before continuing.{}",
+                completed_step, next_clause
+            )));
         }
 
         Ok(Some(
@@ -1065,7 +1157,7 @@ fn extract_target_paths_from_json(
 
 #[cfg(test)]
 mod tests {
-    use super::ToolService;
+    use super::{PlanSyncOutcome, ToolService};
     use crate::core::plan::{PlanItem, PlanState, PlanStepStatus};
     use crate::core::{ApiConfig, ApiProvider};
     use crate::runtime::config::ExecPolicyConfig;
@@ -1078,7 +1170,7 @@ mod tests {
             provider: ApiProvider::OpenAI,
             api_key: "test-key".to_string(),
             base_url: "https://api.openai.com/v1/chat/completions".to_string(),
-            model_name: "gpt-4".to_string(),
+            model_name: "gpt-5.5".to_string(),
         }
     }
 
@@ -1179,6 +1271,54 @@ mod tests {
     }
 
     #[test]
+    fn sync_plan_after_tool_returns_checkpoint_summary_state() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "checkpoint-session",
+            &PlanState {
+                explanation: Some("Testing checkpoint".to_string()),
+                items: vec![
+                    PlanItem {
+                        step: "Inspect server file".to_string(),
+                        status: PlanStepStatus::InProgress,
+                        job_id: None,
+                    },
+                    PlanItem {
+                        step: "Patch handler".to_string(),
+                        status: PlanStepStatus::Pending,
+                        job_id: None,
+                    },
+                ],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        let config = test_config();
+        let exec_policy = ExecPolicyConfig::default();
+        let service = ToolService::new(
+            &conn,
+            &config,
+            &exec_policy,
+            None,
+            Some("checkpoint-session"),
+        );
+
+        let outcome = service
+            .sync_plan_after_tool(r#"{"tool":"read_file","args":{"path":"src/server.rs"}}"#)
+            .expect("sync plan after tool");
+
+        assert_eq!(
+            outcome.completed_step.as_deref(),
+            Some("Inspect server file")
+        );
+        assert_eq!(outcome.next_step.as_deref(), Some("Patch handler"));
+    }
+
+    #[test]
     fn sync_plan_after_tool_does_not_complete_write_step() {
         let conn = Connection::open_in_memory().expect("in-memory db");
         crate::memory::storage::init_db(&conn).expect("init db");
@@ -1216,6 +1356,193 @@ mod tests {
             .expect("load plan")
             .expect("plan present");
         assert_eq!(plan.items[0].status, PlanStepStatus::InProgress);
+        assert!(matches!(
+            plan.runtime.as_ref().and_then(|runtime| runtime.followup.as_ref()),
+            Some(crate::core::plan::PlanFollowup::Checkpoint {
+                step,
+                next_step: None
+            }) if step == "Patch handler"
+        ));
+    }
+
+    #[test]
+    fn plan_followup_instruction_prioritizes_blocked_steps() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "blocked-followup-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "Retry the failing command".to_string(),
+                    status: PlanStepStatus::Blocked,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        let config = test_config();
+        let exec_policy = ExecPolicyConfig::default();
+        let service = ToolService::new(
+            &conn,
+            &config,
+            &exec_policy,
+            None,
+            Some("blocked-followup-session"),
+        );
+
+        let instruction = service
+            .plan_followup_instruction(&PlanSyncOutcome::default())
+            .expect("followup")
+            .expect("instruction present");
+
+        assert!(instruction.contains("blocked at step 'Retry the failing command'"));
+        assert!(instruction.contains("call update_plan"));
+    }
+
+    #[test]
+    fn plan_followup_instruction_uses_checkpoint_summary_for_completed_step() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "checkpoint-followup-session",
+            &PlanState {
+                explanation: None,
+                items: vec![
+                    PlanItem {
+                        step: "Inspect server file".to_string(),
+                        status: PlanStepStatus::Completed,
+                        job_id: None,
+                    },
+                    PlanItem {
+                        step: "Patch handler".to_string(),
+                        status: PlanStepStatus::InProgress,
+                        job_id: None,
+                    },
+                ],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        let config = test_config();
+        let exec_policy = ExecPolicyConfig::default();
+        let service = ToolService::new(
+            &conn,
+            &config,
+            &exec_policy,
+            None,
+            Some("checkpoint-followup-session"),
+        );
+
+        let instruction = service
+            .plan_followup_instruction(&PlanSyncOutcome {
+                completed_step: Some("Inspect server file".to_string()),
+                next_step: Some("Patch handler".to_string()),
+            })
+            .expect("followup")
+            .expect("instruction present");
+
+        assert!(instruction.contains("Plan checkpoint: 'Inspect server file' just completed."));
+        assert!(instruction.contains("Continue with 'Patch handler'"));
+    }
+
+    #[test]
+    fn plan_followup_instruction_requests_retry_once_for_first_failure() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "retry-followup-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "Run migration".to_string(),
+                    status: PlanStepStatus::Blocked,
+                    job_id: None,
+                }],
+                runtime: Some(crate::core::plan::PlanRuntime {
+                    followup: Some(crate::core::plan::PlanFollowup::RetryOrReplan {
+                        step: "Run migration".to_string(),
+                        command: Some("cargo test".to_string()),
+                        retry_count: 1,
+                    }),
+                    ..Default::default()
+                }),
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        let config = test_config();
+        let exec_policy = ExecPolicyConfig::default();
+        let service = ToolService::new(
+            &conn,
+            &config,
+            &exec_policy,
+            None,
+            Some("retry-followup-session"),
+        );
+
+        let instruction = service
+            .plan_followup_instruction(&PlanSyncOutcome::default())
+            .expect("followup")
+            .expect("instruction present");
+
+        assert!(instruction.contains("Retry once if the issue looks transient"));
+        assert!(instruction.contains("Run migration"));
+    }
+
+    #[test]
+    fn plan_followup_instruction_stops_repeated_retries() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "retry-limit-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "Run migration".to_string(),
+                    status: PlanStepStatus::Blocked,
+                    job_id: None,
+                }],
+                runtime: Some(crate::core::plan::PlanRuntime {
+                    followup: Some(crate::core::plan::PlanFollowup::RetryOrReplan {
+                        step: "Run migration".to_string(),
+                        command: Some("cargo test".to_string()),
+                        retry_count: 2,
+                    }),
+                    ..Default::default()
+                }),
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        let config = test_config();
+        let exec_policy = ExecPolicyConfig::default();
+        let service = ToolService::new(
+            &conn,
+            &config,
+            &exec_policy,
+            None,
+            Some("retry-limit-session"),
+        );
+
+        let instruction = service
+            .plan_followup_instruction(&PlanSyncOutcome::default())
+            .expect("followup")
+            .expect("instruction present");
+
+        assert!(instruction.contains("Do not keep retrying blindly"));
+        assert!(instruction.contains("already failed 2 times"));
     }
 
     #[test]
@@ -1238,7 +1565,8 @@ mod tests {
             "command": "cp ./src.txt ./build/out.txt",
             "declared_read_paths": ["./src.txt"],
             "declared_write_paths": ["./build/out.txt"],
-            "requires_network": true
+            "requires_network": true,
+            "retry_policy": "safe"
         }));
 
         assert_eq!(intent.declared_read_paths, vec![PathBuf::from("./src.txt")]);
@@ -1247,5 +1575,9 @@ mod tests {
             vec![PathBuf::from("./build/out.txt")]
         );
         assert!(intent.requires_network);
+        assert_eq!(
+            intent.retry_policy,
+            Some(crate::tools::shell::CommandRetryPolicy::Safe)
+        );
     }
 }

@@ -98,6 +98,7 @@ Core Tools:
 - search_replace(args: {\"path\": \"src/main.rs\", \"old_string\": \"old\", \"new_string\": \"new\"})
 - run_command(args: {\"command\": \"git status\"})
 - run_command(args: {\"command\": \"cp ./src.txt ./build/out.txt\", \"declared_read_paths\": [\"./src.txt\"], \"declared_write_paths\": [\"./build/out.txt\"]})
+- run_command(args: {\"command\": \"curl -fsSL http://127.0.0.1:8081/health\", \"requires_network\": true, \"retry_policy\": \"safe\"})
 - todo(args: {\"action\": \"add|list|remove|clear\", \"description\": \"...\", \"index\": 1})
 - update_plan(args: {\"explanation\": \"optional context\", \"items\": [{\"step\": \"Inspect files\", \"status\": \"in_progress\"}]})
 - list_changed_files(args: {\"ext\": \"rs\", \"tracked_only\": true, \"since\": \"HEAD~1\"})
