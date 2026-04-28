@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Installation</title>
+    <meta name="harper-update-version" content="2026-04-28-install" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -12,14 +13,14 @@
         <header class="site-header">
             <div class="brand"><img src="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" alt="" />HARPER<span>·AI</span></div>
             <nav class="nav">
-                <a href="index.html">Home</a>
-                <a href="installation.html" aria-current="page">Install</a>
-                <a href="troubleshooting.html">Troubleshooting</a>
-                <a href="blog.html">Blog</a>
-                <a href="changelog.html">Changelog</a>
-                <a href="server.html">API Server</a>
-                <a href="terms.html">Terms</a>
-                <a href="privacy.html">Privacy</a>
+                <a href="index.html" data-update-target="home">Home</a>
+                <a href="installation.html" data-update-target="install" aria-current="page">Install</a>
+                <a href="troubleshooting.html" data-update-target="troubleshooting">Troubleshooting</a>
+                <a href="blog.html" data-update-target="blog">Blog</a>
+                <a href="changelog.html" data-update-target="changelog">Changelog</a>
+                <a href="server.html" data-update-target="server">API Server</a>
+                <a href="terms.html" data-update-target="terms">Terms</a>
+                <a href="privacy.html" data-update-target="privacy">Privacy</a>
             </nav>
         </header>
 
@@ -180,6 +181,7 @@ Tab</code></pre>
             <a class="button secondary" href="index.html">← Back</a>
         </footer>
     </div>
+    <script src="nav-updates.js"></script>
     <script>
         const header = document.querySelector('.site-header');
         window.addEventListener('scroll', () => {

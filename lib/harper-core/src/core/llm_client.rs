@@ -207,7 +207,7 @@ pub async fn call_llm(
                                             },
                                             "status": {
                                                 "type": "string",
-                                                "enum": ["pending", "in_progress", "completed"],
+                                                "enum": ["pending", "in_progress", "completed", "blocked"],
                                                 "description": "Current status of the step"
                                             }
                                         },

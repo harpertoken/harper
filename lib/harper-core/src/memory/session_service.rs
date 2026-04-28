@@ -526,6 +526,7 @@ impl<'a> SessionService<'a> {
                         crate::core::plan::PlanStepStatus::Pending => "pending",
                         crate::core::plan::PlanStepStatus::InProgress => "in_progress",
                         crate::core::plan::PlanStepStatus::Completed => "completed",
+                        crate::core::plan::PlanStepStatus::Blocked => "blocked",
                     },
                     item.step
                 ))?;
@@ -590,6 +591,7 @@ impl<'a> SessionService<'a> {
                     crate::core::plan::PlanStepStatus::Pending => "pending",
                     crate::core::plan::PlanStepStatus::InProgress => "in_progress",
                     crate::core::plan::PlanStepStatus::Completed => "completed",
+                    crate::core::plan::PlanStepStatus::Blocked => "blocked",
                 };
                 writeln!(writer, "- [{}] {}", status, item.step)?;
             }

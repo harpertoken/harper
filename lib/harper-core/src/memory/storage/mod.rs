@@ -156,6 +156,19 @@ pub fn init_db(conn: &Connection) -> HarperResult<()> {
         [],
     )?;
     conn.execute(
+        "CREATE TABLE IF NOT EXISTS session_plan_events (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             session_id TEXT NOT NULL,
+             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+         )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_session_plan_events_session_id_id
+         ON session_plan_events(session_id, id)",
+        [],
+    )?;
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS session_agents (
              session_id TEXT PRIMARY KEY,
              sources_json TEXT NOT NULL,
@@ -307,7 +320,29 @@ pub fn save_plan_state(conn: &Connection, session_id: &str, plan: &PlanState) ->
         params![session_id, plan.explanation, items_json],
     )?;
     save_plan_runtime(conn, session_id, plan.runtime.as_ref())?;
+    let event_id = insert_plan_event(conn, session_id)?;
+    crate::core::plan_events::notify(event_id, session_id, plan.clone());
     Ok(())
+}
+
+fn insert_plan_event(conn: &Connection, session_id: &str) -> HarperResult<i64> {
+    conn.execute(
+        "INSERT INTO session_plan_events (session_id) VALUES (?1)",
+        params![session_id],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn load_latest_plan_event_id(conn: &Connection, session_id: &str) -> HarperResult<Option<i64>> {
+    let mut stmt = conn.prepare(
+        "SELECT id FROM session_plan_events WHERE session_id = ?1 ORDER BY id DESC LIMIT 1",
+    )?;
+    let mut rows = stmt.query(params![session_id])?;
+    if let Some(row) = rows.next()? {
+        Ok(Some(row.get(0)?))
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn load_plan_state(conn: &Connection, session_id: &str) -> HarperResult<Option<PlanState>> {
@@ -684,6 +719,7 @@ pub fn insert_command_log(conn: &Connection, record: &CommandLogRecord) -> Harpe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::plan::{PlanItem, PlanState, PlanStepStatus};
 
     #[test]
     fn init_db_adds_session_user_id_column() {
@@ -702,6 +738,33 @@ mod tests {
         assert!(session_belongs_to_user(&conn, "session-1", "user-a").expect("ownership lookup"));
         assert!(!save_session_for_user(&conn, "session-1", "user-b").expect("second claim denied"));
         assert!(!session_belongs_to_user(&conn, "session-1", "user-b").expect("other owner lookup"));
+    }
+
+    #[test]
+    fn save_plan_state_records_plan_event_id() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        init_db(&conn).expect("db init");
+
+        save_plan_state(
+            &conn,
+            "session-a",
+            &PlanState {
+                explanation: Some("Track work".to_string()),
+                items: vec![PlanItem {
+                    step: "Inspect".to_string(),
+                    status: PlanStepStatus::InProgress,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        assert_eq!(
+            load_latest_plan_event_id(&conn, "session-a").expect("latest event id"),
+            Some(1)
+        );
     }
 }
 

@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 // Keyboard shortcut constants
 const HELP_MESSAGE: &str =
-    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | X:Exit | W:Web | B:Sidebar | A:Agents | F:Findings | M:Msgs | C:ID";
+    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | X:Exit | W:Web | B:Sidebar | A:Agents | F:Findings | P:Jobs | M:Msgs | C:ID";
 
 use super::app::{AppState, ChatState, NavigationFocus, SessionInfo, TuiApp};
 use harper_core::memory::session_service::SessionService;
@@ -53,6 +53,9 @@ pub(crate) fn create_chat_state(
         active_agents,
         active_review: None,
         review_selected: 0,
+        plan_job_selected: 0,
+        plan_jobs_expanded: false,
+        plan_job_output_scroll: 0,
         navigation_focus: NavigationFocus::Messages,
         command_output: None,
         agents_panel_expanded: false,
@@ -302,6 +305,42 @@ pub fn handle_event(
                         }
                         return EventResult::Continue;
                     }
+                    KeyCode::Char('p') => {
+                        let mut status_message = None;
+                        if let AppState::Chat(chat_state) = &mut app.state {
+                            if chat_state
+                                .active_plan
+                                .as_ref()
+                                .and_then(|plan| plan.runtime.as_ref())
+                                .is_some_and(|runtime| !runtime.jobs.is_empty())
+                            {
+                                if !chat_state.plan_jobs_expanded {
+                                    chat_state.plan_jobs_expanded = true;
+                                    chat_state.set_navigation_focus(NavigationFocus::PlanJobs);
+                                    status_message =
+                                        Some("Planner jobs browser expanded".to_string());
+                                } else if matches!(
+                                    chat_state.navigation_focus,
+                                    NavigationFocus::PlanJobs
+                                ) {
+                                    chat_state.plan_jobs_expanded = false;
+                                    chat_state.plan_job_output_scroll = 0;
+                                    chat_state.set_navigation_focus(NavigationFocus::Messages);
+                                    status_message =
+                                        Some("Planner jobs browser closed".to_string());
+                                } else {
+                                    chat_state.set_navigation_focus(NavigationFocus::PlanJobs);
+                                    status_message = Some("Focus on planner jobs".to_string());
+                                }
+                            } else {
+                                status_message = Some("No planner jobs".to_string());
+                            }
+                        }
+                        if let Some(message) = status_message {
+                            app.set_status_message(message);
+                        }
+                        return EventResult::Continue;
+                    }
                     KeyCode::Char('y') => {
                         app.previous();
                         return EventResult::Continue;
@@ -336,9 +375,18 @@ pub fn handle_event(
                 {
                     handle_image_paste(app);
                 }
-                KeyCode::Esc => match &app.state {
+                KeyCode::Esc => match &mut app.state {
                     AppState::Menu(_) => {}
-                    AppState::Chat(_) => app.state = AppState::Menu(0),
+                    AppState::Chat(chat_state) => {
+                        if chat_state.plan_jobs_expanded {
+                            chat_state.plan_jobs_expanded = false;
+                            chat_state.plan_job_output_scroll = 0;
+                            chat_state.set_navigation_focus(NavigationFocus::Messages);
+                            app.set_status_message("Planner jobs browser closed".to_string());
+                        } else {
+                            app.state = AppState::Menu(0);
+                        }
+                    }
                     AppState::Sessions(_, _) => app.state = AppState::Menu(0),
                     AppState::ExportSessions(_, _) => app.state = AppState::Menu(0),
                     AppState::Tools(_) => app.state = AppState::Menu(0),

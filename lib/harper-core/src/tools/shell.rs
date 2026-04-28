@@ -17,7 +17,7 @@
 //! This module provides functionality for executing shell commands
 //! with safety checks and user approval.
 
-use crate::core::plan::PlanRuntime;
+use crate::core::plan::PlanJobStatus;
 use crate::core::{error::HarperError, ApiConfig};
 use crate::memory::storage::{self, CommandLogRecord};
 use crate::runtime::config::ExecPolicyConfig;
@@ -63,6 +63,19 @@ async fn emit_command_output(
             .command_output_updated(session_id, command.to_string(), chunk, is_error, done)
             .await;
     }
+}
+
+fn database_path(conn: &Connection) -> Option<String> {
+    let mut stmt = conn.prepare("PRAGMA database_list").ok()?;
+    let mut rows = stmt.query([]).ok()?;
+    while let Ok(Some(row)) = rows.next() {
+        let name: String = row.get(1).ok()?;
+        let path: String = row.get(2).ok()?;
+        if name == "main" && !path.trim().is_empty() {
+            return Some(path);
+        }
+    }
+    None
 }
 
 /// Execute a shell command with safety checks
@@ -211,14 +224,12 @@ pub async fn execute_command(
         if let Some(ctx) =
             audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
         {
-            let _ = crate::tools::plan::set_plan_runtime(
+            let _ = crate::tools::plan::start_plan_job(
                 ctx.0,
                 ctx.1,
-                Some(PlanRuntime {
-                    active_tool: Some("run_command".to_string()),
-                    active_command: Some(command_str.to_string()),
-                    active_status: Some("waiting_approval".to_string()),
-                }),
+                "run_command",
+                Some(command_str.to_string()),
+                PlanJobStatus::WaitingApproval,
             );
             emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
         }
@@ -259,14 +270,10 @@ pub async fn execute_command(
             if let Some(ctx) =
                 audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
             {
-                let _ = crate::tools::plan::set_plan_runtime(
+                let _ = crate::tools::plan::finish_active_plan_job(
                     ctx.0,
                     ctx.1,
-                    Some(PlanRuntime {
-                        active_tool: Some("run_command".to_string()),
-                        active_command: Some(command_str.to_string()),
-                        active_status: Some("blocked".to_string()),
-                    }),
+                    PlanJobStatus::Blocked,
                 );
                 emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
             }
@@ -296,15 +303,16 @@ pub async fn execute_command(
             Some(format!("running command: {}", command_str)),
         )
         .await;
-        let _ = crate::tools::plan::set_plan_runtime(
-            ctx.0,
-            ctx.1,
-            Some(PlanRuntime {
-                active_tool: Some("run_command".to_string()),
-                active_command: Some(command_str.to_string()),
-                active_status: Some("running".to_string()),
-            }),
-        );
+        let _ = crate::tools::plan::update_active_plan_job(ctx.0, ctx.1, PlanJobStatus::Running)
+            .or_else(|_| {
+                crate::tools::plan::start_plan_job(
+                    ctx.0,
+                    ctx.1,
+                    "run_command",
+                    Some(command_str.to_string()),
+                    PlanJobStatus::Running,
+                )
+            });
         emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
     }
 
@@ -336,13 +344,31 @@ pub async fn execute_command(
     if let Some(stdout) = child.stdout.take() {
         let runtime_events = runtime_events.clone();
         let session_id = audit_ctx.and_then(|ctx| ctx.session_id).map(str::to_string);
+        let db_path = audit_ctx.and_then(|ctx| database_path(ctx.conn));
         let command = command_str.to_string();
         stdout_task = Some(tokio::spawn(async move {
+            let live_conn = db_path
+                .as_deref()
+                .and_then(|path| crate::memory::storage::create_connection(path).ok());
             let mut lines = BufReader::new(stdout).lines();
             let mut collected = String::new();
             while let Ok(Some(line)) = lines.next_line().await {
                 collected.push_str(&line);
                 collected.push('\n');
+                if let (Some(conn), Some(session_id)) = (&live_conn, session_id.as_deref()) {
+                    let _ = crate::tools::plan::append_active_plan_job_output(
+                        conn,
+                        session_id,
+                        &format!("{}\n", line),
+                        false,
+                    );
+                    if let Some(sink) = runtime_events.as_ref() {
+                        let plan = crate::memory::storage::load_plan_state(conn, session_id)
+                            .ok()
+                            .flatten();
+                        let _ = sink.plan_updated(session_id, plan).await;
+                    }
+                }
                 emit_command_output(
                     runtime_events.as_ref(),
                     session_id.as_deref(),
@@ -361,13 +387,31 @@ pub async fn execute_command(
     if let Some(stderr) = child.stderr.take() {
         let runtime_events = runtime_events.clone();
         let session_id = audit_ctx.and_then(|ctx| ctx.session_id).map(str::to_string);
+        let db_path = audit_ctx.and_then(|ctx| database_path(ctx.conn));
         let command = command_str.to_string();
         stderr_task = Some(tokio::spawn(async move {
+            let live_conn = db_path
+                .as_deref()
+                .and_then(|path| crate::memory::storage::create_connection(path).ok());
             let mut lines = BufReader::new(stderr).lines();
             let mut collected = String::new();
             while let Ok(Some(line)) = lines.next_line().await {
                 collected.push_str(&line);
                 collected.push('\n');
+                if let (Some(conn), Some(session_id)) = (&live_conn, session_id.as_deref()) {
+                    let _ = crate::tools::plan::append_active_plan_job_output(
+                        conn,
+                        session_id,
+                        &format!("{}\n", line),
+                        true,
+                    );
+                    if let Some(sink) = runtime_events.as_ref() {
+                        let plan = crate::memory::storage::load_plan_state(conn, session_id)
+                            .ok()
+                            .flatten();
+                        let _ = sink.plan_updated(session_id, plan).await;
+                    }
+                }
                 emit_command_output(
                     runtime_events.as_ref(),
                     session_id.as_deref(),
@@ -407,6 +451,14 @@ pub async fn execute_command(
     let exit_code = status.code();
     let stdout_preview = bytes_to_preview(stdout_text.as_bytes());
     let stderr_preview = bytes_to_preview(stderr_text.as_bytes());
+    let output_preview = if status.success() {
+        preview_text(&stdout_text)
+    } else if !stderr_text.trim().is_empty() {
+        preview_text(&stderr_text)
+    } else {
+        preview_text(&stdout_text)
+    };
+    let has_error_output = !status.success() || !stderr_text.trim().is_empty();
 
     let result = if status.success() {
         let out = stdout_text;
@@ -443,7 +495,17 @@ pub async fn execute_command(
     if let Some(ctx) =
         audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
     {
-        let _ = crate::tools::plan::set_plan_runtime(ctx.0, ctx.1, None);
+        let _ = crate::tools::plan::finish_active_plan_job_with_output(
+            ctx.0,
+            ctx.1,
+            if status.success() {
+                PlanJobStatus::Succeeded
+            } else {
+                PlanJobStatus::Failed
+            },
+            output_preview,
+            has_error_output,
+        );
         emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
     }
 
@@ -493,6 +555,20 @@ fn maybe_log_command(
         if let Err(err) = storage::insert_command_log(ctx.conn, &record) {
             eprintln!("Warning: failed to persist command log: {}", err);
         }
+    }
+}
+
+fn preview_text(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let preview: String = trimmed.chars().take(OUTPUT_PREVIEW_LIMIT).collect();
+    if trimmed.chars().count() > OUTPUT_PREVIEW_LIMIT {
+        Some(format!("{}…", preview))
+    } else {
+        Some(preview)
     }
 }
 

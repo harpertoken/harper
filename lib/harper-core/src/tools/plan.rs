@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::core::error::{HarperError, HarperResult};
-use crate::core::plan::{PlanItem, PlanRuntime, PlanState, PlanStepStatus};
+use crate::core::plan::{PlanItem, PlanJobStatus, PlanRuntime, PlanState, PlanStepStatus};
 use rusqlite::Connection;
 
 pub fn update_plan(
@@ -49,6 +49,7 @@ pub fn update_plan(
         items.push(PlanItem {
             step: step.to_string(),
             status,
+            job_id: None,
         });
     }
 
@@ -104,6 +105,136 @@ pub fn set_plan_runtime(
     crate::memory::storage::save_plan_state(conn, session_id, &plan)
 }
 
+pub fn set_plan_runtime_state(
+    conn: &Connection,
+    session_id: &str,
+    tool_name: &str,
+    command: Option<String>,
+    status: &str,
+) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.set_active_tool_state(tool_name.to_string(), command, status.to_string());
+    })
+}
+
+pub fn start_plan_job(
+    conn: &Connection,
+    session_id: &str,
+    tool_name: &str,
+    command: Option<String>,
+    status: PlanJobStatus,
+) -> HarperResult<()> {
+    let Some(mut plan) = crate::memory::storage::load_plan_state(conn, session_id)? else {
+        return Ok(());
+    };
+    let mut runtime = plan.runtime.unwrap_or_default();
+    let job_id = runtime.start_job(tool_name.to_string(), command, status);
+    if let Some(item) = plan
+        .items
+        .iter_mut()
+        .find(|item| matches!(item.status, PlanStepStatus::InProgress))
+    {
+        item.job_id = Some(job_id);
+    }
+    plan.runtime = (!runtime.is_empty()).then_some(runtime);
+    crate::memory::storage::save_plan_state(conn, session_id, &plan)
+}
+
+pub fn update_active_plan_job(
+    conn: &Connection,
+    session_id: &str,
+    status: PlanJobStatus,
+) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.update_active_job_status(status);
+    })
+}
+
+pub fn finish_active_plan_job(
+    conn: &Connection,
+    session_id: &str,
+    status: PlanJobStatus,
+) -> HarperResult<()> {
+    finish_active_plan_job_with_output(conn, session_id, status, None, false)
+}
+
+pub fn finish_active_plan_job_with_output(
+    conn: &Connection,
+    session_id: &str,
+    status: PlanJobStatus,
+    output_preview: Option<String>,
+    has_error_output: bool,
+) -> HarperResult<()> {
+    let Some(mut plan) = crate::memory::storage::load_plan_state(conn, session_id)? else {
+        return Ok(());
+    };
+    let Some(mut runtime) = plan.runtime.take() else {
+        return Ok(());
+    };
+    let active_job_id = runtime.active_job_id.clone();
+    runtime.set_active_job_output(output_preview, has_error_output);
+    runtime.finish_active_job(status.clone());
+
+    if let Some(active_job_id) = active_job_id {
+        if let Some(item_index) = plan
+            .items
+            .iter()
+            .position(|item| item.job_id.as_deref() == Some(active_job_id.as_str()))
+        {
+            plan.items[item_index].job_id = None;
+            match status {
+                PlanJobStatus::Succeeded => {
+                    plan.items[item_index].status = PlanStepStatus::Completed;
+                    if let Some(next_pending) = plan
+                        .items
+                        .iter_mut()
+                        .find(|item| matches!(item.status, PlanStepStatus::Pending))
+                    {
+                        next_pending.status = PlanStepStatus::InProgress;
+                    }
+                }
+                PlanJobStatus::Blocked | PlanJobStatus::Failed => {
+                    plan.items[item_index].status = PlanStepStatus::Blocked;
+                }
+                PlanJobStatus::WaitingApproval | PlanJobStatus::Running => {}
+            }
+        }
+    }
+
+    plan.runtime = (!runtime.is_empty()).then_some(runtime);
+    crate::memory::storage::save_plan_state(conn, session_id, &plan)
+}
+
+pub fn clear_active_plan_runtime(conn: &Connection, session_id: &str) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.clear_active_state();
+    })
+}
+
+pub fn append_active_plan_job_output(
+    conn: &Connection,
+    session_id: &str,
+    chunk: &str,
+    is_error: bool,
+) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.append_active_job_output(chunk, is_error);
+    })
+}
+
+fn update_plan_runtime<F>(conn: &Connection, session_id: &str, mutator: F) -> HarperResult<()>
+where
+    F: FnOnce(&mut PlanRuntime),
+{
+    let Some(mut plan) = crate::memory::storage::load_plan_state(conn, session_id)? else {
+        return Ok(());
+    };
+    let mut runtime = plan.runtime.unwrap_or_default();
+    mutator(&mut runtime);
+    plan.runtime = (!runtime.is_empty()).then_some(runtime);
+    crate::memory::storage::save_plan_state(conn, session_id, &plan)
+}
+
 fn parse_status(value: Option<&serde_json::Value>) -> HarperResult<PlanStepStatus> {
     let raw = value
         .and_then(|status| status.as_str())
@@ -115,9 +246,242 @@ fn parse_status(value: Option<&serde_json::Value>) -> HarperResult<PlanStepStatu
         "pending" => Ok(PlanStepStatus::Pending),
         "in_progress" | "in-progress" | "in progress" => Ok(PlanStepStatus::InProgress),
         "completed" | "done" => Ok(PlanStepStatus::Completed),
+        "blocked" => Ok(PlanStepStatus::Blocked),
         _ => Err(HarperError::Validation(format!(
             "invalid plan status '{}'",
             raw
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        append_active_plan_job_output, finish_active_plan_job, finish_active_plan_job_with_output,
+        start_plan_job,
+    };
+    use crate::core::plan::{PlanItem, PlanJobStatus, PlanState, PlanStepStatus};
+    use rusqlite::Connection;
+
+    #[test]
+    fn start_plan_job_links_current_in_progress_step() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "plan-job-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "Run migration".to_string(),
+                    status: PlanStepStatus::InProgress,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        start_plan_job(
+            &conn,
+            "plan-job-session",
+            "run_command",
+            Some("cargo test".to_string()),
+            PlanJobStatus::Running,
+        )
+        .expect("start job");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "plan-job-session")
+            .expect("load plan")
+            .expect("plan present");
+        assert_eq!(plan.runtime.as_ref().map(|rt| rt.jobs.len()), Some(1));
+        assert_eq!(
+            plan.items[0].job_id,
+            plan.runtime
+                .as_ref()
+                .and_then(|runtime| runtime.active_job_id.clone())
+        );
+    }
+
+    #[test]
+    fn finish_active_plan_job_advances_linked_step_on_success() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "plan-finish-session",
+            &PlanState {
+                explanation: None,
+                items: vec![
+                    PlanItem {
+                        step: "Run migration".to_string(),
+                        status: PlanStepStatus::InProgress,
+                        job_id: None,
+                    },
+                    PlanItem {
+                        step: "Check output".to_string(),
+                        status: PlanStepStatus::Pending,
+                        job_id: None,
+                    },
+                ],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        start_plan_job(
+            &conn,
+            "plan-finish-session",
+            "run_command",
+            Some("cargo test".to_string()),
+            PlanJobStatus::Running,
+        )
+        .expect("start job");
+        finish_active_plan_job(&conn, "plan-finish-session", PlanJobStatus::Succeeded)
+            .expect("finish job");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "plan-finish-session")
+            .expect("load plan")
+            .expect("plan present");
+        assert_eq!(plan.items[0].status, PlanStepStatus::Completed);
+        assert!(plan.items[0].job_id.is_none());
+        assert_eq!(plan.items[1].status, PlanStepStatus::InProgress);
+        assert_eq!(plan.runtime.as_ref().map(|rt| rt.jobs.len()), Some(1));
+        assert!(plan
+            .runtime
+            .as_ref()
+            .is_some_and(|rt| rt.active_job_id.is_none()));
+    }
+
+    #[test]
+    fn finish_active_plan_job_blocks_linked_step_on_failure() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "plan-block-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "Run migration".to_string(),
+                    status: PlanStepStatus::InProgress,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        start_plan_job(
+            &conn,
+            "plan-block-session",
+            "run_command",
+            Some("cargo test".to_string()),
+            PlanJobStatus::Running,
+        )
+        .expect("start job");
+        finish_active_plan_job(&conn, "plan-block-session", PlanJobStatus::Failed)
+            .expect("finish job");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "plan-block-session")
+            .expect("load plan")
+            .expect("plan present");
+        assert_eq!(plan.items[0].status, PlanStepStatus::Blocked);
+        assert!(plan.items[0].job_id.is_none());
+    }
+
+    #[test]
+    fn finish_active_plan_job_persists_output_preview() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "plan-output-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "Run command".to_string(),
+                    status: PlanStepStatus::InProgress,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        start_plan_job(
+            &conn,
+            "plan-output-session",
+            "run_command",
+            Some("cargo test".to_string()),
+            PlanJobStatus::Running,
+        )
+        .expect("start job");
+        finish_active_plan_job_with_output(
+            &conn,
+            "plan-output-session",
+            PlanJobStatus::Succeeded,
+            Some("ok\nall green".to_string()),
+            false,
+        )
+        .expect("finish job");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "plan-output-session")
+            .expect("load plan")
+            .expect("plan present");
+        let runtime = plan.runtime.expect("runtime kept for job history");
+        assert_eq!(runtime.jobs.len(), 1);
+        assert_eq!(
+            runtime.jobs[0].output_preview.as_deref(),
+            Some("ok\nall green")
+        );
+        assert!(!runtime.jobs[0].has_error_output);
+    }
+
+    #[test]
+    fn append_active_plan_job_output_updates_live_transcript_and_preview() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "plan-live-output-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "Run command".to_string(),
+                    status: PlanStepStatus::InProgress,
+                    job_id: None,
+                }],
+                runtime: None,
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        start_plan_job(
+            &conn,
+            "plan-live-output-session",
+            "run_command",
+            Some("cargo test".to_string()),
+            PlanJobStatus::Running,
+        )
+        .expect("start job");
+        append_active_plan_job_output(&conn, "plan-live-output-session", "line one\n", false)
+            .expect("append stdout");
+        append_active_plan_job_output(&conn, "plan-live-output-session", "line two\n", true)
+            .expect("append stderr");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "plan-live-output-session")
+            .expect("load plan")
+            .expect("plan present");
+        let runtime = plan.runtime.expect("runtime kept for live output");
+        let job = runtime.jobs.first().expect("job present");
+        assert_eq!(job.output_transcript, "line one\nline two\n");
+        assert_eq!(job.output_preview.as_deref(), Some("line one\nline two"));
+        assert!(job.has_error_output);
     }
 }

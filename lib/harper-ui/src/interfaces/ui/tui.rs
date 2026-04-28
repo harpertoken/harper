@@ -510,6 +510,7 @@ pub async fn run_tui(
                                     chat_state.awaiting_response = false;
                                     chat_state.active_plan = session_view.plan;
                                     chat_state.active_agents = session_view.agents;
+                                    chat_state.refresh_plan_state();
                                     chat_state.refresh_review_state();
                                     should_clear_activity = true;
                                     if chat_state.sidebar_visible {
@@ -564,6 +565,7 @@ pub async fn run_tui(
                             if let AppState::Chat(chat_state) = &mut app.state {
                                 if chat_state.session_id == session_id {
                                     chat_state.active_plan = active_plan;
+                                    chat_state.refresh_plan_state();
                                 }
                             }
                         }

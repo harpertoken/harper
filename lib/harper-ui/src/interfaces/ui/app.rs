@@ -45,6 +45,7 @@ pub struct ReviewState {
 pub enum NavigationFocus {
     Messages,
     Review,
+    PlanJobs,
     Agents,
 }
 
@@ -57,6 +58,9 @@ pub struct ChatState {
     pub active_agents: Option<ResolvedAgents>,
     pub active_review: Option<ReviewState>,
     pub review_selected: usize,
+    pub plan_job_selected: usize,
+    pub plan_jobs_expanded: bool,
+    pub plan_job_output_scroll: usize,
     pub navigation_focus: NavigationFocus,
     pub command_output: Option<CommandOutputState>,
     pub agents_panel_expanded: bool,
@@ -200,6 +204,22 @@ pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<String> {
 }
 
 impl ChatState {
+    pub fn refresh_plan_state(&mut self) {
+        if let Some(plan) = &self.active_plan {
+            let max_jobs = plan
+                .runtime
+                .as_ref()
+                .map(|runtime| runtime.jobs.len().saturating_sub(1))
+                .unwrap_or(0);
+            self.plan_job_selected = self.plan_job_selected.min(max_jobs);
+        } else {
+            self.plan_job_selected = 0;
+            self.plan_jobs_expanded = false;
+            self.plan_job_output_scroll = 0;
+        }
+        self.normalize_navigation_focus();
+    }
+
     pub fn reset_completion(&mut self) {
         self.completion_candidates.clear();
         self.completion_index = 0;
@@ -216,6 +236,11 @@ impl ChatState {
             .active_review
             .as_ref()
             .is_some_and(|review| !review.findings.is_empty());
+        let has_jobs = self
+            .active_plan
+            .as_ref()
+            .and_then(|plan| plan.runtime.as_ref())
+            .is_some_and(|runtime| !runtime.jobs.is_empty());
         let has_agents = self.agents_panel_expanded
             && self
                 .active_agents
@@ -224,6 +249,7 @@ impl ChatState {
 
         self.navigation_focus = match self.navigation_focus {
             NavigationFocus::Review if has_review => NavigationFocus::Review,
+            NavigationFocus::PlanJobs if has_jobs => NavigationFocus::PlanJobs,
             NavigationFocus::Agents if has_agents => NavigationFocus::Agents,
             _ => NavigationFocus::Messages,
         };
@@ -233,6 +259,7 @@ impl ChatState {
         match self.navigation_focus {
             NavigationFocus::Messages => "messages",
             NavigationFocus::Review => "findings",
+            NavigationFocus::PlanJobs => "jobs",
             NavigationFocus::Agents => "agents",
         }
     }
@@ -248,7 +275,7 @@ impl ChatState {
         } else {
             self.review_selected = 0;
         }
-        self.normalize_navigation_focus();
+        self.refresh_plan_state();
     }
 }
 
@@ -446,6 +473,22 @@ impl TuiApp {
                             }
                         }
                     }
+                    NavigationFocus::PlanJobs => {
+                        if chat_state.plan_jobs_expanded {
+                            chat_state.plan_job_output_scroll =
+                                chat_state.plan_job_output_scroll.saturating_add(1);
+                        } else if let Some(runtime) = chat_state
+                            .active_plan
+                            .as_ref()
+                            .and_then(|plan| plan.runtime.as_ref())
+                        {
+                            if !runtime.jobs.is_empty() {
+                                chat_state.plan_job_selected =
+                                    (chat_state.plan_job_selected + 1).min(runtime.jobs.len() - 1);
+                                chat_state.plan_job_output_scroll = 0;
+                            }
+                        }
+                    }
                     NavigationFocus::Agents => {
                         chat_state.agents_scroll_offset =
                             chat_state.agents_scroll_offset.saturating_add(1);
@@ -489,6 +532,16 @@ impl TuiApp {
                 match chat_state.navigation_focus {
                     NavigationFocus::Review => {
                         chat_state.review_selected = chat_state.review_selected.saturating_sub(1);
+                    }
+                    NavigationFocus::PlanJobs => {
+                        if chat_state.plan_jobs_expanded {
+                            chat_state.plan_job_output_scroll =
+                                chat_state.plan_job_output_scroll.saturating_sub(1);
+                        } else {
+                            chat_state.plan_job_selected =
+                                chat_state.plan_job_selected.saturating_sub(1);
+                            chat_state.plan_job_output_scroll = 0;
+                        }
                     }
                     NavigationFocus::Agents => {
                         chat_state.agents_scroll_offset =

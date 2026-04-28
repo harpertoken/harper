@@ -298,10 +298,12 @@ mod tests {
                 PlanItem {
                     step: "Add storage".to_string(),
                     status: PlanStepStatus::Completed,
+                    job_id: None,
                 },
                 PlanItem {
                     step: "Render UI".to_string(),
                     status: PlanStepStatus::InProgress,
+                    job_id: None,
                 },
             ],
             runtime: None,
