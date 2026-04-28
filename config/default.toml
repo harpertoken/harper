@@ -63,8 +63,10 @@ theme = "minimal"
 # disabled_tools = []
 
 [exec_policy]
+# approval_profile = "allow_listed"   # strict | allow_listed | allow_all
 # allowed_commands = ["ls", "cat", "grep"]
 # blocked_commands = []
+# sandbox_profile = "disabled"        # disabled | workspace | networked_workspace
 
 [custom_commands]
 # commands = { "hello" = "Say hello to the user", "status" = "Show system status" }
@@ -85,6 +87,7 @@ enabled = true
 [exec_policy.sandbox]
 enabled = false
 allowed_dirs = []
+writable_dirs = []
 # network_access = false
 # readonly_home = true
 # max_execution_time_secs = 30

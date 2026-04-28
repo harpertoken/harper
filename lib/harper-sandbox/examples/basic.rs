@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use harper_sandbox::{Sandbox, SandboxConfig};
+use harper_sandbox::{Sandbox, SandboxConfig, SandboxRequest};
 
 fn main() {
     println!("Harper Sandbox Test\n");
 
     let config = SandboxConfig::default();
     let sandbox = Sandbox::new(config);
+    let request = SandboxRequest::new("echo", &["hello from sandbox example"]).unwrap();
 
     println!("Backend: {}", sandbox.backend_name());
     println!("Available: {}", sandbox.is_available());
+    println!("Example request: {:?}", request);
     println!("\n✓ harper-sandbox crate is working!");
 
     println!("\nTo enable sandbox, set in config:");

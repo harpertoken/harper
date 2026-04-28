@@ -24,7 +24,11 @@ use uuid::Uuid;
 const HELP_MESSAGE: &str =
     "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | D/Delete:Remove Session | X:Exit | W:Web | B:Sidebar | A:Agents | F:Findings | P:Jobs | M:Msgs | C:ID";
 
-use super::app::{AppState, ChatState, NavigationFocus, SessionInfo, TuiApp};
+use super::app::{
+    AppState, ChatState, ExecutionPolicyEditorState, ExecutionPolicyListField, NavigationFocus,
+    SessionInfo, TuiApp,
+};
+use super::settings;
 use harper_core::memory::session_service::SessionService;
 
 // Constants
@@ -42,6 +46,7 @@ pub enum EventResult {
     StartProfileLogin {
         provider: String,
     },
+    SaveExecutionPolicy,
     DeleteSession {
         session_id: String,
         remote: bool,
@@ -119,6 +124,23 @@ fn load_export_sessions_into_state(app: &mut TuiApp, session_service: &SessionSe
     }
 }
 
+fn parse_command_list(input: &str) -> Vec<String> {
+    input
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn start_execution_policy_editor(app: &mut TuiApp, field: ExecutionPolicyListField) {
+    let input = match field {
+        ExecutionPolicyListField::AllowedCommands => app.allowed_commands.join(", "),
+        ExecutionPolicyListField::BlockedCommands => app.blocked_commands.join(", "),
+    };
+    app.execution_policy_editor = Some(ExecutionPolicyEditorState { field, input });
+}
+
 pub fn handle_event(
     event: Event,
     app: &mut TuiApp,
@@ -173,6 +195,38 @@ pub fn handle_event(
                         return EventResult::Continue;
                     }
                     _ => return EventResult::Continue, // Consume all other keys while modal is up
+                }
+            }
+
+            if let Some(editor) = &mut app.execution_policy_editor {
+                match key.code {
+                    KeyCode::Esc => {
+                        app.execution_policy_editor = None;
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Enter => {
+                        let values = parse_command_list(&editor.input);
+                        match editor.field {
+                            ExecutionPolicyListField::AllowedCommands => {
+                                app.allowed_commands = values;
+                            }
+                            ExecutionPolicyListField::BlockedCommands => {
+                                app.blocked_commands = values;
+                            }
+                        }
+                        app.execution_policy_editor = None;
+                        app.set_status_message("Updated execution policy command list".to_string());
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Backspace => {
+                        editor.input.pop();
+                        return EventResult::Continue;
+                    }
+                    KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        editor.input.push(c);
+                        return EventResult::Continue;
+                    }
+                    _ => return EventResult::Continue,
                 }
             }
 
@@ -416,7 +470,9 @@ pub fn handle_event(
                     AppState::Sessions(_, _) => app.state = AppState::Menu(0),
                     AppState::ExportSessions(_, _) => app.state = AppState::Menu(0),
                     AppState::Tools(_) => app.state = AppState::Menu(0),
-                    AppState::Profile(_) => app.state = AppState::Menu(0),
+                    AppState::Profile(_) | AppState::ExecutionPolicy(_) => {
+                        app.state = AppState::Menu(0)
+                    }
                     AppState::ViewSession(_, _, _) => app.state = AppState::Menu(0),
                     AppState::Stats(_) => app.state = AppState::Menu(0),
                 },
@@ -543,10 +599,11 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
         }
         AppState::Tools(selected) => match *selected {
             0 => app.state = AppState::Profile(0),
-            1 => handle_web_search(app),
-            2 => handle_system_info(app),
-            3 => handle_process_list(app),
-            4 => handle_git_commands(app),
+            1 => app.state = AppState::ExecutionPolicy(0),
+            2 => handle_web_search(app),
+            3 => handle_system_info(app),
+            4 => handle_process_list(app),
+            5 => handle_git_commands(app),
             _ => {}
         },
         AppState::Profile(selected) => match *selected {
@@ -577,6 +634,18 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                     provider: "apple".to_string(),
                 }
             }
+            _ => {}
+        },
+        AppState::ExecutionPolicy(selected) => match *selected {
+            0 => {
+                app.approval_profile = settings::next_approval_profile(app.approval_profile);
+            }
+            1 => {
+                app.sandbox_profile = settings::next_sandbox_profile(app.sandbox_profile);
+            }
+            2 => start_execution_policy_editor(app, ExecutionPolicyListField::AllowedCommands),
+            3 => start_execution_policy_editor(app, ExecutionPolicyListField::BlockedCommands),
+            4 => return EventResult::SaveExecutionPolicy,
             _ => {}
         },
         AppState::ViewSession(session_id, _, _) => {
@@ -1081,6 +1150,23 @@ mod tests {
     }
 
     #[test]
+    fn test_enter_settings_execution_policy() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Tools(1);
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(app.state, AppState::ExecutionPolicy(0)));
+    }
+
+    #[test]
     fn test_enter_profile_refresh_returns_async_event() {
         let mut app = TuiApp::new();
         app.auth_session = Some(harper_core::AuthSession {
@@ -1124,6 +1210,62 @@ mod tests {
             result,
             EventResult::StartProfileLogin { provider } if provider == "github"
         ));
+    }
+
+    #[test]
+    fn test_enter_execution_policy_save_returns_async_event() {
+        let mut app = TuiApp::new();
+        app.state = AppState::ExecutionPolicy(4);
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::SaveExecutionPolicy));
+    }
+
+    #[test]
+    fn test_enter_execution_policy_allowed_commands_opens_editor() {
+        let mut app = TuiApp::new();
+        app.allowed_commands = vec!["git".to_string()];
+        app.state = AppState::ExecutionPolicy(2);
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        assert!(app.execution_policy_editor.is_some());
+    }
+
+    #[test]
+    fn test_execution_policy_editor_commits_command_list() {
+        let mut app = TuiApp::new();
+        app.state = AppState::ExecutionPolicy(2);
+        app.execution_policy_editor = Some(super::ExecutionPolicyEditorState {
+            field: super::ExecutionPolicyListField::AllowedCommands,
+            input: "git, ls, cargo".to_string(),
+        });
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        assert_eq!(app.allowed_commands, vec!["git", "ls", "cargo"]);
+        assert!(app.execution_policy_editor.is_none());
     }
 
     #[test]

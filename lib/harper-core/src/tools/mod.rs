@@ -69,6 +69,31 @@ pub struct ToolService<'a> {
 }
 
 impl<'a> ToolService<'a> {
+    fn parse_run_command_sandbox_intent(args: &serde_json::Value) -> shell::CommandSandboxIntent {
+        shell::CommandSandboxIntent {
+            declared_read_paths: args
+                .get("declared_read_paths")
+                .and_then(|v| v.as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|v| v.as_str())
+                .map(std::path::PathBuf::from)
+                .collect(),
+            declared_write_paths: args
+                .get("declared_write_paths")
+                .and_then(|v| v.as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|v| v.as_str())
+                .map(std::path::PathBuf::from)
+                .collect(),
+            requires_network: args
+                .get("requires_network")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }
+    }
+
     /// Create a new tool service
     pub fn new(
         conn: &'a Connection,
@@ -200,6 +225,7 @@ impl<'a> ToolService<'a> {
                 response,
                 self.config,
                 self.exec_policy,
+                None,
                 Some(&audit_ctx),
                 self.approver.clone(),
                 self.runtime_events.clone(),
@@ -356,6 +382,7 @@ impl<'a> ToolService<'a> {
             "run_command" => {
                 if let Some(command) = args.get("command").and_then(|v| v.as_str()) {
                     let bracket_command = format!("[RUN_COMMAND {}]", command);
+                    let sandbox_intent = Self::parse_run_command_sandbox_intent(args);
                     let audit_ctx = CommandAuditContext {
                         conn: self.conn,
                         session_id: self.session_id,
@@ -365,6 +392,7 @@ impl<'a> ToolService<'a> {
                         &bracket_command,
                         self.config,
                         self.exec_policy,
+                        Some(&sandbox_intent),
                         Some(&audit_ctx),
                         self.approver.clone(),
                         self.runtime_events.clone(),
@@ -1042,6 +1070,7 @@ mod tests {
     use crate::core::{ApiConfig, ApiProvider};
     use crate::runtime::config::ExecPolicyConfig;
     use rusqlite::Connection;
+    use serde_json::json;
     use std::path::PathBuf;
 
     fn test_config() -> ApiConfig {
@@ -1201,5 +1230,22 @@ mod tests {
     fn extracts_target_paths_from_bracket_tool_call() {
         let paths = ToolService::target_paths_for_tool_call(r#"[READ_FILE src/main.rs]"#);
         assert_eq!(paths, vec![PathBuf::from("src/main.rs")]);
+    }
+
+    #[test]
+    fn parse_run_command_sandbox_intent_reads_explicit_fields() {
+        let intent = ToolService::parse_run_command_sandbox_intent(&json!({
+            "command": "cp ./src.txt ./build/out.txt",
+            "declared_read_paths": ["./src.txt"],
+            "declared_write_paths": ["./build/out.txt"],
+            "requires_network": true
+        }));
+
+        assert_eq!(intent.declared_read_paths, vec![PathBuf::from("./src.txt")]);
+        assert_eq!(
+            intent.declared_write_paths,
+            vec![PathBuf::from("./build/out.txt")]
+        );
+        assert!(intent.requires_network);
     }
 }

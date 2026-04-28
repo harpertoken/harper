@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Installation</title>
-    <meta name="harper-update-version" content="2026-04-28-install" />
+    <meta name="harper-update-version" content="2026-04-28-install-v5" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -79,6 +79,25 @@ SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
                 <p>Remote session operations refresh the TUI session automatically if the access token has expired. If refresh also fails, Harper will show the auth error directly and you will need to sign in again.</p>
                 <p>In both <code>History</code> and <code>Export</code>, press <code>D</code> or <code>Delete</code> to remove the selected session.</p>
                 <p>Empty states are explicit now: if the signed-in user has no remote sessions, <code>History</code> says so directly; if there are no exportable sessions, <code>Export</code> shows that state instead of a blank panel.</p>
+
+                <h2>Execution Policy in Settings</h2>
+                <p>Harper now exposes execution policy selection directly in the TUI under <code>Settings -&gt; Execution Policy</code>. That screen lets you choose an approval profile, choose a sandbox profile, edit <code>allowed_commands</code> and <code>blocked_commands</code>, then save them back to <code>config/local.toml</code>.</p>
+                <div class="code-wrapper">
+                    <pre><code>approval_profile = "allow_listed"   # strict | allow_listed | allow_all
+sandbox_profile = "disabled"        # disabled | workspace | networked_workspace</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>Approval profiles control whether commands always require approval, only allowlisted commands can run automatically, or all commands can run automatically. Under <code>allow_listed</code>, Harper still asks for approval when a command declares network access, or when it declares writes outside the configured sandbox writable roots, even if the command itself is allowlisted. Sandbox profiles control whether command execution is unsandboxed, sandboxed to the workspace, or sandboxed with workspace access plus network enabled.</p>
+                <p>The same screen also lets you edit <code>allowed_commands</code> and <code>blocked_commands</code> directly as comma-separated lists, so you do not have to hand-edit the local config for simple policy changes.</p>
+                <p>If you need finer sandbox control than the named profiles provide, set explicit read/write roots in <code>config/local.toml</code>:</p>
+                <div class="code-wrapper">
+                    <pre><code>[exec_policy.sandbox]
+allowed_dirs = ["."]
+writable_dirs = ["./tmp", "./build"]</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p><code>allowed_dirs</code> defines paths the sandbox may read. <code>writable_dirs</code> defines the subset of paths the sandbox may mutate. If <code>writable_dirs</code> is empty, Harper falls back to the broader profile/default behavior.</p>
+                <p>Saving the profile updates <code>config/local.toml</code> and also applies to future commands in the current TUI session.</p>
 
                 <h2>File references and Tab completion</h2>
                 <p>Type <code>@</code> in the chat input to start a file or directory reference. Press <code>Tab</code> to autocomplete matching paths and keep pressing <code>Tab</code> to cycle through candidates.</p>

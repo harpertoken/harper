@@ -53,7 +53,9 @@ pub use crate::memory::storage::{
 pub use crate::runtime::utils;
 
 // Re-export runtime
-pub use crate::runtime::config::{ExecPolicyConfig, SupabaseAuthConfig};
+pub use crate::runtime::config::{
+    ApprovalProfile, ExecPolicyConfig, SandboxProfile, SupabaseAuthConfig,
+};
 pub use crate::runtime::scheduler::TaskScheduler;
 
 #[cfg(test)]

@@ -20,13 +20,18 @@
 use crate::core::plan::PlanJobStatus;
 use crate::core::{error::HarperError, ApiConfig};
 use crate::memory::storage::{self, CommandLogRecord};
-use crate::runtime::config::ExecPolicyConfig;
+use crate::runtime::config::{ApprovalProfile, ExecPolicyConfig};
+use crate::tools::parsing;
 use colored::*;
+use harper_sandbox::{Sandbox, SandboxRequest};
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
+use tokio::sync::mpsc;
 
 const OUTPUT_PREVIEW_LIMIT: usize = 512;
 
@@ -35,6 +40,54 @@ pub struct CommandAuditContext<'a> {
     pub conn: &'a Connection,
     pub session_id: Option<&'a str>,
     pub source: &'a str,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CommandSandboxIntent {
+    pub declared_read_paths: Vec<PathBuf>,
+    pub declared_write_paths: Vec<PathBuf>,
+    pub requires_network: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RunCommandPayload {
+    command: String,
+    #[serde(default)]
+    declared_read_paths: Vec<PathBuf>,
+    #[serde(default)]
+    declared_write_paths: Vec<PathBuf>,
+    #[serde(default)]
+    requires_network: bool,
+}
+
+fn parse_run_command_response(
+    response: &str,
+    fallback_intent: Option<&CommandSandboxIntent>,
+) -> crate::core::error::HarperResult<(String, Option<CommandSandboxIntent>)> {
+    let payload = if let Some(pos) = response.find(' ') {
+        response[pos..].trim_start().trim_end_matches(']')
+    } else {
+        ""
+    };
+
+    if payload.is_empty() {
+        return Ok((String::new(), fallback_intent.cloned()));
+    }
+
+    if payload.trim_start().starts_with('{') {
+        let parsed: RunCommandPayload = serde_json::from_str(payload)
+            .map_err(|e| HarperError::Command(format!("Invalid run_command payload: {}", e)))?;
+        return Ok((
+            parsed.command,
+            Some(CommandSandboxIntent {
+                declared_read_paths: parsed.declared_read_paths,
+                declared_write_paths: parsed.declared_write_paths,
+                requires_network: parsed.requires_network,
+            }),
+        ));
+    }
+
+    Ok((payload.to_string(), fallback_intent.cloned()))
 }
 
 use crate::core::io_traits::{RuntimeEventSink, UserApproval};
@@ -78,20 +131,331 @@ fn database_path(conn: &Connection) -> Option<String> {
     None
 }
 
+fn build_sandbox_request(
+    command_str: &str,
+    intent: Option<&CommandSandboxIntent>,
+) -> crate::core::error::HarperResult<SandboxRequest> {
+    let args = parsing::parse_quoted_args(command_str)?;
+    let (command, rest) = args
+        .split_first()
+        .ok_or_else(|| HarperError::Command("No command provided".to_string()))?;
+
+    let working_dir = std::env::current_dir().map_err(|e| HarperError::Io(e.to_string()))?;
+    let rest_args: Vec<&str> = rest.iter().map(String::as_str).collect();
+    let (declared_read_paths, declared_write_paths, requires_network) = if let Some(intent) = intent
+    {
+        (
+            intent.declared_read_paths.clone(),
+            intent.declared_write_paths.clone(),
+            intent.requires_network,
+        )
+    } else {
+        let (reads, writes) = infer_path_intent(command, &rest_args);
+        (reads, writes, looks_like_network_command(command))
+    };
+
+    Ok(SandboxRequest {
+        command: command.clone(),
+        args: rest.to_vec(),
+        working_dir,
+        env: vec![],
+        declared_read_paths,
+        declared_write_paths,
+        requires_network,
+    })
+}
+
+fn looks_like_path(arg: &str) -> bool {
+    arg.starts_with('/')
+        || arg.starts_with("./")
+        || arg.starts_with("../")
+        || arg.contains(std::path::MAIN_SEPARATOR)
+}
+
+fn command_basename(command: &str) -> &str {
+    Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(command)
+}
+
+fn infer_path_intent(command: &str, args: &[&str]) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let path_args: Vec<&str> = args
+        .iter()
+        .copied()
+        .filter(|arg| looks_like_path(arg))
+        .collect();
+    if path_args.is_empty() {
+        return (vec![], vec![]);
+    }
+
+    match command_basename(command) {
+        "rm" | "touch" | "mkdir" | "rmdir" => {
+            (vec![], path_args.into_iter().map(PathBuf::from).collect())
+        }
+        "sed"
+            if args
+                .iter()
+                .any(|arg| *arg == "-i" || arg.strip_prefix("-i").is_some()) =>
+        {
+            let mut seen_script = false;
+            let writes = args
+                .iter()
+                .copied()
+                .filter(|arg| {
+                    if arg.starts_with('-') && !seen_script {
+                        return false;
+                    }
+                    if !seen_script {
+                        seen_script = true;
+                        return false;
+                    }
+                    looks_like_path(arg)
+                })
+                .map(PathBuf::from)
+                .collect();
+            (vec![], writes)
+        }
+        "tee" => (
+            vec![],
+            args.iter()
+                .copied()
+                .filter(|arg| !arg.starts_with('-') && looks_like_path(arg))
+                .map(PathBuf::from)
+                .collect(),
+        ),
+        "cp" | "mv" => {
+            if path_args.len() == 1 {
+                (vec![], vec![PathBuf::from(path_args[0])])
+            } else {
+                let (sources, destination) = path_args.split_at(path_args.len() - 1);
+                (
+                    sources.iter().map(PathBuf::from).collect(),
+                    destination.iter().map(PathBuf::from).collect(),
+                )
+            }
+        }
+        "find" if args.contains(&"-delete") => {
+            let roots: Vec<PathBuf> = args
+                .iter()
+                .copied()
+                .take_while(|arg| !arg.starts_with('-'))
+                .filter(|arg| looks_like_path(arg))
+                .map(PathBuf::from)
+                .collect();
+            if roots.is_empty() {
+                (vec![], path_args.into_iter().map(PathBuf::from).collect())
+            } else {
+                (vec![], roots)
+            }
+        }
+        "tar" => infer_tar_path_intent(args),
+        _ => (path_args.into_iter().map(PathBuf::from).collect(), vec![]),
+    }
+}
+
+fn infer_tar_path_intent(args: &[&str]) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let mut extract_mode = false;
+    let mut create_mode = false;
+    let mut archive_path: Option<PathBuf> = None;
+    let mut working_target: Option<PathBuf> = None;
+    let mut input_paths = Vec::new();
+    let mut expect_file = false;
+    let mut expect_directory = false;
+
+    for arg in args {
+        if expect_file {
+            if looks_like_path(arg) {
+                archive_path = Some(PathBuf::from(arg));
+            }
+            expect_file = false;
+            continue;
+        }
+        if expect_directory {
+            if looks_like_path(arg) {
+                working_target = Some(PathBuf::from(arg));
+            }
+            expect_directory = false;
+            continue;
+        }
+
+        if *arg == "-f" {
+            expect_file = true;
+            continue;
+        }
+        if *arg == "-C" {
+            expect_directory = true;
+            continue;
+        }
+        if arg.starts_with('-') {
+            extract_mode |= arg.contains('x') || *arg == "--extract";
+            create_mode |= arg.contains('c') || *arg == "--create";
+            if let Some(value) = arg.strip_prefix("--file=") {
+                if looks_like_path(value) {
+                    archive_path = Some(PathBuf::from(value));
+                }
+            }
+            if let Some(value) = arg.strip_prefix("--directory=") {
+                if looks_like_path(value) {
+                    working_target = Some(PathBuf::from(value));
+                }
+            }
+            continue;
+        }
+        if looks_like_path(arg) {
+            if archive_path.is_none() {
+                archive_path = Some(PathBuf::from(arg));
+            } else {
+                input_paths.push(PathBuf::from(arg));
+            }
+        }
+    }
+
+    if extract_mode {
+        let mut reads = Vec::new();
+        if let Some(archive) = archive_path {
+            reads.push(archive);
+        }
+        let mut writes = Vec::new();
+        if let Some(target) = working_target {
+            writes.push(target);
+        }
+        (reads, writes)
+    } else if create_mode {
+        let mut reads = input_paths;
+        let mut writes = Vec::new();
+        if let Some(archive) = archive_path {
+            writes.push(archive);
+        } else {
+            reads.extend(
+                args.iter()
+                    .copied()
+                    .filter(|arg| looks_like_path(arg))
+                    .map(PathBuf::from),
+            );
+        }
+        (reads, writes)
+    } else {
+        (
+            args.iter()
+                .copied()
+                .filter(|arg| looks_like_path(arg))
+                .map(PathBuf::from)
+                .collect(),
+            vec![],
+        )
+    }
+}
+
+fn looks_like_network_command(command: &str) -> bool {
+    matches!(
+        command_basename(command),
+        "curl" | "wget" | "gh" | "http" | "https" | "scp" | "ssh" | "ping" | "nc"
+    )
+}
+
+fn configured_sandbox(exec_policy: &ExecPolicyConfig) -> Option<harper_sandbox::SandboxConfig> {
+    let sandbox = exec_policy.effective_sandbox_config();
+    Some(harper_sandbox::SandboxConfig {
+        enabled: sandbox.enabled.unwrap_or(false),
+        allowed_dirs: sandbox
+            .allowed_dirs
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .map(PathBuf::from)
+            .collect(),
+        writable_dirs: sandbox
+            .writable_dirs
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .map(PathBuf::from)
+            .collect(),
+        allowed_commands: exec_policy.allowed_commands.clone(),
+        blocked_commands: exec_policy.blocked_commands.clone(),
+        readonly_home: sandbox.readonly_home.unwrap_or(false),
+        network_access: sandbox.network_access.unwrap_or(true),
+        max_execution_time_secs: sandbox.max_execution_time_secs,
+    })
+}
+
+fn path_within_root(base_dir: &Path, path: &Path, root: &Path) -> bool {
+    let normalized_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        base_dir.join(path)
+    };
+    let normalized_root = if root.is_absolute() {
+        root.to_path_buf()
+    } else {
+        base_dir.join(root)
+    };
+    normalized_path.starts_with(normalized_root)
+}
+
+fn writes_within_configured_writable_dirs(
+    exec_policy: &ExecPolicyConfig,
+    intent: &CommandSandboxIntent,
+) -> bool {
+    if intent.declared_write_paths.is_empty() {
+        return true;
+    }
+
+    let sandbox = exec_policy.effective_sandbox_config();
+    let writable_dirs = sandbox.writable_dirs.unwrap_or_default();
+    if writable_dirs.is_empty() {
+        return false;
+    }
+
+    let Ok(base_dir) = std::env::current_dir() else {
+        return false;
+    };
+    let writable_roots: Vec<PathBuf> = writable_dirs.into_iter().map(PathBuf::from).collect();
+
+    intent.declared_write_paths.iter().all(|path| {
+        writable_roots
+            .iter()
+            .any(|root| path_within_root(&base_dir, path, root))
+    })
+}
+
+fn approval_required_for_command(
+    exec_policy: &ExecPolicyConfig,
+    command_str: &str,
+    intent: Option<&CommandSandboxIntent>,
+) -> bool {
+    match exec_policy.effective_approval_profile() {
+        ApprovalProfile::Strict => true,
+        ApprovalProfile::AllowListed => {
+            let allowlisted = exec_policy
+                .allowed_commands
+                .as_ref()
+                .map(|allowed| allowed.iter().any(|cmd| command_str.starts_with(cmd)))
+                .unwrap_or(false);
+            let intent_requires_approval = intent.is_some_and(|intent| {
+                intent.requires_network
+                    || (!intent.declared_write_paths.is_empty()
+                        && !writes_within_configured_writable_dirs(exec_policy, intent))
+            });
+            !allowlisted || intent_requires_approval
+        }
+        ApprovalProfile::AllowAll => false,
+    }
+}
+
 /// Execute a shell command with safety checks
 pub async fn execute_command(
     response: &str,
     _config: &ApiConfig,
     exec_policy: &ExecPolicyConfig,
+    sandbox_intent: Option<&CommandSandboxIntent>,
     audit_ctx: Option<&CommandAuditContext<'_>>,
     approver: Option<Arc<dyn UserApproval>>,
     runtime_events: Option<Arc<dyn RuntimeEventSink>>,
 ) -> crate::core::error::HarperResult<String> {
-    let command_str = if let Some(pos) = response.find(' ') {
-        response[pos..].trim_start().trim_end_matches(']')
-    } else {
-        ""
-    };
+    let (command_string, resolved_intent) = parse_run_command_response(response, sandbox_intent)?;
+    let command_str = command_string.as_str();
 
     if command_str.is_empty() {
         maybe_log_command(
@@ -180,7 +544,6 @@ pub async fn execute_command(
 
     // Check exec policy
     let mut requires_approval = true;
-    let mut approved = false;
 
     if let Some(blocked) = &exec_policy.blocked_commands {
         if blocked.iter().any(|cmd| command_str.starts_with(cmd)) {
@@ -201,17 +564,9 @@ pub async fn execute_command(
         }
     }
 
-    if let Some(allowed) = &exec_policy.allowed_commands {
-        if allowed.iter().any(|cmd| command_str.starts_with(cmd)) {
-            requires_approval = false;
-            approved = true;
-        } else {
-            // If allowed list is set, only allowed commands are permitted without approval
-            requires_approval = true;
-        }
-    } else {
-        approved = !requires_approval;
-    }
+    requires_approval =
+        approval_required_for_command(exec_policy, command_str, resolved_intent.as_ref());
+    let mut approved = !requires_approval;
 
     // Ask for approval if required
     if requires_approval {
@@ -314,6 +669,112 @@ pub async fn execute_command(
                 )
             });
         emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
+    }
+
+    if let Some(sandbox_config) = configured_sandbox(exec_policy).filter(|config| config.enabled) {
+        let request = build_sandbox_request(command_str, resolved_intent.as_ref())?;
+        let sandbox = Sandbox::new(sandbox_config);
+        let (stream_tx, mut stream_rx) = mpsc::unbounded_channel::<(String, bool)>();
+        let runtime_events_clone = runtime_events.clone();
+        let session_id_owned = audit_ctx
+            .and_then(|ctx| ctx.session_id)
+            .map(ToString::to_string);
+        let command_owned = command_str.to_string();
+        let stream_forwarder = tokio::spawn(async move {
+            while let Some((chunk, is_error)) = stream_rx.recv().await {
+                emit_command_output(
+                    runtime_events_clone.as_ref(),
+                    session_id_owned.as_deref(),
+                    &command_owned,
+                    chunk,
+                    is_error,
+                    false,
+                )
+                .await;
+            }
+        });
+        let start = Instant::now();
+        let result = sandbox
+            .execute_request_streaming(request, move |chunk, is_error| {
+                let _ = stream_tx.send((chunk, is_error));
+            })
+            .await?;
+        stream_forwarder.await.map_err(|e| {
+            HarperError::Command(format!("Sandbox output forwarding failed: {}", e))
+        })?;
+        let duration_ms = start.elapsed().as_millis() as i64;
+        let exit_code = result.output.status.code();
+        let stdout_preview = bytes_to_preview(&result.output.stdout);
+        let stderr_preview = bytes_to_preview(&result.output.stderr);
+        let stdout_text = String::from_utf8_lossy(&result.output.stdout).into_owned();
+        let stderr_text = String::from_utf8_lossy(&result.output.stderr).into_owned();
+        let output_preview = if result.output.status.success() {
+            preview_text(&stdout_text)
+        } else if !stderr_text.trim().is_empty() {
+            preview_text(&stderr_text)
+        } else {
+            preview_text(&stdout_text)
+        };
+        let has_error_output = !result.output.status.success() || !stderr_text.trim().is_empty();
+
+        emit_command_output(
+            runtime_events.as_ref(),
+            audit_ctx.and_then(|ctx| ctx.session_id),
+            command_str,
+            String::new(),
+            false,
+            true,
+        )
+        .await;
+
+        let output_text = if result.output.status.success() {
+            maybe_log_command(
+                audit_ctx,
+                command_str,
+                "succeeded",
+                requires_approval,
+                approved,
+                exit_code,
+                Some(duration_ms),
+                stdout_preview,
+                stderr_preview,
+                None,
+            );
+            stdout_text
+        } else {
+            maybe_log_command(
+                audit_ctx,
+                command_str,
+                "failed",
+                requires_approval,
+                approved,
+                exit_code,
+                Some(duration_ms),
+                stdout_preview,
+                stderr_preview,
+                Some("Command exited with non-zero status".to_string()),
+            );
+            stderr_text
+        };
+
+        if let Some(ctx) =
+            audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
+        {
+            let _ = crate::tools::plan::finish_active_plan_job_with_output(
+                ctx.0,
+                ctx.1,
+                if result.output.status.success() {
+                    PlanJobStatus::Succeeded
+                } else {
+                    PlanJobStatus::Failed
+                },
+                output_preview,
+                has_error_output,
+            );
+            emit_plan_update(runtime_events.as_ref(), ctx.0, ctx.1).await;
+        }
+
+        return Ok(output_text);
     }
 
     let start = Instant::now();
@@ -582,4 +1043,330 @@ fn bytes_to_preview(bytes: &[u8]) -> Option<String> {
         preview.push('…');
     }
     Some(preview)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        approval_required_for_command, build_sandbox_request, configured_sandbox,
+        infer_path_intent, looks_like_network_command, parse_run_command_response,
+        CommandSandboxIntent,
+    };
+    use crate::runtime::config::{
+        ApprovalProfile, ExecPolicyConfig, SandboxConfig as RuntimeSandboxConfig, SandboxProfile,
+    };
+
+    #[test]
+    fn build_sandbox_request_extracts_command_args_and_declared_paths() {
+        let request = build_sandbox_request(r#"cat "./notes file.txt" ../README.md"#, None)
+            .expect("sandbox request");
+
+        assert_eq!(request.command, "cat");
+        assert_eq!(
+            request.args,
+            vec!["./notes file.txt".to_string(), "../README.md".to_string()]
+        );
+        assert_eq!(
+            request.declared_read_paths,
+            vec![
+                std::path::PathBuf::from("./notes file.txt"),
+                std::path::PathBuf::from("../README.md")
+            ]
+        );
+        assert!(request.declared_write_paths.is_empty());
+        assert!(!request.requires_network);
+    }
+
+    #[test]
+    fn build_sandbox_request_marks_network_tools() {
+        let request =
+            build_sandbox_request("curl https://example.com", None).expect("sandbox request");
+        assert_eq!(request.command, "curl");
+        assert!(request.requires_network);
+        assert!(looks_like_network_command("gh"));
+        assert!(!looks_like_network_command("cat"));
+    }
+
+    #[test]
+    fn build_sandbox_request_prefers_explicit_intent_over_heuristics() {
+        let intent = CommandSandboxIntent {
+            declared_read_paths: vec![std::path::PathBuf::from("./input.txt")],
+            declared_write_paths: vec![std::path::PathBuf::from("./out.txt")],
+            requires_network: true,
+        };
+        let request =
+            build_sandbox_request("cat ./ignored.txt", Some(&intent)).expect("sandbox request");
+
+        assert_eq!(request.declared_read_paths, intent.declared_read_paths);
+        assert_eq!(request.declared_write_paths, intent.declared_write_paths);
+        assert!(request.requires_network);
+    }
+
+    #[test]
+    fn parse_run_command_response_reads_enhanced_bracket_payload() {
+        let (command, intent) = parse_run_command_response(
+            r#"[RUN_COMMAND {"command":"cp ./src.txt ./out.txt","declared_read_paths":["./src.txt"],"declared_write_paths":["./out.txt"],"requires_network":true}]"#,
+            None,
+        )
+        .expect("parse run command");
+
+        assert_eq!(command, "cp ./src.txt ./out.txt");
+        let intent = intent.expect("sandbox intent");
+        assert_eq!(
+            intent.declared_read_paths,
+            vec![std::path::PathBuf::from("./src.txt")]
+        );
+        assert_eq!(
+            intent.declared_write_paths,
+            vec![std::path::PathBuf::from("./out.txt")]
+        );
+        assert!(intent.requires_network);
+    }
+
+    #[test]
+    fn parse_run_command_response_keeps_plain_bracket_command() {
+        let fallback = CommandSandboxIntent {
+            declared_read_paths: vec![std::path::PathBuf::from("./input.txt")],
+            declared_write_paths: vec![],
+            requires_network: false,
+        };
+        let (command, intent) =
+            parse_run_command_response("[RUN_COMMAND cat ./input.txt]", Some(&fallback))
+                .expect("parse run command");
+
+        assert_eq!(command, "cat ./input.txt");
+        assert_eq!(intent, Some(fallback));
+    }
+
+    #[test]
+    fn infer_path_intent_marks_rm_targets_as_writes() {
+        let (reads, writes) = infer_path_intent("rm", &["./tmp/file.txt"]);
+        assert!(reads.is_empty());
+        assert_eq!(writes, vec![std::path::PathBuf::from("./tmp/file.txt")]);
+    }
+
+    #[test]
+    fn infer_path_intent_marks_cp_sources_and_destination() {
+        let (reads, writes) = infer_path_intent("cp", &["./src.txt", "./dest.txt"]);
+        assert_eq!(reads, vec![std::path::PathBuf::from("./src.txt")]);
+        assert_eq!(writes, vec![std::path::PathBuf::from("./dest.txt")]);
+    }
+
+    #[test]
+    fn infer_path_intent_marks_mv_sources_and_destination() {
+        let (reads, writes) = infer_path_intent("mv", &["./a.txt", "./b.txt", "./target/"]);
+        assert_eq!(
+            reads,
+            vec![
+                std::path::PathBuf::from("./a.txt"),
+                std::path::PathBuf::from("./b.txt")
+            ]
+        );
+        assert_eq!(writes, vec![std::path::PathBuf::from("./target/")]);
+    }
+
+    #[test]
+    fn infer_path_intent_marks_sed_in_place_targets_as_writes() {
+        let (reads, writes) = infer_path_intent("sed", &["-i", "s/a/b/", "./file.txt"]);
+        assert!(reads.is_empty());
+        assert_eq!(writes, vec![std::path::PathBuf::from("./file.txt")]);
+    }
+
+    #[test]
+    fn infer_path_intent_marks_tee_targets_as_writes() {
+        let (reads, writes) = infer_path_intent("tee", &["./out.txt", "./audit.log"]);
+        assert!(reads.is_empty());
+        assert_eq!(
+            writes,
+            vec![
+                std::path::PathBuf::from("./out.txt"),
+                std::path::PathBuf::from("./audit.log")
+            ]
+        );
+    }
+
+    #[test]
+    fn infer_path_intent_marks_tar_extract_archive_read_and_target_write() {
+        let (reads, writes) = infer_path_intent("tar", &["-xf", "./archive.tar", "-C", "./out"]);
+        assert_eq!(reads, vec![std::path::PathBuf::from("./archive.tar")]);
+        assert_eq!(writes, vec![std::path::PathBuf::from("./out")]);
+    }
+
+    #[test]
+    fn infer_path_intent_marks_tar_create_inputs_read_and_archive_write() {
+        let (reads, writes) =
+            infer_path_intent("tar", &["-cf", "./archive.tar", "./src", "./README.md"]);
+        assert_eq!(
+            reads,
+            vec![
+                std::path::PathBuf::from("./src"),
+                std::path::PathBuf::from("./README.md")
+            ]
+        );
+        assert_eq!(writes, vec![std::path::PathBuf::from("./archive.tar")]);
+    }
+
+    #[test]
+    fn infer_path_intent_marks_find_delete_roots_as_writes() {
+        let (reads, writes) = infer_path_intent("find", &["./tmp", "-name", "*.log", "-delete"]);
+        assert!(reads.is_empty());
+        assert_eq!(writes, vec![std::path::PathBuf::from("./tmp")]);
+    }
+
+    #[test]
+    fn configured_sandbox_maps_runtime_policy() {
+        let exec_policy = ExecPolicyConfig {
+            approval_profile: Some(ApprovalProfile::AllowListed),
+            allowed_commands: Some(vec!["git".to_string()]),
+            blocked_commands: Some(vec!["rm".to_string()]),
+            sandbox_profile: Some(SandboxProfile::Disabled),
+            sandbox: Some(RuntimeSandboxConfig {
+                enabled: Some(true),
+                allowed_dirs: Some(vec!["/tmp".to_string()]),
+                writable_dirs: Some(vec!["/tmp/work".to_string()]),
+                network_access: Some(false),
+                readonly_home: Some(true),
+                max_execution_time_secs: Some(15),
+            }),
+        };
+
+        let sandbox = configured_sandbox(&exec_policy).expect("sandbox config");
+        assert!(sandbox.enabled);
+        assert_eq!(sandbox.allowed_dirs, vec![std::path::PathBuf::from("/tmp")]);
+        assert_eq!(
+            sandbox.writable_dirs,
+            vec![std::path::PathBuf::from("/tmp/work")]
+        );
+        assert_eq!(sandbox.allowed_commands, exec_policy.allowed_commands);
+        assert_eq!(sandbox.blocked_commands, exec_policy.blocked_commands);
+        assert!(!sandbox.network_access);
+        assert!(sandbox.readonly_home);
+        assert_eq!(sandbox.max_execution_time_secs, Some(15));
+    }
+
+    #[test]
+    fn approval_profile_allow_all_skips_approval() {
+        let exec_policy = ExecPolicyConfig {
+            approval_profile: Some(ApprovalProfile::AllowAll),
+            allowed_commands: None,
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Disabled),
+            sandbox: None,
+        };
+        assert!(!approval_required_for_command(
+            &exec_policy,
+            "git status",
+            None
+        ));
+    }
+
+    #[test]
+    fn approval_profile_strict_requires_approval_even_for_allowlisted_commands() {
+        let exec_policy = ExecPolicyConfig {
+            approval_profile: Some(ApprovalProfile::Strict),
+            allowed_commands: Some(vec!["git".to_string()]),
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Disabled),
+            sandbox: None,
+        };
+        assert!(approval_required_for_command(
+            &exec_policy,
+            "git status",
+            None
+        ));
+    }
+
+    #[test]
+    fn approval_profile_allow_listed_uses_allowlist() {
+        let exec_policy = ExecPolicyConfig {
+            approval_profile: Some(ApprovalProfile::AllowListed),
+            allowed_commands: Some(vec!["git".to_string()]),
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Disabled),
+            sandbox: None,
+        };
+        assert!(!approval_required_for_command(
+            &exec_policy,
+            "git status",
+            None
+        ));
+        assert!(approval_required_for_command(&exec_policy, "ls -la", None));
+    }
+
+    #[test]
+    fn approval_profile_allow_listed_requires_approval_for_declared_writes() {
+        let exec_policy = ExecPolicyConfig {
+            approval_profile: Some(ApprovalProfile::AllowListed),
+            allowed_commands: Some(vec!["cp".to_string()]),
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Workspace),
+            sandbox: Some(crate::runtime::config::SandboxConfig {
+                enabled: Some(true),
+                allowed_dirs: Some(vec![".".to_string()]),
+                writable_dirs: Some(vec!["./safe".to_string()]),
+                network_access: Some(false),
+                readonly_home: Some(true),
+                max_execution_time_secs: Some(30),
+            }),
+        };
+        let intent = CommandSandboxIntent {
+            declared_read_paths: vec![std::path::PathBuf::from("./src.txt")],
+            declared_write_paths: vec![std::path::PathBuf::from("./out.txt")],
+            requires_network: false,
+        };
+        assert!(approval_required_for_command(
+            &exec_policy,
+            "cp ./src.txt ./out.txt",
+            Some(&intent)
+        ));
+    }
+
+    #[test]
+    fn approval_profile_allow_listed_skips_approval_for_writes_inside_writable_roots() {
+        let exec_policy = ExecPolicyConfig {
+            approval_profile: Some(ApprovalProfile::AllowListed),
+            allowed_commands: Some(vec!["cp".to_string()]),
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Workspace),
+            sandbox: Some(crate::runtime::config::SandboxConfig {
+                enabled: Some(true),
+                allowed_dirs: Some(vec![".".to_string()]),
+                writable_dirs: Some(vec!["./safe".to_string()]),
+                network_access: Some(false),
+                readonly_home: Some(true),
+                max_execution_time_secs: Some(30),
+            }),
+        };
+        let intent = CommandSandboxIntent {
+            declared_read_paths: vec![std::path::PathBuf::from("./src.txt")],
+            declared_write_paths: vec![std::path::PathBuf::from("./safe/out.txt")],
+            requires_network: false,
+        };
+        assert!(!approval_required_for_command(
+            &exec_policy,
+            "cp ./src.txt ./safe/out.txt",
+            Some(&intent)
+        ));
+    }
+
+    #[test]
+    fn approval_profile_allow_listed_requires_approval_for_network_intent() {
+        let exec_policy = ExecPolicyConfig {
+            approval_profile: Some(ApprovalProfile::AllowListed),
+            allowed_commands: Some(vec!["curl".to_string()]),
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Disabled),
+            sandbox: None,
+        };
+        let intent = CommandSandboxIntent {
+            declared_read_paths: vec![],
+            declared_write_paths: vec![],
+            requires_network: true,
+        };
+        assert!(approval_required_for_command(
+            &exec_policy,
+            "curl https://example.com",
+            Some(&intent)
+        ));
+    }
 }

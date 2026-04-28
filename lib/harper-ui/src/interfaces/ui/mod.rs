@@ -16,6 +16,7 @@
 pub mod app;
 pub mod auth;
 pub mod events;
+pub mod settings;
 pub mod theme;
 pub mod tui;
 pub mod widgets;

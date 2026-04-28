@@ -10,6 +10,9 @@ Built on Debian Bookworm with Rust. Installs:
 
 Provides a reproducible development environment with the exact dependencies Harper needs.
 
+For sandbox work, this container is the preferred validation environment because it matches the
+Linux `bubblewrap` backend that `harper-sandbox` exercises.
+
 ## Helpful
 
 - Open in VS Code: `Cmd+Shift+P` → "Rebuild and Reopen in Container"
