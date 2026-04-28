@@ -1,43 +1,27 @@
-## Why
+## Changes
 
-Explain the motivation in your own words.
+- Use bullet points.
+- Prefer concrete reviewer-facing changes.
+- Use nested bullets when one change needs examples, endpoints, commands, or sub-points.
+- Call out behavior changes, storage changes, migrations, config changes, and docs updates explicitly.
 
-Helpful prompts:
-- What did you notice while working?
-- What felt incorrect, confusing, or unnecessary?
-- What outcome were you aiming for?
+Example shape:
+- Added browser and TUI auth flows using PKCE:
+  - `/auth/login/{provider}`
+  - `/auth/callback`
+  - `/auth/me`
+- Scoped session load and delete operations to the authenticated user.
+- Updated CLI behavior:
+  - `cargo harper` starts the TUI and local server by default.
+  - `--no-server` is the explicit opt-out.
 
-Write naturally — a short explanation is enough.
+## Validation
 
----
+- List the exact commands or manual checks you used.
+- Keep each item concrete and reproducible.
+- Include any important manual verification steps when behavior depends on the local environment.
 
-## What Changed
-
-Describe the change as you would explain it to a teammate.
-
-Helpful prompts:
-- What did you modify or remove?
-- Did you simplify, refactor, or fix something?
-- Are there any visible behavior or UI changes?
-
-A small bullet list is usually enough.
-
----
-
-## Verification
-
-Explain how you checked the change.
-
-Helpful prompts:
-- What steps did you take to test it?
-- What should reviewers try locally?
-- What result should they expect?
-
-Steps to verify:
-
-1.
-2.
-3.
-
-Expected result:
--
+Examples:
+- `cargo check -p harper-core`
+- `cargo test -p harper-ui`
+- manual verification of TUI sign-in and restart persistence

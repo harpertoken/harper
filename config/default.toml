@@ -90,6 +90,6 @@ allowed_dirs = []
 # max_execution_time_secs = 30
 
 [server]
-enabled = false
+enabled = true
 host = "127.0.0.1"
 port = 8081

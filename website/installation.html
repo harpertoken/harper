@@ -72,6 +72,7 @@ SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <p>For auth commands, <code>/auth login github</code> opens the browser, Harper polls the local server for completion, and <code>/auth status</code> reports the currently stored local TUI session.</p>
+                <p>When sign-in succeeds, Harper stores the local TUI auth session in the OS credential store (macOS Keychain, Linux keyring, or Windows Credential Manager) instead of writing the active tokens to a JSON file under your home directory.</p>
 
                 <h2>File references and Tab completion</h2>
                 <p>Type <code>@</code> in the chat input to start a file or directory reference. Press <code>Tab</code> to autocomplete matching paths and keep pressing <code>Tab</code> to cycle through candidates.</p>
