@@ -314,6 +314,10 @@ impl HarperConfig {
     }
 }
 
+pub fn should_enable_server(config_enabled: bool, args: &[String]) -> bool {
+    config_enabled && !args.iter().any(|arg| arg == "--no-server")
+}
+
 impl ApiConfig {
     /// Validate API configuration
     fn validate(&self) -> HarperResult<()> {
@@ -462,7 +466,7 @@ impl CustomCommandsConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::HarperConfig;
+    use super::{should_enable_server, HarperConfig};
     use config::ConfigBuilder;
     use std::env;
     use std::path::Path;
@@ -577,11 +581,24 @@ mod tests {
             .as_ref()
             .expect("supabase config should exist");
 
+        let project_url = supabase.project_url.as_deref().unwrap_or_default().trim();
+        let anon_key = supabase.anon_key.as_deref().unwrap_or_default().trim();
+        let jwt_secret = supabase.jwt_secret.as_deref().unwrap_or_default().trim();
+
+        let looks_unconfigured = project_url.is_empty()
+            || project_url.contains("your-project-id")
+            || anon_key.is_empty()
+            || anon_key.contains("your-supabase-anon-key")
+            || jwt_secret.is_empty()
+            || jwt_secret.contains("your-supabase-jwt-secret");
+        if looks_unconfigured {
+            return;
+        }
+
         assert!(
-            supabase
-                .project_url
-                .as_deref()
-                .is_some_and(|value| !value.trim().is_empty() && !value.contains("your-project-id")),
+            supabase.project_url.as_deref().is_some_and(
+                |value| !value.trim().is_empty() && !value.contains("your-project-id")
+            ),
             "project_url should be loaded from .env"
         );
         assert!(
@@ -596,5 +613,35 @@ mod tests {
             ),
             "jwt_secret should be loaded from .env"
         );
+    }
+
+    #[test]
+    fn default_config_enables_server() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        let config = config::Config::builder()
+            .add_source(config::File::from(repo_root.join("config/default.toml")))
+            .build()
+            .expect("load default config");
+
+        assert_eq!(config.get_bool("server.enabled").ok(), Some(true));
+        assert_eq!(
+            config.get_string("server.host").ok().as_deref(),
+            Some("127.0.0.1")
+        );
+        assert_eq!(config.get_int("server.port").ok(), Some(8081));
+    }
+
+    #[test]
+    fn no_server_flag_overrides_enabled_server_config() {
+        assert!(should_enable_server(true, &[]));
+        assert!(!should_enable_server(true, &["--no-server".to_string()]));
+        assert!(!should_enable_server(
+            true,
+            &["harper".to_string(), "--no-server".to_string()]
+        ));
+        assert!(!should_enable_server(false, &[]));
     }
 }

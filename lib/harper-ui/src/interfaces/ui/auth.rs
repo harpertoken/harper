@@ -288,7 +288,7 @@ mod tests {
 
     #[test]
     fn loads_auth_session_from_legacy_file() {
-        let _guard = KEYRING_TEST_LOCK.lock().expect("lock keyring test");
+        let _guard = keyring_test_guard();
         set_default_credential_builder(mock::default_credential_builder());
 
         let original_home = std::env::var_os("HOME");
@@ -330,6 +330,57 @@ mod tests {
 
         restore_home(original_home);
         let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn clear_auth_session_removes_legacy_file_fallback() {
+        let _guard = keyring_test_guard();
+        set_default_credential_builder(mock::default_credential_builder());
+
+        let original_home = std::env::var_os("HOME");
+        let temp_dir =
+            std::env::temp_dir().join(format!("harper-keyring-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).expect("create temp dir");
+        std::env::set_var("HOME", &temp_dir);
+
+        let session = AuthSession {
+            access_token: "access-token".to_string(),
+            refresh_token: Some("refresh-token".to_string()),
+            expires_at: Some(12345),
+            user: AuthenticatedUser {
+                user_id: "user-1".to_string(),
+                email: Some("user@example.com".to_string()),
+                display_name: Some("Example User".to_string()),
+                provider: Some(UserAuthProvider::Github),
+            },
+        };
+
+        let legacy_path = auth_session_path().expect("legacy path");
+        let parent = legacy_path.parent().expect("legacy parent");
+        std::fs::create_dir_all(parent).expect("create auth dir");
+        std::fs::write(
+            &legacy_path,
+            serde_json::to_string_pretty(&StoredAuthSession {
+                session: session.clone(),
+            })
+            .expect("serialize session"),
+        )
+        .expect("write legacy session");
+
+        assert!(legacy_path.exists());
+
+        clear_auth_session().expect("clear auth session");
+        assert!(!legacy_path.exists());
+        assert!(load_auth_session().is_none());
+
+        restore_home(original_home);
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    fn keyring_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        KEYRING_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn restore_home(original_home: Option<std::ffi::OsString>) {

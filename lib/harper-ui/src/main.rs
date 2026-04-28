@@ -23,7 +23,7 @@ use std::io::{IsTerminal, Write};
 use turul_mcp_client::McpClient;
 
 #[allow(unused_imports)]
-use harper_core::runtime::config::{ExecPolicyConfig, HarperConfig};
+use harper_core::runtime::config::{should_enable_server, ExecPolicyConfig, HarperConfig};
 
 mod auth;
 
@@ -138,12 +138,10 @@ async fn main() -> Result<(), HarperError> {
 
     // Check for --no-server flag
     let args: Vec<String> = std::env::args().collect();
-    let no_server = args.iter().any(|a| a == "--no-server");
-
     let mut server_task = None;
 
     // Check for server mode
-    let server_enabled = config.server.enabled.unwrap_or(false) && !no_server;
+    let server_enabled = should_enable_server(config.server.enabled.unwrap_or(false), &args);
     if server_enabled {
         let host = config.server.host.as_deref().unwrap_or("127.0.0.1");
         let port = config.server.port.unwrap_or(8080);
