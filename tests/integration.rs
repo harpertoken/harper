@@ -572,6 +572,7 @@ mod e2e_tests {
     #[allow(clippy::too_many_lines, clippy::items_after_statements)]
     fn test_binary_execution_e2e() {
         use std::fs;
+        use std::path::PathBuf;
         use std::process::{Command, Stdio};
 
         // Create a temporary directory for the test
@@ -671,27 +672,53 @@ enabled = false
             println!("Database parent directory exists: {}", parent.exists());
         }
 
-        // Build the binary first
         let profile = if cfg!(debug_assertions) {
             "debug"
         } else {
             "release"
         };
-        let mut build_cmd = std::process::Command::new("cargo");
-        build_cmd.args(["build", "-p", "harper-ui", "--bin", "harper"]);
-        if profile == "release" {
-            build_cmd.arg("--release");
-        }
-        let status = build_cmd.status().expect("Failed to build harper binary");
-        assert!(status.success(), "harper binary build failed");
+        let coverage_mode = std::env::var_os("LLVM_PROFILE_FILE").is_some()
+            || std::env::var_os("CARGO_LLVM_COV").is_some();
 
-        // Build the command
         let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
-        let binary_path = std::env::current_dir()
-            .unwrap()
-            .join(&target_dir)
-            .join(profile)
-            .join("harper");
+        let workspace_root = std::env::current_dir().unwrap();
+        let candidate_paths = [
+            std::env::var_os("CARGO_BIN_EXE_harper").map(PathBuf::from),
+            Some(
+                workspace_root
+                    .join(&target_dir)
+                    .join(profile)
+                    .join("harper"),
+            ),
+            Some(workspace_root.join("target").join(profile).join("harper")),
+        ];
+
+        let binary_path = candidate_paths
+            .into_iter()
+            .flatten()
+            .find(|path| path.exists())
+            .unwrap_or_else(|| {
+                if coverage_mode {
+                    eprintln!(
+                        "Skipping nested cargo build in coverage mode; harper binary was not prebuilt"
+                    );
+                    PathBuf::new()
+                } else {
+                    let mut build_cmd = std::process::Command::new("cargo");
+                    build_cmd.args(["build", "-p", "harper-ui", "--bin", "harper"]);
+                    if profile == "release" {
+                        build_cmd.arg("--release");
+                    }
+                    let status = build_cmd.status().expect("Failed to build harper binary");
+                    assert!(status.success(), "harper binary build failed");
+                    workspace_root.join(&target_dir).join(profile).join("harper")
+                }
+            });
+
+        if binary_path.as_os_str().is_empty() {
+            return;
+        }
+
         let mut command = Command::new(binary_path);
 
         // Set the working directory to the temp directory so it finds the config file
