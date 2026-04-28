@@ -17,8 +17,9 @@ use jsonwebtoken::{
     decode, decode_header, errors::ErrorKind, jwk::JwkSet, Algorithm, DecodingKey, Validation,
 };
 use reqwest::Client;
+use std::str::FromStr;
 
-use crate::core::auth::{AuthenticatedUser, UserAuthClaims};
+use crate::core::auth::{AuthenticatedUser, UserAuthClaims, UserAuthProvider};
 use crate::runtime::config::SupabaseAuthConfig;
 
 pub const ACCESS_TOKEN_COOKIE: &str = "harper_access_token";
@@ -66,11 +67,15 @@ pub fn decode_access_token(
         _ => AuthError::InvalidToken(format!("Invalid Supabase token: {}", err)),
     })?;
 
+    let claims = decoded.claims;
+    let provider = inferred_provider(&claims);
+    let display_name = inferred_display_name(&claims);
+
     Ok(AuthenticatedUser {
-        user_id: decoded.claims.sub,
-        email: decoded.claims.email,
-        display_name: None,
-        provider: None,
+        user_id: claims.sub,
+        email: claims.email,
+        display_name,
+        provider,
     })
 }
 
@@ -155,12 +160,48 @@ async fn decode_access_token_with_jwks(
         _ => AuthError::InvalidToken(format!("Invalid Supabase token: {}", err)),
     })?;
 
+    let claims = decoded.claims;
+    let provider = inferred_provider(&claims);
+    let display_name = inferred_display_name(&claims);
+
     Ok(AuthenticatedUser {
-        user_id: decoded.claims.sub,
-        email: decoded.claims.email,
-        display_name: None,
-        provider: None,
+        user_id: claims.sub,
+        email: claims.email,
+        display_name,
+        provider,
     })
+}
+
+fn inferred_provider(claims: &UserAuthClaims) -> Option<UserAuthProvider> {
+    if let Some(app_metadata) = &claims.app_metadata {
+        if let Some(provider) = app_metadata
+            .provider
+            .as_deref()
+            .and_then(|provider| UserAuthProvider::from_str(provider).ok())
+        {
+            return Some(provider);
+        }
+
+        if let Some(provider) = app_metadata
+            .providers
+            .iter()
+            .find_map(|provider| UserAuthProvider::from_str(provider).ok())
+        {
+            return Some(provider);
+        }
+    }
+
+    None
+}
+
+fn inferred_display_name(claims: &UserAuthClaims) -> Option<String> {
+    let metadata = claims.user_metadata.as_ref()?;
+    metadata
+        .full_name
+        .as_ref()
+        .or(metadata.name.as_ref())
+        .or(metadata.user_name.as_ref())
+        .cloned()
 }
 
 fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
@@ -207,5 +248,51 @@ impl AuthError {
             ),
             Self::InvalidToken(message) => (StatusCode::UNAUTHORIZED, message),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{inferred_display_name, inferred_provider};
+    use crate::core::auth::{
+        UserAppMetadataClaims, UserAuthClaims, UserAuthProvider, UserMetadataClaims,
+    };
+
+    #[test]
+    fn infers_provider_from_app_metadata() {
+        let claims = UserAuthClaims {
+            sub: "user-1".to_string(),
+            email: Some("user@example.com".to_string()),
+            role: None,
+            aud: None,
+            app_metadata: Some(UserAppMetadataClaims {
+                provider: Some("github".to_string()),
+                providers: vec!["github".to_string()],
+            }),
+            user_metadata: None,
+        };
+
+        assert_eq!(inferred_provider(&claims), Some(UserAuthProvider::Github));
+    }
+
+    #[test]
+    fn infers_display_name_from_user_metadata() {
+        let claims = UserAuthClaims {
+            sub: "user-1".to_string(),
+            email: Some("user@example.com".to_string()),
+            role: None,
+            aud: None,
+            app_metadata: None,
+            user_metadata: Some(UserMetadataClaims {
+                full_name: Some("Example User".to_string()),
+                name: None,
+                user_name: None,
+            }),
+        };
+
+        assert_eq!(
+            inferred_display_name(&claims).as_deref(),
+            Some("Example User")
+        );
     }
 }

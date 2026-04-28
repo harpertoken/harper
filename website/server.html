@@ -134,6 +134,19 @@ open http://127.0.0.1:8081/auth/login/github</code></pre>
                     <button class="copy-btn"></button>
                 </div>
 
+                <h3><code>/auth/me</code> response</h3>
+                <div class="code-wrapper">
+                    <pre><code>{
+  "authenticated": true,
+  "user": {
+    "user_id": "00000000-0000-0000-0000-000000000000",
+    "email": "user@example.com",
+    "display_name": "Example User",
+    "provider": "github"
+  }
+}</code></pre>
+                </div>
+
                 <h3>TUI auth commands</h3>
                 <p>The TUI does not require a separate auth menu. Start a normal conversation and type one of the slash commands below into the message input.</p>
                 <div class="code-wrapper">

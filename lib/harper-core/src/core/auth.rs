@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -28,6 +29,19 @@ impl UserAuthProvider {
             Self::Github => "github",
             Self::Google => "google",
             Self::Apple => "apple",
+        }
+    }
+}
+
+impl FromStr for UserAuthProvider {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_lowercase().as_str() {
+            "github" => Ok(Self::Github),
+            "google" => Ok(Self::Google),
+            "apple" => Ok(Self::Apple),
+            _ => Err(()),
         }
     }
 }
@@ -54,4 +68,22 @@ pub struct UserAuthClaims {
     pub email: Option<String>,
     pub role: Option<String>,
     pub aud: Option<String>,
+    #[serde(default)]
+    pub app_metadata: Option<UserAppMetadataClaims>,
+    #[serde(default)]
+    pub user_metadata: Option<UserMetadataClaims>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct UserAppMetadataClaims {
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub providers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct UserMetadataClaims {
+    pub full_name: Option<String>,
+    pub name: Option<String>,
+    pub user_name: Option<String>,
 }
