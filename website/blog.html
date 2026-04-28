@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Blog</title>
-    <meta name="harper-update-version" content="2026-04-28-blog-v2" />
+    <meta name="harper-update-version" content="2026-04-28-blog-v3" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -28,6 +28,12 @@
             <div class="content-container">
                 <h1 class="hero-title">Notes from the codebase.</h1>
                 <p class="hero-lede">Short product and engineering notes from Harper. This page stays high level. The <a href="changelog.html">changelog</a> keeps the version-by-version detail.</p>
+
+                <article>
+                    <h2>April 2026 · Cargo and Bazel validation got tighter</h2>
+                    <p>Some of the recent Harper work was not product-facing at all. The repo now has better parity between Cargo and Bazel validation, which matters because changes that compile and test under one path need to fail fast under the other as well.</p>
+                    <p>This is mostly contributor-facing engineering work: aligning default config assumptions with test environments, closing dependency wiring gaps, and making sure the signed-in local workflow behaves the same way in local development and CI.</p>
+                </article>
 
                 <article>
                     <h2>April 2026 · Signed-in local workflows are now account-scoped</h2>

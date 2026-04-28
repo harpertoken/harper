@@ -160,9 +160,9 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            enabled: Some(false),
+            enabled: Some(true),
             host: Some("127.0.0.1".to_string()),
-            port: Some(8080),
+            port: Some(8081),
         }
     }
 }
@@ -466,7 +466,7 @@ impl CustomCommandsConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{should_enable_server, HarperConfig};
+    use super::{should_enable_server, HarperConfig, ServerConfig};
     use config::ConfigBuilder;
     use std::env;
     use std::path::Path;
@@ -617,21 +617,11 @@ mod tests {
 
     #[test]
     fn default_config_enables_server() {
-        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(Path::parent)
-            .expect("workspace root");
-        let config = config::Config::builder()
-            .add_source(config::File::from(repo_root.join("config/default.toml")))
-            .build()
-            .expect("load default config");
+        let config = ServerConfig::default();
 
-        assert_eq!(config.get_bool("server.enabled").ok(), Some(true));
-        assert_eq!(
-            config.get_string("server.host").ok().as_deref(),
-            Some("127.0.0.1")
-        );
-        assert_eq!(config.get_int("server.port").ok(), Some(8081));
+        assert_eq!(config.enabled, Some(true));
+        assert_eq!(config.host.as_deref(), Some("127.0.0.1"));
+        assert_eq!(config.port, Some(8081));
     }
 
     #[test]
