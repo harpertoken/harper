@@ -288,7 +288,7 @@ async fn main() -> Result<(), HarperError> {
 
     // Try TUI first, fall back to text menu if TUI fails
     let custom_commands = config.custom_commands.commands.clone().unwrap_or_default();
-    let server_base_url = config.server.enabled.unwrap_or(false).then(|| {
+    let server_base_url = server_enabled.then(|| {
         format!(
             "http://{}:{}",
             config

@@ -1,7 +1,11 @@
 use harper_core::{AuthSession, SessionStateView};
+use keyring::{Entry, Error as KeyringError};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+
+const KEYRING_SERVICE: &str = "harper";
+const TUI_AUTH_SESSION_ACCOUNT: &str = "tui-auth-session";
 
 #[derive(Debug, Clone)]
 pub enum TuiAuthCommand {
@@ -133,33 +137,42 @@ pub async fn fetch_remote_session_state(
 }
 
 pub fn load_auth_session() -> Option<AuthSession> {
-    let path = auth_session_path()?;
-    let content = fs::read_to_string(path).ok()?;
-    serde_json::from_str::<StoredAuthSession>(&content)
-        .ok()
-        .map(|stored| stored.session)
+    if let Some(session) = load_auth_session_from_keyring() {
+        return Some(session);
+    }
+
+    let session = load_auth_session_from_file()?;
+    if save_auth_session_to_keyring(&session).is_ok() {
+        let _ = delete_legacy_auth_session_file();
+    }
+    Some(session)
 }
 
 pub fn save_auth_session(session: &AuthSession) -> Result<(), String> {
-    let path = auth_session_path().ok_or_else(|| "Home directory not found".to_string())?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    match save_auth_session_to_keyring(session) {
+        Ok(()) => {
+            let _ = delete_legacy_auth_session_file();
+            Ok(())
+        }
+        Err(keyring_error) => {
+            save_auth_session_to_file(session)?;
+            eprintln!(
+                "Warning: falling back to file-backed TUI auth session storage: {}",
+                keyring_error
+            );
+            Ok(())
+        }
     }
-    let content = serde_json::to_string_pretty(&StoredAuthSession {
-        session: session.clone(),
-    })
-    .map_err(|err| err.to_string())?;
-    fs::write(path, content).map_err(|err| err.to_string())
 }
 
 pub fn clear_auth_session() -> Result<(), String> {
-    let Some(path) = auth_session_path() else {
-        return Ok(());
-    };
-    if path.exists() {
-        fs::remove_file(path).map_err(|err| err.to_string())?;
+    if let Ok(entry) = auth_session_entry() {
+        match entry.delete_password() {
+            Ok(()) | Err(KeyringError::NoEntry) => {}
+            Err(err) => return Err(err.to_string()),
+        }
     }
-    Ok(())
+    delete_legacy_auth_session_file()
 }
 
 pub fn launch_browser(url: &str) -> Result<(), String> {
@@ -198,9 +211,71 @@ fn auth_session_path() -> Option<PathBuf> {
     Some(home.join(".harper").join("auth").join("tui-session.json"))
 }
 
+fn auth_session_entry() -> Result<Entry, String> {
+    Entry::new(KEYRING_SERVICE, TUI_AUTH_SESSION_ACCOUNT).map_err(|err| err.to_string())
+}
+
+fn load_auth_session_from_keyring() -> Option<AuthSession> {
+    let entry = auth_session_entry().ok()?;
+    let content = entry.get_password().ok()?;
+    deserialize_auth_session(&content).ok()
+}
+
+fn load_auth_session_from_file() -> Option<AuthSession> {
+    let path = auth_session_path()?;
+    let content = fs::read_to_string(path).ok()?;
+    deserialize_auth_session(&content).ok()
+}
+
+fn save_auth_session_to_keyring(session: &AuthSession) -> Result<(), String> {
+    let entry = auth_session_entry()?;
+    let content = serialize_auth_session(session)?;
+    entry.set_password(&content).map_err(|err| err.to_string())
+}
+
+fn save_auth_session_to_file(session: &AuthSession) -> Result<(), String> {
+    let path = auth_session_path().ok_or_else(|| "Home directory not found".to_string())?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    let content = serialize_auth_session(session)?;
+    fs::write(path, content).map_err(|err| err.to_string())
+}
+
+fn delete_legacy_auth_session_file() -> Result<(), String> {
+    let Some(path) = auth_session_path() else {
+        return Ok(());
+    };
+    if path.exists() {
+        fs::remove_file(path).map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
+fn serialize_auth_session(session: &AuthSession) -> Result<String, String> {
+    serde_json::to_string_pretty(&StoredAuthSession {
+        session: session.clone(),
+    })
+    .map_err(|err| err.to_string())
+}
+
+fn deserialize_auth_session(content: &str) -> Result<AuthSession, String> {
+    serde_json::from_str::<StoredAuthSession>(content)
+        .map(|stored| stored.session)
+        .map_err(|err| err.to_string())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_tui_auth_command, TuiAuthCommand};
+    use super::{
+        auth_session_path, clear_auth_session, load_auth_session, parse_tui_auth_command,
+        StoredAuthSession, TuiAuthCommand,
+    };
+    use harper_core::{AuthSession, AuthenticatedUser, UserAuthProvider};
+    use keyring::{mock, set_default_credential_builder};
+    use std::sync::Mutex;
+
+    static KEYRING_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn parses_tui_auth_login_command() {
@@ -208,6 +283,60 @@ mod tests {
         match command {
             TuiAuthCommand::Login { provider } => assert_eq!(provider, "github"),
             _ => panic!("expected login command"),
+        }
+    }
+
+    #[test]
+    fn loads_auth_session_from_legacy_file() {
+        let _guard = KEYRING_TEST_LOCK.lock().expect("lock keyring test");
+        set_default_credential_builder(mock::default_credential_builder());
+
+        let original_home = std::env::var_os("HOME");
+        let temp_dir =
+            std::env::temp_dir().join(format!("harper-keyring-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).expect("create temp dir");
+        std::env::set_var("HOME", &temp_dir);
+
+        let session = AuthSession {
+            access_token: "access-token".to_string(),
+            refresh_token: Some("refresh-token".to_string()),
+            expires_at: Some(12345),
+            user: AuthenticatedUser {
+                user_id: "user-1".to_string(),
+                email: Some("user@example.com".to_string()),
+                display_name: Some("Example User".to_string()),
+                provider: Some(UserAuthProvider::Github),
+            },
+        };
+
+        let legacy_path = auth_session_path().expect("legacy path");
+        let parent = legacy_path.parent().expect("legacy parent");
+        std::fs::create_dir_all(parent).expect("create auth dir");
+        std::fs::write(
+            &legacy_path,
+            serde_json::to_string_pretty(&StoredAuthSession {
+                session: session.clone(),
+            })
+            .expect("serialize session"),
+        )
+        .expect("write legacy session");
+
+        let loaded = load_auth_session().expect("load auth session");
+        assert_eq!(loaded, session);
+
+        clear_auth_session().expect("clear auth session");
+        assert!(load_auth_session().is_none());
+        assert!(!legacy_path.exists());
+
+        restore_home(original_home);
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    fn restore_home(original_home: Option<std::ffi::OsString>) {
+        if let Some(value) = original_home {
+            std::env::set_var("HOME", value);
+        } else {
+            std::env::remove_var("HOME");
         }
     }
 }

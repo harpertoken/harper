@@ -143,6 +143,7 @@ open http://127.0.0.1:8081/auth/login/github</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <p><code>/auth login github</code> starts a local flow, opens the browser, and then stores the resulting TUI session once Harper sees the completed callback. <code>/auth status</code> reports the local TUI auth state. <code>/auth logout</code> clears the local stored TUI session.</p>
+                <p>Successful TUI sign-in stores the local auth session in the system credential store (for example macOS Keychain) rather than a plain JSON token file. If you launch Harper with <code>--no-server</code>, these TUI auth commands are unavailable because the local auth callback and polling endpoints are disabled.</p>
 
                 <h2>Review example</h2>
                 <div class="code-wrapper">
