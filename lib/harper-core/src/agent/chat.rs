@@ -1981,13 +1981,27 @@ impl<'a> ChatService<'a> {
         segments
     }
 
+    fn looks_like_absolute_followup_path(path: &str) -> bool {
+        let normalized = path.replace('\\', "/");
+        normalized.starts_with('/')
+            || normalized.starts_with("~/")
+            || normalized.starts_with("//")
+            || normalized
+                .as_bytes()
+                .get(1)
+                .is_some_and(|byte| *byte == b':')
+    }
+
     fn sanitize_followup_write_path(path: &str) -> Option<String> {
         let trimmed = path.trim();
         if trimmed.is_empty() {
             return None;
         }
         let candidate = std::path::Path::new(trimmed);
-        let sanitized = if candidate.is_absolute() || trimmed.contains("..") {
+        let sanitized = if candidate.is_absolute()
+            || Self::looks_like_absolute_followup_path(trimmed)
+            || trimmed.contains("..")
+        {
             candidate.file_name()?.to_str()?.to_string()
         } else {
             trimmed.to_string()
