@@ -256,7 +256,6 @@ pub async fn list_sessions(
     Ok(Json(
         sessions
             .into_iter()
-            .take(50)
             .map(|session| SessionListItem {
                 id: session.id,
                 user_id: session.user_id,

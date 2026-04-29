@@ -16,7 +16,9 @@ use harper_core::core::Message;
 use harper_core::memory::session_service::GlobalStats;
 use harper_core::ResolvedAgents;
 use harper_core::{ApprovalProfile, AuthSession, ExecutionStrategy, PlanState, SandboxProfile};
+use ratatui::text::Line;
 use serde::Deserialize;
+use std::collections::BTreeSet;
 use std::fs;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -24,8 +26,8 @@ use tokio::sync::oneshot;
 
 // Constants for sidebar entry limits
 const MAX_SIDEBAR_PROBE_ENTRIES: usize = 5;
-const MAX_SIDEBAR_GIT_ENTRIES: usize = 10;
-const MAX_SIDEBAR_FILE_ENTRIES: usize = 12;
+const MAX_SIDEBAR_GIT_ENTRIES: usize = 4;
+const MAX_SIDEBAR_FILE_ENTRIES: usize = 6;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ReviewFindingState {
@@ -48,6 +50,19 @@ pub enum NavigationFocus {
     PlanSteps,
     PlanJobs,
     Agents,
+}
+
+#[derive(Clone)]
+pub struct SidebarSection {
+    pub title: String,
+    pub entries: Vec<String>,
+}
+
+#[derive(Clone)]
+pub struct RenderedMessageBlock {
+    pub role: String,
+    pub content: String,
+    pub lines: Vec<Line<'static>>,
 }
 
 #[derive(Clone)]
@@ -76,7 +91,10 @@ pub struct ChatState {
     pub scroll_offset: usize,
     pub completion_prefix: Option<String>,
     pub sidebar_visible: bool,
-    pub sidebar_entries: Vec<String>,
+    pub sidebar_sections: Vec<SidebarSection>,
+    pub rendered_message_cache: Vec<RenderedMessageBlock>,
+    pub rendered_transcript_lines: Vec<Line<'static>>,
+    pub render_cache_theme_key: String,
 }
 
 #[derive(Clone)]
@@ -87,123 +105,220 @@ pub struct CommandOutputState {
     pub done: bool,
 }
 
-pub fn gather_sidebar_entries(chat_state: Option<&ChatState>) -> Vec<String> {
-    let mut entries = Vec::new();
+pub fn gather_sidebar_entries(chat_state: Option<&ChatState>) -> Vec<SidebarSection> {
+    let mut command_entries = Vec::new();
+    let mut seen_commands = BTreeSet::new();
     if let Some(chat) = chat_state {
         for msg in chat.messages.iter().rev() {
             for line in msg.content.lines().rev() {
                 let trimmed = line.trim();
-                if trimmed.starts_with("$ ") {
-                    entries.push(trimmed.trim_start_matches("$ ").to_string());
+                if trimmed.starts_with("$ ")
+                    && seen_commands.insert(trimmed.trim_start_matches("$ ").to_string())
+                {
+                    command_entries.push(trimmed.trim_start_matches("$ ").to_string());
                 }
-                if entries.len() >= 5 {
+                if command_entries.len() >= MAX_SIDEBAR_PROBE_ENTRIES {
                     break;
                 }
             }
-            if entries.len() >= 5 {
+            if command_entries.len() >= MAX_SIDEBAR_PROBE_ENTRIES {
                 break;
             }
         }
     }
 
+    let mut git_entries = Vec::new();
     if let Ok(status) = harper_core::tools::git::git_status() {
-        for line in status.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty()
-                || trimmed.starts_with("Git status")
-                || trimmed.starts_with("Git working")
-            {
+        git_entries = summarize_git_status(&status);
+    }
+
+    let mut file_entries = Vec::new();
+    if let Ok(dir) = fs::read_dir(".") {
+        for entry in dir.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if should_skip_sidebar_workspace_entry(&name) {
                 continue;
             }
-            entries.push(trimmed.to_string());
-            if entries.len() >= 10 {
+            file_entries.push(name);
+            if file_entries.len() >= MAX_SIDEBAR_FILE_ENTRIES {
                 break;
             }
         }
     }
 
-    if entries.len() < 10 {
-        if let Ok(dir) = fs::read_dir(".") {
-            for entry in dir.flatten() {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                if name.starts_with('.') {
-                    continue;
-                }
-                entries.push(name);
-                if entries.len() >= 12 {
-                    break;
-                }
-            }
-        }
-    }
-
-    if entries.is_empty() {
-        entries.push("Empty context".to_string());
-    }
-    entries
+    build_sidebar_sections(command_entries, git_entries, file_entries)
 }
 
 /// Gather sidebar entries asynchronously
-pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<String> {
-    let mut entries = Vec::new();
+pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<SidebarSection> {
+    let mut command_entries = Vec::new();
+    let mut seen_commands = BTreeSet::new();
     for msg in messages.iter().rev() {
         for line in msg.content.lines().rev() {
             let trimmed = line.trim();
-            if trimmed.starts_with("$ ") {
-                entries.push(trimmed.trim_start_matches("$ ").to_string());
+            if trimmed.starts_with("$ ")
+                && seen_commands.insert(trimmed.trim_start_matches("$ ").to_string())
+            {
+                command_entries.push(trimmed.trim_start_matches("$ ").to_string());
             }
-            if entries.len() >= MAX_SIDEBAR_PROBE_ENTRIES {
+            if command_entries.len() >= MAX_SIDEBAR_PROBE_ENTRIES {
                 break;
             }
         }
-        if entries.len() >= MAX_SIDEBAR_PROBE_ENTRIES {
+        if command_entries.len() >= MAX_SIDEBAR_PROBE_ENTRIES {
             break;
         }
     }
 
+    let mut git_entries = Vec::new();
     if let Ok(status) = harper_core::tools::git::git_status_async().await {
-        for line in status.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty()
-                || trimmed.starts_with("Git status")
-                || trimmed.starts_with("Git working")
-            {
-                continue;
-            }
-            entries.push(trimmed.to_string());
-            if entries.len() >= MAX_SIDEBAR_GIT_ENTRIES {
-                break;
+        git_entries = summarize_git_status(&status);
+    }
+
+    let mut file_entries = Vec::new();
+    let mut dir = match tokio::fs::read_dir(".").await {
+        Ok(dir) => dir,
+        Err(_) => {
+            return build_sidebar_sections(command_entries, git_entries, file_entries);
+        }
+    };
+    while let Ok(Some(entry)) = dir.next_entry().await {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if should_skip_sidebar_workspace_entry(&name) {
+            continue;
+        }
+        file_entries.push(name);
+        if file_entries.len() >= MAX_SIDEBAR_FILE_ENTRIES {
+            break;
+        }
+    }
+
+    build_sidebar_sections(command_entries, git_entries, file_entries)
+}
+
+fn build_sidebar_sections(
+    command_entries: Vec<String>,
+    git_entries: Vec<String>,
+    file_entries: Vec<String>,
+) -> Vec<SidebarSection> {
+    let mut sections = Vec::new();
+
+    if !command_entries.is_empty() {
+        sections.push(SidebarSection {
+            title: "Recent commands".to_string(),
+            entries: command_entries,
+        });
+    }
+
+    if !git_entries.is_empty() {
+        sections.push(SidebarSection {
+            title: "Git status".to_string(),
+            entries: git_entries,
+        });
+    }
+
+    if !file_entries.is_empty() {
+        sections.push(SidebarSection {
+            title: "Top level".to_string(),
+            entries: file_entries,
+        });
+    }
+
+    if sections.is_empty() {
+        sections.push(SidebarSection {
+            title: "Context".to_string(),
+            entries: vec!["No recent context".to_string()],
+        });
+    }
+
+    sections
+}
+
+fn summarize_git_status(status: &str) -> Vec<String> {
+    let mut unique_paths = Vec::new();
+    let mut seen_paths = BTreeSet::new();
+    let mut modified = 0usize;
+    let mut added = 0usize;
+    let mut deleted = 0usize;
+    let mut untracked = 0usize;
+
+    for line in status.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty()
+            || trimmed.starts_with("Git status")
+            || trimmed.starts_with("Git working")
+        {
+            continue;
+        }
+
+        let mut chars = trimmed.chars();
+        let x = chars.next().unwrap_or(' ');
+        let y = chars.next().unwrap_or(' ');
+
+        let path = trimmed
+            .split_once(' ')
+            .map(|(_, path)| path.trim())
+            .unwrap_or(trimmed);
+
+        if seen_paths.insert(path.to_string()) {
+            unique_paths.push(path.to_string());
+
+            match (x, y) {
+                ('?', '?') => untracked += 1,
+                ('A', _) | (_, 'A') => added += 1,
+                ('D', _) | (_, 'D') => deleted += 1,
+                _ => modified += 1,
             }
         }
     }
 
-    if entries.len() < MAX_SIDEBAR_GIT_ENTRIES {
-        let mut dir = match tokio::fs::read_dir(".").await {
-            Ok(dir) => dir,
-            Err(_) => {
-                // If we can't read the directory, just skip it
-                if entries.is_empty() {
-                    entries.push("Empty context".to_string());
-                }
-                return entries;
-            }
-        };
-        while let Ok(Some(entry)) = dir.next_entry().await {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if name.starts_with('.') {
-                continue;
-            }
-            entries.push(name);
-            if entries.len() >= MAX_SIDEBAR_FILE_ENTRIES {
-                break;
-            }
-        }
+    if unique_paths.is_empty() {
+        return Vec::new();
     }
 
-    if entries.is_empty() {
-        entries.push("Empty context".to_string());
+    let mut entries = Vec::new();
+    let mut summary_parts = Vec::new();
+    if modified > 0 {
+        summary_parts.push(format!("{modified} modified"));
+    }
+    if added > 0 {
+        summary_parts.push(format!("{added} added"));
+    }
+    if deleted > 0 {
+        summary_parts.push(format!("{deleted} deleted"));
+    }
+    if untracked > 0 {
+        summary_parts.push(format!("{untracked} untracked"));
+    }
+
+    if summary_parts.is_empty() {
+        entries.push(format!("{} changed", unique_paths.len()));
+    } else {
+        entries.push(summary_parts.join(", "));
+    }
+
+    for path in unique_paths.into_iter().take(MAX_SIDEBAR_GIT_ENTRIES - 1) {
+        entries.push(format_sidebar_path(&path));
     }
     entries
+}
+
+fn format_sidebar_path(path: &str) -> String {
+    let parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
+    if parts.len() <= 2 {
+        return path.to_string();
+    }
+
+    let tail = parts[parts.len().saturating_sub(2)..].join("/");
+    format!("…/{tail}")
+}
+
+fn should_skip_sidebar_workspace_entry(name: &str) -> bool {
+    name.starts_with('.')
+        || matches!(
+            name,
+            "bazel-bin" | "bazel-out" | "bazel-testlogs" | "target" | "node_modules" | ".DS_Store"
+        )
 }
 
 impl ChatState {
@@ -320,7 +435,7 @@ pub enum AppState {
     Chat(Box<ChatState>),
     Sessions(Vec<SessionInfo>, usize),       // sessions, selected
     ExportSessions(Vec<SessionInfo>, usize), // sessions, selected for export
-    Tools(usize),                            // selected tool
+    Settings(usize),                         // selected settings row
     Profile(usize),
     ExecutionPolicy(usize),
     ViewSession(String, Vec<Message>, usize), // name, messages, selected
@@ -338,6 +453,8 @@ pub enum ExecutionPolicyListField {
 pub struct ExecutionPolicyEditorState {
     pub field: ExecutionPolicyListField,
     pub input: String,
+    pub selected_index: usize,
+    pub text_input_focused: bool,
 }
 
 #[derive(Clone)]
@@ -381,6 +498,7 @@ pub enum HeaderWidget {
 pub struct TuiApp {
     pub state: AppState,
     pub message: Option<UiMessage>,
+    pub help_selected: usize,
     pub pending_approval: Option<ApprovalState>,
     pub activity_status: Option<String>,
     pub activity_started_at: Option<Instant>,
@@ -397,6 +515,7 @@ pub struct TuiApp {
     pub execution_strategy: ExecutionStrategy,
     pub sandbox_profile: SandboxProfile,
     pub retry_max_attempts: u32,
+    pub agents_context_enabled: bool,
     pub allowed_commands: Vec<String>,
     pub blocked_commands: Vec<String>,
     pub execution_policy_editor: Option<ExecutionPolicyEditorState>,
@@ -408,6 +527,7 @@ impl Default for TuiApp {
         Self {
             state: AppState::Menu(0),
             message: None,
+            help_selected: 0,
             pending_approval: None,
             activity_status: None,
             activity_started_at: None,
@@ -424,6 +544,7 @@ impl Default for TuiApp {
             execution_strategy: ExecutionStrategy::Auto,
             sandbox_profile: SandboxProfile::Disabled,
             retry_max_attempts: 1,
+            agents_context_enabled: true,
             allowed_commands: Vec::new(),
             blocked_commands: Vec::new(),
             execution_policy_editor: None,
@@ -451,6 +572,10 @@ impl TuiApp {
         message_type: MessageType,
         expires_after: Option<Duration>,
     ) {
+        if content.trim().is_empty() {
+            self.message = None;
+            return;
+        }
         self.message = Some(UiMessage {
             content,
             message_type,
@@ -479,6 +604,7 @@ impl TuiApp {
     }
 
     pub fn set_help_message(&mut self, content: String) {
+        self.help_selected = 0;
         self.set_message(content, MessageType::Help, None);
     }
 
@@ -492,6 +618,7 @@ impl TuiApp {
 
     pub fn clear_message(&mut self) {
         self.message = None;
+        self.help_selected = 0;
     }
 
     pub fn refresh_message(&mut self) {
@@ -615,7 +742,7 @@ impl TuiApp {
                     *sel = (*sel + 1) % sessions.len();
                 }
             }
-            AppState::Tools(sel) => *sel = (*sel + 1) % 5,
+            AppState::Settings(sel) => *sel = (*sel + 1) % 5,
             AppState::Profile(sel) => *sel = (*sel + 1) % profile_action_count,
             AppState::ExecutionPolicy(sel) => *sel = (*sel + 1) % execution_policy_row_count,
             AppState::ExportSessions(sessions, sel) => {
@@ -625,7 +752,7 @@ impl TuiApp {
             }
             AppState::ViewSession(_, messages, sel) => {
                 if !messages.is_empty() {
-                    *sel = (*sel + 1) % messages.len();
+                    *sel = sel.saturating_add(1);
                 }
             }
             AppState::Stats(_) => {}
@@ -680,7 +807,7 @@ impl TuiApp {
                     };
                 }
             }
-            AppState::Tools(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
+            AppState::Settings(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
             AppState::Profile(sel) => {
                 *sel = if *sel == 0 {
                     profile_action_count - 1
@@ -706,11 +833,7 @@ impl TuiApp {
             }
             AppState::ViewSession(_, messages, sel) => {
                 if !messages.is_empty() {
-                    *sel = if *sel == 0 {
-                        messages.len() - 1
-                    } else {
-                        *sel - 1
-                    };
+                    *sel = sel.saturating_sub(1);
                 }
             }
             AppState::Stats(_) => {}

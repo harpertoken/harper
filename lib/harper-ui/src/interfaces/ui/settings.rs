@@ -223,6 +223,22 @@ pub fn header_widget_names(widgets: &[HeaderWidget]) -> Vec<&'static str> {
     widgets.iter().map(|w| header_widget_name(*w)).collect()
 }
 
+pub fn available_header_widgets() -> &'static [HeaderWidget] {
+    &[
+        HeaderWidget::Session,
+        HeaderWidget::Plan,
+        HeaderWidget::Agents,
+        HeaderWidget::Web,
+        HeaderWidget::Auth,
+        HeaderWidget::Focus,
+        HeaderWidget::Model,
+        HeaderWidget::Cwd,
+        HeaderWidget::Strategy,
+        HeaderWidget::Approval,
+        HeaderWidget::Activity,
+    ]
+}
+
 pub fn parse_header_widgets(values: &[String]) -> Vec<HeaderWidget> {
     let mut parsed = Vec::new();
     for value in values {
