@@ -504,18 +504,23 @@ impl<'a> ChatService<'a> {
 
     /// Generate help text for commands
     fn generate_help_text(&self) -> String {
-        let mut help_text = "Available commands:\n".to_string();
-        help_text.push_str("  /help - Show this help\n");
-        help_text.push_str("  /exit - Exit the session\n");
-        help_text.push_str("  /clear - Clear chat history\n");
-        help_text.push_str("  /audit [limit] - Show recent command executions\n");
-        help_text.push_str(
-            "  /strategy [auto|grounded|deterministic|model] - Set or show execution strategy\n",
-        );
-        help_text.push_str("  !command - Execute shell command directly\n");
-        help_text.push_str("  @file - Reference and read files (with Tab completion)\n");
+        let mut help_text = "Available commands:\n\n".to_string();
+        help_text.push_str("/help\n");
+        help_text.push_str("  Show this help.\n\n");
+        help_text.push_str("/exit\n");
+        help_text.push_str("  Exit the session.\n\n");
+        help_text.push_str("/clear\n");
+        help_text.push_str("  Clear chat history.\n\n");
+        help_text.push_str("/audit [limit]\n");
+        help_text.push_str("  Show recent command executions.\n\n");
+        help_text.push_str("/strategy [auto|grounded|deterministic|model]\n");
+        help_text.push_str("  Set or show execution strategy.\n\n");
+        help_text.push_str("!command\n");
+        help_text.push_str("  Execute shell command directly.\n\n");
+        help_text.push_str("@file\n");
+        help_text.push_str("  Reference and read files with Tab completion.\n");
         for (cmd, desc) in &self.custom_commands {
-            help_text.push_str(&format!("  /{} - {}\n", cmd, desc));
+            help_text.push_str(&format!("\n/{}\n  {}\n", cmd, desc));
         }
         help_text
     }
@@ -657,6 +662,10 @@ impl<'a> ChatService<'a> {
     }
 
     fn emit_todo_reminder(&self) -> HarperResult<()> {
+        if self.runtime_events.is_some() {
+            return Ok(());
+        }
+
         let todos = crate::memory::storage::load_todos(self.conn)?;
         if todos.is_empty() {
             return Ok(());
@@ -678,6 +687,10 @@ impl<'a> ChatService<'a> {
     }
 
     fn emit_quick_audit_refresh(&self, session_id: &str) {
+        if self.runtime_events.is_some() {
+            return;
+        }
+
         match self.fetch_command_logs(session_id, 3) {
             Ok(entries) if !entries.is_empty() => {
                 println!(

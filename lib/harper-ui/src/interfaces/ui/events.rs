@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 // Keyboard shortcut constants
 const HELP_MESSAGE: &str =
-    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | D/Delete:Remove Session | X:Exit | W:Web | B:Sidebar | A:Agents | F:Findings | Ctrl+S:Plan | R:Retry | U:Replan | K:Ack | P:Jobs | M:Msgs | C:ID";
+    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | D/Delete:Remove Session | X:Exit | W:Web | B:Sidebar | A:Agents | /agents on|off | F:Findings | Ctrl+S:Plan | R:Retry | U:Replan | K:Ack | P:Jobs | M:Msgs | C:ID";
 
 use super::app::{
     AppState, ChatState, ExecutionPolicyEditorState, ExecutionPolicyListField, NavigationFocus,
@@ -72,6 +72,7 @@ pub enum EventResult {
         session_id: String,
         remote: bool,
         export_view: bool,
+        selected_index: usize,
     },
     GatherSidebarEntries,
     Quit,
@@ -82,7 +83,18 @@ pub(crate) fn create_chat_state(
     messages: Vec<harper_core::core::Message>,
     active_plan: Option<harper_core::PlanState>,
     active_agents: Option<harper_core::ResolvedAgents>,
+    agents_context_enabled: bool,
 ) -> ChatState {
+    let active_agents = if agents_context_enabled {
+        active_agents.or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|cwd| harper_core::core::agents::resolve_agents_for_dir(&cwd).ok())
+        })
+    } else {
+        None
+    };
+
     let mut chat_state = ChatState {
         session_id,
         messages,
@@ -108,7 +120,10 @@ pub(crate) fn create_chat_state(
         scroll_offset: 0,
         completion_prefix: None,
         sidebar_visible: false,
-        sidebar_entries: Vec::new(),
+        sidebar_sections: Vec::new(),
+        rendered_message_cache: Vec::new(),
+        rendered_transcript_lines: Vec::new(),
+        render_cache_theme_key: String::new(),
     };
     chat_state.refresh_review_state();
     chat_state.follow_latest_messages();
@@ -165,7 +180,12 @@ fn start_execution_policy_editor(app: &mut TuiApp, field: ExecutionPolicyListFie
         ExecutionPolicyListField::AllowedCommands => app.allowed_commands.join(", "),
         ExecutionPolicyListField::BlockedCommands => app.blocked_commands.join(", "),
     };
-    app.execution_policy_editor = Some(ExecutionPolicyEditorState { field, input });
+    app.execution_policy_editor = Some(ExecutionPolicyEditorState {
+        field,
+        input,
+        selected_index: 0,
+        text_input_focused: false,
+    });
 }
 
 fn handle_plan_step_action(key: KeyEvent, app: &mut TuiApp) -> Option<EventResult> {
@@ -266,8 +286,33 @@ pub fn handle_event(
 ) -> EventResult {
     match event {
         Event::Key(key) => {
-            // Clear message on any key press
-            if app.message.is_some() {
+            if let Some(message) = app.message.as_ref() {
+                if matches!(message.message_type, super::app::MessageType::Help) {
+                    let help_row_count = message
+                        .content
+                        .split('|')
+                        .map(str::trim)
+                        .filter(|item| !item.is_empty())
+                        .collect::<Vec<_>>()
+                        .chunks(2)
+                        .len();
+
+                    match key.code {
+                        KeyCode::Esc => app.clear_message(),
+                        KeyCode::Down | KeyCode::Char('j') if help_row_count > 0 => {
+                            app.help_selected = (app.help_selected + 1) % help_row_count;
+                        }
+                        KeyCode::Up | KeyCode::Char('k') if help_row_count > 0 => {
+                            app.help_selected = if app.help_selected == 0 {
+                                help_row_count - 1
+                            } else {
+                                app.help_selected - 1
+                            };
+                        }
+                        _ => {}
+                    }
+                    return EventResult::Continue;
+                }
                 app.clear_message();
             }
 
@@ -317,6 +362,82 @@ pub fn handle_event(
             }
 
             if let Some(editor) = &mut app.execution_policy_editor {
+                if matches!(editor.field, ExecutionPolicyListField::HeaderWidgets) {
+                    let widgets = settings::available_header_widgets();
+                    match key.code {
+                        KeyCode::Esc => {
+                            app.execution_policy_editor = None;
+                            return EventResult::Continue;
+                        }
+                        KeyCode::Tab => {
+                            editor.text_input_focused = !editor.text_input_focused;
+                            return EventResult::Continue;
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            if editor.text_input_focused {
+                                return EventResult::Continue;
+                            }
+                            if !widgets.is_empty() {
+                                editor.selected_index = (editor.selected_index + 1) % widgets.len();
+                            }
+                            return EventResult::Continue;
+                        }
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            if editor.text_input_focused {
+                                return EventResult::Continue;
+                            }
+                            if !widgets.is_empty() {
+                                editor.selected_index = if editor.selected_index == 0 {
+                                    widgets.len() - 1
+                                } else {
+                                    editor.selected_index - 1
+                                };
+                            }
+                            return EventResult::Continue;
+                        }
+                        KeyCode::Char(' ') | KeyCode::Enter => {
+                            if editor.text_input_focused {
+                                return EventResult::Continue;
+                            }
+                            if let Some(widget) = widgets.get(editor.selected_index).copied() {
+                                if widget == super::app::HeaderWidget::Model {
+                                } else if app.header_widgets.contains(&widget) {
+                                    app.header_widgets.retain(|item| *item != widget);
+                                    editor.input =
+                                        settings::header_widgets_summary(&app.header_widgets);
+                                } else {
+                                    app.header_widgets.push(widget);
+                                    editor.input =
+                                        settings::header_widgets_summary(&app.header_widgets);
+                                }
+                            }
+                            return EventResult::Continue;
+                        }
+                        KeyCode::Char('s') => {
+                            app.execution_policy_editor = None;
+                            app.set_status_message("Updated execution policy settings".to_string());
+                            return EventResult::Continue;
+                        }
+                        KeyCode::Backspace => {
+                            if editor.text_input_focused {
+                                editor.input.pop();
+                                let values = parse_command_list(&editor.input);
+                                app.header_widgets = settings::parse_header_widgets(&values);
+                            }
+                            return EventResult::Continue;
+                        }
+                        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            if editor.text_input_focused {
+                                editor.input.push(c);
+                                let values = parse_command_list(&editor.input);
+                                app.header_widgets = settings::parse_header_widgets(&values);
+                            }
+                            return EventResult::Continue;
+                        }
+                        _ => return EventResult::Continue,
+                    }
+                }
+
                 match key.code {
                     KeyCode::Esc => {
                         app.execution_policy_editor = None;
@@ -434,10 +555,10 @@ pub fn handle_event(
                         if let AppState::Chat(chat_state) = &mut app.state {
                             chat_state.sidebar_visible = !chat_state.sidebar_visible;
                             if chat_state.sidebar_visible {
-                                app.set_status_message("Harvest navigator pinned".to_string());
+                                app.set_status_message("Context sidebar shown".to_string());
                                 return EventResult::GatherSidebarEntries;
                             } else {
-                                app.set_status_message("Harvest navigator hidden".to_string());
+                                app.set_status_message("Context sidebar hidden".to_string());
                             }
                         }
                         return EventResult::Continue;
@@ -630,7 +751,7 @@ pub fn handle_event(
                     }
                     AppState::Sessions(_, _) => app.state = AppState::Menu(0),
                     AppState::ExportSessions(_, _) => app.state = AppState::Menu(0),
-                    AppState::Tools(_) => app.state = AppState::Menu(0),
+                    AppState::Settings(_) => app.state = AppState::Menu(0),
                     AppState::Profile(_) | AppState::ExecutionPolicy(_) => {
                         app.state = AppState::Menu(0)
                     }
@@ -638,6 +759,9 @@ pub fn handle_event(
                     AppState::Stats(_) => app.state = AppState::Menu(0),
                 },
                 KeyCode::Down | KeyCode::Char('j') => {
+                    if handle_completion_down(app) {
+                        return EventResult::Continue;
+                    }
                     if matches!(app.state, AppState::Chat(_)) {
                         if matches!(key.code, KeyCode::Down) {
                             app.next();
@@ -649,6 +773,9 @@ pub fn handle_event(
                     }
                 }
                 KeyCode::Up | KeyCode::Char('k') => {
+                    if handle_completion_up(app) {
+                        return EventResult::Continue;
+                    }
                     if matches!(app.state, AppState::Chat(_)) {
                         if matches!(key.code, KeyCode::Up) {
                             app.previous();
@@ -707,6 +834,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         vec![],
                         None,
                         None,
+                        app.agents_context_enabled,
                     )));
                     return EventResult::GatherSidebarEntries;
                 } // Start Chat
@@ -723,8 +851,8 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         Err(e) => app.set_error_message(format!("Error loading stats: {}", e)),
                     }
                 }
-                4 => app.state = AppState::Tools(0), // Tools
-                5 => return EventResult::Quit,       // Exit
+                4 => app.state = AppState::Settings(0), // Settings
+                5 => return EventResult::Quit,          // Exit
                 _ => {}
             }
         }
@@ -758,13 +886,12 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             }
             app.state = AppState::Menu(0);
         }
-        AppState::Tools(selected) => match *selected {
+        AppState::Settings(selected) => match *selected {
             0 => app.state = AppState::Profile(0),
             1 => app.state = AppState::ExecutionPolicy(0),
             2 => handle_web_search(app),
             3 => handle_system_info(app),
             4 => handle_process_list(app),
-            5 => handle_git_commands(app),
             _ => {}
         },
         AppState::Profile(selected) => match *selected {
@@ -824,6 +951,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                         session_view.messages,
                         session_view.plan,
                         session_view.agents,
+                        app.agents_context_enabled,
                     )));
                     return EventResult::GatherSidebarEntries;
                 }
@@ -872,6 +1000,7 @@ fn delete_selected_session(app: &mut TuiApp) -> EventResult {
                 session_id: session.id.clone(),
                 remote: app.auth_session.is_some() && app.auth_server_base_url.is_some(),
                 export_view: false,
+                selected_index: *selected,
             }
         }
         AppState::ExportSessions(sessions, selected)
@@ -882,16 +1011,10 @@ fn delete_selected_session(app: &mut TuiApp) -> EventResult {
                 session_id: session.id.clone(),
                 remote: false,
                 export_view: true,
+                selected_index: *selected,
             }
         }
         _ => EventResult::Continue,
-    }
-}
-
-fn handle_git_commands(app: &mut TuiApp) {
-    match harper_core::tools::git::git_status() {
-        Ok(status) => app.set_info_message(format!("Git Status:\n{}", status)),
-        Err(e) => app.set_error_message(format!("Git error: {}", e)),
     }
 }
 
@@ -1127,6 +1250,10 @@ fn slash_command_candidates(input: &str) -> Vec<String> {
         "/clear",
         "/exit",
         "/audit",
+        "/agents",
+        "/agents on",
+        "/agents off",
+        "/agents status",
         "/strategy",
         "/strategy auto",
         "/strategy grounded",
@@ -1155,6 +1282,51 @@ fn refresh_chat_completions(chat_state: &mut ChatState) {
     } else {
         chat_state.reset_completion();
     }
+}
+
+fn current_completion_index(chat_state: &ChatState) -> Option<usize> {
+    chat_state
+        .completion_candidates
+        .iter()
+        .position(|candidate| candidate == &chat_state.input)
+}
+
+fn select_completion_candidate(chat_state: &mut ChatState, index: usize) {
+    if let Some(candidate) = chat_state.completion_candidates.get(index) {
+        chat_state.input = candidate.clone();
+        chat_state.completion_index = index;
+    }
+}
+
+fn handle_completion_down(app: &mut TuiApp) -> bool {
+    let AppState::Chat(chat_state) = &mut app.state else {
+        return false;
+    };
+    if !chat_state.input.starts_with('/') || chat_state.completion_candidates.is_empty() {
+        return false;
+    }
+
+    let next_index = current_completion_index(chat_state)
+        .map(|index| (index + 1) % chat_state.completion_candidates.len())
+        .unwrap_or(0);
+    select_completion_candidate(chat_state, next_index);
+    true
+}
+
+fn handle_completion_up(app: &mut TuiApp) -> bool {
+    let AppState::Chat(chat_state) = &mut app.state else {
+        return false;
+    };
+    if !chat_state.input.starts_with('/') || chat_state.completion_candidates.is_empty() {
+        return false;
+    }
+
+    let last_index = chat_state.completion_candidates.len().saturating_sub(1);
+    let prev_index = current_completion_index(chat_state)
+        .map(|index| if index == 0 { last_index } else { index - 1 })
+        .unwrap_or(last_index);
+    select_completion_candidate(chat_state, prev_index);
+    true
 }
 
 fn handle_tab(app: &mut TuiApp) {
@@ -1227,10 +1399,10 @@ fn handle_tab(app: &mut TuiApp) {
 
             // Cycle through candidates
             if !chat_state.completion_candidates.is_empty() {
-                chat_state.input =
-                    chat_state.completion_candidates[chat_state.completion_index].clone();
-                chat_state.completion_index =
-                    (chat_state.completion_index + 1) % chat_state.completion_candidates.len();
+                let next_index = current_completion_index(chat_state)
+                    .map(|index| (index + 1) % chat_state.completion_candidates.len())
+                    .unwrap_or(0);
+                select_completion_candidate(chat_state, next_index);
             }
         } else if chat_state.input.starts_with('/') {
             if chat_state.completion_candidates.is_empty() {
@@ -1238,10 +1410,10 @@ fn handle_tab(app: &mut TuiApp) {
                 chat_state.completion_index = 0;
             }
             if !chat_state.completion_candidates.is_empty() {
-                chat_state.input =
-                    chat_state.completion_candidates[chat_state.completion_index].clone();
-                chat_state.completion_index =
-                    (chat_state.completion_index + 1) % chat_state.completion_candidates.len();
+                let next_index = current_completion_index(chat_state)
+                    .map(|index| (index + 1) % chat_state.completion_candidates.len())
+                    .unwrap_or(0);
+                select_completion_candidate(chat_state, next_index);
             }
         } else {
             chat_state.completion_candidates.clear();
@@ -1322,7 +1494,7 @@ mod tests {
     #[test]
     fn test_enter_settings_profile() {
         let mut app = TuiApp::new();
-        app.state = AppState::Tools(0); // Profile
+        app.state = AppState::Settings(0); // Profile
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
         let session_service = SessionService::new(&conn);
@@ -1339,7 +1511,7 @@ mod tests {
     #[test]
     fn test_enter_settings_execution_policy() {
         let mut app = TuiApp::new();
-        app.state = AppState::Tools(1);
+        app.state = AppState::Settings(1);
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
         let session_service = SessionService::new(&conn);
@@ -1440,6 +1612,8 @@ mod tests {
         app.execution_policy_editor = Some(super::ExecutionPolicyEditorState {
             field: super::ExecutionPolicyListField::AllowedCommands,
             input: "git, ls, cargo".to_string(),
+            selected_index: 0,
+            text_input_focused: false,
         });
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
@@ -1490,6 +1664,7 @@ mod tests {
                 updated_at: None,
             }),
             None,
+            app.agents_context_enabled,
         )));
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
@@ -1528,6 +1703,7 @@ mod tests {
                 updated_at: None,
             }),
             None,
+            true,
         );
         chat_state.plan_steps_expanded = true;
         chat_state.set_navigation_focus(NavigationFocus::PlanSteps);
@@ -1571,6 +1747,7 @@ mod tests {
                 updated_at: None,
             }),
             None,
+            true,
         );
         chat_state.plan_steps_expanded = true;
         chat_state.set_navigation_focus(NavigationFocus::PlanSteps);
@@ -1612,6 +1789,7 @@ mod tests {
                 updated_at: None,
             }),
             None,
+            true,
         );
         chat_state.plan_steps_expanded = true;
         chat_state.set_navigation_focus(NavigationFocus::PlanSteps);
@@ -1648,6 +1826,7 @@ mod tests {
                 updated_at: None,
             }),
             None,
+            true,
         );
         chat_state.plan_steps_expanded = true;
         chat_state.set_navigation_focus(NavigationFocus::PlanSteps);
@@ -1675,6 +1854,7 @@ mod tests {
             vec![],
             None,
             None,
+            app.agents_context_enabled,
         )));
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
@@ -1734,7 +1914,8 @@ mod tests {
             EventResult::DeleteSession {
                 session_id,
                 remote: false,
-                export_view: false
+                export_view: false,
+                ..
             } if session_id == "session-1"
         ));
     }
@@ -1764,8 +1945,41 @@ mod tests {
             EventResult::DeleteSession {
                 session_id,
                 remote: false,
-                export_view: true
+                export_view: true,
+                ..
             } if session_id == "session-1"
         ));
+    }
+
+    #[test]
+    fn slash_completion_down_selects_first_candidate() {
+        let mut app = TuiApp::new();
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.input = "/".to_string();
+        refresh_chat_completions(&mut chat_state);
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        assert!(handle_completion_down(&mut app));
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.input, "/agents");
+    }
+
+    #[test]
+    fn slash_completion_up_wraps_to_last_candidate() {
+        let mut app = TuiApp::new();
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.input = "/".to_string();
+        refresh_chat_completions(&mut chat_state);
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        assert!(handle_completion_up(&mut app));
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.input, "/strategy model");
     }
 }

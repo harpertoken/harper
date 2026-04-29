@@ -51,7 +51,7 @@ header_widgets = ["model", "cwd", "strategy"]</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <p><code>allow_listed</code> preserves the existing default behavior for safe commands, but Harper still asks for approval when the command declares network access or writes outside the configured writable roots. <code>strict</code> requires approval for every command. <code>allow_all</code> skips approval checks. <code>auto</code> and <code>grounded</code> keep the model in the loop for normal repo work, while <code>deterministic</code> prefers direct grounded tool execution for supported intents and <code>model</code> disables deterministic shortcuts. <code>workspace</code> enables sandboxing with workspace access and network disabled. <code>networked_workspace</code> enables the same workspace sandbox but allows network access.</p>
-                <p><code>header_widgets</code> controls the persistent chat header. You can edit it from <code>Settings -&gt; Execution Policy</code>, and saving that screen writes the selected widgets back to <code>config/local.toml</code>. Supported values are <code>session</code>, <code>plan</code>, <code>agents</code>, <code>web</code>, <code>auth</code>, <code>focus</code>, <code>model</code>, <code>cwd</code>, <code>strategy</code>, <code>approval</code>, and <code>activity</code>.</p>
+                <p><code>header_widgets</code> controls the persistent chat header. In <code>Settings -&gt; Execution Policy</code>, Harper now exposes that field as both a checklist and a synchronized comma-separated text field, while saving still writes the selected widgets back to <code>config/local.toml</code>. Supported values are <code>session</code>, <code>plan</code>, <code>agents</code>, <code>web</code>, <code>auth</code>, <code>focus</code>, <code>model</code>, <code>cwd</code>, <code>strategy</code>, <code>approval</code>, and <code>activity</code>.</p>
                 <p><code>retry_max_attempts</code> controls bounded automatic retries for retry-safe commands. You can also tune which command classes qualify:</p>
                 <div class="code-wrapper">
                     <pre><code>[exec_policy]
@@ -211,11 +211,17 @@ open http://127.0.0.1:8081/auth/login/github</code></pre>
                 <h3>TUI auth commands</h3>
                 <p>The TUI does not require a separate auth menu. Start a normal conversation and type one of the slash commands below into the message input.</p>
                 <div class="code-wrapper">
-                    <pre><code>/auth login github
+                    <pre><code>/agents
+/agents status
+/agents on
+/agents off
+/auth login github
 /auth status
 /auth logout</code></pre>
                     <button class="copy-btn"></button>
                 </div>
+                <p>Typing <code>/</code> opens the full slash-command list in the TUI. Use <code>↑</code>/<code>↓</code> or <code>Tab</code> to move through suggestions before submitting the command from chat.</p>
+                <p><code>/agents</code> reports AGENTS context status for the current TUI session. <code>/agents on</code> and <code>/agents off</code> enable or disable AGENTS context resolution in the UI, and <code>/agents status</code> reports the current setting.</p>
                 <p><code>/auth login github</code> starts a local flow, opens the browser, and then stores the resulting TUI session once Harper sees the completed callback. <code>/auth status</code> reports the local TUI auth state. <code>/auth logout</code> clears the local stored TUI session.</p>
                 <p>Successful TUI sign-in stores the local auth session in the system credential store (for example macOS Keychain) rather than a plain JSON token file. If you launch Harper with <code>--no-server</code>, these TUI auth commands are unavailable because the local auth callback and polling endpoints are disabled.</p>
                 <p>The same TUI session is also visible from <code>Settings -&gt; Profile</code>, which shows the signed-in account and offers <code>Logout</code> and <code>Refresh Session</code> actions.</p>

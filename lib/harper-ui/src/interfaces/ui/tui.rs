@@ -198,7 +198,7 @@ enum UiUpdate {
         active_agents: Option<ResolvedAgents>,
     },
     SidebarEntries {
-        entries: Vec<String>,
+        sections: Vec<super::app::SidebarSection>,
     },
     Error(String),
 }
@@ -208,8 +208,10 @@ fn spawn_sidebar_gathering(chat_state: &ChatState, ui_tx: &mpsc::Sender<UiUpdate
     let messages = chat_state.messages.clone();
     let ui_tx_clone = ui_tx.clone();
     tokio::spawn(async move {
-        let entries = super::app::gather_sidebar_entries_async(&messages).await;
-        let _ = ui_tx_clone.send(UiUpdate::SidebarEntries { entries }).await;
+        let sections = super::app::gather_sidebar_entries_async(&messages).await;
+        let _ = ui_tx_clone
+            .send(UiUpdate::SidebarEntries { sections })
+            .await;
     });
 }
 
@@ -232,6 +234,23 @@ fn parse_strategy_command(
         _ => return Some(Err(current)),
     };
     Some(Ok(strategy))
+}
+
+enum AgentsCommand {
+    ShowStatus,
+    Set(bool),
+}
+
+fn parse_agents_command(input: &str) -> Option<AgentsCommand> {
+    let trimmed = input.trim();
+    let command = trimmed.strip_prefix("/agents")?;
+    let value = command.trim().to_ascii_lowercase();
+    match value.as_str() {
+        "" | "status" => Some(AgentsCommand::ShowStatus),
+        "on" | "enable" | "enabled" => Some(AgentsCommand::Set(true)),
+        "off" | "disable" | "disabled" => Some(AgentsCommand::Set(false)),
+        _ => None,
+    }
 }
 
 pub async fn run_tui(
@@ -430,6 +449,9 @@ pub async fn run_tui(
     loop {
         app.refresh_activity_status();
         app.refresh_message();
+        if let AppState::Chat(chat_state) = &mut app.state {
+            crate::interfaces::ui::widgets::refresh_chat_render_cache(chat_state, theme);
+        }
         terminal.draw(|f| widgets::draw(f, &app, theme))?;
 
         // Handle both UI events and worker updates
@@ -465,6 +487,34 @@ pub async fn run_tui(
                                                 "Current execution strategy: {}",
                                                 settings::execution_strategy_name(current_only)
                                             ));
+                                        }
+                                    }
+                                    continue;
+                                }
+                                if let Some(command) = parse_agents_command(&msg) {
+                                    match command {
+                                        AgentsCommand::ShowStatus => {
+                                            let status = if app.agents_context_enabled {
+                                                "on"
+                                            } else {
+                                                "off"
+                                            };
+                                            app.set_info_message(format!("AGENTS context: {}", status));
+                                        }
+                                        AgentsCommand::Set(enabled) => {
+                                            app.agents_context_enabled = enabled;
+                                            if enabled {
+                                                chat_state.active_agents = std::env::current_dir()
+                                                    .ok()
+                                                    .and_then(|cwd| harper_core::core::agents::resolve_agents_for_dir(&cwd).ok());
+                                                app.set_status_message("AGENTS context enabled".to_string());
+                                            } else {
+                                                chat_state.active_agents = None;
+                                                chat_state.agents_panel_expanded = false;
+                                                chat_state.agents_scroll_offset = 0;
+                                                chat_state.set_navigation_focus(super::app::NavigationFocus::Messages);
+                                                app.set_status_message("AGENTS context disabled".to_string());
+                                            }
                                         }
                                     }
                                     continue;
@@ -596,6 +646,7 @@ pub async fn run_tui(
                                                 session_view.messages,
                                                 session_view.plan,
                                                 session_view.agents,
+                                                app.agents_context_enabled,
                                             )));
                                             if let AppState::Chat(chat_state) = &mut app.state {
                                                 spawn_sidebar_gathering(chat_state, &ui_tx);
@@ -616,6 +667,7 @@ pub async fn run_tui(
                                             session_view.messages,
                                             session_view.plan,
                                             session_view.agents,
+                                            app.agents_context_enabled,
                                         )));
                                         if let AppState::Chat(chat_state) = &mut app.state {
                                             spawn_sidebar_gathering(chat_state, &ui_tx);
@@ -629,6 +681,7 @@ pub async fn run_tui(
                             session_id,
                             remote,
                             export_view,
+                            selected_index,
                         } => {
                             if remote {
                                 if let (Some(base_url), Some(session)) = (
@@ -664,8 +717,11 @@ pub async fn run_tui(
                                                             name: s.title.unwrap_or(s.id),
                                                             created_at: s.created_at,
                                                         })
-                                                        .collect();
-                                                    app.state = AppState::Sessions(session_infos, 0);
+                                                        .collect::<Vec<_>>();
+                                                    let next_selected = selected_index
+                                                        .min(session_infos.len().saturating_sub(1));
+                                                    app.state =
+                                                        AppState::Sessions(session_infos, next_selected);
                                                 }
                                                 Err(err) => app.set_error_message(format!(
                                                     "Error reloading remote sessions: {}",
@@ -715,11 +771,16 @@ pub async fn run_tui(
                                                         name: s.title.unwrap_or(s.id),
                                                         created_at: s.created_at,
                                                     })
-                                                    .collect();
+                                                    .collect::<Vec<_>>();
+                                                let next_selected = selected_index
+                                                    .min(session_infos.len().saturating_sub(1));
                                                 app.state = if export_view {
-                                                    AppState::ExportSessions(session_infos, 0)
+                                                    AppState::ExportSessions(
+                                                        session_infos,
+                                                        next_selected,
+                                                    )
                                                 } else {
-                                                    AppState::Sessions(session_infos, 0)
+                                                    AppState::Sessions(session_infos, next_selected)
                                                 };
                                             }
                                             Err(e) => app.set_error_message(format!(
@@ -1049,14 +1110,14 @@ pub async fn run_tui(
                             active_agents,
                         } => {
                             if let AppState::Chat(chat_state) = &mut app.state {
-                                if chat_state.session_id == session_id {
+                                if chat_state.session_id == session_id && app.agents_context_enabled {
                                     chat_state.active_agents = active_agents;
                                 }
                             }
                         }
-                        UiUpdate::SidebarEntries { entries } => {
+                        UiUpdate::SidebarEntries { sections } => {
                             if let AppState::Chat(chat_state) = &mut app.state {
-                                chat_state.sidebar_entries = entries;
+                                chat_state.sidebar_sections = sections;
                             }
                         }
                         UiUpdate::Error(err) => {

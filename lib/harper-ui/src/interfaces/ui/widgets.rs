@@ -27,7 +27,7 @@ use harper_core::core::plan::{PlanFollowup, PlanJobRecord, PlanJobStatus};
 use harper_core::{PlanRuntime, PlanState, PlanStepStatus, ResolvedAgents};
 
 // Refined shortcuts for a cleaner footer
-const FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
+const CHAT_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
     &[
         ("G", "Help"),
         ("W", "Search"),
@@ -50,6 +50,80 @@ const FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
         ("P", "Jobs"),
     ],
 ];
+
+const HOME_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
+    &[
+        ("↑↓", "Move"),
+        ("Enter", "Open"),
+        ("Ctrl+G", "Help"),
+        ("Q", "Quit"),
+    ],
+    &[("J/K", "Move"), ("L", "Open")],
+];
+
+const SESSIONS_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
+    &[
+        ("↑↓", "Move"),
+        ("Enter", "Resume"),
+        ("→", "Preview"),
+        ("D", "Delete"),
+        ("Esc", "Back"),
+    ],
+    &[("J/K", "Move"), ("L", "Preview"), ("Q", "Back")],
+];
+
+const EXPORT_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
+    &[
+        ("↑↓", "Move"),
+        ("Enter", "Export"),
+        ("Esc", "Back"),
+        ("Q", "Back"),
+    ],
+    &[("J/K", "Move")],
+];
+
+const PREVIEW_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
+    &[
+        ("↑↓", "Scroll"),
+        ("Enter", "Resume"),
+        ("Esc", "Back"),
+        ("Q", "Back"),
+    ],
+    &[("J/K", "Scroll")],
+];
+
+const SETTINGS_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
+    &[
+        ("↑↓", "Move"),
+        ("Enter", "Open"),
+        ("Esc", "Back"),
+        ("Q", "Back"),
+    ],
+    &[("J/K", "Move")],
+];
+
+const PROFILE_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
+    &[
+        ("↑↓", "Move"),
+        ("Enter", "Run"),
+        ("Esc", "Back"),
+        ("Q", "Back"),
+    ],
+    &[("J/K", "Move")],
+];
+
+const EXECUTION_POLICY_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
+    &[
+        ("↑↓", "Move"),
+        ("Enter", "Change"),
+        ("Esc", "Back"),
+        ("Q", "Back"),
+    ],
+    &[("J/K", "Move")],
+];
+
+const STATS_FOOTER_SHORTCUTS: &[&[(&str, &str)]] =
+    &[&[("Esc", "Back"), ("Q", "Back"), ("Ctrl+G", "Help")]];
 
 use crate::plugins::syntax::highlight_code_lines;
 use syntect::highlighting::ThemeSet;
@@ -102,6 +176,51 @@ pub fn parse_content_with_code(
     )
 }
 
+fn theme_render_cache_key(theme: &Theme) -> String {
+    format!(
+        "{:?}|{:?}|{:?}|{:?}|{:?}|{}",
+        theme.input, theme.output, theme.foreground, theme.accent, theme.title, theme.syntax_theme
+    )
+}
+
+pub fn refresh_chat_render_cache(chat_state: &mut super::app::ChatState, theme: &Theme) {
+    let theme_key = theme_render_cache_key(theme);
+    let visible_messages = chat_state
+        .messages
+        .iter()
+        .filter(|msg| msg.role != "system")
+        .collect::<Vec<_>>();
+
+    let theme_changed = chat_state.render_cache_theme_key != theme_key;
+    let cache_changed = theme_changed
+        || chat_state.rendered_message_cache.len() != visible_messages.len()
+        || visible_messages
+            .iter()
+            .zip(chat_state.rendered_message_cache.iter())
+            .any(|(msg, cached)| msg.role != cached.role || msg.content != cached.content);
+
+    if !cache_changed {
+        return;
+    }
+
+    let mut rendered_message_cache = Vec::with_capacity(visible_messages.len());
+
+    for msg in visible_messages.iter() {
+        let mut lines = Vec::new();
+        append_rendered_message_lines(&mut lines, msg, theme, theme.input, theme.output);
+
+        rendered_message_cache.push(super::app::RenderedMessageBlock {
+            role: msg.role.clone(),
+            content: msg.content.clone(),
+            lines,
+        });
+    }
+
+    chat_state.rendered_message_cache = rendered_message_cache;
+    chat_state.rendered_transcript_lines.clear();
+    chat_state.render_cache_theme_key = theme_key;
+}
+
 pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     let area = frame.area();
     let chunks = Layout::default()
@@ -118,12 +237,12 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             let chat_area = if chat_state.sidebar_visible {
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
-                    .split(main_area);
-                draw_zen_sidebar(frame, &chat_state.sidebar_entries, theme, chunks[0]);
+                    .constraints([Constraint::Length(26), Constraint::Min(0)])
+                    .split(area);
+                draw_zen_sidebar(frame, &chat_state.sidebar_sections, theme, chunks[0]);
                 chunks[1]
             } else {
-                main_area
+                area
             };
 
             let has_plan = chat_state
@@ -182,18 +301,13 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             draw_chat_summary(frame, app, chat_state, theme, chunks[0]);
 
             let mut message_lines: Vec<Line<'static>> = Vec::new();
-            for msg in chat_state
-                .messages
-                .iter()
-                .filter(|msg| msg.role != "system")
-            {
-                append_rendered_message_lines(
-                    &mut message_lines,
-                    msg,
-                    theme,
-                    theme.input,
-                    theme.output,
-                );
+            let divider_width = chunks[1].width.saturating_sub(4);
+            for (index, cached) in chat_state.rendered_message_cache.iter().enumerate() {
+                message_lines.extend(cached.lines.iter().cloned());
+                let has_following_message = index + 1 < chat_state.rendered_message_cache.len();
+                if cached.role == "assistant" && has_following_message {
+                    append_message_divider(&mut message_lines, theme, divider_width);
+                }
             }
 
             if chat_state.awaiting_response {
@@ -286,12 +400,15 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                     chat_state.active_agents.as_ref(),
                     theme,
                     chunks[next_panel_index],
-                    chat_state.agents_panel_expanded,
-                    chat_state.agents_scroll_offset,
-                    matches!(
-                        chat_state.navigation_focus,
-                        super::app::NavigationFocus::Agents
-                    ),
+                    AgentsPanelViewState {
+                        context_enabled: app.agents_context_enabled,
+                        expanded: chat_state.agents_panel_expanded,
+                        scroll_offset: chat_state.agents_scroll_offset,
+                        focused: matches!(
+                            chat_state.navigation_focus,
+                            super::app::NavigationFocus::Agents
+                        ),
+                    },
                 );
             }
 
@@ -341,7 +458,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         AppState::ExportSessions(sessions, selected) => {
             draw_export_sessions(frame, sessions, *selected, theme, main_area)
         }
-        AppState::Tools(selected) => draw_tools(frame, *selected, theme, main_area),
+        AppState::Settings(selected) => draw_settings(frame, *selected, theme, main_area),
         AppState::Profile(selected) => draw_profile(frame, app, *selected, theme, main_area),
         AppState::ExecutionPolicy(selected) => {
             draw_execution_policy(frame, app, *selected, theme, main_area)
@@ -370,7 +487,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     }
 
     if let Some(msg) = &app.message {
-        draw_message_overlay(frame, msg, theme);
+        draw_message_overlay(frame, msg, app.help_selected, theme);
     }
 }
 
@@ -917,6 +1034,15 @@ fn append_rendered_message_lines(
     message_lines.push(Line::raw(""));
 }
 
+fn append_message_divider(message_lines: &mut Vec<Line<'static>>, theme: &Theme, width: u16) {
+    let width = width.max(8) as usize;
+    message_lines.push(Line::from(vec![Span::styled(
+        "─".repeat(width),
+        theme.muted_style(),
+    )]));
+    message_lines.push(Line::raw(""));
+}
+
 fn review_panel_height(review: &ReviewState, selected: usize) -> u16 {
     let findings = review.findings.len().min(3);
     let model_line = usize::from(review.model.is_some());
@@ -974,12 +1100,16 @@ fn draw_chat_summary(
                 format!("plan: {}/{} done", completed, total)
             }
         });
-    let agents_status = chat_state
-        .active_agents
-        .as_ref()
-        .map_or("agents: none".to_string(), |agents| {
-            format!("agents: {} sections", agents.effective_rule_sections.len())
-        });
+    let agents_status = if !app.agents_context_enabled {
+        "agents: off".to_string()
+    } else {
+        chat_state
+            .active_agents
+            .as_ref()
+            .map_or("agents: none".to_string(), |agents| {
+                format!("agents: {} sections", agents.effective_rule_sections.len())
+            })
+    };
     let web_status = if chat_state.web_search_enabled {
         "web: on".to_string()
     } else {
@@ -1225,7 +1355,7 @@ fn plan_panel_height(plan: &PlanState) -> u16 {
 
 fn completion_popup_height(chat_state: &super::app::ChatState) -> u16 {
     if chat_state.input.starts_with('/') && !chat_state.completion_candidates.is_empty() {
-        (chat_state.completion_candidates.len().min(4) as u16) + 2
+        (chat_state.completion_candidates.len() as u16) + 2
     } else {
         0
     }
@@ -1240,14 +1370,14 @@ fn draw_completion_popup(
     let items = chat_state
         .completion_candidates
         .iter()
-        .take(4)
         .map(|candidate| {
             let style = if candidate == &chat_state.input {
-                Style::default()
+                theme
+                    .selection_style()
                     .fg(theme.accent)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(theme.foreground)
+                Style::default().bg(theme.background).fg(theme.foreground)
             };
             ListItem::new(candidate.clone()).style(style)
         })
@@ -1256,9 +1386,11 @@ fn draw_completion_popup(
     let widget = List::new(items).block(
         Block::default()
             .title(" Slash Commands ")
-            .borders(Borders::TOP)
-            .border_style(theme.muted_style())
-            .padding(Padding::horizontal(1)),
+            .title_style(theme.accent_style().add_modifier(Modifier::BOLD))
+            .borders(Borders::ALL)
+            .border_style(theme.accent_style())
+            .padding(Padding::horizontal(1))
+            .style(Style::default().bg(theme.background)),
     );
     frame.render_widget(widget, area);
 }
@@ -1564,6 +1696,14 @@ struct PlanPanelFocus {
     focused_jobs: bool,
 }
 
+#[derive(Clone, Copy)]
+struct AgentsPanelViewState {
+    context_enabled: bool,
+    expanded: bool,
+    scroll_offset: usize,
+    focused: bool,
+}
+
 fn agents_panel_height(agents: &ResolvedAgents, expanded: bool) -> u16 {
     if expanded {
         return 10;
@@ -1584,32 +1724,43 @@ fn draw_agents_panel(
     agents: Option<&ResolvedAgents>,
     theme: &Theme,
     area: Rect,
-    expanded: bool,
-    scroll_offset: usize,
-    focused: bool,
+    view_state: AgentsPanelViewState,
 ) {
     let lines = if let Some(agents) = agents {
-        if expanded {
-            expanded_agents_lines(agents, theme, scroll_offset, area.height)
+        if view_state.expanded {
+            expanded_agents_lines(agents, theme, view_state.scroll_offset, area.height)
         } else {
             compact_agents_lines(agents, theme)
         }
     } else {
-        vec![
-            Line::styled(
-                "No active AGENTS sources yet.",
-                Style::default().fg(theme.foreground),
-            ),
-            Line::styled(
-                "Send a message or open a session with resolved AGENTS context.",
-                theme.muted_style(),
-            ),
-        ]
+        if view_state.context_enabled {
+            vec![
+                Line::styled(
+                    "No active AGENTS sources yet.",
+                    Style::default().fg(theme.foreground),
+                ),
+                Line::styled(
+                    "Send a message or open a session with resolved AGENTS context.",
+                    theme.muted_style(),
+                ),
+            ]
+        } else {
+            vec![
+                Line::styled(
+                    "AGENTS context is disabled.",
+                    Style::default().fg(theme.foreground),
+                ),
+                Line::styled(
+                    "Use /agents on to enable cwd and file-scoped AGENTS resolution.",
+                    theme.muted_style(),
+                ),
+            ]
+        }
     };
 
-    let title = if expanded && focused {
+    let title = if view_state.expanded && view_state.focused {
         " AGENTS (focused • Y/V or ↑/↓) "
-    } else if expanded {
+    } else if view_state.expanded {
         " AGENTS (expanded • Ctrl+A focus) "
     } else {
         " AGENTS (Ctrl+A open) "
@@ -1889,25 +2040,33 @@ fn draw_stats(
     frame.render_widget(stats_widget, area);
 }
 
-fn draw_zen_sidebar(frame: &mut Frame, entries: &[String], theme: &Theme, area: Rect) {
-    let items: Vec<ListItem> = entries
-        .iter()
-        .map(|entry| {
-            let content = if entry.starts_with("[git]") {
-                entry.trim_start_matches("[git] ").to_string()
-            } else if entry.starts_with("[dir]") {
-                entry.trim_start_matches("[dir] ").to_string()
-            } else if entry.starts_with("[file]") {
-                entry.trim_start_matches("[file] ").to_string()
-            } else if entry.starts_with("[probe]") {
-                entry.trim_start_matches("[probe] ").to_string()
-            } else {
-                entry.clone()
-            };
+fn draw_zen_sidebar(
+    frame: &mut Frame,
+    sections: &[super::app::SidebarSection],
+    theme: &Theme,
+    area: Rect,
+) {
+    let mut items = Vec::new();
 
-            ListItem::new(Line::from(vec![Span::styled(content, theme.muted_style())]))
-        })
-        .collect();
+    for (section_index, section) in sections.iter().enumerate() {
+        if section_index > 0 {
+            items.push(ListItem::new(Line::from(vec![Span::raw(" ")])));
+        }
+
+        items.push(ListItem::new(Line::from(vec![Span::styled(
+            section.title.clone(),
+            Style::default()
+                .fg(theme.foreground)
+                .add_modifier(Modifier::BOLD),
+        )])));
+
+        for entry in &section.entries {
+            items.push(ListItem::new(Line::from(vec![Span::styled(
+                format!("• {entry}"),
+                theme.muted_style(),
+            )])));
+        }
+    }
 
     let sidebar = List::new(items).block(
         Block::default()
@@ -1987,20 +2146,42 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-fn draw_zen_footer(frame: &mut Frame, _app: &TuiApp, theme: &Theme, area: Rect) {
+fn footer_shortcuts_for_state(
+    state: &AppState,
+) -> &'static [&'static [(&'static str, &'static str)]] {
+    match state {
+        AppState::Menu(_) => HOME_FOOTER_SHORTCUTS,
+        AppState::Sessions(_, _) => SESSIONS_FOOTER_SHORTCUTS,
+        AppState::ExportSessions(_, _) => EXPORT_FOOTER_SHORTCUTS,
+        AppState::ViewSession(_, _, _) => PREVIEW_FOOTER_SHORTCUTS,
+        AppState::Settings(_) => SETTINGS_FOOTER_SHORTCUTS,
+        AppState::Profile(_) => PROFILE_FOOTER_SHORTCUTS,
+        AppState::ExecutionPolicy(_) => EXECUTION_POLICY_FOOTER_SHORTCUTS,
+        AppState::Stats(_) => STATS_FOOTER_SHORTCUTS,
+        _ => CHAT_FOOTER_SHORTCUTS,
+    }
+}
+
+fn draw_zen_footer(frame: &mut Frame, app: &TuiApp, theme: &Theme, area: Rect) {
     let block = Block::default()
         .borders(Borders::TOP)
         .border_style(theme.muted_style());
     let area = block.inner(area);
-    frame.render_widget(block, frame.area()); // Render border on full area
+    frame.render_widget(
+        block,
+        Rect {
+            x: area.x,
+            y: area.y.saturating_sub(1),
+            width: area.width,
+            height: area.height.saturating_add(1),
+        },
+    );
 
-    let num_cols = FOOTER_SHORTCUTS
-        .iter()
-        .map(|row| row.len())
-        .max()
-        .unwrap_or(1) as u16;
+    let shortcuts = footer_shortcuts_for_state(&app.state);
+
+    let num_cols = shortcuts.iter().map(|row| row.len()).max().unwrap_or(1) as u16;
     let col_width = (area.width / num_cols).max(1);
-    for (row_idx, row) in FOOTER_SHORTCUTS.iter().enumerate() {
+    for (row_idx, row) in shortcuts.iter().enumerate() {
         for (col_idx, (key, label)) in row.iter().enumerate() {
             let shortcut_area = Rect {
                 x: area.x + col_idx as u16 * col_width,
@@ -2085,23 +2266,43 @@ fn draw_sessions(
                 } else {
                     " Sessions "
                 })
-                .padding(Padding::uniform(1)),
+                .title_style(theme.accent_style().add_modifier(Modifier::BOLD))
+                .borders(Borders::ALL)
+                .border_style(theme.accent_style())
+                .padding(Padding::horizontal(1))
+                .style(Style::default().bg(theme.background)),
         )
+        .style(Style::default().bg(theme.background).fg(theme.foreground))
         .wrap(Wrap { trim: true });
         frame.render_widget(empty, area);
         return;
     }
 
+    let visible_item_capacity = area.height.saturating_sub(2).max(2) as usize / 2;
+    let visible_item_capacity = visible_item_capacity.max(1);
+    let selected = selected.min(sessions.len().saturating_sub(1));
+    let max_scroll_start = sessions.len().saturating_sub(visible_item_capacity);
+    let scroll_start = if sessions.len() > visible_item_capacity {
+        selected
+            .saturating_sub(visible_item_capacity / 2)
+            .min(max_scroll_start)
+    } else {
+        0
+    };
+
     let items: Vec<ListItem> = sessions
         .iter()
         .enumerate()
+        .skip(scroll_start)
+        .take(visible_item_capacity)
         .map(|(i, session)| {
             let style = if i == selected {
-                Style::default()
+                theme
+                    .selection_style()
                     .fg(theme.accent)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(theme.foreground)
+                Style::default().bg(theme.background).fg(theme.foreground)
             };
             ListItem::new(vec![
                 Line::from(vec![
@@ -2118,14 +2319,19 @@ fn draw_sessions(
         })
         .collect();
 
+    let position = format!("{}/{}", selected + 1, sessions.len());
     let sessions_list = List::new(items).block(
         Block::default()
             .title(if remote_mode {
-                " Remote Sessions (Enter resume • → preview) "
+                format!(" Remote Sessions ({position}) (Enter resume • → preview) ")
             } else {
-                " Sessions (Enter resume • → preview) "
+                format!(" Sessions ({position}) (Enter resume • → preview) ")
             })
-            .padding(Padding::uniform(1)),
+            .title_style(theme.accent_style().add_modifier(Modifier::BOLD))
+            .borders(Borders::ALL)
+            .border_style(theme.accent_style())
+            .padding(Padding::horizontal(1))
+            .style(Style::default().bg(theme.background)),
     );
 
     frame.render_widget(sessions_list, area);
@@ -2155,23 +2361,43 @@ fn draw_export_sessions(
         .block(
             Block::default()
                 .title(" Export Sessions ")
-                .padding(Padding::uniform(1)),
+                .title_style(theme.accent_style().add_modifier(Modifier::BOLD))
+                .borders(Borders::ALL)
+                .border_style(theme.accent_style())
+                .padding(Padding::horizontal(1))
+                .style(Style::default().bg(theme.background)),
         )
+        .style(Style::default().bg(theme.background).fg(theme.foreground))
         .wrap(Wrap { trim: true });
         frame.render_widget(empty, area);
         return;
     }
 
+    let visible_item_capacity = area.height.saturating_sub(2).max(2) as usize / 2;
+    let visible_item_capacity = visible_item_capacity.max(1);
+    let selected = selected.min(sessions.len().saturating_sub(1));
+    let max_scroll_start = sessions.len().saturating_sub(visible_item_capacity);
+    let scroll_start = if sessions.len() > visible_item_capacity {
+        selected
+            .saturating_sub(visible_item_capacity / 2)
+            .min(max_scroll_start)
+    } else {
+        0
+    };
+
     let items: Vec<ListItem> = sessions
         .iter()
         .enumerate()
+        .skip(scroll_start)
+        .take(visible_item_capacity)
         .map(|(i, session)| {
             let style = if i == selected {
-                Style::default()
+                theme
+                    .selection_style()
                     .fg(theme.accent)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(theme.foreground)
+                Style::default().bg(theme.background).fg(theme.foreground)
             };
             ListItem::new(vec![
                 Line::from(vec![
@@ -2188,10 +2414,15 @@ fn draw_export_sessions(
         })
         .collect();
 
+    let position = format!("{}/{}", selected + 1, sessions.len());
     let sessions_list = List::new(items).block(
         Block::default()
-            .title(" Export Local Sessions ")
-            .padding(Padding::uniform(1)),
+            .title(format!(" Export Local Sessions ({position}) "))
+            .title_style(theme.accent_style().add_modifier(Modifier::BOLD))
+            .borders(Borders::ALL)
+            .border_style(theme.accent_style())
+            .padding(Padding::horizontal(1))
+            .style(Style::default().bg(theme.background)),
     );
 
     frame.render_widget(sessions_list, area);
@@ -2210,14 +2441,13 @@ fn display_session_name(session: &SessionInfo) -> String {
     "Untitled session".to_string()
 }
 
-fn draw_tools(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
+fn draw_settings(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
     let tools = [
         "Profile",
         "Execution Policy",
         "Search",
         "System",
         "Processes",
-        "Git",
     ];
     let items: Vec<ListItem> = tools
         .iter()
@@ -2326,10 +2556,14 @@ fn draw_execution_policy(
     .block(Block::default().padding(Padding::uniform(1)))
     .wrap(Wrap { trim: true });
 
-    let editor_height = if app.execution_policy_editor.is_some() {
-        4
-    } else {
-        0
+    let editor_height = match app
+        .execution_policy_editor
+        .as_ref()
+        .map(|editor| editor.field)
+    {
+        Some(super::app::ExecutionPolicyListField::HeaderWidgets) => 16,
+        Some(_) => 4,
+        None => 0,
     };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -2350,23 +2584,98 @@ fn draw_execution_policy(
         chunks[1],
     );
     if let Some(editor) = &app.execution_policy_editor {
-        let label = match editor.field {
+        match editor.field {
             super::app::ExecutionPolicyListField::HeaderWidgets => {
-                "Edit Header Widgets (comma-separated)"
+                let items = settings::available_header_widgets()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, widget)| {
+                        let enabled = app.header_widgets.contains(widget);
+                        let marker = if enabled { "[x]" } else { "[ ]" };
+                        let locked = if *widget == super::app::HeaderWidget::Model {
+                            " (required)"
+                        } else {
+                            ""
+                        };
+                        let style = if index == editor.selected_index {
+                            if editor.text_input_focused {
+                                Style::default().bg(theme.background).fg(theme.foreground)
+                            } else {
+                                theme
+                                    .selection_style()
+                                    .fg(theme.accent)
+                                    .add_modifier(Modifier::BOLD)
+                            }
+                        } else {
+                            Style::default().bg(theme.background).fg(theme.foreground)
+                        };
+                        ListItem::new(Line::from(vec![
+                            Span::styled(format!("{marker} "), style),
+                            Span::styled(settings::header_widget_name(*widget), style),
+                            Span::styled(locked, theme.muted_style()),
+                        ]))
+                        .style(style)
+                    })
+                    .collect::<Vec<_>>();
+                let editor_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(8), Constraint::Length(3)])
+                    .split(chunks[2]);
+
+                let editor_widget = List::new(items).block(
+                    Block::default()
+                        .title(" Edit Header Widgets (Tab switch • Space/Enter toggle • S save) ")
+                        .border_style(if editor.text_input_focused {
+                            theme.muted_style()
+                        } else {
+                            theme.accent_style()
+                        })
+                        .borders(Borders::ALL)
+                        .padding(Padding::horizontal(1))
+                        .style(Style::default().bg(theme.background)),
+                );
+                frame.render_widget(editor_widget, editor_chunks[0]);
+
+                let summary_text = if editor.text_input_focused {
+                    format!("{}▌", editor.input)
+                } else {
+                    editor.input.clone()
+                };
+                let summary_widget = Paragraph::new(summary_text).block(
+                    Block::default()
+                        .title(" Saved as (Tab switch • comma edit) ")
+                        .border_style(if editor.text_input_focused {
+                            theme.accent_style()
+                        } else {
+                            theme.muted_style()
+                        })
+                        .borders(Borders::ALL)
+                        .padding(Padding::horizontal(1))
+                        .style(Style::default().bg(theme.background)),
+                );
+                frame.render_widget(
+                    summary_widget
+                        .style(Style::default().bg(theme.background).fg(theme.foreground)),
+                    editor_chunks[1],
+                );
             }
             super::app::ExecutionPolicyListField::AllowedCommands => {
-                "Edit Allowed Commands (comma-separated)"
+                let editor_widget = Paragraph::new(editor.input.as_str()).block(
+                    Block::default()
+                        .title(" Edit Allowed Commands (comma-separated) ")
+                        .padding(Padding::horizontal(1)),
+                );
+                frame.render_widget(editor_widget, chunks[2]);
             }
             super::app::ExecutionPolicyListField::BlockedCommands => {
-                "Edit Blocked Commands (comma-separated)"
+                let editor_widget = Paragraph::new(editor.input.as_str()).block(
+                    Block::default()
+                        .title(" Edit Blocked Commands (comma-separated) ")
+                        .padding(Padding::horizontal(1)),
+                );
+                frame.render_widget(editor_widget, chunks[2]);
             }
-        };
-        let editor_widget = Paragraph::new(editor.input.as_str()).block(
-            Block::default()
-                .title(format!(" {label} "))
-                .padding(Padding::horizontal(1)),
-        );
-        frame.render_widget(editor_widget, chunks[2]);
+        }
     }
 }
 
@@ -2489,69 +2798,238 @@ fn draw_view_session(
     frame: &mut Frame,
     name: &str,
     messages: &[harper_core::core::Message],
-    selected: usize,
+    scroll_offset: usize,
     theme: &Theme,
     area: Rect,
 ) {
-    let safe_scroll_offset = selected.min(messages.len());
-    let displayed_messages = &messages[safe_scroll_offset..];
     let mut message_lines: Vec<Line> = Vec::new();
-    for msg in displayed_messages.iter().filter(|msg| msg.role != "system") {
+    for msg in messages.iter().filter(|msg| msg.role != "system") {
         append_rendered_message_lines(&mut message_lines, msg, theme, theme.input, theme.output);
     }
 
+    let title = format!(" Preview {} (Enter resume • Esc back) ", name);
     let view = Paragraph::new(message_lines)
         .block(
             Block::default()
-                .title(format!(" Preview {} (Enter resume • Esc back) ", name))
-                .padding(Padding::uniform(1)),
+                .title(title)
+                .title_style(theme.accent_style().add_modifier(Modifier::BOLD))
+                .borders(Borders::ALL)
+                .border_style(theme.accent_style())
+                .padding(Padding::horizontal(1))
+                .style(Style::default().bg(theme.background)),
         )
+        .style(Style::default().bg(theme.background).fg(theme.foreground))
+        .scroll((scroll_offset as u16, 0))
         .wrap(Wrap { trim: false });
 
     frame.render_widget(view, area);
 }
 
-fn draw_message_overlay(frame: &mut Frame, message: &UiMessage, theme: &Theme) {
+fn draw_message_overlay(
+    frame: &mut Frame,
+    message: &UiMessage,
+    help_selected: usize,
+    theme: &Theme,
+) {
+    if message.content.trim().is_empty() {
+        return;
+    }
+    if matches!(message.message_type, super::app::MessageType::Help) {
+        draw_help_overlay(frame, &message.content, help_selected, theme);
+        return;
+    }
     let area = frame.area();
-    let max_overlay_width = area.width.saturating_mul(3) / 4;
-    let content_width = message
-        .content
-        .lines()
-        .map(|line| line.chars().count() as u16)
-        .max()
-        .unwrap_or(0);
-    let overlay_width = (content_width + 8).clamp(24, max_overlay_width.max(24));
-    let text_width = overlay_width.saturating_sub(4).max(1) as usize;
-    let wrapped_line_count = message
-        .content
-        .lines()
-        .map(|line| {
-            let len = line.chars().count();
-            usize::max(1, len.div_ceil(text_width))
-        })
-        .sum::<usize>() as u16;
-    let overlay_height = (wrapped_line_count + 4).clamp(5, area.height.saturating_mul(3) / 4);
+    let (alignment, overlay_area) = match message.message_type {
+        super::app::MessageType::Status | super::app::MessageType::Info => {
+            let max_width = area.width.saturating_sub(4).clamp(24, 96);
+            let content_width = message
+                .content
+                .lines()
+                .map(|line| line.chars().count() as u16)
+                .max()
+                .unwrap_or(0);
+            let overlay_width = (content_width + 8).clamp(24, max_width);
+            let text_width = overlay_width.saturating_sub(4).max(1) as usize;
+            let wrapped_line_count = message
+                .content
+                .lines()
+                .map(|line| {
+                    let len = line.chars().count();
+                    usize::max(1, len.div_ceil(text_width))
+                })
+                .sum::<usize>() as u16;
+            let overlay_height = (wrapped_line_count + 2).clamp(3, area.height.saturating_sub(3));
+            let overlay_x = area.width.saturating_sub(overlay_width + 2);
+            let overlay_y = 3.min(area.height.saturating_sub(overlay_height));
+            let overlay_area = Rect {
+                x: overlay_x,
+                y: overlay_y,
+                width: overlay_width,
+                height: overlay_height,
+            };
+            (Alignment::Left, overlay_area)
+        }
+        super::app::MessageType::Error | super::app::MessageType::Help => {
+            let max_overlay_width = area.width.saturating_mul(3) / 4;
+            let content_width = message
+                .content
+                .lines()
+                .map(|line| line.chars().count() as u16)
+                .max()
+                .unwrap_or(0);
+            let overlay_width = (content_width + 8).clamp(24, max_overlay_width.max(24));
+            let text_width = overlay_width.saturating_sub(4).max(1) as usize;
+            let wrapped_line_count = message
+                .content
+                .lines()
+                .map(|line| {
+                    let len = line.chars().count();
+                    usize::max(1, len.div_ceil(text_width))
+                })
+                .sum::<usize>() as u16;
+            let overlay_height =
+                (wrapped_line_count + 4).clamp(5, area.height.saturating_mul(3) / 4);
+            let overlay_area = Rect {
+                x: (area.width - overlay_width) / 2,
+                y: (area.height - overlay_height) / 2,
+                width: overlay_width,
+                height: overlay_height,
+            };
+            (Alignment::Center, overlay_area)
+        }
+    };
+
+    let border_style = match message.message_type {
+        super::app::MessageType::Error => theme.warning_style(),
+        super::app::MessageType::Help => theme.accent_style(),
+        super::app::MessageType::Status => theme.muted_style(),
+        super::app::MessageType::Info => theme.info_style(),
+    };
+    let block_padding = match message.message_type {
+        super::app::MessageType::Status | super::app::MessageType::Info => Padding::horizontal(1),
+        super::app::MessageType::Error | super::app::MessageType::Help => Padding::uniform(1),
+    };
 
     let overlay = Paragraph::new(message.content.as_str())
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(theme.muted_style())
-                .padding(Padding::uniform(1)),
+                .border_style(border_style)
+                .padding(block_padding),
         )
         .style(Style::default().bg(theme.background).fg(theme.foreground))
-        .alignment(Alignment::Center)
+        .alignment(alignment)
         .wrap(Wrap { trim: true });
-
-    let overlay_area = Rect {
-        x: (area.width - overlay_width) / 2,
-        y: (area.height - overlay_height) / 2,
-        width: overlay_width,
-        height: overlay_height,
-    };
 
     frame.render_widget(Clear, overlay_area);
     frame.render_widget(overlay, overlay_area);
+}
+
+fn draw_help_overlay(frame: &mut Frame, content: &str, selected: usize, theme: &Theme) {
+    let area = frame.area();
+    let overlay_area = centered_rect(78, 34, area);
+    frame.render_widget(Clear, overlay_area);
+
+    let shortcuts = content
+        .split('|')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .collect::<Vec<_>>();
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(1),
+            Constraint::Length(2),
+        ])
+        .split(overlay_area);
+
+    let total_rows = shortcuts.chunks(2).len();
+    let visible_rows = chunks[1].height.max(1) as usize;
+    let selected = selected.min(total_rows.saturating_sub(1));
+    let max_scroll_start = total_rows.saturating_sub(visible_rows);
+    let scroll_start = if total_rows > visible_rows {
+        selected
+            .saturating_sub(visible_rows / 2)
+            .min(max_scroll_start)
+    } else {
+        0
+    };
+    let scroll_end = (scroll_start + visible_rows).min(total_rows);
+
+    let row_items = shortcuts
+        .chunks(2)
+        .enumerate()
+        .skip(scroll_start)
+        .take(scroll_end.saturating_sub(scroll_start))
+        .map(|(index, chunk)| {
+            let left = chunk.first().copied().unwrap_or_default();
+            let right = chunk.get(1).copied().unwrap_or_default();
+            let style = if index == selected {
+                theme
+                    .selection_style()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().bg(theme.background).fg(theme.foreground)
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("{left:<34}"), style),
+                Span::styled(right.to_string(), style),
+            ]))
+            .style(style)
+        })
+        .collect::<Vec<_>>();
+
+    let header = Paragraph::new(Line::from(vec![Span::styled(
+        "Keyboard shortcuts",
+        theme.accent_style().add_modifier(Modifier::BOLD),
+    )]))
+    .block(
+        Block::default()
+            .title(" Help ")
+            .title_style(theme.accent_style().add_modifier(Modifier::BOLD))
+            .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
+            .border_style(theme.accent_style())
+            .padding(Padding::horizontal(1))
+            .style(Style::default().bg(theme.background)),
+    )
+    .style(Style::default().bg(theme.background).fg(theme.foreground));
+    frame.render_widget(header, chunks[0]);
+
+    let body = List::new(row_items).block(
+        Block::default()
+            .borders(Borders::LEFT | Borders::RIGHT)
+            .border_style(theme.accent_style())
+            .padding(Padding::horizontal(1))
+            .style(Style::default().bg(theme.background)),
+    );
+    frame.render_widget(body, chunks[1]);
+
+    let footer_hint = if total_rows > visible_rows {
+        format!(
+            "↑/↓ move • J/K move • Esc closes this help panel • {}/{}",
+            selected + 1,
+            total_rows
+        )
+    } else {
+        "↑/↓ move • J/K move • Esc closes this help panel".to_string()
+    };
+
+    let footer = Paragraph::new(Line::from(vec![Span::styled(
+        footer_hint,
+        theme.muted_style().add_modifier(Modifier::ITALIC),
+    )]))
+    .block(
+        Block::default()
+            .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
+            .border_style(theme.accent_style())
+            .padding(Padding::horizontal(1))
+            .style(Style::default().bg(theme.background)),
+    )
+    .style(Style::default().bg(theme.background).fg(theme.foreground));
+    frame.render_widget(footer, chunks[2]);
 }
 
 fn draw_plan_jobs_browser(frame: &mut Frame, chat_state: &super::app::ChatState, theme: &Theme) {
