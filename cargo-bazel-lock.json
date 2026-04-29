@@ -1,5 +1,5 @@
 {
-  "checksum": "ea22c0a1b6f5766c820cd97ff0a7a9a0e3b25fb07a3fd8a269edb9262549d4e7",
+  "checksum": "4607d7e51685652eec6c0bb6e3424445468cf6984fd39629309d8da7ed1c9c06",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -11355,9 +11355,9 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "harper-core 0.14.0": {
+    "harper-core 0.15.0": {
       "name": "harper-core",
-      "version": "0.14.0",
+      "version": "0.15.0",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -11512,6 +11512,10 @@
               "target": "socket2"
             },
             {
+              "id": "syn 2.0.117",
+              "target": "syn"
+            },
+            {
               "id": "sync_wrapper 1.0.2",
               "target": "sync_wrapper"
             },
@@ -11581,7 +11585,7 @@
           ],
           "selects": {}
         },
-        "version": "0.14.0"
+        "version": "0.15.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11722,9 +11726,9 @@
       ],
       "license_file": null
     },
-    "harper-sandbox 0.1.3": {
+    "harper-sandbox 0.2.0": {
       "name": "harper-sandbox",
-      "version": "0.1.3",
+      "version": "0.2.0",
       "package_url": null,
       "repository": null,
       "targets": [
@@ -11784,8 +11788,17 @@
             ]
           }
         },
+        "deps_dev": {
+          "common": [
+            {
+              "id": "tempfile 3.27.0",
+              "target": "tempfile"
+            }
+          ],
+          "selects": {}
+        },
         "edition": "2021",
-        "version": "0.1.3"
+        "version": "0.2.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11794,9 +11807,9 @@
       ],
       "license_file": null
     },
-    "harper-ui 0.13.0": {
+    "harper-ui 0.14.0": {
       "name": "harper-ui",
-      "version": "0.13.0",
+      "version": "0.14.0",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -11897,7 +11910,7 @@
           ],
           "selects": {}
         },
-        "version": "0.13.0"
+        "version": "0.14.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -23091,10 +23104,25 @@
         ],
         "crate_features": {
           "common": [
-            "default",
             "proc-macro"
           ],
-          "selects": {}
+          "selects": {
+            "aarch64-apple-darwin": [
+              "default"
+            ],
+            "aarch64-unknown-linux-gnu": [
+              "default"
+            ],
+            "x86_64-pc-windows-msvc": [
+              "default"
+            ],
+            "x86_64-unknown-linux-gnu": [
+              "default"
+            ],
+            "x86_64-unknown-nixos-gnu": [
+              "default"
+            ]
+          }
         },
         "deps": {
           "common": [
@@ -23790,10 +23818,25 @@
         ],
         "crate_features": {
           "common": [
-            "default",
             "proc-macro"
           ],
-          "selects": {}
+          "selects": {
+            "aarch64-apple-darwin": [
+              "default"
+            ],
+            "aarch64-unknown-linux-gnu": [
+              "default"
+            ],
+            "x86_64-pc-windows-msvc": [
+              "default"
+            ],
+            "x86_64-unknown-linux-gnu": [
+              "default"
+            ],
+            "x86_64-unknown-nixos-gnu": [
+              "default"
+            ]
+          }
         },
         "deps": {
           "common": [
@@ -30307,16 +30350,39 @@
             "clone-impls",
             "default",
             "derive",
-            "extra-traits",
-            "fold",
             "full",
             "parsing",
             "printing",
             "proc-macro",
-            "visit",
-            "visit-mut"
+            "visit"
           ],
-          "selects": {}
+          "selects": {
+            "aarch64-apple-darwin": [
+              "extra-traits",
+              "fold",
+              "visit-mut"
+            ],
+            "aarch64-unknown-linux-gnu": [
+              "extra-traits",
+              "fold",
+              "visit-mut"
+            ],
+            "x86_64-pc-windows-msvc": [
+              "extra-traits",
+              "fold",
+              "visit-mut"
+            ],
+            "x86_64-unknown-linux-gnu": [
+              "extra-traits",
+              "fold",
+              "visit-mut"
+            ],
+            "x86_64-unknown-nixos-gnu": [
+              "extra-traits",
+              "fold",
+              "visit-mut"
+            ]
+          }
         },
         "deps": {
           "common": [
@@ -41433,11 +41499,11 @@
   },
   "binary_crates": [],
   "workspace_members": {
-    "harper-core 0.14.0": "lib/harper-core",
+    "harper-core 0.15.0": "lib/harper-core",
     "harper-firmware 0.1.3": "lib/harper-firmware",
     "harper-mcp-server 0.1.2": "lib/harper-mcp-server",
-    "harper-sandbox 0.1.3": "lib/harper-sandbox",
-    "harper-ui 0.13.0": "lib/harper-ui",
+    "harper-sandbox 0.2.0": "lib/harper-sandbox",
+    "harper-ui 0.14.0": "lib/harper-ui",
     "harper-workspace 0.7.0": ""
   },
   "conditions": {
@@ -41740,6 +41806,7 @@
     "serde 1.0.228",
     "serde_json 1.0.149",
     "socket2 0.6.3",
+    "syn 2.0.117",
     "sync_wrapper 1.0.2",
     "syntect 5.3.0",
     "tempfile 3.27.0",

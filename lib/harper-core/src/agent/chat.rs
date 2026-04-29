@@ -21,9 +21,11 @@ use crate::agent::offline_shell::plan_offline_shell_commands;
 use crate::agent::prompt::PromptBuilder;
 use crate::core::cache::{ApiCacheKey, ApiResponseCache};
 use crate::core::error::{HarperError, HarperResult};
+use crate::core::plan::AuthoringPhase;
 use crate::core::{ApiConfig, Message};
 use crate::memory::storage::CommandLogEntry;
-use crate::runtime::config::ExecPolicyConfig;
+use crate::parsing;
+use crate::runtime::config::{ExecPolicyConfig, ExecutionStrategy};
 use crate::runtime::scheduler::{TaskPriority, TaskScheduler};
 use crate::tools::shell::CommandAuditContext;
 use crate::tools::ToolService;
@@ -50,6 +52,7 @@ enum CommandAction {
     Clear,
     Exit,
     Audit(AuditParams),
+    Strategy(Option<ExecutionStrategy>),
     Custom(String),
     Unknown(String),
 }
@@ -75,6 +78,12 @@ enum AuditApprovalFilter {
 }
 
 struct FileCompleter;
+
+#[derive(Debug, Clone)]
+struct AuthoringRequestContext {
+    prompt: String,
+    candidate_paths: HashSet<PathBuf>,
+}
 
 impl Helper for FileCompleter {}
 
@@ -193,6 +202,7 @@ pub struct ChatService<'a> {
     background_tasks: TaskScheduler<ChatBackgroundTask>,
     todo_reminder_armed: bool,
     last_audit_refresh: Option<Instant>,
+    execution_strategy: ExecutionStrategy,
 }
 
 #[allow(dead_code)]
@@ -210,6 +220,7 @@ impl<'a> ChatService<'a> {
         custom_commands: HashMap<String, String>,
         exec_policy: ExecPolicyConfig,
     ) -> Self {
+        let execution_strategy = exec_policy.effective_execution_strategy();
         Self {
             conn,
             config,
@@ -224,6 +235,7 @@ impl<'a> ChatService<'a> {
             background_tasks: TaskScheduler::new(),
             todo_reminder_armed: false,
             last_audit_refresh: None,
+            execution_strategy,
         }
     }
 
@@ -259,12 +271,14 @@ impl<'a> ChatService<'a> {
                 retry_max_attempts: None,
                 retry_network_commands: None,
                 retry_write_commands: None,
+                execution_strategy: None,
             },
             approver: None,
             runtime_events: None,
             background_tasks: TaskScheduler::new(),
             todo_reminder_armed: false,
             last_audit_refresh: None,
+            execution_strategy: ExecutionStrategy::Auto,
         }
     }
 
@@ -309,6 +323,19 @@ impl<'a> ChatService<'a> {
                     CommandAction::Audit(params) => {
                         self.format_command_audit(session_id, &params)?
                     }
+                    CommandAction::Strategy(Some(strategy)) => {
+                        self.execution_strategy = strategy;
+                        format!(
+                            "Execution strategy set to `{}`.",
+                            Self::execution_strategy_name(strategy)
+                        )
+                    }
+                    CommandAction::Strategy(None) => {
+                        format!(
+                            "Current execution strategy: `{}`.",
+                            Self::execution_strategy_name(self.execution_strategy)
+                        )
+                    }
                     CommandAction::Custom(desc) => {
                         self.add_user_message(history, session_id, &desc)?;
                         let response = self
@@ -334,15 +361,6 @@ impl<'a> ChatService<'a> {
 
         // Normal message processing
         self.add_user_message(history, session_id, &processed_msg)?;
-        if let Some(local_response) = self
-            .try_handle_deterministic_intent(&processed_msg, session_id)
-            .await?
-        {
-            self.notify_command_activity(session_id);
-            self.add_assistant_message(history, session_id, &local_response)?;
-            self.trim_history(history);
-            return Ok(());
-        }
         if let Some(local_response) = self
             .try_handle_offline_shell_proxy(&processed_msg, session_id)
             .await?
@@ -491,6 +509,9 @@ impl<'a> ChatService<'a> {
         help_text.push_str("  /exit - Exit the session\n");
         help_text.push_str("  /clear - Clear chat history\n");
         help_text.push_str("  /audit [limit] - Show recent command executions\n");
+        help_text.push_str(
+            "  /strategy [auto|grounded|deterministic|model] - Set or show execution strategy\n",
+        );
         help_text.push_str("  !command - Execute shell command directly\n");
         help_text.push_str("  @file - Reference and read files (with Tab completion)\n");
         for (cmd, desc) in &self.custom_commands {
@@ -523,6 +544,16 @@ impl<'a> ChatService<'a> {
         match name {
             "exit" => CommandAction::Exit,
             "clear" => CommandAction::Clear,
+            "strategy" => match args {
+                Some(value) => match Self::parse_execution_strategy(value) {
+                    Some(strategy) => CommandAction::Strategy(Some(strategy)),
+                    None => CommandAction::Unknown(format!(
+                        "Unknown strategy '{}'. Use: auto, grounded, deterministic, model.",
+                        value
+                    )),
+                },
+                None => CommandAction::Strategy(None),
+            },
             "audit" => match parse_audit_params(args) {
                 Ok(params) => CommandAction::Audit(params),
                 Err(err) => CommandAction::Unknown(err.to_string()),
@@ -744,6 +775,21 @@ impl<'a> ChatService<'a> {
                             }
                             continue;
                         }
+                        CommandAction::Strategy(Some(strategy)) => {
+                            self.execution_strategy = strategy;
+                            println!(
+                                "Execution strategy set to `{}`.",
+                                Self::execution_strategy_name(strategy)
+                            );
+                            continue;
+                        }
+                        CommandAction::Strategy(None) => {
+                            println!(
+                                "Current execution strategy: `{}`.",
+                                Self::execution_strategy_name(self.execution_strategy)
+                            );
+                            continue;
+                        }
                         CommandAction::Custom(desc) => {
                             println!("Custom command: {}", desc);
                             self.add_user_message(history, session_id, &desc)?;
@@ -831,18 +877,103 @@ impl<'a> ChatService<'a> {
                 content: plan_prompt,
             });
         }
-        self.emit_activity_update(session_id, Some("thinking".to_string()));
-        let mut response = self.call_llm(&client, &history_for_llm).await?;
-        let mut executed_tool_calls: HashSet<String> = HashSet::new();
-        let mut injected_agents_guidance: HashSet<String> = HashSet::new();
-        let mut last_tool_content: Option<String> = None;
-        let mut forced_tool_retry = false;
         let last_user_msg = history
             .iter()
             .rev()
             .find(|message| message.role == "user")
             .map(|message| message.content.clone())
             .unwrap_or_default();
+        let mut authoring_context = None;
+        if let Some(authoring_request_context) =
+            self.authoring_prompt_for_request(&last_user_msg).await?
+        {
+            history_for_llm.push(Message {
+                role: "system".to_string(),
+                content: authoring_request_context.prompt.clone(),
+            });
+            authoring_context = Some(authoring_request_context);
+        }
+
+        if self.execution_strategy == ExecutionStrategy::Deterministic {
+            if let Some((tool_name, tool_content)) = self
+                .try_handle_deterministic_intent(history, &last_user_msg, session_id)
+                .await?
+            {
+                return self
+                    .summarize_deterministic_tool_result(
+                        &client,
+                        &mut history_for_llm,
+                        history,
+                        session_id,
+                        &tool_name,
+                        &tool_content,
+                    )
+                    .await;
+            }
+        }
+
+        self.emit_activity_update(session_id, Some("thinking".to_string()));
+        let mut response = self.call_llm(&client, &history_for_llm).await?;
+        let mut executed_tool_calls: HashSet<String> = HashSet::new();
+        let mut injected_agents_guidance: HashSet<String> = HashSet::new();
+        let mut last_tool_content: Option<String> = None;
+        let mut forced_tool_retry = false;
+        let persisted_authoring = self
+            .prompt_id
+            .as_deref()
+            .and_then(|session_id| {
+                crate::memory::storage::load_plan_state(self.conn, session_id).ok()
+            })
+            .flatten()
+            .and_then(|plan| plan.runtime)
+            .and_then(|runtime| runtime.authoring);
+        let persisted_authoring_scope: HashSet<PathBuf> = persisted_authoring
+            .as_ref()
+            .map(|authoring| {
+                authoring
+                    .edit_scope
+                    .iter()
+                    .map(|path| Self::normalize_authoring_path(PathBuf::from(path)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut saw_authoring_inspection = persisted_authoring
+            .as_ref()
+            .and_then(|authoring| authoring.phase.as_ref())
+            .is_some_and(|phase| {
+                matches!(
+                    phase,
+                    AuthoringPhase::FilesInspected
+                        | AuthoringPhase::EditsApplied
+                        | AuthoringPhase::Validated
+                )
+            });
+        let mut saw_plan_update = persisted_authoring
+            .as_ref()
+            .and_then(|authoring| authoring.phase.as_ref())
+            .is_some_and(|phase| {
+                matches!(
+                    phase,
+                    AuthoringPhase::PlanCreated
+                        | AuthoringPhase::FilesInspected
+                        | AuthoringPhase::EditsApplied
+                        | AuthoringPhase::Validated
+                )
+            });
+        let mut inspected_paths: HashSet<PathBuf> = persisted_authoring
+            .as_ref()
+            .map(|authoring| {
+                authoring
+                    .inspected_files
+                    .iter()
+                    .map(|path| Self::normalize_authoring_path(PathBuf::from(path)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let has_structured_authoring_plan = persisted_authoring
+            .as_ref()
+            .and_then(|authoring| authoring.structured_plan.as_ref())
+            .is_some();
 
         for _ in 0..MAX_TOOL_ROUNDS {
             let clean_response = Self::sanitize_model_response(&response);
@@ -850,6 +981,29 @@ impl<'a> ChatService<'a> {
             let dedupe_key = tool_signature
                 .clone()
                 .unwrap_or_else(|| clean_response.clone());
+            if self.execution_strategy != ExecutionStrategy::Deterministic
+                && matches!(
+                    self.execution_strategy,
+                    ExecutionStrategy::Auto | ExecutionStrategy::Grounded
+                )
+                && Self::response_looks_like_generic_capability_refusal(&clean_response)
+            {
+                if let Some((tool_name, tool_content)) = self
+                    .try_handle_deterministic_intent(history, &last_user_msg, session_id)
+                    .await?
+                {
+                    return self
+                        .summarize_deterministic_tool_result(
+                            &client,
+                            &mut history_for_llm,
+                            history,
+                            session_id,
+                            &tool_name,
+                            &tool_content,
+                        )
+                        .await;
+                }
+            }
             if let Some(required_tool) =
                 Self::forced_tool_retry_target(&last_user_msg, &clean_response, forced_tool_retry)
             {
@@ -860,6 +1014,34 @@ impl<'a> ChatService<'a> {
                         "The user request requires an actual tool call. Do not answer with prose. Respond now with exactly one JSON tool call using `{}`.",
                         required_tool
                     ),
+                });
+                self.emit_activity_update(session_id, Some("thinking".to_string()));
+                response = self.call_llm(&client, &history_for_llm).await?;
+                continue;
+            }
+            let merged_candidate_paths = authoring_context
+                .as_ref()
+                .map(|ctx| {
+                    let mut merged = ctx.candidate_paths.clone();
+                    merged.extend(persisted_authoring_scope.iter().cloned());
+                    merged
+                })
+                .or_else(|| {
+                    (!persisted_authoring_scope.is_empty())
+                        .then_some(persisted_authoring_scope.clone())
+                });
+            if let Some(authoring_retry_prompt) = Self::authoring_tool_retry_prompt(
+                &last_user_msg,
+                &clean_response,
+                merged_candidate_paths.as_ref(),
+                saw_authoring_inspection,
+                saw_plan_update,
+                has_structured_authoring_plan,
+                &inspected_paths,
+            ) {
+                history_for_llm.push(Message {
+                    role: "system".to_string(),
+                    content: authoring_retry_prompt,
                 });
                 self.emit_activity_update(session_id, Some("thinking".to_string()));
                 response = self.call_llm(&client, &history_for_llm).await?;
@@ -911,6 +1093,71 @@ impl<'a> ChatService<'a> {
 
             if let Some((tool_result, tool_content)) = tool_option {
                 self.notify_command_activity(session_id);
+                if let Some(tool_name) = Self::tool_name_from_tool_call(&clean_response) {
+                    if tool_name == "update_plan" {
+                        saw_plan_update = true;
+                        if let Some(authoring_request_context) = authoring_context.as_ref() {
+                            let _ = crate::tools::plan::seed_plan_authoring_context(
+                                self.conn,
+                                session_id,
+                                &last_user_msg,
+                                authoring_request_context
+                                    .candidate_paths
+                                    .iter()
+                                    .map(|path| path.display().to_string())
+                                    .collect(),
+                            );
+                        }
+                        let _ = crate::tools::plan::mark_plan_authoring_plan_created(
+                            self.conn, session_id,
+                        );
+                    }
+                    if matches!(
+                        tool_name.as_str(),
+                        "read_file"
+                            | "codebase_investigator"
+                            | "git_diff"
+                            | "git_status"
+                            | "list_changed_files"
+                            | "grep"
+                    ) {
+                        saw_authoring_inspection = true;
+                        let inspected = ToolService::target_paths_for_tool_call(&clean_response)
+                            .into_iter()
+                            .map(Self::normalize_authoring_path)
+                            .collect::<Vec<_>>();
+                        inspected_paths.extend(inspected.iter().cloned());
+                        let _ = crate::tools::plan::mark_plan_authoring_inspection(
+                            self.conn,
+                            session_id,
+                            inspected
+                                .into_iter()
+                                .map(|path| path.display().to_string())
+                                .collect(),
+                        );
+                    }
+                    if matches!(tool_name.as_str(), "search_replace" | "write_file") {
+                        let edited = ToolService::target_paths_for_tool_call(&clean_response)
+                            .into_iter()
+                            .map(Self::normalize_authoring_path)
+                            .collect::<Vec<_>>();
+                        let _ = crate::tools::plan::mark_plan_authoring_edit_applied(
+                            self.conn,
+                            session_id,
+                            edited
+                                .into_iter()
+                                .map(|path| path.display().to_string())
+                                .collect(),
+                        );
+                    }
+                    if tool_name == "run_command"
+                        && Self::is_authoring_validation_command(&clean_response)
+                    {
+                        let _ = crate::tools::plan::mark_plan_authoring_validated(
+                            self.conn, session_id,
+                        );
+                    }
+                }
                 executed_tool_calls.insert(dedupe_key);
                 last_tool_content = Some(tool_content.clone());
                 let tool_message = Message {
@@ -926,7 +1173,22 @@ impl<'a> ChatService<'a> {
             break;
         }
 
-        Ok(response)
+        Ok(Self::finalize_assistant_response(
+            &response,
+            last_tool_content.as_deref(),
+        ))
+    }
+
+    fn finalize_assistant_response(response: &str, last_tool_content: Option<&str>) -> String {
+        if !response.trim().is_empty() {
+            return response.to_string();
+        }
+
+        if let Some(tool_content) = last_tool_content.filter(|content| !content.trim().is_empty()) {
+            return format!("Tool result:\n{}", tool_content);
+        }
+
+        "The model returned an empty response.".to_string()
     }
 
     fn agents_guidance_for_tool_call(
@@ -1125,6 +1387,71 @@ impl<'a> ChatService<'a> {
         has_action && (has_sequence || word_count >= 14)
     }
 
+    async fn authoring_prompt_for_request(
+        &self,
+        user_msg: &str,
+    ) -> Result<Option<AuthoringRequestContext>, HarperError> {
+        if !Self::request_needs_authoring_flow(user_msg) {
+            return Ok(None);
+        }
+
+        let overview = crate::tools::codebase_investigator::authoring_context(user_msg).await?;
+        Ok(Some(AuthoringRequestContext {
+            prompt: format!(
+                "This is an open-ended code authoring request. Do not answer with prose-only guidance. Use actual Harper tools to act on the repository. First inspect the grounded repo context below. If the task is multi-step, keep the task state current with update_plan before substantial edits. When the target is ambiguous, inspect the codebase before editing. Prefer this flow: understand the repo context, inspect relevant files, update_plan if needed, then use write_file/search_replace/run_command to make the change. Use the AUTHORING_CONTEXT and CANDIDATES sections to decide which files to inspect or edit first.\n\nGrounded repo context:\n{}",
+                overview
+            ),
+            candidate_paths: Self::extract_authoring_candidate_paths(&overview),
+        }))
+    }
+
+    fn request_needs_authoring_flow(user_msg: &str) -> bool {
+        let lower = user_msg.to_ascii_lowercase();
+        let has_authoring_signal = [
+            "create",
+            "make",
+            "modify",
+            "update",
+            "change",
+            "edit",
+            "refactor",
+            "implement",
+            "add",
+            "build",
+            "wire",
+        ]
+        .iter()
+        .any(|marker| lower.contains(marker));
+        if !has_authoring_signal {
+            return false;
+        }
+
+        let is_direct_deterministic_action = crate::agent::intent::route_intent(user_msg)
+            .is_some_and(|intent| {
+                matches!(
+                    intent,
+                    crate::agent::intent::DeterministicIntent::WriteFile(_)
+                        | crate::agent::intent::DeterministicIntent::ReadFile(_)
+                        | crate::agent::intent::DeterministicIntent::RunCommand(_)
+                )
+            });
+        if is_direct_deterministic_action {
+            return false;
+        }
+
+        lower.contains("repo")
+            || lower.contains("codebase")
+            || lower.contains("subsystem")
+            || lower.contains("feature")
+            || lower.contains("screen")
+            || lower.contains("tui")
+            || lower.contains("ui")
+            || lower.contains("core")
+            || lower.contains("planner")
+            || lower.contains("flow")
+            || lower.contains("behavior")
+    }
+
     fn request_requires_tool(user_msg: &str) -> Option<&'static str> {
         let lower = user_msg.to_ascii_lowercase();
         if lower.contains("git diff")
@@ -1135,6 +1462,29 @@ impl<'a> ChatService<'a> {
         }
         if lower.contains("git status") || lower.contains("status of repo") {
             return Some("git_status");
+        }
+        if (lower.contains("repo")
+            || lower.contains("repository")
+            || lower.contains("codebase")
+            || lower.contains("project"))
+            && (lower.contains("find ")
+                || lower.contains("where ")
+                || lower.contains("render")
+                || lower.contains("located")
+                || lower.contains("lives")
+                || lower.contains("defined")
+                || lower.contains("used"))
+        {
+            return Some("codebase_investigator");
+        }
+        if lower.contains("where is")
+            || lower.contains("where does")
+            || lower.contains("find where")
+            || lower.contains("find all")
+            || lower.contains("who calls")
+            || lower.contains("what renders")
+        {
+            return Some("codebase_investigator");
         }
         if (lower.contains("read ")
             || lower.contains("show ")
@@ -1155,6 +1505,9 @@ impl<'a> ChatService<'a> {
             && (lower.contains("file") || lower.contains(".rs") || lower.contains(".md"))
         {
             return Some("search_replace");
+        }
+        if Self::request_needs_authoring_flow(user_msg) {
+            return Some("codebase_investigator");
         }
         if lower.contains("run ")
             || lower.contains("execute ")
@@ -1195,6 +1548,200 @@ impl<'a> ChatService<'a> {
                 .trim()
                 .to_string()
         }
+    }
+
+    fn authoring_tool_retry_prompt(
+        user_msg: &str,
+        model_response: &str,
+        candidate_paths: Option<&HashSet<PathBuf>>,
+        saw_authoring_inspection: bool,
+        saw_plan_update: bool,
+        has_structured_authoring_plan: bool,
+        inspected_paths: &HashSet<PathBuf>,
+    ) -> Option<String> {
+        if !Self::request_needs_authoring_flow(user_msg) {
+            return None;
+        }
+        let tool_name = Self::tool_name_from_tool_call(model_response)?;
+        if !matches!(tool_name.as_str(), "search_replace" | "write_file") {
+            return None;
+        }
+        if Self::request_needs_plan(user_msg) && !saw_plan_update {
+            return Some(
+                "This is an open-ended multi-step authoring request. Before the first edit, call update_plan with concise steps and exactly one in_progress item. Do not edit any file yet.".to_string(),
+            );
+        }
+        if !has_structured_authoring_plan && Self::request_needs_plan(user_msg) {
+            return Some(
+                "Before the first edit on this open-ended authoring task, call update_plan with an authoring_plan that lists primary_files, supporting_files, planned_edits, and validation_plan. Do not edit any file yet.".to_string(),
+            );
+        }
+        if !saw_authoring_inspection {
+            let candidate_hint = candidate_paths
+                .map(Self::format_authoring_candidate_hint)
+                .unwrap_or_else(|| "Inspect the grounded repo context first.".to_string());
+            return Some(format!(
+                "Do not edit yet. This open-ended authoring request requires inspection before the first write/search_replace. First call codebase_investigator or read_file on a concrete repo file, then edit. {}",
+                candidate_hint
+            ));
+        }
+        let target_paths = ToolService::target_paths_for_tool_call(model_response);
+        if !target_paths.is_empty()
+            && !Self::authoring_targets_allowed(&target_paths, candidate_paths, inspected_paths)
+        {
+            let candidate_hint = candidate_paths
+                .map(Self::format_authoring_candidate_hint)
+                .unwrap_or_else(|| "Edit only files you inspected in this session.".to_string());
+            return Some(format!(
+                "Do not edit that path yet. For this authoring request, edits must target files from the grounded candidate set or files you already inspected. {}",
+                candidate_hint
+            ));
+        }
+        None
+    }
+
+    fn tool_name_from_tool_call(tool_call_json: &str) -> Option<String> {
+        let trimmed = tool_call_json.trim();
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if let Some(name) = json_value
+                .get("tool")
+                .and_then(|v| v.as_str())
+                .or_else(|| json_value.get("name").and_then(|v| v.as_str()))
+            {
+                return Some(name.to_string());
+            }
+            if let Some(first) = json_value.as_array().and_then(|arr| arr.first()) {
+                if let Some(name) = first
+                    .get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|v| v.as_str())
+                {
+                    return Some(name.to_string());
+                }
+            }
+        }
+        let upper = trimmed.to_ascii_uppercase();
+        if upper.starts_with("[READ_FILE") {
+            Some("read_file".to_string())
+        } else if upper.starts_with("[RUN_COMMAND") {
+            Some("run_command".to_string())
+        } else if upper.starts_with("[GIT_STATUS") {
+            Some("git_status".to_string())
+        } else if upper.starts_with("[GIT_DIFF") {
+            Some("git_diff".to_string())
+        } else if upper.starts_with("[SEARCH_REPLACE") {
+            Some("search_replace".to_string())
+        } else if upper.starts_with("[WRITE_FILE") {
+            Some("write_file".to_string())
+        } else if upper.starts_with("[UPDATE_PLAN") {
+            Some("update_plan".to_string())
+        } else if upper.starts_with("[CODEBASE_INVESTIGATOR") {
+            Some("codebase_investigator".to_string())
+        } else {
+            None
+        }
+    }
+
+    fn extract_run_command_text(tool_call_json: &str) -> Option<String> {
+        let trimmed = tool_call_json.trim();
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            let args = json_value
+                .get("args")
+                .or_else(|| json_value.get("arguments"))?;
+            return args
+                .get("command")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+        }
+        parsing::extract_tool_arg(trimmed, "[RUN_COMMAND").ok()
+    }
+
+    fn is_authoring_validation_command(tool_call_json: &str) -> bool {
+        let Some(command) = Self::extract_run_command_text(tool_call_json) else {
+            return false;
+        };
+        let lower = command.to_ascii_lowercase();
+        lower.contains("cargo check")
+            || lower.contains("cargo test")
+            || lower.contains("cargo fmt")
+            || lower.contains("pytest")
+            || lower.contains("npm test")
+            || lower.contains("pnpm test")
+    }
+
+    fn extract_authoring_candidate_paths(overview: &str) -> HashSet<PathBuf> {
+        overview
+            .lines()
+            .filter_map(|line| line.strip_prefix("FILE: "))
+            .map(|path| Self::normalize_authoring_path(PathBuf::from(path.trim())))
+            .collect()
+    }
+
+    fn normalize_authoring_path(path: PathBuf) -> PathBuf {
+        let path_str = path.to_string_lossy();
+        if let Some(stripped) = path_str.strip_prefix("./") {
+            PathBuf::from(stripped)
+        } else {
+            path
+        }
+    }
+
+    fn format_authoring_candidate_hint(candidate_paths: &HashSet<PathBuf>) -> String {
+        if candidate_paths.is_empty() {
+            return "Inspect a concrete repo file first.".to_string();
+        }
+        let mut candidates = candidate_paths
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>();
+        candidates.sort();
+        candidates.dedup();
+        format!(
+            "Inspect or edit one of these candidate files first: {}.",
+            candidates
+                .into_iter()
+                .take(4)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+
+    fn authoring_targets_allowed(
+        target_paths: &[PathBuf],
+        candidate_paths: Option<&HashSet<PathBuf>>,
+        inspected_paths: &HashSet<PathBuf>,
+    ) -> bool {
+        target_paths.iter().all(|target_path| {
+            let normalized_target = Self::normalize_authoring_path(target_path.clone());
+            let target_name = normalized_target.file_name().and_then(|name| name.to_str());
+            inspected_paths.iter().any(|allowed| {
+                let normalized_allowed = Self::normalize_authoring_path(allowed.clone());
+                normalized_allowed == normalized_target
+                    || normalized_allowed.ends_with(&normalized_target)
+                    || normalized_target.ends_with(&normalized_allowed)
+                    || target_name
+                        .zip(
+                            normalized_allowed
+                                .file_name()
+                                .and_then(|name| name.to_str()),
+                        )
+                        .is_some_and(|(target, allowed)| target == allowed)
+            }) || candidate_paths.is_some_and(|candidates| {
+                candidates.iter().any(|allowed| {
+                    let normalized_allowed = Self::normalize_authoring_path(allowed.clone());
+                    normalized_allowed == normalized_target
+                        || normalized_allowed.ends_with(&normalized_target)
+                        || normalized_target.ends_with(&normalized_allowed)
+                        || target_name
+                            .zip(
+                                normalized_allowed
+                                    .file_name()
+                                    .and_then(|name| name.to_str()),
+                            )
+                            .is_some_and(|(target, allowed)| target == allowed)
+                })
+            })
+        })
     }
 
     fn tool_call_signature(response: &str) -> Option<String> {
@@ -1252,10 +1799,15 @@ impl<'a> ChatService<'a> {
 
     async fn try_handle_deterministic_intent(
         &self,
+        history: &[Message],
         user_msg: &str,
         session_id: &str,
-    ) -> Result<Option<String>, HarperError> {
-        match route_intent(user_msg) {
+    ) -> Result<Option<(String, String)>, HarperError> {
+        let routed_intent = route_intent(user_msg).or_else(|| {
+            Self::infer_followup_write_file_intent(history, user_msg)
+                .map(DeterministicIntent::WriteFile)
+        });
+        match routed_intent {
             Some(DeterministicIntent::ListChangedFiles(filters)) => {
                 let audit_ctx = CommandAuditContext {
                     conn: self.conn,
@@ -1272,10 +1824,568 @@ impl<'a> ChatService<'a> {
                     filters.since.as_deref(),
                 )
                 .await?;
-                Ok(Some(response))
+                Ok(Some(("list_changed_files".to_string(), response)))
+            }
+            Some(DeterministicIntent::GitStatus) => {
+                let response = crate::tools::git::git_status()?;
+                Ok(Some(("git_status".to_string(), response)))
+            }
+            Some(DeterministicIntent::GitDiff) => {
+                let response = crate::tools::git::git_diff()?;
+                Ok(Some(("git_diff".to_string(), response)))
+            }
+            Some(DeterministicIntent::GitBranch) => {
+                let response = crate::tools::git::current_branch()?;
+                Ok(Some(("git_branch".to_string(), response)))
+            }
+            Some(DeterministicIntent::CurrentDirectory) => {
+                let cwd = std::env::current_dir().map_err(|e| {
+                    HarperError::Command(format!("Failed to determine current directory: {}", e))
+                })?;
+                Ok(Some((
+                    "current_directory".to_string(),
+                    format!("Current working directory: {}", cwd.display()),
+                )))
+            }
+            Some(DeterministicIntent::RepoIdentity) => {
+                let response = crate::tools::git::repo_identity()?;
+                Ok(Some(("repo_identity".to_string(), response)))
+            }
+            Some(DeterministicIntent::CodebaseOverview) => {
+                let response = crate::tools::codebase_investigator::overview_snapshot().await?;
+                Ok(Some(("codebase_overview".to_string(), response)))
+            }
+            Some(DeterministicIntent::ReadFile(intent)) => {
+                let response = crate::tools::filesystem::read_file(
+                    &format!("[READ_FILE {}]", intent.path),
+                    self.approver.clone(),
+                )
+                .await?;
+                Ok(Some(("read_file".to_string(), response)))
+            }
+            Some(DeterministicIntent::WriteFile(intent)) => {
+                let response = crate::tools::filesystem::write_file_direct(
+                    &intent.path,
+                    &intent.content,
+                    self.approver.clone(),
+                )
+                .await?;
+                Ok(Some(("write_file".to_string(), response)))
+            }
+            Some(DeterministicIntent::CodebaseSearch(intent)) => {
+                let response =
+                    crate::tools::codebase_investigator::search_text(&intent.pattern).await?;
+                Ok(Some(("codebase_search".to_string(), response)))
+            }
+            Some(DeterministicIntent::RunCommand(intent)) => {
+                let audit_ctx = CommandAuditContext {
+                    conn: self.conn,
+                    session_id: Some(session_id),
+                    source: "intent_run_command",
+                };
+                let response = crate::tools::shell::execute_command(
+                    &format!("[RUN_COMMAND {}]", intent.command),
+                    self.config,
+                    &self.exec_policy,
+                    None,
+                    Some(&audit_ctx),
+                    self.approver.clone(),
+                    self.runtime_events.clone(),
+                )
+                .await?;
+                let rendered = format!(
+                    "COMMAND: {}\nOUTPUT:\n{}",
+                    intent.command,
+                    response.trim_end()
+                );
+                Ok(Some(("run_command".to_string(), rendered)))
             }
             None => Ok(None),
         }
+    }
+
+    fn infer_followup_write_file_intent(
+        history: &[Message],
+        user_msg: &str,
+    ) -> Option<crate::agent::intent::WriteFileIntent> {
+        let normalized = user_msg.to_ascii_lowercase();
+        let wants_creation = normalized.contains("create the file")
+            || normalized.contains("create this file")
+            || normalized.contains("make this file")
+            || normalized.contains("write this file")
+            || normalized.contains("can you create this file")
+            || normalized.contains("can you make this file")
+            || normalized.contains("make the file")
+            || normalized.contains("write the file")
+            || normalized == "create it"
+            || normalized == "write it"
+            || normalized == "make it";
+        if !wants_creation {
+            return None;
+        }
+
+        let assistant_msg = history
+            .iter()
+            .rev()
+            .find(|message| message.role == "assistant")?;
+        let backtick_segments = Self::extract_backtick_segments(&assistant_msg.content);
+        let path = backtick_segments
+            .iter()
+            .find(|segment| {
+                segment.ends_with(".py")
+                    || segment.ends_with(".rs")
+                    || segment.ends_with(".js")
+                    || segment.ends_with(".ts")
+                    || segment.ends_with(".txt")
+                    || segment.ends_with(".md")
+                    || segment.ends_with(".json")
+                    || segment.ends_with(".sh")
+            })?
+            .to_string();
+        let path = Self::sanitize_followup_write_path(&path)?;
+
+        let content = backtick_segments
+            .iter()
+            .find(|segment| {
+                Self::sanitize_followup_write_path(segment)
+                    .as_deref()
+                    .is_none_or(|sanitized| sanitized != path)
+                    && !segment.starts_with("python")
+                    && !segment.starts_with("python3")
+                    && !segment.starts_with("cargo ")
+                    && !segment.starts_with("node ")
+                    && !segment.starts_with("bash ")
+            })
+            .cloned()
+            .or_else(|| {
+                Self::infer_code_from_plain_assistant_text(&assistant_msg.content, &path)
+            })?;
+
+        Some(crate::agent::intent::WriteFileIntent { path, content })
+    }
+
+    fn extract_backtick_segments(content: &str) -> Vec<String> {
+        let mut segments = Vec::new();
+        let mut remaining = content;
+        while let Some(start) = remaining.find('`') {
+            let after_start = &remaining[start + 1..];
+            let Some(end) = after_start.find('`') else {
+                break;
+            };
+            let segment = after_start[..end].trim();
+            if !segment.is_empty() {
+                segments.push(segment.to_string());
+            }
+            remaining = &after_start[end + 1..];
+        }
+        segments
+    }
+
+    fn sanitize_followup_write_path(path: &str) -> Option<String> {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let candidate = std::path::Path::new(trimmed);
+        let sanitized = if candidate.is_absolute() || trimmed.contains("..") {
+            candidate.file_name()?.to_str()?.to_string()
+        } else {
+            trimmed.to_string()
+        };
+        if sanitized.is_empty() || sanitized.contains('/') || sanitized.contains('\\') {
+            return None;
+        }
+        Some(sanitized)
+    }
+
+    fn infer_code_from_plain_assistant_text(content: &str, path: &str) -> Option<String> {
+        if path.ends_with(".py") {
+            return content
+                .lines()
+                .find(|line| line.contains("print("))
+                .map(|line| line.trim().to_string());
+        }
+        if path.ends_with(".rs") {
+            return content
+                .lines()
+                .find(|line| line.contains("fn main"))
+                .map(|line| line.trim().to_string());
+        }
+        if path.ends_with(".md") {
+            let markdown_lines = content
+                .lines()
+                .skip_while(|line| {
+                    let trimmed = line.trim();
+                    !trimmed.starts_with('#')
+                        && !trimmed.starts_with("- ")
+                        && !trimmed.starts_with("* ")
+                        && !trimmed.chars().next().is_some_and(|c| c.is_ascii_digit())
+                })
+                .map(str::trim_end)
+                .collect::<Vec<_>>();
+            let markdown = markdown_lines.join("\n").trim().to_string();
+            if !markdown.is_empty() {
+                return Some(markdown);
+            }
+        }
+        if path.ends_with(".txt") {
+            let text = content
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !text.is_empty() {
+                return Some(text);
+            }
+        }
+        None
+    }
+
+    async fn summarize_deterministic_tool_result(
+        &mut self,
+        client: &Client,
+        history_for_llm: &mut Vec<Message>,
+        history: &mut Vec<Message>,
+        session_id: &str,
+        tool_name: &str,
+        tool_content: &str,
+    ) -> Result<String, HarperError> {
+        self.notify_command_activity(session_id);
+        if tool_name == "repo_identity"
+            || tool_name == "git_branch"
+            || tool_name == "git_status"
+            || tool_name == "git_diff"
+            || tool_name == "write_file"
+            || tool_name == "run_command"
+        {
+            return Ok(Self::compact_deterministic_fallback(
+                tool_name,
+                tool_content,
+            ));
+        }
+
+        let tool_message = Message {
+            role: "system".to_string(),
+            content: tool_content.to_string(),
+        };
+        history.push(tool_message.clone());
+        history_for_llm.push(tool_message);
+        history_for_llm.push(Message {
+            role: "system".to_string(),
+            content: Self::deterministic_summary_instruction(tool_name).to_string(),
+        });
+        self.emit_activity_update(session_id, Some("thinking".to_string()));
+        let response = self.call_llm(client, history_for_llm).await?;
+        if response.trim().is_empty()
+            || Self::tool_call_signature(&response).is_some()
+            || Self::deterministic_summary_is_low_value(tool_name, &response, tool_content)
+        {
+            return Ok(Self::compact_deterministic_fallback(
+                tool_name,
+                tool_content,
+            ));
+        }
+        Ok(response)
+    }
+
+    fn deterministic_summary_instruction(tool_name: &str) -> &'static str {
+        match tool_name {
+            "codebase_search" => {
+                "A deterministic `codebase_search` tool was already selected and executed. Do not call any tool. Use only this structured search context. Prioritize files with the strongest ROLE and REASONS for the query focus, explain which file is most relevant first, and avoid repeating raw match dumps."
+            }
+            "codebase_overview" => {
+                "A deterministic `codebase_overview` tool was already selected and executed. Do not call any tool. Use only this workspace snapshot. Answer briefly with a grounded codebase overview: summarize the repo structure, major crates, and likely hotspots without repeating the raw snapshot verbatim."
+            }
+            _ => {
+                "A deterministic tool was already selected and executed. Do not call any tool. Answer in plain language using only this tool result. Keep the answer short and summarize the most relevant result instead of repeating raw output."
+            }
+        }
+    }
+
+    fn deterministic_summary_is_low_value(
+        tool_name: &str,
+        response: &str,
+        tool_content: &str,
+    ) -> bool {
+        if tool_name != "codebase_search" && tool_name != "codebase_overview" {
+            return false;
+        }
+
+        let trimmed = response.trim();
+        if trimmed.starts_with("Top matches for ")
+            || trimmed.starts_with("Top source matches:")
+            || trimmed.starts_with("Tool result:")
+            || trimmed.contains("route_intent(")
+        {
+            return true;
+        }
+
+        let repeated_lines = tool_content
+            .lines()
+            .skip(1)
+            .filter(|line| !line.trim().is_empty())
+            .take(3)
+            .filter(|line| trimmed.contains(line.trim()))
+            .count();
+
+        let repetition_threshold = if tool_name == "codebase_overview" {
+            1
+        } else {
+            2
+        };
+
+        repeated_lines >= repetition_threshold
+    }
+
+    fn compact_deterministic_fallback(tool_name: &str, tool_content: &str) -> String {
+        if tool_name == "repo_identity"
+            || tool_name == "git_branch"
+            || tool_name == "current_directory"
+        {
+            return tool_content.to_string();
+        }
+        if tool_name == "git_status" {
+            return Self::format_git_status(tool_content);
+        }
+        if tool_name == "git_diff" {
+            return Self::format_git_diff(tool_content);
+        }
+        if tool_name == "write_file" {
+            return Self::format_write_file(tool_content);
+        }
+        if tool_name == "run_command" {
+            return Self::format_run_command(tool_content);
+        }
+        if tool_name == "codebase_overview" {
+            return Self::summarize_codebase_overview(tool_content);
+        }
+        if tool_name == "codebase_search" {
+            return Self::summarize_codebase_search_result(tool_content);
+        }
+
+        format!("Tool result:\n{}", tool_content)
+    }
+
+    fn format_git_status(tool_content: &str) -> String {
+        let body = tool_content
+            .strip_prefix(
+                "Git status:
+",
+            )
+            .unwrap_or(tool_content)
+            .trim();
+        if body.is_empty() {
+            return "Git working directory is clean".to_string();
+        }
+
+        let mut modified = Vec::new();
+        let mut added = Vec::new();
+        let mut deleted = Vec::new();
+        let mut untracked = Vec::new();
+        let mut renamed = Vec::new();
+        let mut other = Vec::new();
+
+        for line in body.lines() {
+            let line = line.trim_end();
+            if line.len() < 3 {
+                continue;
+            }
+            let status = &line[..2];
+            let path = line[3..].trim();
+            match status {
+                "??" => untracked.push(path.to_string()),
+                "A " | "AM" | " M" if status.starts_with('A') => added.push(path.to_string()),
+                "D " | " D" | "MD" | "AD" => deleted.push(path.to_string()),
+                "R " | "R?" | "RM" | "RR" => renamed.push(path.to_string()),
+                _ if status.contains('M') => modified.push(path.to_string()),
+                _ => other.push(format!("{} {}", status, path)),
+            }
+        }
+
+        let mut parts = Vec::new();
+        if !modified.is_empty() {
+            parts.push(format!("{} modified", modified.len()));
+        }
+        if !added.is_empty() {
+            parts.push(format!("{} added", added.len()));
+        }
+        if !deleted.is_empty() {
+            parts.push(format!("{} deleted", deleted.len()));
+        }
+        if !renamed.is_empty() {
+            parts.push(format!("{} renamed", renamed.len()));
+        }
+        if !untracked.is_empty() {
+            parts.push(format!("{} untracked", untracked.len()));
+        }
+        if !other.is_empty() {
+            parts.push(format!("{} other", other.len()));
+        }
+
+        let summary = if parts.is_empty() {
+            "Git working directory has changes.".to_string()
+        } else {
+            format!("Git working directory has {}.", parts.join(", "))
+        };
+
+        let mut notable = Vec::new();
+        notable.extend(modified.iter().take(3).cloned());
+        notable.extend(added.iter().take(3 - notable.len()).cloned());
+        if notable.len() < 3 {
+            notable.extend(untracked.iter().take(3 - notable.len()).cloned());
+        }
+
+        if notable.is_empty() {
+            summary
+        } else {
+            format!("{} Notable files: {}.", summary, notable.join(", "))
+        }
+    }
+
+    fn format_git_diff(tool_content: &str) -> String {
+        let trimmed = tool_content.trim();
+        if trimmed == "No changes to show" {
+            return trimmed.to_string();
+        }
+        let diff_body = tool_content
+            .strip_prefix("Git diff:\n")
+            .unwrap_or(tool_content)
+            .trim_end();
+        format!("Git diff:\n```diff\n{}\n```", diff_body)
+    }
+
+    fn format_write_file(tool_content: &str) -> String {
+        let mut path = None;
+        let mut content = None;
+        for line in tool_content.lines() {
+            if let Some(value) = line.strip_prefix("Wrote file: ") {
+                path = Some(value.trim().to_string());
+            } else if let Some(value) = line.strip_prefix("CONTENT: ") {
+                content = Some(value.to_string());
+            }
+        }
+
+        match (path, content) {
+            (Some(path), Some(content)) => {
+                let language = std::path::Path::new(&path)
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .unwrap_or("txt");
+                format!("Created `{}`:\n```{}\n{}\n```", path, language, content)
+            }
+            _ => format!("Tool result:\n{}", tool_content),
+        }
+    }
+
+    fn format_run_command(tool_content: &str) -> String {
+        let mut command = None;
+        let mut in_output = false;
+        let mut output_lines = Vec::new();
+
+        for line in tool_content.lines() {
+            if let Some(value) = line.strip_prefix("COMMAND: ") {
+                command = Some(value.trim().to_string());
+                continue;
+            }
+            if line.trim() == "OUTPUT:" {
+                in_output = true;
+                continue;
+            }
+            if in_output {
+                output_lines.push(line);
+            }
+        }
+
+        let command = command.unwrap_or_else(|| "command".to_string());
+        let output = output_lines.join("\n").trim().to_string();
+        if output.is_empty() {
+            return format!("Ran `{}` successfully.", command);
+        }
+
+        format!("Ran `{}`.\n```\n{}\n```", command, output)
+    }
+
+    fn summarize_codebase_search_result(tool_content: &str) -> String {
+        let mut bullets = Vec::new();
+        let mut current_file = None;
+        let mut current_snippet = None;
+        let mut current_reasons: Option<String> = None;
+
+        for line in tool_content.lines().skip(1) {
+            let trimmed = line.trim();
+            if let Some(value) = trimmed.strip_prefix("FILE: ") {
+                if let (Some(file), Some(snippet)) = (current_file.take(), current_snippet.take()) {
+                    let reasons = current_reasons.take().unwrap_or_default();
+                    let reason_suffix = if reasons.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" [{}]", reasons)
+                    };
+                    bullets.push(format!("- `{}` → {}{}", file, snippet, reason_suffix));
+                }
+                current_file = Some(value.to_string());
+                current_reasons = None;
+                current_snippet = None;
+            } else if let Some(value) = trimmed.strip_prefix("REASONS: ") {
+                current_reasons = Some(value.to_string());
+            } else if let Some(value) = trimmed.strip_prefix("- ") {
+                if current_snippet.is_none() {
+                    current_snippet = Some(value.to_string());
+                }
+            }
+            if bullets.len() >= 4 {
+                break;
+            }
+        }
+
+        if bullets.len() < 4 {
+            if let (Some(file), Some(snippet)) = (current_file.take(), current_snippet.take()) {
+                let reasons = current_reasons.take().unwrap_or_default();
+                let reason_suffix = if reasons.is_empty() {
+                    String::new()
+                } else {
+                    format!(" [{}]", reasons)
+                };
+                bullets.push(format!("- `{}` → {}{}", file, snippet, reason_suffix));
+            }
+        }
+
+        if bullets.is_empty() {
+            return format!("Tool result:\n{}", tool_content);
+        }
+
+        format!("Top source matches:\n{}", bullets.join("\n"))
+    }
+
+    fn summarize_codebase_overview(tool_content: &str) -> String {
+        let mut lines = Vec::new();
+
+        for line in tool_content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if let Some(value) = trimmed.strip_prefix("Workspace root: ") {
+                lines.push(format!("Workspace root: `{}`", value));
+            } else if let Some(value) = trimmed.strip_prefix("Workspace package: ") {
+                lines.push(format!("Workspace package: `{}`", value));
+            } else if let Some(value) = trimmed.strip_prefix("Workspace members: ") {
+                lines.push(format!("Workspace members: {}", value));
+            } else if let Some(value) = trimmed.strip_prefix("Crate roles: ") {
+                lines.push(format!("Crate roles: {}", value));
+            } else if let Some(value) = trimmed.strip_prefix("Top-level entries: ") {
+                lines.push(format!("Top-level entries: {}", value));
+            } else if let Some(value) = trimmed.strip_prefix("Likely hotspots: ") {
+                lines.push(format!("Likely hotspots: {}", value));
+            }
+        }
+
+        if lines.is_empty() {
+            return format!("Tool result:\n{}", tool_content);
+        }
+
+        format!("Codebase overview:\n- {}", lines.join("\n- "))
     }
 
     async fn try_handle_offline_shell_proxy(
@@ -1283,6 +2393,9 @@ impl<'a> ChatService<'a> {
         user_msg: &str,
         session_id: &str,
     ) -> Result<Option<String>, HarperError> {
+        if self.execution_strategy != ExecutionStrategy::Deterministic {
+            return Ok(None);
+        }
         let commands = plan_offline_shell_commands(user_msg);
         if commands.is_empty() {
             return Ok(None);
@@ -1396,6 +2509,34 @@ impl<'a> ChatService<'a> {
         }
 
         Ok(lines.join("\n"))
+    }
+
+    fn parse_execution_strategy(value: &str) -> Option<ExecutionStrategy> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "auto" => Some(ExecutionStrategy::Auto),
+            "grounded" => Some(ExecutionStrategy::Grounded),
+            "deterministic" => Some(ExecutionStrategy::Deterministic),
+            "model" | "model-only" | "model_only" => Some(ExecutionStrategy::ModelOnly),
+            _ => None,
+        }
+    }
+
+    fn execution_strategy_name(strategy: ExecutionStrategy) -> &'static str {
+        match strategy {
+            ExecutionStrategy::Auto => "auto",
+            ExecutionStrategy::Grounded => "grounded",
+            ExecutionStrategy::Deterministic => "deterministic",
+            ExecutionStrategy::ModelOnly => "model",
+        }
+    }
+
+    fn response_looks_like_generic_capability_refusal(response: &str) -> bool {
+        let lower = response.to_ascii_lowercase();
+        lower.contains("none of the provided tools")
+            || lower.contains("i can't assist with that request")
+            || lower.contains("there is no way to perform")
+            || lower.contains("would be necessary to use a tool designed")
+            || lower.contains("the provided tools")
     }
 
     fn fetch_command_logs(
@@ -1930,6 +3071,16 @@ mod tests {
     }
 
     #[test]
+    fn forced_tool_retry_targets_codebase_queries() {
+        let user_msg = "Find where retry metadata is rendered in this repo.";
+        let prose = "You can grep for retry and metadata in the repository.";
+        assert_eq!(
+            ChatService::forced_tool_retry_target(user_msg, prose, false),
+            Some("codebase_investigator")
+        );
+    }
+
+    #[test]
     fn forced_tool_retry_runs_only_once() {
         let user_msg = "run cargo test";
         let prose = "I would run tests to verify the change.";
@@ -1937,6 +3088,77 @@ mod tests {
             ChatService::forced_tool_retry_target(user_msg, prose, true),
             None
         );
+    }
+
+    #[test]
+    fn compact_deterministic_fallback_summarizes_codebase_search() {
+        let tool_content = "Top matches for 'retry metadata':\nFILE: ./lib/harper-ui/src/interfaces/ui/widgets.rs:1036\nROLE: ui_widget_rendering\nREASONS: role=ui_widget_rendering, contains_all_terms, widget_render_path\nSNIPPETS:\n- 1036: \" Plan (Ctrl+S • C complete • I in-progress • B blocked • R retry • U replan • K ack • X clear) \"\nFILE: ./lib/harper-ui/src/interfaces/ui/widgets.rs:1229\nROLE: ui_widget_rendering\nREASONS: role=ui_widget_rendering, contains_all_terms, widget_render_path\nSNIPPETS:\n- 1229: PlanFollowup::RetryOrReplan {\nFILE: ./lib/harper-ui/src/interfaces/ui/widgets.rs:1232\nROLE: ui_widget_rendering\nREASONS: role=ui_widget_rendering, contains_all_terms, widget_render_path\nSNIPPETS:\n- 1232: retry_count,";
+        let summary = ChatService::compact_deterministic_fallback("codebase_search", tool_content);
+
+        assert!(summary.starts_with("Top source matches:\n"));
+        assert!(summary.contains("`./lib/harper-ui/src/interfaces/ui/widgets.rs:1036`"));
+        assert!(summary.contains("PlanFollowup::RetryOrReplan"));
+    }
+
+    #[test]
+    fn compact_deterministic_fallback_summarizes_codebase_overview() {
+        let tool_content = "Workspace root: /Users/niladri/harper\nWorkspace package: harper-workspace\nWorkspace members: lib/harper-core, lib/harper-ui\nCrate roles: harper-core: runtime, tools, storage, agent logic; harper-ui: TUI state, events, widgets\nTop-level entries: AGENTS.md, Cargo.toml, lib\nLikely hotspots: lib/harper-core/src/agent/chat.rs, lib/harper-ui/src/interfaces/ui/widgets.rs";
+        let summary =
+            ChatService::compact_deterministic_fallback("codebase_overview", tool_content);
+
+        assert!(summary.starts_with("Codebase overview:\n- "));
+        assert!(summary.contains("Workspace package: `harper-workspace`"));
+        assert!(summary.contains("Likely hotspots:"));
+    }
+
+    #[test]
+    fn compact_deterministic_fallback_formats_git_diff_as_fenced_block() {
+        let tool_content = "Git diff:\ndiff --git a/file.rs b/file.rs\n@@ -1 +1 @@\n-old\n+new\n";
+        let summary = ChatService::compact_deterministic_fallback("git_diff", tool_content);
+
+        assert!(summary.starts_with("Git diff:\n```diff\n"));
+        assert!(summary.contains("+new"));
+        assert!(summary.ends_with("\n```"));
+    }
+
+    #[test]
+    fn compact_deterministic_fallback_formats_write_file_as_fenced_block() {
+        let tool_content = "Wrote file: hello-world.txt\nCONTENT: Hello World";
+        let summary = ChatService::compact_deterministic_fallback("write_file", tool_content);
+
+        assert!(summary.starts_with("Created `hello-world.txt`:\n```txt\n"));
+        assert!(summary.contains("Hello World"));
+        assert!(summary.ends_with("\n```"));
+    }
+
+    #[test]
+    fn deterministic_summary_is_low_value_for_raw_codebase_echo() {
+        let tool_content = "Top matches for 'retry metadata':\nFILE: ./lib/harper-ui/src/interfaces/ui/widgets.rs:1036\nROLE: ui_widget_rendering\nREASONS: role=ui_widget_rendering, contains_all_terms\nSNIPPETS:\n- 1036: one\nFILE: ./lib/harper-ui/src/interfaces/ui/widgets.rs:1229\nROLE: ui_widget_rendering\nREASONS: role=ui_widget_rendering, contains_all_terms\nSNIPPETS:\n- 1229: two\nFILE: ./lib/harper-ui/src/interfaces/ui/widgets.rs:1232\nROLE: ui_widget_rendering\nREASONS: role=ui_widget_rendering, contains_all_terms\nSNIPPETS:\n- 1232: three";
+        let response = "Top matches for 'retry metadata': FILE: ./lib/harper-ui/src/interfaces/ui/widgets.rs:1036 ROLE: ui_widget_rendering SNIPPETS: 1036: one FILE: ./lib/harper-ui/src/interfaces/ui/widgets.rs:1229";
+        assert!(ChatService::deterministic_summary_is_low_value(
+            "codebase_search",
+            response,
+            tool_content
+        ));
+    }
+
+    #[test]
+    fn finalize_assistant_response_keeps_non_empty_text() {
+        let result = ChatService::finalize_assistant_response("Plan updated.", None);
+        assert_eq!(result, "Plan updated.");
+    }
+
+    #[test]
+    fn finalize_assistant_response_falls_back_to_tool_output() {
+        let result =
+            ChatService::finalize_assistant_response("   \n", Some("Plan updated: 3 steps."));
+        assert_eq!(result, "Tool result:\nPlan updated: 3 steps.");
+    }
+
+    #[test]
+    fn finalize_assistant_response_uses_explicit_empty_message_when_no_tool_output() {
+        let result = ChatService::finalize_assistant_response("   \n", None);
+        assert_eq!(result, "The model returned an empty response.");
     }
 
     #[test]
@@ -1954,5 +3176,176 @@ mod tests {
         );
         assert!(title.ends_with("..."));
         assert!(title.len() <= 51);
+    }
+
+    #[test]
+    fn infer_followup_write_file_intent_uses_previous_assistant_filename_and_code() {
+        let history = vec![
+            Message {
+                role: "user".to_string(),
+                content: "hey can you create a python hello joy file".to_string(),
+            },
+            Message {
+                role: "assistant".to_string(),
+                content: "Sure. Save this content into a file named `hello_joy.py`: `print(\"Hello Joy!\")` and run it with `python3 hello_joy.py`.".to_string(),
+            },
+        ];
+
+        let intent =
+            ChatService::infer_followup_write_file_intent(&history, "please create the file")
+                .expect("follow-up write intent");
+
+        assert_eq!(intent.path, "hello_joy.py");
+        assert_eq!(intent.content, "print(\"Hello Joy!\")");
+    }
+
+    #[test]
+    fn infer_followup_write_file_intent_sanitizes_absolute_filename() {
+        let history = vec![
+            Message {
+                role: "user".to_string(),
+                content: "create a new file explaining ai in markdown".to_string(),
+            },
+            Message {
+                role: "assistant".to_string(),
+                content: "Save this as `/home/user/ai.md`\n\n# Introduction to Artificial Intelligence\n\nAI is a field of computer science.".to_string(),
+            },
+        ];
+
+        let intent =
+            ChatService::infer_followup_write_file_intent(&history, "can you create this file")
+                .expect("follow-up write intent");
+
+        assert_eq!(intent.path, "ai.md");
+        assert!(intent
+            .content
+            .contains("# Introduction to Artificial Intelligence"));
+    }
+
+    #[test]
+    fn infer_followup_write_file_intent_extracts_markdown_body() {
+        let history = vec![
+            Message {
+                role: "user".to_string(),
+                content: "create a new file explaining ai in markdown".to_string(),
+            },
+            Message {
+                role: "assistant".to_string(),
+                content: "Sure, use `ai.md`\n\n# Introduction to Artificial Intelligence\n\n## What Is AI?\n\nArtificial intelligence is ...".to_string(),
+            },
+        ];
+
+        let intent =
+            ChatService::infer_followup_write_file_intent(&history, "please create the file")
+                .expect("follow-up write intent");
+
+        assert_eq!(intent.path, "ai.md");
+        assert!(intent
+            .content
+            .starts_with("# Introduction to Artificial Intelligence"));
+        assert!(intent.content.contains("## What Is AI?"));
+    }
+
+    #[test]
+    fn request_needs_authoring_flow_for_open_ended_repo_change() {
+        assert!(ChatService::request_needs_authoring_flow(
+            "refactor the planner flow in this repo"
+        ));
+    }
+
+    #[test]
+    fn request_does_not_need_authoring_flow_for_direct_write_intent() {
+        assert!(!ChatService::request_needs_authoring_flow(
+            "create hello.rs with fn main() { println!(\"Hi\"); }"
+        ));
+    }
+
+    #[test]
+    fn request_requires_tool_for_open_ended_authoring_flow() {
+        assert_eq!(
+            ChatService::request_requires_tool("refactor the planner flow in this repo"),
+            Some("codebase_investigator")
+        );
+    }
+
+    #[test]
+    fn authoring_tool_retry_prompt_requires_plan_before_first_edit() {
+        let mut candidates = HashSet::new();
+        candidates.insert(PathBuf::from("lib/harper-ui/src/interfaces/ui/widgets.rs"));
+
+        let prompt = ChatService::authoring_tool_retry_prompt(
+            "refactor the planner flow in this repo and then update the tui rendering too",
+            r#"{"tool":"search_replace","args":{"path":"lib/harper-ui/src/interfaces/ui/widgets.rs","search":"old","replace":"new"}}"#,
+            Some(&candidates),
+            false,
+            false,
+            false,
+            &HashSet::new(),
+        )
+        .expect("should require plan");
+
+        assert!(prompt.contains("call update_plan"));
+        assert!(prompt.contains("Do not edit any file yet"));
+    }
+
+    #[test]
+    fn authoring_tool_retry_prompt_requires_inspection_before_edit() {
+        let mut candidates = HashSet::new();
+        candidates.insert(PathBuf::from("lib/harper-ui/src/interfaces/ui/widgets.rs"));
+
+        let prompt = ChatService::authoring_tool_retry_prompt(
+            "change the retry rendering behavior in the tui",
+            r#"{"tool":"search_replace","args":{"path":"lib/harper-ui/src/interfaces/ui/widgets.rs","search":"old","replace":"new"}}"#,
+            Some(&candidates),
+            false,
+            true,
+            true,
+            &HashSet::new(),
+        )
+        .expect("should require inspection");
+
+        assert!(prompt.contains("requires inspection before the first write/search_replace"));
+        assert!(prompt.contains("codebase_investigator or read_file"));
+    }
+
+    #[test]
+    fn authoring_tool_retry_prompt_rejects_edit_outside_candidates() {
+        let mut candidates = HashSet::new();
+        candidates.insert(PathBuf::from("lib/harper-ui/src/interfaces/ui/widgets.rs"));
+
+        let prompt = ChatService::authoring_tool_retry_prompt(
+            "change the retry rendering behavior in the tui",
+            r#"{"tool":"search_replace","args":{"path":"/Users/username/Documents/project/source/file.txt","search":"old","replace":"new"}}"#,
+            Some(&candidates),
+            true,
+            true,
+            true,
+            &HashSet::new(),
+        )
+        .expect("should reject non-candidate edit");
+
+        assert!(prompt.contains("must target files from the grounded candidate set"));
+        assert!(prompt.contains("widgets.rs"));
+    }
+
+    #[test]
+    fn parses_execution_strategy_values() {
+        assert_eq!(
+            ChatService::parse_execution_strategy("auto"),
+            Some(ExecutionStrategy::Auto)
+        );
+        assert_eq!(
+            ChatService::parse_execution_strategy("grounded"),
+            Some(ExecutionStrategy::Grounded)
+        );
+        assert_eq!(
+            ChatService::parse_execution_strategy("deterministic"),
+            Some(ExecutionStrategy::Deterministic)
+        );
+        assert_eq!(
+            ChatService::parse_execution_strategy("model"),
+            Some(ExecutionStrategy::ModelOnly)
+        );
+        assert_eq!(ChatService::parse_execution_strategy("bogus"), None);
     }
 }

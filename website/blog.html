@@ -53,6 +53,13 @@
                     <p>The product implication is straightforward: once plan state is real, the UI can show what is pending, what is active, and what just changed. It also means future automation can attach tool execution and job status to actual steps instead of relying on the model to narrate everything correctly.</p>
                 </article>
 
+
+                <article>
+                    <h2>April 2026 · Execution strategy became explicit</h2>
+                    <p>Harper now exposes execution strategy directly in the TUI and local config. The point is not to turn the product into a classical deterministic router; the point is to make the tradeoff explicit. <code>auto</code> and <code>grounded</code> keep the model in the loop for normal repo work, while <code>deterministic</code> provides a stricter direct-tool mode for smoke checks and operational prompts.</p>
+                    <p>This also cleaned up a real failure mode in local-model sessions. Instead of letting weaker models either invent shell commands or refuse valid repo actions, Harper now feeds grounded repo context into the model first and only falls back to deterministic execution when the model response is empty, low-value, or invalid.</p>
+                </article>
+
                 <article>
                     <h2>April 2026 · <code>AGENTS.md</code> stopped being a flat append</h2>
                     <p>Earlier builds treated <code>AGENTS.md</code> as one static block of prompt text. Harper now resolves applicable files from repo root down to the target path, merges rules with deeper precedence, and keeps both the raw sources and the effective rendered view available to the UI and API.</p>

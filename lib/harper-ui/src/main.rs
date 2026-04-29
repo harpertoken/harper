@@ -305,9 +305,12 @@ async fn main() -> Result<(), HarperError> {
             &api_config,
             &session_service,
             &theme,
-            custom_commands.clone(),
             &exec_policy,
-            server_base_url,
+            &config.ui,
+            harper_ui::interfaces::ui::tui::TuiRunOptions {
+                custom_commands: custom_commands.clone(),
+                server_base_url,
+            },
         )
         .await
         .is_ok()

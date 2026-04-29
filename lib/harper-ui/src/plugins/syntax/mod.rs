@@ -19,7 +19,7 @@
 // documented in deny.toml and CI configuration.
 
 use ratatui::style::{Color, Style};
-use ratatui::text::Span;
+use ratatui::text::{Line, Span};
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{Style as SynStyle, ThemeSet};
 use syntect::parsing::SyntaxSet;
@@ -32,9 +32,7 @@ pub fn highlight_code(
     code: &str,
     theme_name: &str,
 ) -> Vec<Span<'static>> {
-    let syntax = syntax_set
-        .find_syntax_by_extension(language)
-        .unwrap_or_else(|| syntax_set.find_syntax_plain_text());
+    let syntax = resolve_syntax(syntax_set, language);
 
     let theme = theme_set
         .themes
@@ -58,6 +56,49 @@ pub fn highlight_code(
                 .collect::<Vec<Span>>()
         })
         .collect()
+}
+
+pub fn highlight_code_lines(
+    syntax_set: &SyntaxSet,
+    theme_set: &ThemeSet,
+    language: &str,
+    code: &str,
+    theme_name: &str,
+) -> Vec<Line<'static>> {
+    let syntax = resolve_syntax(syntax_set, language);
+    let theme = theme_set
+        .themes
+        .get(theme_name)
+        .or_else(|| theme_set.themes.get("base16-ocean.dark"))
+        .expect("Could not find the requested theme or the default 'base16-ocean.dark' theme.");
+    let mut highlighter = HighlightLines::new(syntax, theme);
+
+    LinesWithEndings::from(code)
+        .map(|line| {
+            let ranges: Vec<(SynStyle, &str)> = highlighter
+                .highlight_line(line, syntax_set)
+                .unwrap_or_default();
+            let spans = ranges
+                .into_iter()
+                .map(|(style, text)| {
+                    let color = syntect_to_ratatui_color(style.foreground);
+                    Span::styled(text.to_string(), Style::default().fg(color))
+                })
+                .collect::<Vec<_>>();
+            Line::from(spans)
+        })
+        .collect()
+}
+
+fn resolve_syntax<'a>(
+    syntax_set: &'a SyntaxSet,
+    language: &str,
+) -> &'a syntect::parsing::SyntaxReference {
+    syntax_set
+        .find_syntax_by_extension(language)
+        .or_else(|| syntax_set.find_syntax_by_token(language))
+        .or_else(|| syntax_set.find_syntax_by_name(language))
+        .unwrap_or_else(|| syntax_set.find_syntax_plain_text())
 }
 
 fn syntect_to_ratatui_color(color: syntect::highlighting::Color) -> Color {

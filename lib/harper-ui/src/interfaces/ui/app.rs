@@ -15,7 +15,7 @@
 use harper_core::core::Message;
 use harper_core::memory::session_service::GlobalStats;
 use harper_core::ResolvedAgents;
-use harper_core::{ApprovalProfile, AuthSession, PlanState, SandboxProfile};
+use harper_core::{ApprovalProfile, AuthSession, ExecutionStrategy, PlanState, SandboxProfile};
 use serde::Deserialize;
 use std::fs;
 use std::sync::{Arc, Mutex};
@@ -207,6 +207,10 @@ pub async fn gather_sidebar_entries_async(messages: &[Message]) -> Vec<String> {
 }
 
 impl ChatState {
+    pub fn follow_latest_messages(&mut self) {
+        self.scroll_offset = 0;
+    }
+
     pub fn refresh_plan_state(&mut self) {
         if let Some(plan) = &self.active_plan {
             let max_steps = plan.items.len().saturating_sub(1);
@@ -325,6 +329,7 @@ pub enum AppState {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ExecutionPolicyListField {
+    HeaderWidgets,
     AllowedCommands,
     BlockedCommands,
 }
@@ -357,6 +362,21 @@ pub struct UiMessage {
     pub expires_at: Option<Instant>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderWidget {
+    Session,
+    Plan,
+    Agents,
+    Web,
+    Auth,
+    Focus,
+    Model,
+    Cwd,
+    Strategy,
+    Approval,
+    Activity,
+}
+
 #[derive(Clone)]
 pub struct TuiApp {
     pub state: AppState,
@@ -368,16 +388,19 @@ pub struct TuiApp {
     pub cut_buffer: String,
     pub approval_history: Vec<String>,
     pub model_label: String,
+    pub current_working_dir: String,
     pub auth_session: Option<AuthSession>,
     pub auth_flow_id: Option<String>,
     pub auth_server_base_url: Option<String>,
     pub auth_last_poll_at: Option<Instant>,
     pub approval_profile: ApprovalProfile,
+    pub execution_strategy: ExecutionStrategy,
     pub sandbox_profile: SandboxProfile,
     pub retry_max_attempts: u32,
     pub allowed_commands: Vec<String>,
     pub blocked_commands: Vec<String>,
     pub execution_policy_editor: Option<ExecutionPolicyEditorState>,
+    pub header_widgets: Vec<HeaderWidget>,
 }
 
 impl Default for TuiApp {
@@ -392,16 +415,31 @@ impl Default for TuiApp {
             cut_buffer: String::new(),
             approval_history: Vec::new(),
             model_label: String::new(),
+            current_working_dir: String::new(),
             auth_session: None,
             auth_flow_id: None,
             auth_server_base_url: None,
             auth_last_poll_at: None,
             approval_profile: ApprovalProfile::AllowListed,
+            execution_strategy: ExecutionStrategy::Auto,
             sandbox_profile: SandboxProfile::Disabled,
             retry_max_attempts: 1,
             allowed_commands: Vec::new(),
             blocked_commands: Vec::new(),
             execution_policy_editor: None,
+            header_widgets: vec![
+                HeaderWidget::Session,
+                HeaderWidget::Plan,
+                HeaderWidget::Agents,
+                HeaderWidget::Web,
+                HeaderWidget::Auth,
+                HeaderWidget::Focus,
+                HeaderWidget::Model,
+                HeaderWidget::Cwd,
+                HeaderWidget::Strategy,
+                HeaderWidget::Approval,
+                HeaderWidget::Activity,
+            ],
         }
     }
 }
@@ -433,7 +471,7 @@ impl TuiApp {
     }
 
     pub fn execution_policy_row_count(&self) -> usize {
-        6
+        8
     }
 
     pub fn set_error_message(&mut self, content: String) {
@@ -568,8 +606,7 @@ impl TuiApp {
                             chat_state.agents_scroll_offset.saturating_add(1);
                     }
                     NavigationFocus::Messages => {
-                        chat_state.scroll_offset =
-                            (chat_state.scroll_offset + 1).min(chat_state.messages.len());
+                        chat_state.scroll_offset = chat_state.scroll_offset.saturating_sub(1);
                     }
                 }
             }
@@ -630,7 +667,7 @@ impl TuiApp {
                             chat_state.agents_scroll_offset.saturating_sub(1);
                     }
                     NavigationFocus::Messages => {
-                        chat_state.scroll_offset = chat_state.scroll_offset.saturating_sub(1);
+                        chat_state.scroll_offset = chat_state.scroll_offset.saturating_add(1);
                     }
                 }
             }

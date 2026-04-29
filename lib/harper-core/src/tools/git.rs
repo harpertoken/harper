@@ -25,6 +25,7 @@ use crate::tools::shell::{self, CommandAuditContext};
 use colored::*;
 use std::collections::HashSet;
 use std::io;
+use std::path::Path;
 
 use crate::core::io_traits::UserApproval;
 use std::sync::Arc;
@@ -73,6 +74,64 @@ pub fn git_status() -> crate::core::error::HarperResult<String> {
         .map_err(|e| HarperError::Command(format!("Failed to run git status: {}", e)))?;
 
     Ok(process_git_status_output(output))
+}
+
+pub fn repo_identity() -> crate::core::error::HarperResult<String> {
+    let top_level = std::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .map_err(|e| HarperError::Command(format!("Failed to determine git root: {}", e)))?;
+    if !top_level.status.success() {
+        return Err(HarperError::Command(
+            String::from_utf8_lossy(&top_level.stderr)
+                .trim()
+                .to_string(),
+        ));
+    }
+
+    let root = String::from_utf8_lossy(&top_level.stdout)
+        .trim()
+        .to_string();
+    let repo_name = Path::new(&root)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("unknown");
+
+    let branch_output = std::process::Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .map_err(|e| HarperError::Command(format!("Failed to determine branch: {}", e)))?;
+    let branch = if branch_output.status.success() {
+        String::from_utf8_lossy(&branch_output.stdout)
+            .trim()
+            .to_string()
+    } else {
+        "unknown".to_string()
+    };
+
+    Ok(format!(
+        "Current repo: {} (root: {}, branch: {})",
+        repo_name, root, branch
+    ))
+}
+
+pub fn current_branch() -> crate::core::error::HarperResult<String> {
+    let branch_output = std::process::Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .map_err(|e| HarperError::Command(format!("Failed to determine branch: {}", e)))?;
+    if !branch_output.status.success() {
+        return Err(HarperError::Command(
+            String::from_utf8_lossy(&branch_output.stderr)
+                .trim()
+                .to_string(),
+        ));
+    }
+
+    let branch = String::from_utf8_lossy(&branch_output.stdout)
+        .trim()
+        .to_string();
+    Ok(format!("Current branch: {}", branch))
 }
 
 /// Get git status asynchronously

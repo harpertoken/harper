@@ -12,49 +12,56 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use harper_core::{ApprovalProfile, SandboxProfile};
+use harper_core::{ApprovalProfile, ExecutionStrategy, SandboxProfile};
+
+use super::app::HeaderWidget;
 use std::fs;
 use std::io;
 use std::path::Path;
 
-pub fn save_execution_policy_settings(
-    approval: ApprovalProfile,
-    sandbox: SandboxProfile,
-    retry_max_attempts: u32,
-    allowed_commands: &[String],
-    blocked_commands: &[String],
-) -> io::Result<()> {
+pub struct ExecPolicySettings<'a> {
+    pub approval: ApprovalProfile,
+    pub execution_strategy: ExecutionStrategy,
+    pub sandbox: SandboxProfile,
+    pub retry_max_attempts: u32,
+    pub allowed_commands: &'a [String],
+    pub blocked_commands: &'a [String],
+    pub header_widgets: &'a [HeaderWidget],
+}
+
+pub fn save_execution_policy_settings(settings: ExecPolicySettings<'_>) -> io::Result<()> {
     let path = Path::new("config/local.toml");
     let existing = fs::read_to_string(path).unwrap_or_default();
-    let updated = upsert_exec_policy_settings(
-        &existing,
-        approval,
-        sandbox,
-        retry_max_attempts,
-        allowed_commands,
-        blocked_commands,
-    );
+    let updated = upsert_exec_policy_settings(&existing, &settings);
     fs::write(path, updated)
 }
 
-fn upsert_exec_policy_settings(
-    input: &str,
-    approval: ApprovalProfile,
-    sandbox: SandboxProfile,
-    retry_max_attempts: u32,
-    allowed_commands: &[String],
-    blocked_commands: &[String],
-) -> String {
-    let approval_line = format!("approval_profile = \"{}\"", approval_profile_name(approval));
-    let sandbox_line = format!("sandbox_profile = \"{}\"", sandbox_profile_name(sandbox));
-    let retry_line = format!("retry_max_attempts = {}", retry_max_attempts);
+fn upsert_exec_policy_settings(input: &str, settings: &ExecPolicySettings<'_>) -> String {
+    let approval_line = format!(
+        "approval_profile = \"{}\"",
+        approval_profile_name(settings.approval)
+    );
+    let strategy_line = format!(
+        "execution_strategy = \"{}\"",
+        execution_strategy_name(settings.execution_strategy)
+    );
+    let sandbox_line = format!(
+        "sandbox_profile = \"{}\"",
+        sandbox_profile_name(settings.sandbox)
+    );
+    let retry_line = format!("retry_max_attempts = {}", settings.retry_max_attempts);
     let allowed_line = format!(
         "allowed_commands = {}",
-        serde_json::to_string(allowed_commands).unwrap_or_else(|_| "[]".to_string())
+        serde_json::to_string(settings.allowed_commands).unwrap_or_else(|_| "[]".to_string())
     );
     let blocked_line = format!(
         "blocked_commands = {}",
-        serde_json::to_string(blocked_commands).unwrap_or_else(|_| "[]".to_string())
+        serde_json::to_string(settings.blocked_commands).unwrap_or_else(|_| "[]".to_string())
+    );
+    let header_widgets_line = format!(
+        "header_widgets = {}",
+        serde_json::to_string(&header_widget_names(settings.header_widgets))
+            .unwrap_or_else(|_| "[]".to_string())
     );
 
     let mut lines: Vec<String> = input.lines().map(str::to_string).collect();
@@ -75,6 +82,7 @@ fn upsert_exec_policy_settings(
                 .filter(|line| {
                     let trimmed = line.trim_start();
                     !(trimmed.starts_with("approval_profile")
+                        || trimmed.starts_with("execution_strategy")
                         || trimmed.starts_with("sandbox_profile")
                         || trimmed.starts_with("retry_max_attempts")
                         || trimmed.starts_with("allowed_commands")
@@ -86,6 +94,7 @@ fn upsert_exec_policy_settings(
             section_body.insert(0, allowed_line);
             section_body.insert(0, retry_line);
             section_body.insert(0, sandbox_line);
+            section_body.insert(0, strategy_line);
             section_body.insert(0, approval_line);
 
             lines.splice(start + 1..section_end, section_body);
@@ -96,10 +105,40 @@ fn upsert_exec_policy_settings(
             }
             lines.push("[exec_policy]".to_string());
             lines.push(approval_line);
+            lines.push(strategy_line);
             lines.push(sandbox_line);
             lines.push(retry_line);
             lines.push(allowed_line);
             lines.push(blocked_line);
+        }
+    }
+
+    let ui_section_start = lines.iter().position(|line| line.trim() == "[ui]");
+
+    match ui_section_start {
+        Some(start) => {
+            let section_end = lines
+                .iter()
+                .enumerate()
+                .skip(start + 1)
+                .find(|(_, line)| line.trim_start().starts_with('['))
+                .map(|(index, _)| index)
+                .unwrap_or(lines.len());
+
+            let mut section_body: Vec<String> = lines[start + 1..section_end]
+                .iter()
+                .filter(|line| !line.trim_start().starts_with("header_widgets"))
+                .cloned()
+                .collect();
+            section_body.insert(0, header_widgets_line);
+            lines.splice(start + 1..section_end, section_body);
+        }
+        None => {
+            if !lines.is_empty() && !lines.last().is_some_and(|line| line.trim().is_empty()) {
+                lines.push(String::new());
+            }
+            lines.push("[ui]".to_string());
+            lines.push(header_widgets_line);
         }
     }
 
@@ -115,6 +154,15 @@ pub fn approval_profile_name(profile: ApprovalProfile) -> &'static str {
         ApprovalProfile::Strict => "strict",
         ApprovalProfile::AllowListed => "allow_listed",
         ApprovalProfile::AllowAll => "allow_all",
+    }
+}
+
+pub fn execution_strategy_name(strategy: ExecutionStrategy) -> &'static str {
+    match strategy {
+        ExecutionStrategy::Auto => "auto",
+        ExecutionStrategy::Grounded => "grounded",
+        ExecutionStrategy::Deterministic => "deterministic",
+        ExecutionStrategy::ModelOnly => "model",
     }
 }
 
@@ -134,6 +182,15 @@ pub fn next_approval_profile(profile: ApprovalProfile) -> ApprovalProfile {
     }
 }
 
+pub fn next_execution_strategy(strategy: ExecutionStrategy) -> ExecutionStrategy {
+    match strategy {
+        ExecutionStrategy::Auto => ExecutionStrategy::Grounded,
+        ExecutionStrategy::Grounded => ExecutionStrategy::Deterministic,
+        ExecutionStrategy::Deterministic => ExecutionStrategy::ModelOnly,
+        ExecutionStrategy::ModelOnly => ExecutionStrategy::Auto,
+    }
+}
+
 pub fn next_sandbox_profile(profile: SandboxProfile) -> SandboxProfile {
     match profile {
         SandboxProfile::Disabled => SandboxProfile::Workspace,
@@ -146,26 +203,89 @@ pub fn next_retry_max_attempts(value: u32) -> u32 {
     (value + 1) % 4
 }
 
+pub fn header_widget_name(widget: HeaderWidget) -> &'static str {
+    match widget {
+        HeaderWidget::Session => "session",
+        HeaderWidget::Plan => "plan",
+        HeaderWidget::Agents => "agents",
+        HeaderWidget::Web => "web",
+        HeaderWidget::Auth => "auth",
+        HeaderWidget::Focus => "focus",
+        HeaderWidget::Model => "model",
+        HeaderWidget::Cwd => "cwd",
+        HeaderWidget::Strategy => "strategy",
+        HeaderWidget::Approval => "approval",
+        HeaderWidget::Activity => "activity",
+    }
+}
+
+pub fn header_widget_names(widgets: &[HeaderWidget]) -> Vec<&'static str> {
+    widgets.iter().map(|w| header_widget_name(*w)).collect()
+}
+
+pub fn parse_header_widgets(values: &[String]) -> Vec<HeaderWidget> {
+    let mut parsed = Vec::new();
+    for value in values {
+        let widget = match value.trim().to_ascii_lowercase().as_str() {
+            "session" => Some(HeaderWidget::Session),
+            "plan" => Some(HeaderWidget::Plan),
+            "agents" => Some(HeaderWidget::Agents),
+            "web" => Some(HeaderWidget::Web),
+            "auth" => Some(HeaderWidget::Auth),
+            "focus" => Some(HeaderWidget::Focus),
+            "model" => Some(HeaderWidget::Model),
+            "cwd" => Some(HeaderWidget::Cwd),
+            "strategy" => Some(HeaderWidget::Strategy),
+            "approval" => Some(HeaderWidget::Approval),
+            "activity" => Some(HeaderWidget::Activity),
+            _ => None,
+        };
+        if let Some(widget) = widget {
+            if !parsed.contains(&widget) {
+                parsed.push(widget);
+            }
+        }
+    }
+    if !parsed.contains(&HeaderWidget::Model) {
+        parsed.insert(0, HeaderWidget::Model);
+    }
+    if parsed.is_empty() {
+        vec![HeaderWidget::Model]
+    } else {
+        parsed
+    }
+}
+
+pub fn header_widgets_summary(widgets: &[HeaderWidget]) -> String {
+    header_widget_names(widgets).join(", ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        approval_profile_name, next_approval_profile, next_retry_max_attempts,
-        next_sandbox_profile, sandbox_profile_name, upsert_exec_policy_settings,
+        approval_profile_name, execution_strategy_name, next_approval_profile,
+        next_execution_strategy, next_retry_max_attempts, next_sandbox_profile,
+        sandbox_profile_name, upsert_exec_policy_settings, ExecPolicySettings, HeaderWidget,
     };
-    use harper_core::{ApprovalProfile, SandboxProfile};
+    use harper_core::{ApprovalProfile, ExecutionStrategy, SandboxProfile};
 
     #[test]
     fn upsert_exec_policy_profiles_creates_section() {
         let output = upsert_exec_policy_settings(
             "",
-            ApprovalProfile::AllowListed,
-            SandboxProfile::Workspace,
-            2,
-            &["git".to_string()],
-            &["rm".to_string()],
+            &ExecPolicySettings {
+                approval: ApprovalProfile::AllowListed,
+                execution_strategy: ExecutionStrategy::Grounded,
+                sandbox: SandboxProfile::Workspace,
+                retry_max_attempts: 2,
+                allowed_commands: &["git".to_string()],
+                blocked_commands: &["rm".to_string()],
+                header_widgets: &[HeaderWidget::Model, HeaderWidget::Strategy],
+            },
         );
         assert!(output.contains("[exec_policy]"));
         assert!(output.contains("approval_profile = \"allow_listed\""));
+        assert!(output.contains("execution_strategy = \"grounded\""));
         assert!(output.contains("sandbox_profile = \"workspace\""));
         assert!(output.contains("retry_max_attempts = 2"));
         assert!(output.contains("allowed_commands = [\"git\"]"));
@@ -177,13 +297,18 @@ mod tests {
         let input = "[exec_policy]\napproval_profile = \"strict\"\nsandbox_profile = \"disabled\"\nallowed_commands = [\"git\"]\nblocked_commands = [\"rm\"]\n";
         let output = upsert_exec_policy_settings(
             input,
-            ApprovalProfile::AllowAll,
-            SandboxProfile::NetworkedWorkspace,
-            3,
-            &["ls".to_string()],
-            &["sudo".to_string()],
+            &ExecPolicySettings {
+                approval: ApprovalProfile::AllowAll,
+                execution_strategy: ExecutionStrategy::Deterministic,
+                sandbox: SandboxProfile::NetworkedWorkspace,
+                retry_max_attempts: 3,
+                allowed_commands: &["ls".to_string()],
+                blocked_commands: &["sudo".to_string()],
+                header_widgets: &[HeaderWidget::Model, HeaderWidget::Cwd],
+            },
         );
         assert!(output.contains("approval_profile = \"allow_all\""));
+        assert!(output.contains("execution_strategy = \"deterministic\""));
         assert!(output.contains("sandbox_profile = \"networked_workspace\""));
         assert!(output.contains("retry_max_attempts = 3"));
         assert!(output.contains("allowed_commands = [\"ls\"]"));
@@ -198,6 +323,10 @@ mod tests {
             "allow_listed"
         );
         assert_eq!(
+            execution_strategy_name(ExecutionStrategy::Grounded),
+            "grounded"
+        );
+        assert_eq!(
             sandbox_profile_name(SandboxProfile::NetworkedWorkspace),
             "networked_workspace"
         );
@@ -208,6 +337,10 @@ mod tests {
         assert_eq!(
             next_approval_profile(ApprovalProfile::Strict),
             ApprovalProfile::AllowListed
+        );
+        assert_eq!(
+            next_execution_strategy(ExecutionStrategy::Auto),
+            ExecutionStrategy::Grounded
         );
         assert_eq!(
             next_sandbox_profile(SandboxProfile::Workspace),

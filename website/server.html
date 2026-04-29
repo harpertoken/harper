@@ -38,15 +38,20 @@ host = "127.0.0.1"
 port = 8081</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p>Execution approval and sandbox behavior are configured separately under <code>[exec_policy]</code>. You can edit them directly in config or select them from <code>Settings -&gt; Execution Policy</code> in the TUI, including the command allow/block lists.</p>
+                <p>Execution approval, execution strategy, and sandbox behavior are configured under <code>[exec_policy]</code>. You can edit them directly in config or select them from <code>Settings -&gt; Execution Policy</code> in the TUI, including the command allow/block lists.</p>
                 <div class="code-wrapper">
                     <pre><code>[exec_policy]
 approval_profile = "allow_listed"   # strict | allow_listed | allow_all
+execution_strategy = "auto"         # auto | grounded | deterministic | model
 sandbox_profile = "disabled"        # disabled | workspace | networked_workspace
-retry_max_attempts = 1</code></pre>
+retry_max_attempts = 1
+
+[ui]
+header_widgets = ["model", "cwd", "strategy"]</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p><code>allow_listed</code> preserves the existing default behavior for safe commands, but Harper still asks for approval when the command declares network access or writes outside the configured writable roots. <code>strict</code> requires approval for every command. <code>allow_all</code> skips approval checks. <code>workspace</code> enables sandboxing with workspace access and network disabled. <code>networked_workspace</code> enables the same workspace sandbox but allows network access.</p>
+                <p><code>allow_listed</code> preserves the existing default behavior for safe commands, but Harper still asks for approval when the command declares network access or writes outside the configured writable roots. <code>strict</code> requires approval for every command. <code>allow_all</code> skips approval checks. <code>auto</code> and <code>grounded</code> keep the model in the loop for normal repo work, while <code>deterministic</code> prefers direct grounded tool execution for supported intents and <code>model</code> disables deterministic shortcuts. <code>workspace</code> enables sandboxing with workspace access and network disabled. <code>networked_workspace</code> enables the same workspace sandbox but allows network access.</p>
+                <p><code>header_widgets</code> controls the persistent chat header. You can edit it from <code>Settings -&gt; Execution Policy</code>, and saving that screen writes the selected widgets back to <code>config/local.toml</code>. Supported values are <code>session</code>, <code>plan</code>, <code>agents</code>, <code>web</code>, <code>auth</code>, <code>focus</code>, <code>model</code>, <code>cwd</code>, <code>strategy</code>, <code>approval</code>, and <code>activity</code>.</p>
                 <p><code>retry_max_attempts</code> controls bounded automatic retries for retry-safe commands. You can also tune which command classes qualify:</p>
                 <div class="code-wrapper">
                     <pre><code>[exec_policy]
@@ -63,6 +68,16 @@ writable_dirs = ["./tmp", "./build"]</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <p><code>allowed_dirs</code> are readable roots. <code>writable_dirs</code> are writable roots. This lets you keep most of the workspace readable while only allowing writes in specific subpaths.</p>
+
+                <h2>Deterministic repo routes</h2>
+                <p>Harper now uses a model-first grounded strategy for repo work:</p>
+                <ul>
+                    <li>Structured codebase and authoring helpers gather grounded context.</li>
+                    <li>The model reasons on top of that context for agentic repo questions.</li>
+                    <li>Deterministic routing and summaries remain available as fallback or explicit strategy choices.</li>
+                </ul>
+                <p>Examples of grounded routes include <code>git status</code>, <code>git diff</code>, repo identity, branch lookup, direct file reads, and simple create/write prompts. Codebase prompts such as <code>find where X is rendered</code> use a structured search helper first, then let the model summarize from that grounded result. Open-ended authoring prompts build authoring context, require plan/inspection before edits, and use deterministic fallback only when the model fails.</p>
+                <p>This keeps the execution path explicit and safe, while avoiding the older failure mode where a weaker local model would answer with generic prose instead of using the repo tools.</p>
 
                 <h2>Run Harper with the server enabled</h2>
                 <p>Start Harper normally after enabling the server in config. If you only want the TUI, disable server startup with the flag below.</p>

@@ -25,8 +25,8 @@ use harper_core::core::plan::{PlanFollowup, PlanJobRecord, PlanJobStatus};
 use harper_core::{PlanRuntime, PlanState, PlanStepStatus, ResolvedAgents};
 
 // Refined shortcuts for a cleaner footer
-const FOOTER_SHORTCUTS: [[(&str, &str); 9]; 2] = [
-    [
+const FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
+    &[
         ("G", "Help"),
         ("W", "Search"),
         ("B", "Sidebar"),
@@ -35,9 +35,8 @@ const FOOTER_SHORTCUTS: [[(&str, &str); 9]; 2] = [
         ("M", "Msgs"),
         ("C", "ID"),
         ("O", "Export"),
-        ("D", "Delete"),
     ],
-    [
+    &[
         ("X", "Exit"),
         ("R", "Load"),
         ("L", "Preview"),
@@ -50,70 +49,62 @@ const FOOTER_SHORTCUTS: [[(&str, &str); 9]; 2] = [
     ],
 ];
 
-use crate::plugins::syntax::highlight_code;
+use crate::plugins::syntax::highlight_code_lines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 
-pub fn parse_content_with_code<'a>(
+enum MessageSegment {
+    Paragraph(String),
+    Heading(String),
+    StructuredLine(String),
+    CodeBlock {
+        language: Option<String>,
+        content: String,
+    },
+    Blank,
+}
+
+fn wrapped_line_count(lines: &[Line<'static>], width: u16) -> usize {
+    if width == 0 {
+        return 0;
+    }
+
+    lines
+        .iter()
+        .map(|line| {
+            let line_width = line.width();
+            if line_width == 0 {
+                1
+            } else {
+                line_width.div_ceil(width as usize)
+            }
+        })
+        .sum()
+}
+
+pub fn parse_content_with_code(
     syntax_set: &SyntaxSet,
     theme_set: &ThemeSet,
-    content: &'a str,
+    content: &str,
+    theme: &Theme,
     default_color: Color,
     syntax_theme: &str,
-) -> Vec<Span<'a>> {
-    let mut spans = Vec::new();
-    let mut remaining = content;
-
-    while let Some(start) = remaining.find("```") {
-        if start > 0 {
-            spans.push(Span::styled(
-                &remaining[..start],
-                Style::default().fg(default_color),
-            ));
-        }
-
-        let after_start = &remaining[start + 3..];
-        if let Some(end) = after_start.find("```") {
-            let code_block = &after_start[..end];
-            if let Some(newline_pos) = code_block.find('\n') {
-                let language = &code_block[..newline_pos].trim();
-                let code = &code_block[newline_pos + 1..];
-                spans.extend(highlight_code(
-                    syntax_set,
-                    theme_set,
-                    language,
-                    code,
-                    syntax_theme,
-                ));
-            } else {
-                spans.push(Span::styled(code_block, Style::default().fg(default_color)));
-            }
-            remaining = &after_start[end + 3..];
-        } else {
-            spans.push(Span::styled(
-                &remaining[start..],
-                Style::default().fg(default_color),
-            ));
-            remaining = "";
-            break;
-        }
-    }
-
-    if !remaining.is_empty() {
-        spans.push(Span::styled(remaining, Style::default().fg(default_color)));
-    }
-
-    spans
+) -> Vec<Line<'static>> {
+    render_message_segments(
+        parse_message_segments(content),
+        syntax_set,
+        theme_set,
+        theme,
+        default_color,
+        syntax_theme,
+    )
 }
 
 pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(0),
-            Constraint::Length(2), // Slimmer footer
-        ])
+        .constraints([Constraint::Min(0), Constraint::Length(2)])
         .split(area);
 
     let main_area = chunks[0];
@@ -125,12 +116,8 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             let chat_area = if chat_state.sidebar_visible {
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([
-                        Constraint::Percentage(20), // Slimmer sidebar
-                        Constraint::Percentage(80),
-                    ])
+                    .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
                     .split(main_area);
-
                 draw_zen_sidebar(frame, &chat_state.sidebar_entries, theme, chunks[0]);
                 chunks[1]
             } else {
@@ -168,6 +155,8 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .as_ref()
                 .map(|review| review_panel_height(review, chat_state.review_selected))
                 .unwrap_or(0);
+            let completion_height = completion_popup_height(chat_state);
+
             let mut constraints = vec![Constraint::Length(3), Constraint::Min(5)];
             if has_review {
                 constraints.push(Constraint::Length(review_height));
@@ -182,6 +171,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 constraints.push(Constraint::Length(agents_height));
             }
             constraints.push(Constraint::Length(3));
+
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints(constraints)
@@ -189,51 +179,19 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
 
             draw_chat_summary(frame, app, chat_state, theme, chunks[0]);
 
-            // Messages area - Typography focused
-            let safe_scroll_offset = chat_state.scroll_offset.min(chat_state.messages.len());
-            let displayed_messages = &chat_state.messages[safe_scroll_offset..];
-            let mut message_lines: Vec<Line> = Vec::new();
-
-            for msg in displayed_messages.iter().filter(|msg| msg.role != "system") {
-                let label = match msg.role.as_str() {
-                    "user" => "User ›",
-                    "assistant" => "Harper ›",
-                    _ => "System ›",
-                };
-
-                let label_style = match msg.role.as_str() {
-                    "user" => Style::default()
-                        .fg(theme.accent)
-                        .add_modifier(Modifier::BOLD),
-                    "assistant" => Style::default()
-                        .fg(theme.title)
-                        .add_modifier(Modifier::BOLD),
-                    _ => theme.muted_style(),
-                };
-
-                message_lines.push(Line::from(vec![Span::styled(label, label_style)]));
-
-                let content_color = if msg.role == "user" {
-                    theme.foreground
-                } else {
-                    theme.output
-                };
-
-                if msg.content.contains("```") {
-                    let spans = parse_content_with_code(
-                        &theme.syntax_set,
-                        &theme.theme_set,
-                        &msg.content,
-                        content_color,
-                        &theme.syntax_theme,
-                    );
-                    message_lines.push(Line::from(spans));
-                } else {
-                    for line in msg.content.lines() {
-                        message_lines.push(Line::styled(line, content_color));
-                    }
-                }
-                message_lines.push(Line::raw("")); // Breathing room
+            let mut message_lines: Vec<Line<'static>> = Vec::new();
+            for msg in chat_state
+                .messages
+                .iter()
+                .filter(|msg| msg.role != "system")
+            {
+                append_rendered_message_lines(
+                    &mut message_lines,
+                    msg,
+                    theme,
+                    theme.input,
+                    theme.output,
+                );
             }
 
             if chat_state.awaiting_response {
@@ -258,13 +216,20 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             }
 
             let chat_block = Block::default()
-                .borders(Borders::NONE) // No noise
+                .borders(Borders::NONE)
                 .padding(Padding::uniform(1));
-
+            let visible_line_capacity = chunks[1].height.saturating_sub(2) as usize;
+            let content_width = chunks[1].width.saturating_sub(2);
+            let total_wrapped_lines = wrapped_line_count(&message_lines, content_width);
             let messages_widget = Paragraph::new(message_lines)
                 .block(chat_block)
                 .wrap(Wrap { trim: false });
-
+            let max_scroll_offset = total_wrapped_lines.saturating_sub(visible_line_capacity);
+            let effective_scroll_offset = chat_state.scroll_offset.min(max_scroll_offset);
+            let paragraph_scroll = total_wrapped_lines
+                .saturating_sub(visible_line_capacity + effective_scroll_offset)
+                as u16;
+            let messages_widget = messages_widget.scroll((paragraph_scroll, 0));
             frame.render_widget(messages_widget, chunks[1]);
 
             let mut next_panel_index = 2;
@@ -290,7 +255,6 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 }
                 next_panel_index += 1;
             }
-
             if has_plan {
                 if let Some(plan) = &chat_state.active_plan {
                     draw_plan_panel(
@@ -329,7 +293,6 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 );
             }
 
-            // Input area - Minimalist
             let input_block = Block::default()
                 .borders(Borders::TOP)
                 .border_style(theme.muted_style())
@@ -339,7 +302,6 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 Span::styled("› ", Style::default().fg(theme.accent)),
                 Span::styled(&chat_state.input, Style::default().fg(theme.input)),
             ])];
-
             if chat_state.input.trim().is_empty() {
                 input_text.push(Line::from(Span::styled(
                     "Type a message... (Ctrl+G for help)",
@@ -348,13 +310,23 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             }
 
             let input_widget = Paragraph::new(input_text).block(input_block);
-
             let input_index = 2
                 + usize::from(has_review)
                 + usize::from(has_command_output)
                 + usize::from(has_plan)
                 + usize::from(has_agents);
             frame.render_widget(input_widget, chunks[input_index]);
+
+            if completion_height > 0 {
+                let popup_area = Rect {
+                    x: chunks[input_index].x,
+                    y: chunks[input_index].y.saturating_sub(completion_height),
+                    width: chunks[input_index].width.min(48),
+                    height: completion_height,
+                };
+                frame.render_widget(Clear, popup_area);
+                draw_completion_popup(frame, chat_state, theme, popup_area);
+            }
         }
         AppState::Sessions(sessions, selected) => draw_sessions(
             frame,
@@ -378,7 +350,9 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         AppState::Stats(stats) => draw_stats(frame, stats, theme, main_area),
     }
 
-    draw_zen_footer(frame, app, theme, footer_area);
+    if !matches!(app.state, AppState::Chat(_)) {
+        draw_zen_footer(frame, app, theme, footer_area);
+    }
 
     if let Some(approval) = &app.pending_approval {
         draw_approval(frame, approval, theme);
@@ -398,6 +372,549 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     }
 }
 
+fn render_diff_lines(content: &str, theme: &Theme) -> Vec<Line<'static>> {
+    content
+        .lines()
+        .map(|line| {
+            let style = if line.starts_with("+++") || line.starts_with("---") {
+                theme.info_style().add_modifier(Modifier::BOLD)
+            } else if line.starts_with('+') {
+                Style::default().fg(theme.success)
+            } else if line.starts_with('-') {
+                Style::default().fg(theme.error)
+            } else if line.starts_with("@@") {
+                theme.accent_style().add_modifier(Modifier::BOLD)
+            } else if line.starts_with("diff --git") || line.starts_with("index ") {
+                theme.muted_style().add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.foreground)
+            };
+            Line::styled(line.to_string(), style)
+        })
+        .collect()
+}
+
+fn parse_message_segments(content: &str) -> Vec<MessageSegment> {
+    let raw_lines: Vec<&str> = content.lines().collect();
+    let mut segments = Vec::new();
+    let mut paragraph = Vec::new();
+    let mut idx = 0usize;
+
+    let flush_paragraph = |paragraph: &mut Vec<&str>, segments: &mut Vec<MessageSegment>| {
+        if paragraph.is_empty() {
+            return;
+        }
+        let text = paragraph.join("\n");
+        if !text.trim().is_empty() {
+            segments.push(MessageSegment::Paragraph(text));
+        }
+        paragraph.clear();
+    };
+
+    while idx < raw_lines.len() {
+        let raw_line = raw_lines[idx];
+        let trimmed = raw_line.trim_end();
+        let normalized = trimmed.trim();
+
+        if normalized.is_empty() {
+            flush_paragraph(&mut paragraph, &mut segments);
+            if !matches!(segments.last(), Some(MessageSegment::Blank)) {
+                segments.push(MessageSegment::Blank);
+            }
+            idx += 1;
+            continue;
+        }
+
+        if let Some(rest) = normalized.strip_prefix("```") {
+            flush_paragraph(&mut paragraph, &mut segments);
+            let language = if rest.trim().is_empty() {
+                None
+            } else {
+                Some(rest.trim().to_string())
+            };
+            let mut code_lines = Vec::new();
+            idx += 1;
+            while idx < raw_lines.len() && raw_lines[idx].trim_end() != "```" {
+                code_lines.push(raw_lines[idx].trim_end());
+                idx += 1;
+            }
+            if idx < raw_lines.len() {
+                idx += 1;
+            }
+            segments.push(MessageSegment::CodeBlock {
+                language,
+                content: code_lines.join("\n"),
+            });
+            continue;
+        }
+
+        if normalized.starts_with('#') {
+            flush_paragraph(&mut paragraph, &mut segments);
+            segments.push(MessageSegment::Heading(
+                normalized.trim_start_matches('#').trim().to_string(),
+            ));
+            idx += 1;
+            continue;
+        }
+
+        let is_structured_line = normalized.starts_with("- ")
+            || normalized.starts_with("* ")
+            || normalized.starts_with("> ")
+            || normalized
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_digit())
+                && normalized.contains(". ");
+        if is_structured_line {
+            flush_paragraph(&mut paragraph, &mut segments);
+            segments.push(MessageSegment::StructuredLine(normalized.to_string()));
+            idx += 1;
+            continue;
+        }
+
+        if let Some((language, code, consumed)) = infer_unfenced_code_lines(&raw_lines[idx..]) {
+            flush_paragraph(&mut paragraph, &mut segments);
+            segments.push(MessageSegment::CodeBlock {
+                language: Some(language.to_string()),
+                content: code,
+            });
+            idx += consumed;
+            continue;
+        }
+
+        paragraph.push(trimmed);
+        idx += 1;
+    }
+
+    flush_paragraph(&mut paragraph, &mut segments);
+    segments
+}
+
+fn render_message_segments(
+    segments: Vec<MessageSegment>,
+    syntax_set: &SyntaxSet,
+    theme_set: &ThemeSet,
+    theme: &Theme,
+    default_color: Color,
+    syntax_theme: &str,
+) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    for segment in segments {
+        match segment {
+            MessageSegment::Paragraph(text) => {
+                lines.extend(normalize_plain_message_lines(&text, default_color, theme));
+            }
+            MessageSegment::Heading(text) => {
+                lines.push(parse_inline_markdown_line(&text, default_color, true));
+            }
+            MessageSegment::StructuredLine(text) => {
+                lines.push(parse_inline_markdown_line(&text, default_color, false));
+            }
+            MessageSegment::CodeBlock { language, content } => match language.as_deref() {
+                Some(language) if language.eq_ignore_ascii_case("diff") => {
+                    lines.extend(render_diff_lines(&content, theme));
+                }
+                Some(language) => {
+                    lines.extend(highlight_code_lines(
+                        syntax_set,
+                        theme_set,
+                        language,
+                        &content,
+                        syntax_theme,
+                    ));
+                }
+                None => {
+                    lines.extend(normalize_plain_message_lines(
+                        &content,
+                        default_color,
+                        theme,
+                    ));
+                }
+            },
+            MessageSegment::Blank => lines.push(Line::raw("")),
+        }
+    }
+    lines
+}
+
+fn normalize_plain_message_lines(content: &str, color: Color, theme: &Theme) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    let mut paragraph: Vec<&str> = Vec::new();
+    let raw_lines: Vec<&str> = content.lines().collect();
+
+    let flush_paragraph = |paragraph: &mut Vec<&str>, lines: &mut Vec<Line<'static>>| {
+        if paragraph.is_empty() {
+            return;
+        }
+        let normalized = paragraph.join(" ");
+        let normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !normalized.is_empty() {
+            if let Some((language, code)) = infer_unfenced_code_block(&normalized) {
+                lines.extend(highlight_code_lines(
+                    &theme.syntax_set,
+                    &theme.theme_set,
+                    language,
+                    code,
+                    &theme.syntax_theme,
+                ));
+            } else if let Some((prefix, language, code, suffix)) =
+                split_inline_code_paragraph(&normalized)
+            {
+                if !prefix.is_empty() {
+                    lines.push(parse_inline_markdown_line(prefix, color, false));
+                }
+                lines.extend(highlight_code_lines(
+                    &theme.syntax_set,
+                    &theme.theme_set,
+                    language,
+                    code,
+                    &theme.syntax_theme,
+                ));
+                if !suffix.is_empty() {
+                    lines.push(parse_inline_markdown_line(suffix, color, false));
+                }
+            } else {
+                lines.push(parse_inline_markdown_line(&normalized, color, false));
+            }
+        }
+        paragraph.clear();
+    };
+
+    let mut idx = 0usize;
+    while idx < raw_lines.len() {
+        let raw_line = raw_lines[idx];
+        let trimmed = raw_line.trim();
+        if trimmed.is_empty() {
+            flush_paragraph(&mut paragraph, &mut lines);
+            if !lines.is_empty() {
+                lines.push(Line::raw(""));
+            }
+            idx += 1;
+            continue;
+        }
+
+        let is_structured_line = trimmed.starts_with("- ")
+            || trimmed.starts_with("* ")
+            || trimmed.starts_with("> ")
+            || trimmed.starts_with('#')
+            || trimmed.chars().next().is_some_and(|ch| ch.is_ascii_digit())
+                && trimmed.contains(". ");
+
+        if looks_like_code_intro(trimmed)
+            && raw_lines
+                .get(idx + 1)
+                .is_some_and(|next| infer_unfenced_code_lines(std::slice::from_ref(next)).is_some())
+        {
+            flush_paragraph(&mut paragraph, &mut lines);
+            lines.push(parse_inline_markdown_line(trimmed, color, false));
+            idx += 1;
+            continue;
+        }
+
+        if let Some((language, code, consumed)) = infer_unfenced_code_lines(&raw_lines[idx..]) {
+            flush_paragraph(&mut paragraph, &mut lines);
+            lines.extend(highlight_code_lines(
+                &theme.syntax_set,
+                &theme.theme_set,
+                language,
+                &code,
+                &theme.syntax_theme,
+            ));
+            idx += consumed;
+            continue;
+        }
+
+        if is_structured_line {
+            flush_paragraph(&mut paragraph, &mut lines);
+            lines.push(parse_inline_markdown_line(
+                trimmed,
+                color,
+                trimmed.starts_with('#'),
+            ));
+            idx += 1;
+            continue;
+        }
+
+        paragraph.push(trimmed);
+        idx += 1;
+    }
+
+    flush_paragraph(&mut paragraph, &mut lines);
+    lines
+}
+
+fn parse_inline_markdown_line(content: &str, color: Color, heading: bool) -> Line<'static> {
+    let base_style = if heading {
+        Style::default().fg(color).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(color)
+    };
+
+    let mut spans = Vec::new();
+    let mut remaining = content;
+    while !remaining.is_empty() {
+        let bold_index = remaining.find("**");
+        let code_index = remaining.find('`');
+        let next_marker = match (bold_index, code_index) {
+            (Some(bold), Some(code)) => {
+                if bold < code {
+                    Some((bold, "bold"))
+                } else {
+                    Some((code, "code"))
+                }
+            }
+            (Some(bold), None) => Some((bold, "bold")),
+            (None, Some(code)) => Some((code, "code")),
+            (None, None) => None,
+        };
+
+        let Some((index, kind)) = next_marker else {
+            if !remaining.is_empty() {
+                spans.push(Span::styled(remaining.to_string(), base_style));
+            }
+            break;
+        };
+
+        if index > 0 {
+            spans.push(Span::styled(remaining[..index].to_string(), base_style));
+        }
+
+        remaining = &remaining[index..];
+        match kind {
+            "bold" => {
+                if let Some(end) = remaining[2..].find("**") {
+                    let text = &remaining[2..2 + end];
+                    spans.push(Span::styled(
+                        text.to_string(),
+                        base_style.add_modifier(Modifier::BOLD),
+                    ));
+                    remaining = &remaining[2 + end + 2..];
+                } else {
+                    spans.push(Span::styled(remaining.to_string(), base_style));
+                    break;
+                }
+            }
+            "code" => {
+                if let Some(end) = remaining[1..].find('`') {
+                    let text = &remaining[1..1 + end];
+                    spans.push(Span::styled(
+                        text.to_string(),
+                        base_style
+                            .fg(Color::Rgb(193, 223, 173))
+                            .add_modifier(Modifier::ITALIC),
+                    ));
+                    remaining = &remaining[1 + end + 1..];
+                } else {
+                    spans.push(Span::styled(remaining.to_string(), base_style));
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+
+    Line::from(spans)
+}
+
+fn infer_unfenced_code_lines(lines: &[&str]) -> Option<(&'static str, String, usize)> {
+    let first = lines.first()?.trim_end();
+    if first.trim().is_empty() || !is_code_like_line(first.trim()) {
+        return None;
+    }
+    let language = detect_code_language(first.trim())?;
+
+    let mut collected = vec![first];
+    let mut consumed = 1usize;
+    while let Some(next) = lines.get(consumed) {
+        let trimmed = next.trim_end();
+        if trimmed.trim().is_empty() {
+            break;
+        }
+        if is_code_like_continuation(trimmed) || is_code_like_line(trimmed.trim()) {
+            collected.push(trimmed);
+            consumed += 1;
+        } else {
+            break;
+        }
+    }
+
+    Some((language, collected.join("\n"), consumed))
+}
+
+fn infer_unfenced_code_block(normalized: &str) -> Option<(&'static str, &str)> {
+    let language = detect_code_language(normalized)?;
+    if is_code_like_line(normalized) {
+        Some((language, normalized))
+    } else {
+        None
+    }
+}
+
+fn split_inline_code_paragraph(normalized: &str) -> Option<(&str, &'static str, &str, &str)> {
+    let colon = normalized.find(':')?;
+    let (prefix, after_prefix) = normalized.split_at(colon + 1);
+    if !looks_like_code_intro(prefix.trim()) {
+        return None;
+    }
+
+    let after = after_prefix.trim();
+    if let Some(rest) = after.strip_prefix("print(") {
+        let mut depth = 1i32;
+        let mut end_index = "print(".len();
+        for ch in rest.chars() {
+            end_index += ch.len_utf8();
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        let code = &after[..end_index];
+                        let suffix = after[end_index..].trim_start();
+                        return Some((prefix.trim_end(), "py", code, suffix));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    None
+}
+
+fn looks_like_code_intro(line: &str) -> bool {
+    let lower = line.trim().to_ascii_lowercase();
+    lower.starts_with("here is")
+        || lower.contains("script:")
+        || lower.contains("code:")
+        || lower.contains("command:")
+}
+
+fn is_code_like_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed.starts_with("fn ")
+        || trimmed.starts_with("pub fn ")
+        || trimmed.starts_with("def ")
+        || trimmed.starts_with("class ")
+        || trimmed.starts_with("import ")
+        || trimmed.starts_with("from ")
+        || trimmed.starts_with("use ")
+        || trimmed.starts_with("struct ")
+        || trimmed.starts_with("enum ")
+        || trimmed.starts_with("trait ")
+        || trimmed.starts_with("impl ")
+        || trimmed.starts_with("let ")
+        || trimmed.starts_with("const ")
+        || trimmed.starts_with("async fn ")
+        || trimmed.starts_with("#!/bin/")
+        || trimmed.starts_with("print(")
+        || trimmed.starts_with('{')
+        || trimmed.starts_with('[')
+        || trimmed.contains(" = ")
+        || trimmed.ends_with('{')
+}
+
+fn is_code_like_continuation(line: &str) -> bool {
+    let trimmed = line.trim();
+    line.starts_with(' ')
+        || line.starts_with('\t')
+        || trimmed.starts_with('}')
+        || trimmed.starts_with(')')
+        || trimmed.starts_with("else")
+        || trimmed.starts_with("elif")
+        || trimmed.starts_with("return ")
+        || trimmed.starts_with("println!(")
+        || trimmed.starts_with("print(")
+}
+
+fn detect_code_language(content: &str) -> Option<&'static str> {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.starts_with("diff --git")
+        || trimmed.starts_with("@@")
+        || trimmed.contains("\n@@ ")
+        || (trimmed.starts_with('+') || trimmed.starts_with('-')) && trimmed.lines().count() > 1
+    {
+        return Some("diff");
+    }
+    if trimmed.starts_with("fn ")
+        || trimmed.starts_with("pub fn ")
+        || trimmed.starts_with("use ")
+        || trimmed.starts_with("struct ")
+        || trimmed.starts_with("enum ")
+        || trimmed.starts_with("trait ")
+        || trimmed.starts_with("impl ")
+        || trimmed.contains("println!(")
+    {
+        return Some("rs");
+    }
+    if trimmed.starts_with("def ")
+        || trimmed.starts_with("class ")
+        || trimmed.starts_with("import ")
+        || trimmed.starts_with("from ")
+        || trimmed.starts_with("print(")
+    {
+        return Some("py");
+    }
+    if trimmed.starts_with("#!/bin/")
+        || trimmed.starts_with("echo ")
+        || trimmed.starts_with("cargo ")
+        || trimmed.starts_with("git ")
+        || trimmed.starts_with("cd ")
+    {
+        return Some("sh");
+    }
+    if trimmed.starts_with('[') && trimmed.contains(']') || trimmed.contains(" = ") {
+        return Some("toml");
+    }
+    if (trimmed.starts_with('{') && trimmed.ends_with('}'))
+        || (trimmed.starts_with('[') && trimmed.ends_with(']'))
+    {
+        return Some("json");
+    }
+    None
+}
+
+fn append_rendered_message_lines(
+    message_lines: &mut Vec<Line<'static>>,
+    msg: &harper_core::core::Message,
+    theme: &Theme,
+    user_color: Color,
+    assistant_color: Color,
+) {
+    let label = match msg.role.as_str() {
+        "user" => "User ›",
+        "assistant" => "Harper ›",
+        _ => "System ›",
+    };
+    let label_style = match msg.role.as_str() {
+        "user" => Style::default()
+            .fg(theme.accent)
+            .add_modifier(Modifier::BOLD),
+        "assistant" => Style::default()
+            .fg(theme.title)
+            .add_modifier(Modifier::BOLD),
+        _ => theme.muted_style(),
+    };
+    let default_color = if msg.role == "user" {
+        user_color
+    } else {
+        assistant_color
+    };
+
+    message_lines.push(Line::from(vec![Span::styled(label, label_style)]));
+    message_lines.extend(parse_content_with_code(
+        &theme.syntax_set,
+        &theme.theme_set,
+        &msg.content,
+        theme,
+        default_color,
+        &theme.syntax_theme,
+    ));
+    message_lines.push(Line::raw(""));
+}
+
 fn review_panel_height(review: &ReviewState, selected: usize) -> u16 {
     let findings = review.findings.len().min(3);
     let model_line = usize::from(review.model.is_some());
@@ -407,6 +924,16 @@ fn review_panel_height(review: &ReviewState, selected: usize) -> u16 {
         .map(|finding| 2 + finding.message.lines().count().min(3))
         .unwrap_or(0);
     (findings + model_line + detail_lines + 4) as u16
+}
+
+fn header_widget_enabled(app: &TuiApp, widget: super::app::HeaderWidget) -> bool {
+    app.header_widgets.contains(&widget)
+}
+
+fn push_header_separator(spans: &mut Vec<Span<'static>>, _theme: &Theme) {
+    if !spans.is_empty() {
+        spans.push(Span::raw("  "));
+    }
 }
 
 fn draw_chat_summary(
@@ -452,9 +979,9 @@ fn draw_chat_summary(
             format!("agents: {} sections", agents.effective_rule_sections.len())
         });
     let web_status = if chat_state.web_search_enabled {
-        "web: on"
+        "web: on".to_string()
     } else {
-        "web: off"
+        "web: off".to_string()
     };
     let auth_status = app.auth_status_label();
     let focus_status = format!("focus: {}", chat_state.navigation_focus_label());
@@ -463,72 +990,109 @@ fn draw_chat_summary(
     } else {
         Some(format!("model: {}", app.model_label))
     };
+    let cwd_status = if app.current_working_dir.is_empty() {
+        None
+    } else {
+        Some(format!("cwd: {}", app.current_working_dir))
+    };
+    let strategy_status = format!(
+        "strategy: {}",
+        settings::execution_strategy_name(app.execution_strategy)
+    );
     let approval_status = if app.pending_approval.is_some() {
-        Some("approval: pending")
+        Some("approval: pending".to_string())
     } else {
         None
     };
     let activity_status = app.activity_status.as_ref().map(|status| {
-        let spinner = activity_spinner_frame(app);
         format!(
             "activity: {} {}",
-            spinner,
+            activity_spinner_frame(app),
             truncate_chat_summary(status, 32)
         )
     });
-    let agents_panel_status = if chat_state.agents_panel_expanded {
-        Some("agents panel: open")
-    } else {
-        None
-    };
     let last_action = latest_action_summary(app, chat_state);
     let last_rule_source = latest_rule_source(chat_state);
 
-    let mut spans = vec![
-        Span::styled("session ", theme.muted_style()),
-        Span::styled(
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    if header_widget_enabled(app, super::app::HeaderWidget::Session) {
+        spans.push(Span::styled("session ", theme.muted_style()));
+        spans.push(Span::styled(
             truncate_chat_summary(&chat_state.session_id, 12),
             Style::default()
                 .fg(theme.foreground)
                 .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw("  "),
-        Span::styled(plan_status, theme.muted_style()),
-        Span::raw("  "),
-        Span::styled(agents_status, theme.muted_style()),
-        Span::raw("  "),
-        Span::styled(web_status, theme.muted_style()),
-        Span::raw("  "),
-        Span::styled(auth_status, theme.muted_style()),
-        Span::raw("  "),
-        Span::styled(focus_status, theme.muted_style()),
-    ];
-    if let Some(status) = approval_status {
-        spans.push(Span::raw("  "));
+        ));
+    }
+    if header_widget_enabled(app, super::app::HeaderWidget::Plan) {
+        push_header_separator(&mut spans, theme);
+        spans.push(Span::styled(plan_status, theme.muted_style()));
+    }
+    if header_widget_enabled(app, super::app::HeaderWidget::Agents) {
+        push_header_separator(&mut spans, theme);
+        spans.push(Span::styled(agents_status, theme.muted_style()));
+    }
+    if header_widget_enabled(app, super::app::HeaderWidget::Web) {
+        push_header_separator(&mut spans, theme);
+        spans.push(Span::styled(web_status, theme.muted_style()));
+    }
+    if header_widget_enabled(app, super::app::HeaderWidget::Auth) {
+        push_header_separator(&mut spans, theme);
+        spans.push(Span::styled(auth_status, theme.muted_style()));
+    }
+    if header_widget_enabled(app, super::app::HeaderWidget::Focus) {
+        push_header_separator(&mut spans, theme);
+        spans.push(Span::styled(focus_status, theme.muted_style()));
+    }
+    if header_widget_enabled(app, super::app::HeaderWidget::Model) {
+        if let Some(status) = model_status {
+            push_header_separator(&mut spans, theme);
+            spans.push(Span::styled(
+                status,
+                Style::default()
+                    .fg(theme.foreground)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+    }
+    if header_widget_enabled(app, super::app::HeaderWidget::Cwd) {
+        if let Some(status) = cwd_status {
+            push_header_separator(&mut spans, theme);
+            spans.push(Span::styled(status, theme.muted_style()));
+        }
+    }
+    if header_widget_enabled(app, super::app::HeaderWidget::Strategy) {
+        push_header_separator(&mut spans, theme);
         spans.push(Span::styled(
-            status,
+            strategy_status,
             Style::default()
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ));
     }
-    if let Some(status) = activity_status {
-        spans.push(Span::raw("  "));
-        spans.push(Span::styled(
-            status,
-            Style::default()
-                .fg(theme.output)
-                .add_modifier(Modifier::BOLD),
-        ));
+    if header_widget_enabled(app, super::app::HeaderWidget::Approval) {
+        if let Some(status) = approval_status {
+            push_header_separator(&mut spans, theme);
+            spans.push(Span::styled(
+                status,
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
     }
-    if let Some(status) = model_status {
-        spans.push(Span::raw("  "));
-        spans.push(Span::styled(status, theme.muted_style()));
+    if header_widget_enabled(app, super::app::HeaderWidget::Activity) {
+        if let Some(status) = activity_status {
+            push_header_separator(&mut spans, theme);
+            spans.push(Span::styled(
+                status,
+                Style::default()
+                    .fg(theme.output)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
     }
-    if let Some(status) = agents_panel_status {
-        spans.push(Span::raw("  "));
-        spans.push(Span::styled(status, theme.muted_style()));
-    }
+
     let line = Line::from(spans);
     let mut detail_spans = Vec::new();
     if let Some(action) = last_action {
@@ -657,6 +1221,46 @@ fn plan_panel_height(plan: &PlanState) -> u16 {
     lines as u16
 }
 
+fn completion_popup_height(chat_state: &super::app::ChatState) -> u16 {
+    if chat_state.input.starts_with('/') && !chat_state.completion_candidates.is_empty() {
+        (chat_state.completion_candidates.len().min(4) as u16) + 2
+    } else {
+        0
+    }
+}
+
+fn draw_completion_popup(
+    frame: &mut Frame,
+    chat_state: &super::app::ChatState,
+    theme: &Theme,
+    area: Rect,
+) {
+    let items = chat_state
+        .completion_candidates
+        .iter()
+        .take(4)
+        .map(|candidate| {
+            let style = if candidate == &chat_state.input {
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.foreground)
+            };
+            ListItem::new(candidate.clone()).style(style)
+        })
+        .collect::<Vec<_>>();
+
+    let widget = List::new(items).block(
+        Block::default()
+            .title(" Slash Commands ")
+            .borders(Borders::TOP)
+            .border_style(theme.muted_style())
+            .padding(Padding::horizontal(1)),
+    );
+    frame.render_widget(widget, area);
+}
+
 fn command_output_panel_height(output: &CommandOutputState) -> u16 {
     let line_count = output.content.lines().count().clamp(1, 5);
     (line_count + 3) as u16
@@ -684,15 +1288,32 @@ fn draw_command_output_panel(
     } else {
         output.content.trim_end()
     };
-    for line in content
-        .lines()
-        .rev()
-        .take(4)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-    {
-        lines.push(Line::styled(line.to_string(), Style::default().fg(color)));
+    if let Some(language) = detect_command_output_language(&output.command, content) {
+        let code = strip_command_output_prefix(content);
+        let highlighted = if language == "diff" {
+            render_diff_lines(code, theme)
+        } else {
+            highlight_code_lines(
+                &theme.syntax_set,
+                &theme.theme_set,
+                language,
+                code,
+                &theme.syntax_theme,
+            )
+        };
+        let window = highlighted.len().saturating_sub(4);
+        lines.extend(highlighted.into_iter().skip(window));
+    } else {
+        for line in content
+            .lines()
+            .rev()
+            .take(4)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+        {
+            lines.push(Line::styled(line.to_string(), Style::default().fg(color)));
+        }
     }
     let block = Block::default()
         .title(title)
@@ -701,6 +1322,50 @@ fn draw_command_output_panel(
         .padding(Padding::horizontal(1));
     let widget = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
     frame.render_widget(widget, area);
+}
+
+fn detect_command_output_language(command: &str, content: &str) -> Option<&'static str> {
+    let normalized_command = command.to_ascii_lowercase();
+    if normalized_command.contains("git diff")
+        || content.starts_with("Git diff:\n")
+        || content.contains("diff --git ")
+        || content.contains("\n@@ ")
+    {
+        return Some("diff");
+    }
+
+    if normalized_command.starts_with("cat ") || normalized_command.contains(" read_file ") {
+        if normalized_command.ends_with(".rs") {
+            return Some("rs");
+        }
+        if normalized_command.ends_with(".toml") {
+            return Some("toml");
+        }
+        if normalized_command.ends_with(".py") {
+            return Some("py");
+        }
+        if normalized_command.ends_with(".ts") {
+            return Some("ts");
+        }
+        if normalized_command.ends_with(".js") {
+            return Some("js");
+        }
+        if normalized_command.ends_with(".json") {
+            return Some("json");
+        }
+        if normalized_command.ends_with(".md") {
+            return Some("md");
+        }
+        if normalized_command.ends_with(".sh") {
+            return Some("sh");
+        }
+    }
+
+    detect_code_language(content)
+}
+
+fn strip_command_output_prefix(content: &str) -> &str {
+    content.strip_prefix("Git diff:\n").unwrap_or(content)
 }
 
 fn draw_review_panel(
@@ -1327,7 +1992,11 @@ fn draw_zen_footer(frame: &mut Frame, _app: &TuiApp, theme: &Theme, area: Rect) 
     let area = block.inner(area);
     frame.render_widget(block, frame.area()); // Render border on full area
 
-    let num_cols = FOOTER_SHORTCUTS[0].len().max(1) as u16;
+    let num_cols = FOOTER_SHORTCUTS
+        .iter()
+        .map(|row| row.len())
+        .max()
+        .unwrap_or(1) as u16;
     let col_width = (area.width / num_cols).max(1);
     for (row_idx, row) in FOOTER_SHORTCUTS.iter().enumerate() {
         for (col_idx, (key, label)) in row.iter().enumerate() {
@@ -1595,10 +2264,18 @@ fn draw_execution_policy(
             settings::approval_profile_name(app.approval_profile)
         ),
         format!(
+            "Execution Strategy: {}",
+            settings::execution_strategy_name(app.execution_strategy)
+        ),
+        format!(
             "Sandbox Profile: {}",
             settings::sandbox_profile_name(app.sandbox_profile)
         ),
         format!("Retry Attempts: {}", app.retry_max_attempts),
+        format!(
+            "Header Widgets: {}",
+            settings::header_widgets_summary(&app.header_widgets)
+        ),
         format!("Allowed Commands: {allowed}"),
         format!("Blocked Commands: {blocked}"),
         "Save and Apply".to_string(),
@@ -1624,11 +2301,15 @@ fn draw_execution_policy(
             theme.muted_style(),
         ),
         Line::styled(
+            "Execution strategy controls model-first vs deterministic command/tool routing.",
+            theme.muted_style(),
+        ),
+        Line::styled(
             "Sandbox profiles control workspace/network restrictions for command execution.",
             theme.muted_style(),
         ),
         Line::styled(
-            "Saved values are written to config/local.toml and apply to future commands in this TUI session.",
+            "Saved values are written to config/local.toml and apply to future commands and header rendering.",
             theme.muted_style(),
         ),
         Line::styled(
@@ -1651,7 +2332,7 @@ fn draw_execution_policy(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(11),
+            Constraint::Length(12),
             Constraint::Min(8),
             Constraint::Length(editor_height),
         ])
@@ -1668,6 +2349,9 @@ fn draw_execution_policy(
     );
     if let Some(editor) = &app.execution_policy_editor {
         let label = match editor.field {
+            super::app::ExecutionPolicyListField::HeaderWidgets => {
+                "Edit Header Widgets (comma-separated)"
+            }
             super::app::ExecutionPolicyListField::AllowedCommands => {
                 "Edit Allowed Commands (comma-separated)"
             }
@@ -1811,41 +2495,7 @@ fn draw_view_session(
     let displayed_messages = &messages[safe_scroll_offset..];
     let mut message_lines: Vec<Line> = Vec::new();
     for msg in displayed_messages.iter().filter(|msg| msg.role != "system") {
-        let label = match msg.role.as_str() {
-            "user" => "User ›",
-            "assistant" => "Harper ›",
-            _ => "System ›",
-        };
-        let label_style = match msg.role.as_str() {
-            "user" => Style::default()
-                .fg(theme.accent)
-                .add_modifier(Modifier::BOLD),
-            "assistant" => Style::default()
-                .fg(theme.title)
-                .add_modifier(Modifier::BOLD),
-            _ => theme.muted_style(),
-        };
-        message_lines.push(Line::from(vec![Span::styled(label, label_style)]));
-        let default_color = if msg.role == "user" {
-            theme.input
-        } else {
-            theme.output
-        };
-        if msg.content.contains("```") {
-            let spans = parse_content_with_code(
-                &theme.syntax_set,
-                &theme.theme_set,
-                &msg.content,
-                default_color,
-                &theme.syntax_theme,
-            );
-            message_lines.push(Line::from(spans));
-        } else {
-            for line in msg.content.lines() {
-                message_lines.push(Line::styled(line, default_color));
-            }
-        }
-        message_lines.push(Line::raw(""));
+        append_rendered_message_lines(&mut message_lines, msg, theme, theme.input, theme.output);
     }
 
     let view = Paragraph::new(message_lines)
@@ -2162,14 +2812,170 @@ mod tests {
     #[test]
     fn test_parse_content_with_code_no_code() {
         let (syntax_set, theme_set) = setup();
-        let spans = parse_content_with_code(
+        let lines = parse_content_with_code(
             &syntax_set,
             &theme_set,
             "Hello",
+            &Theme::default(),
             Color::White,
             "base16-ocean.dark",
         );
-        assert_eq!(spans.len(), 1);
+        assert_eq!(lines.len(), 1);
+    }
+
+    #[test]
+    fn parse_content_with_code_preserves_fenced_diff_lines() {
+        let (syntax_set, theme_set) = setup();
+        let lines = parse_content_with_code(
+            &syntax_set,
+            &theme_set,
+            "Git diff:\n```diff\ndiff --git a/foo.rs b/foo.rs\n@@ -1 +1 @@\n-old\n+new\n```",
+            &Theme::default(),
+            Color::White,
+            "base16-ocean.dark",
+        );
+
+        assert!(lines.len() >= 5);
+        assert_eq!(lines[0].spans[0].content.as_ref(), "Git diff:");
+        assert!(lines.iter().any(|line| {
+            line.spans.iter().any(|span| {
+                span.content
+                    .as_ref()
+                    .contains("diff --git a/foo.rs b/foo.rs")
+            })
+        }));
+        assert!(lines.iter().filter(|line| !line.spans.is_empty()).count() >= 4);
+        let theme = Theme::default();
+        assert!(lines.iter().any(|line| {
+            line.to_string().contains("diff --git a/foo.rs b/foo.rs")
+                && line.style.fg == Some(theme.muted)
+        }));
+        assert!(lines.iter().any(|line| {
+            line.to_string().contains("@@ -1 +1 @@") && line.style.fg == Some(theme.accent)
+        }));
+        assert!(lines.iter().any(|line| {
+            line.to_string().contains("-old") && line.style.fg == Some(theme.error)
+        }));
+        assert!(lines.iter().any(|line| {
+            line.to_string().contains("+new") && line.style.fg == Some(theme.success)
+        }));
+    }
+
+    #[test]
+    fn normalize_plain_message_lines_reflows_wrapped_prose() {
+        let theme = Theme::default();
+        let lines = normalize_plain_message_lines(
+            "I am a large language model.\nI do not have direct access to repositories.\n\nBut I can explain general behavior.",
+            Color::White,
+            &theme,
+        );
+
+        assert_eq!(lines.len(), 3);
+        assert_eq!(
+            lines[0].spans[0].content.as_ref(),
+            "I am a large language model. I do not have direct access to repositories."
+        );
+        assert!(lines[1].spans.is_empty());
+        assert_eq!(
+            lines[2].spans[0].content.as_ref(),
+            "But I can explain general behavior."
+        );
+    }
+
+    #[test]
+    fn normalize_plain_message_lines_preserves_structured_lines() {
+        let theme = Theme::default();
+        let lines = normalize_plain_message_lines(
+            "- first item\n- second item\n\n1. numbered item",
+            Color::White,
+            &theme,
+        );
+
+        assert_eq!(lines[0].spans[0].content.as_ref(), "- first item");
+        assert_eq!(lines[1].spans[0].content.as_ref(), "- second item");
+        assert_eq!(lines[3].spans[0].content.as_ref(), "1. numbered item");
+    }
+
+    #[test]
+    fn parse_inline_markdown_line_strips_bold_markers() {
+        let line = parse_inline_markdown_line("Hello **world**", Color::White, false);
+
+        assert_eq!(line.to_string(), "Hello world");
+        assert_eq!(line.spans.len(), 2);
+        assert!(line.spans[1].style.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn parse_inline_markdown_line_strips_code_markers() {
+        let line = parse_inline_markdown_line("Use `cargo test` now", Color::White, false);
+
+        assert_eq!(line.to_string(), "Use cargo test now");
+        assert_eq!(line.spans.len(), 3);
+        assert!(line.spans[1].style.add_modifier.contains(Modifier::ITALIC));
+    }
+
+    #[test]
+    fn normalize_plain_message_lines_highlights_unfenced_python_code() {
+        let theme = Theme::default();
+        let lines = normalize_plain_message_lines("print(\"Hello Joy\")", Color::White, &theme);
+
+        assert!(!lines.is_empty());
+        assert_eq!(lines[0].to_string(), "print(\"Hello Joy\")");
+    }
+
+    #[test]
+    fn normalize_plain_message_lines_preserves_multiline_unfenced_python_code() {
+        let theme = Theme::default();
+        let lines = normalize_plain_message_lines(
+            "def greet():\n    print(\"Hello Joy\")\n\ngreet()",
+            Color::White,
+            &theme,
+        );
+
+        assert!(lines.len() >= 3);
+        assert!(lines
+            .iter()
+            .any(|line| line.to_string().contains("def greet():")));
+        assert!(lines
+            .iter()
+            .any(|line| line.to_string().contains("print(\"Hello Joy\")")));
+        assert!(lines
+            .iter()
+            .any(|line| line.to_string().contains("greet()")));
+    }
+
+    #[test]
+    fn normalize_plain_message_lines_handles_intro_followed_by_code_block() {
+        let theme = Theme::default();
+        let lines = normalize_plain_message_lines(
+            "Here is the Python script:\ndef greet():\n    print(\"Hello Joy\")",
+            Color::White,
+            &theme,
+        );
+
+        assert!(lines.len() >= 3);
+        assert_eq!(lines[0].to_string(), "Here is the Python script:");
+        assert!(lines
+            .iter()
+            .any(|line| line.to_string().contains("def greet():")));
+        assert!(lines
+            .iter()
+            .any(|line| line.to_string().contains("print(\"Hello Joy\")")));
+    }
+
+    #[test]
+    fn normalize_plain_message_lines_splits_inline_code_paragraph() {
+        let theme = Theme::default();
+        let lines = normalize_plain_message_lines(
+            "Here is the Python script: print(\"Hello Joy\") Save this content into hello_joy.py",
+            Color::White,
+            &theme,
+        );
+
+        assert!(lines.len() >= 3);
+        assert!(lines[0].to_string().contains("Here is the Python script"));
+        assert_eq!(lines[1].to_string(), "print(\"Hello Joy\")");
+        assert!(lines[2].to_string().contains("Save this content"));
     }
 
     #[test]
@@ -2207,6 +3013,7 @@ mod tests {
                     },
                 ],
                 followup: None,
+                authoring: None,
             }),
             updated_at: None,
         };
@@ -2260,6 +3067,7 @@ mod tests {
                 },
             ],
             followup: None,
+            authoring: None,
         };
 
         let lines = plan_job_lines(&runtime, 0, true, &Theme::default());
@@ -2346,5 +3154,24 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert!(lines[0].to_string().contains("checkpoint pending"));
         assert!(lines[1].to_string().contains("next step: Patch handler"));
+    }
+
+    #[test]
+    fn detect_command_output_language_identifies_git_diff() {
+        let command = "git diff -- lib/harper-core/src/agent/chat.rs";
+        let content = "Git diff:\ndiff --git a/file.rs b/file.rs\n@@ -1 +1 @@\n-old\n+new\n";
+
+        assert_eq!(
+            detect_command_output_language(command, content),
+            Some("diff")
+        );
+    }
+
+    #[test]
+    fn detect_command_output_language_falls_back_to_content_shape() {
+        let command = "show output";
+        let content = "def greet():\n    print(\"Hello Joy\")";
+
+        assert_eq!(detect_command_output_language(command, content), Some("py"));
     }
 }

@@ -26,7 +26,325 @@ use ring::{
     aead::{self},
     rand::{SecureRandom, SystemRandom},
 };
-use serde_json::json;
+use serde_json::{json, Value};
+
+fn built_in_tool_functions() -> Vec<Value> {
+    vec![
+        json!({
+            "name": "read_file",
+            "description": "Read the contents of a file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The path to the file to read"
+                    }
+                },
+                "required": ["path"]
+            }
+        }),
+        json!({
+            "name": "write_file",
+            "description": "Write content to a file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The path to the file to write"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The content to write to the file"
+                    }
+                },
+                "required": ["path", "content"]
+            }
+        }),
+        json!({
+            "name": "search_replace",
+            "description": "Search and replace text in a file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The path to the file"
+                    },
+                    "old_string": {
+                        "type": "string",
+                        "description": "The text to replace"
+                    },
+                    "new_string": {
+                        "type": "string",
+                        "description": "The replacement text"
+                    }
+                },
+                "required": ["path", "old_string", "new_string"]
+            }
+        }),
+        json!({
+            "name": "run_command",
+            "description": "Run a shell command",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The command to run"
+                    },
+                    "declared_read_paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional explicit paths the command will read"
+                    },
+                    "declared_write_paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional explicit paths the command will write"
+                    },
+                    "requires_network": {
+                        "type": "boolean",
+                        "description": "Set true if the command needs network access"
+                    },
+                    "retry_policy": {
+                        "type": "string",
+                        "enum": ["never", "safe"],
+                        "description": "Optional explicit retry policy for transient-safe commands"
+                    }
+                },
+                "required": ["command"]
+            }
+        }),
+        json!({
+            "name": "todo",
+            "description": "Manage todo list. Supported actions: add, list, remove, clear",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["add", "list", "remove", "clear"],
+                        "description": "The action to perform"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description for 'add' action"
+                    },
+                    "index": {
+                        "type": "integer",
+                        "description": "1-based index for 'remove' action"
+                    }
+                },
+                "required": ["action"]
+            }
+        }),
+        json!({
+            "name": "update_plan",
+            "description": "Update the current execution plan for the active session",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "explanation": {
+                        "type": "string",
+                        "description": "Optional note explaining the current plan or why it changed"
+                    },
+                    "authoring_plan": {
+                        "type": "object",
+                        "description": "Optional structured authoring plan for open-ended code changes",
+                        "properties": {
+                            "primary_files": {"type": "array", "items": {"type": "string"}},
+                            "supporting_files": {"type": "array", "items": {"type": "string"}},
+                            "validation_files": {"type": "array", "items": {"type": "string"}},
+                            "planned_edits": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "path": {"type": "string"},
+                                        "change": {"type": "string"},
+                                        "why": {"type": "string"}
+                                    },
+                                    "required": ["path", "change"]
+                                }
+                            },
+                            "validation_plan": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "command": {"type": "string"},
+                                        "scope": {"type": "string"}
+                                    },
+                                    "required": ["command"]
+                                }
+                            }
+                        }
+                    },
+                    "items": {
+                        "type": "array",
+                        "description": "Ordered plan steps",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "step": {
+                                    "type": "string",
+                                    "description": "Short step description"
+                                },
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["pending", "in_progress", "completed", "blocked"],
+                                    "description": "Current status of the step"
+                                }
+                            },
+                            "required": ["step", "status"]
+                        }
+                    }
+                },
+                "required": ["items"]
+            }
+        }),
+        json!({
+            "name": "git_status",
+            "description": "Get the current git status",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }),
+        json!({
+            "name": "git_diff",
+            "description": "Get the git diff",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }),
+        json!({
+            "name": "git_commit",
+            "description": "Commit changes with a message",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "The commit message"
+                    }
+                },
+                "required": ["message"]
+            }
+        }),
+        json!({
+            "name": "git_add",
+            "description": "Add files to git staging",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "files": {
+                        "type": "string",
+                        "description": "Files to add (space-separated)"
+                    }
+                },
+                "required": ["files"]
+            }
+        }),
+        json!({
+            "name": "list_changed_files",
+            "description": "List changed files with optional filters",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ext": {
+                        "type": "string",
+                        "description": "Optional file extension filter, for example 'rs'"
+                    },
+                    "tracked_only": {
+                        "type": "boolean",
+                        "description": "When true, exclude untracked files"
+                    },
+                    "since": {
+                        "type": "string",
+                        "description": "Optional git --since expression, for example 'today'"
+                    }
+                },
+                "required": []
+            }
+        }),
+    ]
+}
+
+fn build_ollama_tools() -> Vec<Value> {
+    built_in_tool_functions()
+        .into_iter()
+        .map(|function| json!({"type": "function", "function": function}))
+        .collect()
+}
+
+fn build_ollama_request_body(config: &ApiConfig, history: &[Message]) -> Value {
+    let messages_json: Vec<_> = history
+        .iter()
+        .map(|m| json!({"role": m.role, "content": m.content}))
+        .collect();
+
+    json!({
+        "model": config.model_name,
+        "messages": messages_json,
+        "tools": build_ollama_tools(),
+        "stream": false,
+    })
+}
+
+fn extract_assistant_reply(provider: &ApiProvider, resp_json: &Value) -> String {
+    match provider {
+        ApiProvider::OpenAI | ApiProvider::Sambanova => {
+            let message = &resp_json["choices"][0]["message"];
+            if let Some(tool_calls) = message.get("tool_calls") {
+                serde_json::to_string(tool_calls).unwrap_or_else(|_| "[No response]".to_string())
+            } else {
+                message["content"]
+                    .as_str()
+                    .unwrap_or("[No response]")
+                    .to_string()
+            }
+        }
+        ApiProvider::Gemini => {
+            let part = &resp_json["candidates"][0]["content"]["parts"][0];
+            if let Some(function_call) = part.get("functionCall") {
+                serde_json::to_string(function_call).unwrap_or_else(|_| "[No response]".to_string())
+            } else {
+                part.get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("[No response]")
+                    .to_string()
+            }
+        }
+        ApiProvider::Ollama => {
+            if let Some(tool_calls) = resp_json
+                .get("message")
+                .and_then(|msg| msg.get("tool_calls"))
+                .or_else(|| resp_json.get("tool_calls"))
+            {
+                serde_json::to_string(tool_calls).unwrap_or_else(|_| "[No response]".to_string())
+            } else {
+                resp_json
+                    .get("message")
+                    .and_then(|msg| msg.get("content"))
+                    .and_then(|content| content.as_str())
+                    .map(|s| s.to_string())
+                    .or_else(|| {
+                        resp_json
+                            .get("response")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .unwrap_or_else(|| "[No response]".to_string())
+            }
+        }
+    }
+}
 
 /// Call the configured LLM API with conversation history
 ///
@@ -93,223 +411,7 @@ pub async fn call_llm(
             }
 
             let tools = json!({
-                "function_declarations": [
-                    {
-                        "name": "read_file",
-                        "description": "Read the contents of a file",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "path": {
-                                    "type": "string",
-                                    "description": "The path to the file to read"
-                                }
-                            },
-                            "required": ["path"]
-                        }
-                    },
-                    {
-                        "name": "write_file",
-                        "description": "Write content to a file",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "path": {
-                                    "type": "string",
-                                    "description": "The path to the file to write"
-                                },
-                                "content": {
-                                    "type": "string",
-                                    "description": "The content to write to the file"
-                                }
-                            },
-                            "required": ["path", "content"]
-                        }
-                    },
-                    {
-                        "name": "search_replace",
-                        "description": "Search and replace text in a file",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "path": {
-                                    "type": "string",
-                                    "description": "The path to the file"
-                                },
-                                "old_string": {
-                                    "type": "string",
-                                    "description": "The text to replace"
-                                },
-                                "new_string": {
-                                    "type": "string",
-                                    "description": "The replacement text"
-                                }
-                            },
-                            "required": ["path", "old_string", "new_string"]
-                        }
-                    },
-                    {
-                        "name": "run_command",
-                        "description": "Run a shell command",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "command": {
-                                    "type": "string",
-                                    "description": "The command to run"
-                                },
-                                "declared_read_paths": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "Optional explicit paths the command will read"
-                                },
-                                "declared_write_paths": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "Optional explicit paths the command will write"
-                                },
-                                "requires_network": {
-                                    "type": "boolean",
-                                    "description": "Set true if the command needs network access"
-                                },
-                                "retry_policy": {
-                                    "type": "string",
-                                    "enum": ["never", "safe"],
-                                    "description": "Optional explicit retry policy for transient-safe commands"
-                                }
-                            },
-                            "required": ["command"]
-                        }
-                    },
-                    {
-                        "name": "todo",
-                        "description": "Manage todo list. Supported actions: add, list, remove, clear",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "action": {
-                                    "type": "string",
-                                    "enum": ["add", "list", "remove", "clear"],
-                                    "description": "The action to perform"
-                                },
-                                "description": {
-                                    "type": "string",
-                                    "description": "Description for 'add' action"
-                                },
-                                "index": {
-                                    "type": "integer",
-                                    "description": "1-based index for 'remove' action"
-                                }
-                            },
-                            "required": ["action"]
-                        }
-                    },
-                    {
-                        "name": "update_plan",
-                        "description": "Update the current execution plan for the active session",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "explanation": {
-                                    "type": "string",
-                                    "description": "Optional note explaining the current plan or why it changed"
-                                },
-                                "items": {
-                                    "type": "array",
-                                    "description": "Ordered plan steps",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "step": {
-                                                "type": "string",
-                                                "description": "Short step description"
-                                            },
-                                            "status": {
-                                                "type": "string",
-                                                "enum": ["pending", "in_progress", "completed", "blocked"],
-                                                "description": "Current status of the step"
-                                            }
-                                        },
-                                        "required": ["step", "status"]
-                                    }
-                                }
-                            },
-                            "required": ["items"]
-                        }
-                    },
-                    {
-                        "name": "git_status",
-                        "description": "Get the current git status",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {},
-                            "required": []
-                        }
-                    },
-                    {
-                        "name": "git_diff",
-                        "description": "Get the git diff",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {},
-                            "required": []
-                        }
-                    },
-                    {
-                        "name": "git_commit",
-                        "description": "Commit changes with a message",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "message": {
-                                    "type": "string",
-                                    "description": "The commit message"
-                                }
-                            },
-                            "required": ["message"]
-                        }
-                    },
-                    {
-                        "name": "git_add",
-                        "description": "Add files to git staging",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "files": {
-                                    "type": "string",
-                                    "description": "Files to add (space-separated)"
-                                }
-                            },
-                            "required": ["files"]
-                        }
-                    },
-                    {
-                        "name": "list_changed_files",
-                        "description": "List changed files with optional filters",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "ext": {
-                                    "type": "string",
-                                    "description": "Optional file extension filter, for example 'rs'"
-                                },
-                                "tracked_only": {
-                                    "type": "boolean",
-                                    "description": "When true, exclude untracked files"
-                                },
-                                "since": {
-                                    "type": "string",
-                                    "description": "Optional git --since expression, for example 'today'"
-                                }
-                            },
-                            "required": []
-                        }
-                    }
-                ]
+                "function_declarations": built_in_tool_functions()
             });
 
             let mut body = json!({
@@ -334,21 +436,10 @@ pub async fn call_llm(
                 .await?
         }
         ApiProvider::Ollama => {
-            let messages_json: Vec<_> = history
-                .iter()
-                .map(|m| json!({"role": m.role, "content": m.content}))
-                .collect();
-
-            let body = json!({
-                "model": config.model_name,
-                "messages": messages_json,
-                "stream": false,
-            });
-
             client
                 .post(&config.base_url)
                 .header(CONTENT_TYPE, "application/json")
-                .json(&body)
+                .json(&build_ollama_request_body(config, history))
                 .send()
                 .await?
         }
@@ -368,42 +459,7 @@ pub async fn call_llm(
         .await
         .map_err(|e| HarperError::Api(e.to_string()))?;
 
-    let assistant_reply = match config.provider {
-        ApiProvider::OpenAI | ApiProvider::Sambanova => {
-            let message = &resp_json["choices"][0]["message"];
-            if let Some(tool_calls) = message.get("tool_calls") {
-                serde_json::to_string(tool_calls).unwrap_or_else(|_| "[No response]".to_string())
-            } else {
-                message["content"]
-                    .as_str()
-                    .unwrap_or("[No response]")
-                    .to_string()
-            }
-        }
-        ApiProvider::Gemini => {
-            let part = &resp_json["candidates"][0]["content"]["parts"][0];
-            if let Some(function_call) = part.get("functionCall") {
-                serde_json::to_string(function_call).unwrap_or_else(|_| "[No response]".to_string())
-            } else {
-                part.get("text")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("[No response]")
-                    .to_string()
-            }
-        }
-        ApiProvider::Ollama => resp_json
-            .get("message")
-            .and_then(|msg| msg.get("content"))
-            .and_then(|content| content.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                resp_json
-                    .get("response")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            })
-            .unwrap_or_else(|| "[No response]".to_string()),
-    };
+    let assistant_reply = extract_assistant_reply(&config.provider, &resp_json);
 
     Ok(assistant_reply)
 }
@@ -547,7 +603,62 @@ pub fn decrypt_data(encrypted_data: &[u8], key: &[u8]) -> HarperResult<Vec<u8>> 
 mod tests {
     use super::*;
     use crate::core::constants::test_data;
+    use crate::core::{ApiConfig, ApiProvider, Message};
     use hex_literal::hex;
+    use serde_json::json;
+
+    fn test_ollama_config() -> ApiConfig {
+        ApiConfig {
+            provider: ApiProvider::Ollama,
+            api_key: String::new(),
+            base_url: "http://127.0.0.1:11434/api/chat".to_string(),
+            model_name: "qwen2.5:1.5b".to_string(),
+        }
+    }
+
+    #[test]
+    fn build_ollama_request_body_includes_tools() {
+        let history = vec![Message {
+            role: "user".to_string(),
+            content: "read Cargo.toml".to_string(),
+        }];
+
+        let body = build_ollama_request_body(&test_ollama_config(), &history);
+        let tools = body
+            .get("tools")
+            .and_then(|value| value.as_array())
+            .expect("tools array");
+
+        assert!(!tools.is_empty());
+        assert_eq!(body["stream"], json!(false));
+        assert_eq!(body["model"], json!("qwen2.5:1.5b"));
+        assert_eq!(tools[0]["type"], json!("function"));
+        assert_eq!(tools[0]["function"]["name"], json!("read_file"));
+    }
+
+    #[test]
+    fn extract_assistant_reply_prefers_ollama_tool_calls() {
+        let resp_json = json!({
+            "message": {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "function": {
+                            "name": "read_file",
+                            "arguments": {
+                                "path": "Cargo.toml"
+                            }
+                        }
+                    }
+                ]
+            }
+        });
+
+        let reply = extract_assistant_reply(&ApiProvider::Ollama, &resp_json);
+        assert!(reply.contains("\"name\":\"read_file\""));
+        assert!(reply.contains("Cargo.toml"));
+    }
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {

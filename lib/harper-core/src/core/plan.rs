@@ -70,6 +70,61 @@ pub enum PlanFollowup {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthoringPhase {
+    ContextBuilt,
+    PlanCreated,
+    FilesInspected,
+    EditsApplied,
+    Validated,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct AuthoringValidationStep {
+    pub command: String,
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct AuthoringPlannedEdit {
+    pub path: String,
+    pub change: String,
+    #[serde(default)]
+    pub why: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct StructuredAuthoringPlan {
+    #[serde(default)]
+    pub primary_files: Vec<String>,
+    #[serde(default)]
+    pub supporting_files: Vec<String>,
+    #[serde(default)]
+    pub validation_files: Vec<String>,
+    #[serde(default)]
+    pub planned_edits: Vec<AuthoringPlannedEdit>,
+    #[serde(default)]
+    pub validation_plan: Vec<AuthoringValidationStep>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct AuthoringRuntime {
+    #[serde(default)]
+    pub request: Option<String>,
+    #[serde(default)]
+    pub phase: Option<AuthoringPhase>,
+    #[serde(default)]
+    pub candidate_files: Vec<String>,
+    #[serde(default)]
+    pub inspected_files: Vec<String>,
+    #[serde(default)]
+    pub edit_scope: Vec<String>,
+    #[serde(default)]
+    pub structured_plan: Option<StructuredAuthoringPlan>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct PlanRuntime {
     #[serde(default)]
@@ -84,6 +139,8 @@ pub struct PlanRuntime {
     pub jobs: Vec<PlanJobRecord>,
     #[serde(default)]
     pub followup: Option<PlanFollowup>,
+    #[serde(default)]
+    pub authoring: Option<AuthoringRuntime>,
 }
 
 impl PlanRuntime {
@@ -96,6 +153,7 @@ impl PlanRuntime {
             && self.active_job_id.is_none()
             && self.jobs.is_empty()
             && self.followup.is_none()
+            && self.authoring.is_none()
     }
 
     pub fn set_active_tool_state(
@@ -235,6 +293,147 @@ impl PlanRuntime {
         self.followup = None;
     }
 
+    pub fn seed_authoring_context(
+        &mut self,
+        request: impl Into<String>,
+        candidate_files: Vec<String>,
+    ) {
+        let mut candidate_files = candidate_files;
+        candidate_files.sort();
+        candidate_files.dedup();
+        self.authoring = Some(AuthoringRuntime {
+            request: Some(request.into()),
+            phase: Some(AuthoringPhase::ContextBuilt),
+            edit_scope: candidate_files.clone(),
+            candidate_files,
+            inspected_files: Vec::new(),
+            structured_plan: None,
+        });
+    }
+
+    pub fn mark_authoring_plan_created(&mut self) {
+        let Some(authoring) = self.authoring.as_mut() else {
+            return;
+        };
+        authoring.phase = Some(AuthoringPhase::PlanCreated);
+    }
+
+    pub fn set_authoring_structured_plan(&mut self, plan: StructuredAuthoringPlan) {
+        if self.authoring.is_none() {
+            let mut candidate_files = Vec::new();
+            candidate_files.extend(plan.primary_files.iter().cloned());
+            candidate_files.extend(plan.supporting_files.iter().cloned());
+            candidate_files.extend(plan.validation_files.iter().cloned());
+            candidate_files.extend(plan.planned_edits.iter().map(|edit| edit.path.clone()));
+            candidate_files.sort();
+            candidate_files.dedup();
+            self.authoring = Some(AuthoringRuntime {
+                request: None,
+                phase: Some(AuthoringPhase::PlanCreated),
+                candidate_files: candidate_files.clone(),
+                inspected_files: Vec::new(),
+                edit_scope: candidate_files,
+                structured_plan: Some(plan),
+            });
+            return;
+        }
+        let Some(authoring) = self.authoring.as_mut() else {
+            return;
+        };
+        let mut edit_scope = authoring.edit_scope.clone();
+        edit_scope.extend(plan.primary_files.iter().cloned());
+        edit_scope.extend(plan.supporting_files.iter().cloned());
+        edit_scope.extend(plan.validation_files.iter().cloned());
+        edit_scope.extend(plan.planned_edits.iter().map(|edit| edit.path.clone()));
+        edit_scope.sort();
+        edit_scope.dedup();
+        authoring.edit_scope = edit_scope;
+        authoring.structured_plan = Some(plan);
+        authoring.phase = Some(AuthoringPhase::PlanCreated);
+    }
+
+    pub fn mark_authoring_inspection<I>(&mut self, paths: I)
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let Some(authoring) = self.authoring.as_mut() else {
+            return;
+        };
+        for path in paths {
+            if !authoring
+                .inspected_files
+                .iter()
+                .any(|existing| existing == &path)
+            {
+                authoring.inspected_files.push(path.clone());
+            }
+            if !authoring
+                .edit_scope
+                .iter()
+                .any(|existing| existing == &path)
+            {
+                authoring.edit_scope.push(path);
+            }
+        }
+        authoring.inspected_files.sort();
+        authoring.inspected_files.dedup();
+        authoring.edit_scope.sort();
+        authoring.edit_scope.dedup();
+        authoring.phase = Some(AuthoringPhase::FilesInspected);
+    }
+
+    pub fn mark_authoring_edit_applied<I>(&mut self, paths: I)
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let Some(authoring) = self.authoring.as_mut() else {
+            return;
+        };
+        for path in paths {
+            if !authoring
+                .edit_scope
+                .iter()
+                .any(|existing| existing == &path)
+            {
+                authoring.edit_scope.push(path);
+            }
+        }
+        authoring.edit_scope.sort();
+        authoring.edit_scope.dedup();
+        authoring.phase = Some(AuthoringPhase::EditsApplied);
+    }
+
+    pub fn authoring_edit_scope(&self) -> Option<&[String]> {
+        self.authoring
+            .as_ref()
+            .map(|authoring| authoring.edit_scope.as_slice())
+    }
+
+    pub fn authoring_inspected_files(&self) -> Option<&[String]> {
+        self.authoring
+            .as_ref()
+            .map(|authoring| authoring.inspected_files.as_slice())
+    }
+
+    pub fn authoring_phase(&self) -> Option<&AuthoringPhase> {
+        self.authoring
+            .as_ref()
+            .and_then(|authoring| authoring.phase.as_ref())
+    }
+
+    pub fn authoring_structured_plan(&self) -> Option<&StructuredAuthoringPlan> {
+        self.authoring
+            .as_ref()
+            .and_then(|authoring| authoring.structured_plan.as_ref())
+    }
+
+    pub fn mark_authoring_validated(&mut self) {
+        let Some(authoring) = self.authoring.as_mut() else {
+            return;
+        };
+        authoring.phase = Some(AuthoringPhase::Validated);
+    }
+
     pub fn clear_active_state(&mut self) {
         self.active_tool = None;
         self.active_command = None;
@@ -277,7 +476,7 @@ pub struct PlanState {
 
 #[cfg(test)]
 mod tests {
-    use super::{PlanFollowup, PlanJobStatus, PlanRuntime};
+    use super::{AuthoringPhase, PlanFollowup, PlanJobStatus, PlanRuntime};
 
     #[test]
     fn runtime_deserializes_legacy_shape_with_empty_jobs() {
@@ -332,5 +531,60 @@ mod tests {
                 retry_count: 2,
             })
         );
+    }
+
+    #[test]
+    fn runtime_tracks_authoring_phase_and_scope() {
+        let mut runtime = PlanRuntime::default();
+
+        runtime.seed_authoring_context(
+            "refactor planner flow",
+            vec![
+                "lib/harper-ui/src/interfaces/ui/widgets.rs".to_string(),
+                "lib/harper-core/src/agent/chat.rs".to_string(),
+            ],
+        );
+        assert_eq!(
+            runtime.authoring_phase(),
+            Some(&AuthoringPhase::ContextBuilt)
+        );
+        assert_eq!(
+            runtime.authoring_edit_scope(),
+            Some(
+                &[
+                    "lib/harper-core/src/agent/chat.rs".to_string(),
+                    "lib/harper-ui/src/interfaces/ui/widgets.rs".to_string()
+                ][..]
+            )
+        );
+
+        runtime.mark_authoring_plan_created();
+        assert_eq!(
+            runtime.authoring_phase(),
+            Some(&AuthoringPhase::PlanCreated)
+        );
+
+        runtime.mark_authoring_inspection(vec![
+            "lib/harper-ui/src/interfaces/ui/widgets.rs".to_string()
+        ]);
+        assert_eq!(
+            runtime.authoring_phase(),
+            Some(&AuthoringPhase::FilesInspected)
+        );
+        assert_eq!(
+            runtime.authoring_inspected_files(),
+            Some(&["lib/harper-ui/src/interfaces/ui/widgets.rs".to_string()][..])
+        );
+
+        runtime.mark_authoring_edit_applied(vec!["lib/harper-core/src/tools/plan.rs".to_string()]);
+        assert_eq!(
+            runtime.authoring_phase(),
+            Some(&AuthoringPhase::EditsApplied)
+        );
+        assert!(runtime
+            .authoring_edit_scope()
+            .expect("scope")
+            .iter()
+            .any(|path| path == "lib/harper-core/src/tools/plan.rs"));
     }
 }

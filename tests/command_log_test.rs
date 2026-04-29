@@ -41,6 +41,7 @@ async fn test_command_logging() {
 
     let exec_policy = ExecPolicyConfig {
         approval_profile: None,
+        execution_strategy: None,
         allowed_commands: Some(vec!["echo".to_string()]),
         blocked_commands: None,
         sandbox_profile: None,

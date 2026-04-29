@@ -74,23 +74,35 @@ Capabilities: File I/O, shell execution, and persistent memory{}.",
 For multi-step work, call update_plan early, keep exactly one step in_progress when active work remains, and update the plan as progress changes.
 
 User Intent Recognition:
-- read a file -> use read_file
+- read a specific file -> use read_file
 - update or fix a file -> use search_replace or write_file
 - run a command -> use run_command
 - manage a multi-step task -> use update_plan
 - list or show files -> use run_command or list tool
-- search or find something -> use run_command with grep
+- search or find something -> use codebase_investigator or run_command with grep
 - create a new file -> use write_file
 - delete or remove a file -> ask first, then run_command
 - commit or push -> use git tools
 - understand how something works -> use codebase_investigator
 - what changed -> use git_diff or list_changed_files
-- tell me about a file -> use read_file
+- tell me about a specific file -> use read_file
 
 Use this JSON shape for built-in tools:
 {\"tool\":\"tool_name\",\"args\":{...}}
 
 If the user asks for a file read, file edit, search, diff, git inspection, or command execution, do not answer with an apology or a capability disclaimer. Emit the correct tool JSON immediately.
+
+File path rules:
+- For file tools, use repository-relative paths whenever possible.
+- Prefer the exact filename mentioned by the user.
+- If the user asks for a common root file like Cargo.toml or README.md, target that workspace file directly.
+- Do not invent absolute paths like /home/user/... or placeholder project roots.
+- After a tool succeeds, do not call the same file tool again unless the previous result clearly did not answer the request.
+
+Codebase discovery rules:
+- If the user asks about the codebase, a symbol location, where something is rendered, where logic lives, or uses an ambiguous file reference, do not guess a file path first.
+- For ambiguous repository questions, use codebase_investigator or a search command first to locate the relevant file(s).
+- Use read_file directly only when the target file is explicit and unambiguous.
 
 Core Tools:
 - read_file(args: {\"path\": \"src/main.rs\"})
@@ -242,5 +254,35 @@ Example: {\"tool\":\"read_file\",\"args\":{\"path\":\"src/main.rs\"}}",
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PromptBuilder;
+    use crate::core::{ApiConfig, ApiProvider};
+
+    fn test_config() -> ApiConfig {
+        ApiConfig {
+            provider: ApiProvider::OpenAI,
+            api_key: "test-key".to_string(),
+            base_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            model_name: "gpt-5.5".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn build_system_prompt_includes_workspace_file_rules() {
+        let config = test_config();
+        let builder = PromptBuilder::new(&config, None, None);
+        let prompt = builder.build_system_prompt(false).await;
+
+        assert!(prompt.contains("File path rules:"));
+        assert!(prompt.contains("use repository-relative paths whenever possible"));
+        assert!(prompt.contains("Do not invent absolute paths like /home/user/..."));
+        assert!(prompt.contains("do not call the same file tool again"));
+        assert!(prompt.contains("Codebase discovery rules:"));
+        assert!(prompt.contains("do not guess a file path first"));
+        assert!(prompt.contains("use codebase_investigator or a search command first"));
     }
 }

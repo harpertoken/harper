@@ -33,7 +33,8 @@ use harper_core::agent::chat::ChatService;
 use harper_core::core::io_traits::{RuntimeEventSink, UserApproval};
 use harper_core::core::ApiConfig;
 use harper_core::memory::session_service::SessionService;
-use harper_core::runtime::config::ExecPolicyConfig;
+use harper_core::runtime::config::{ExecPolicyConfig, UiConfig};
+use harper_core::ExecutionStrategy;
 use harper_core::{PlanState, ResolvedAgents, SessionStateView};
 use rusqlite::Connection;
 
@@ -51,6 +52,11 @@ pub struct TuiApproval {
 
 pub struct TuiRuntimeEvents {
     ui_tx: mpsc::Sender<UiUpdate>,
+}
+
+pub struct TuiRunOptions {
+    pub custom_commands: HashMap<String, String>,
+    pub server_base_url: Option<String>,
 }
 
 #[async_trait]
@@ -207,14 +213,35 @@ fn spawn_sidebar_gathering(chat_state: &ChatState, ui_tx: &mpsc::Sender<UiUpdate
     });
 }
 
+fn parse_strategy_command(
+    input: &str,
+    current: ExecutionStrategy,
+) -> Option<Result<ExecutionStrategy, ExecutionStrategy>> {
+    let trimmed = input.trim();
+    let command = trimmed.strip_prefix("/strategy")?;
+    let value = command.trim();
+    if value.is_empty() {
+        return Some(Err(current));
+    }
+
+    let strategy = match value.to_ascii_lowercase().as_str() {
+        "auto" => ExecutionStrategy::Auto,
+        "grounded" => ExecutionStrategy::Grounded,
+        "deterministic" => ExecutionStrategy::Deterministic,
+        "model" | "model-only" | "model_only" => ExecutionStrategy::ModelOnly,
+        _ => return Some(Err(current)),
+    };
+    Some(Ok(strategy))
+}
+
 pub async fn run_tui(
     conn: &Connection,
     api_config: &ApiConfig,
     session_service: &SessionService<'_>,
     theme: &Theme,
-    custom_commands: HashMap<String, String>,
     exec_policy: &ExecPolicyConfig,
-    server_base_url: Option<String>,
+    ui_config: &UiConfig,
+    options: TuiRunOptions,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Set up terminal
     enable_raw_mode()?;
@@ -225,9 +252,17 @@ pub async fn run_tui(
 
     let mut app = TuiApp::new();
     app.model_label = format!("{:?} / {}", api_config.provider, api_config.model_name);
+    app.current_working_dir = std::env::current_dir()
+        .map(|path| path.display().to_string())
+        .unwrap_or_default();
     app.auth_session = auth::load_auth_session();
-    app.auth_server_base_url = server_base_url.clone();
+    app.auth_server_base_url = options.server_base_url.clone();
     app.approval_profile = exec_policy.effective_approval_profile();
+    app.execution_strategy = exec_policy.effective_execution_strategy();
+    let configured_widgets = ui_config.effective_header_widgets();
+    if !configured_widgets.is_empty() {
+        app.header_widgets = settings::parse_header_widgets(&configured_widgets);
+    }
     app.sandbox_profile = exec_policy.effective_sandbox_profile();
     app.retry_max_attempts = exec_policy.effective_retry_max_attempts();
     app.allowed_commands = exec_policy.allowed_commands.clone().unwrap_or_default();
@@ -241,7 +276,7 @@ pub async fn run_tui(
 
     // Clone data for worker
     let worker_api_config = api_config.clone();
-    let worker_custom_commands = custom_commands.clone();
+    let worker_custom_commands = options.custom_commands.clone();
     let worker_exec_policy = Arc::new(Mutex::new(exec_policy.clone()));
     let ui_exec_policy = worker_exec_policy.clone();
     let db_path = conn
@@ -413,6 +448,27 @@ pub async fn run_tui(
                         EventResult::Quit => break,
                         EventResult::SendMessage(msg) => {
                             if let AppState::Chat(chat_state) = &mut app.state {
+                                if let Some(strategy) = parse_strategy_command(&msg, app.execution_strategy) {
+                                    match strategy {
+                                        Ok(new_strategy) => {
+                                            app.execution_strategy = new_strategy;
+                                            if let Ok(mut policy) = ui_exec_policy.lock() {
+                                                policy.execution_strategy = Some(new_strategy);
+                                            }
+                                            app.set_status_message(format!(
+                                                "Execution strategy set to {}",
+                                                settings::execution_strategy_name(new_strategy)
+                                            ));
+                                        }
+                                        Err(current_only) => {
+                                            app.set_info_message(format!(
+                                                "Current execution strategy: {}",
+                                                settings::execution_strategy_name(current_only)
+                                            ));
+                                        }
+                                    }
+                                    continue;
+                                }
                                 if let Some(command) = auth::parse_tui_auth_command(&msg) {
                                     match command {
                                         auth::TuiAuthCommand::Login { provider } => {
@@ -465,6 +521,7 @@ pub async fn run_tui(
                                     role: "user".to_string(),
                                     content: msg.clone(),
                                 });
+                                chat_state.follow_latest_messages();
                                 chat_state.awaiting_response = true;
                                 chat_state.command_output = None;
                                 app.set_activity_status(Some("thinking".to_string()));
@@ -711,15 +768,20 @@ pub async fn run_tui(
                         }
                         EventResult::SaveExecutionPolicy => {
                             match settings::save_execution_policy_settings(
-                                app.approval_profile,
-                                app.sandbox_profile,
-                                app.retry_max_attempts,
-                                &app.allowed_commands,
-                                &app.blocked_commands,
+                                settings::ExecPolicySettings {
+                                    approval: app.approval_profile,
+                                    execution_strategy: app.execution_strategy,
+                                    sandbox: app.sandbox_profile,
+                                    retry_max_attempts: app.retry_max_attempts,
+                                    allowed_commands: &app.allowed_commands,
+                                    blocked_commands: &app.blocked_commands,
+                                    header_widgets: &app.header_widgets,
+                                },
                             ) {
                                 Ok(()) => {
                                     if let Ok(mut policy) = ui_exec_policy.lock() {
                                         policy.approval_profile = Some(app.approval_profile);
+                                        policy.execution_strategy = Some(app.execution_strategy);
                                         policy.sandbox_profile = Some(app.sandbox_profile);
                                         policy.allowed_commands = if app.allowed_commands.is_empty()
                                         {
@@ -919,6 +981,7 @@ pub async fn run_tui(
                             if let AppState::Chat(chat_state) = &mut app.state {
                                 if chat_state.session_id == session_view.session_id {
                                     chat_state.messages = session_view.messages;
+                                    chat_state.follow_latest_messages();
                                     chat_state.awaiting_response = false;
                                     chat_state.active_plan = session_view.plan;
                                     chat_state.active_agents = session_view.agents;

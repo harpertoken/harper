@@ -440,9 +440,8 @@ impl<'a> ToolService<'a> {
                 let path = args.get("path").and_then(|v| v.as_str());
                 let content = args.get("content").and_then(|v| v.as_str());
                 if let (Some(path), Some(content)) = (path, content) {
-                    let bracket_command = format!("[WRITE_FILE {} {}]", path, content);
                     let write_result =
-                        filesystem::write_file(&bracket_command, self.approver.clone()).await?;
+                        filesystem::write_file_direct(path, content, self.approver.clone()).await?;
                     let final_response = self
                         .call_llm_after_tool(client, history, raw_response, &write_result)
                         .await?;
@@ -757,6 +756,7 @@ impl<'a> ToolService<'a> {
         tool_output: &str,
     ) -> Result<String, HarperError> {
         self.emit_activity_update(Some("thinking".to_string()));
+        let completed_tool_name = Self::tool_name_from_call(tool_call_json);
         let plan_sync_outcome = self.sync_plan_after_tool(tool_call_json)?;
         // Create a new history vector by cloning the existing one
         let mut new_history = history.to_vec();
@@ -792,11 +792,259 @@ SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the
             content: system_message,
         });
 
-        // Call the LLM with the new history. If that fails (quota, blocked API, etc.),
-        // fall back to returning the tool output directly so the user still gets a result.
         match crate::core::llm_client::call_llm(client, self.config, &new_history).await {
-            Ok(response) => Ok(response),
+            Ok(response)
+                if completed_tool_name.as_deref() == Some("read_file")
+                    && Self::response_looks_like_file_tool_call(&response) =>
+            {
+                new_history.push(Message {
+                    role: "system".to_string(),
+                    content: "You already have the completed file contents. Do not call read_file, write_file, or search_replace again. Answer the user now in plain language only from the file result you already have.".to_string(),
+                });
+                match crate::core::llm_client::call_llm(client, self.config, &new_history).await {
+                    Ok(retry_response) => Ok(Self::finalize_read_file_followup_response(
+                        &retry_response,
+                        tool_output,
+                    )),
+                    Err(_) => Ok(format!("Tool result:\n{}", tool_output)),
+                }
+            }
+            Ok(response) if Self::response_looks_like_tool_call(&response) => {
+                new_history.push(Message {
+                    role: "system".to_string(),
+                    content: "You already have the completed tool result. Do not call any tool again. Respond now in plain language only.".to_string(),
+                });
+                match crate::core::llm_client::call_llm(client, self.config, &new_history).await {
+                    Ok(retry_response) => Ok(Self::finalize_tool_followup_response(
+                        completed_tool_name.as_deref(),
+                        &retry_response,
+                        tool_output,
+                    )),
+                    Err(_) => Ok(format!("Tool result:\n{}", tool_output)),
+                }
+            }
+            Ok(response) => Ok(Self::finalize_tool_followup_response(
+                completed_tool_name.as_deref(),
+                &response,
+                tool_output,
+            )),
             Err(_) => Ok(format!("Tool result:\n{}", tool_output)),
+        }
+    }
+
+    fn response_looks_like_file_tool_call(response: &str) -> bool {
+        matches!(
+            Self::tool_name_from_call(response).as_deref(),
+            Some("read_file" | "write_file" | "search_replace")
+        )
+    }
+
+    fn response_looks_like_tool_call(response: &str) -> bool {
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(response.trim()) {
+            if let Some(tool_calls) = json_value.as_array() {
+                if let Some(first_call) = tool_calls.first() {
+                    if first_call.get("function").is_some() {
+                        return true;
+                    }
+                }
+            }
+
+            if json_value
+                .get("tool")
+                .or_else(|| json_value.get("name"))
+                .or_else(|| json_value.get("mcp_tool"))
+                .is_some()
+            {
+                return true;
+            }
+        }
+
+        let upper = response.trim().to_uppercase();
+        upper.starts_with(tools::RUN_COMMAND)
+            || upper.starts_with(tools::READ_FILE)
+            || upper.starts_with(tools::WRITE_FILE)
+            || upper.starts_with(tools::SEARCH_REPLACE)
+            || upper.starts_with(tools::TODO)
+            || upper.starts_with(tools::SEARCH)
+            || upper.starts_with(git_tools::GIT_STATUS)
+            || upper.starts_with(git_tools::GIT_DIFF)
+            || upper.starts_with(git_tools::GIT_COMMIT)
+            || upper.starts_with(git_tools::GIT_ADD)
+            || upper.starts_with(tools::GITHUB_ISSUE)
+            || upper.starts_with(tools::GITHUB_PR)
+            || upper.starts_with(tools::API_TEST)
+            || upper.starts_with(tools::CODE_ANALYZE)
+            || upper.starts_with(tools::CODEBASE_INVESTIGATE)
+            || upper.starts_with(tools::DB_QUERY)
+            || upper.starts_with(tools::IMAGE_INFO)
+            || upper.starts_with(tools::IMAGE_RESIZE)
+            || upper.starts_with(tools::SCREENPIPE)
+            || upper.starts_with(tools::FIRMWARE)
+    }
+
+    fn finalize_tool_followup_response(
+        tool_name: Option<&str>,
+        response: &str,
+        tool_output: &str,
+    ) -> String {
+        if response.trim().is_empty()
+            || Self::response_looks_like_tool_call(response)
+            || Self::response_is_low_value_tool_echo(response)
+        {
+            Self::format_tool_followup_fallback(tool_name, tool_output)
+        } else {
+            response.to_string()
+        }
+    }
+
+    fn finalize_read_file_followup_response(response: &str, tool_output: &str) -> String {
+        if response.trim().is_empty()
+            || Self::response_looks_like_file_tool_call(response)
+            || Self::response_is_low_value_tool_echo(response)
+        {
+            Self::format_tool_followup_fallback(Some("read_file"), tool_output)
+        } else {
+            response.to_string()
+        }
+    }
+
+    fn response_is_low_value_tool_echo(response: &str) -> bool {
+        let trimmed = response.trim();
+        trimmed.starts_with("Tool result:")
+            || trimmed.starts_with("Tool Result:")
+            || trimmed.starts_with("tool result:")
+    }
+
+    fn format_tool_followup_fallback(tool_name: Option<&str>, tool_output: &str) -> String {
+        match tool_name {
+            Some("git_status") => Self::format_git_status(tool_output),
+            Some("git_diff") => Self::format_git_diff(tool_output),
+            Some("write_file") => Self::format_write_file(tool_output),
+            Some("run_command") => Self::format_run_command(tool_output),
+            _ => format!("Tool result:\n{}", tool_output),
+        }
+    }
+
+    fn format_git_status(tool_content: &str) -> String {
+        let body = tool_content
+            .strip_prefix("Git status:\n")
+            .unwrap_or(tool_content)
+            .trim();
+        if body.is_empty() || body == "clean" {
+            return "Git working directory is clean.".to_string();
+        }
+
+        let mut modified = 0usize;
+        let mut added = 0usize;
+        let mut deleted = 0usize;
+        let mut renamed = 0usize;
+        let mut untracked = 0usize;
+        let mut notable = Vec::new();
+
+        for line in body.lines() {
+            let line = line.trim_end();
+            if line.len() < 3 {
+                continue;
+            }
+            let status = &line[..2];
+            let path = line[2..].trim();
+            if notable.len() < 6 && !path.is_empty() {
+                notable.push(path.to_string());
+            }
+            match status {
+                "??" => untracked += 1,
+                s if s.contains('M') => modified += 1,
+                s if s.contains('A') => added += 1,
+                s if s.contains('D') => deleted += 1,
+                s if s.contains('R') => renamed += 1,
+                _ => modified += 1,
+            }
+        }
+
+        let mut parts = Vec::new();
+        if modified > 0 {
+            parts.push(format!("{} modified", modified));
+        }
+        if added > 0 {
+            parts.push(format!("{} added", added));
+        }
+        if deleted > 0 {
+            parts.push(format!("{} deleted", deleted));
+        }
+        if renamed > 0 {
+            parts.push(format!("{} renamed", renamed));
+        }
+        if untracked > 0 {
+            parts.push(format!("{} untracked", untracked));
+        }
+
+        let summary = if parts.is_empty() {
+            "Git working directory has changes.".to_string()
+        } else {
+            format!("Git working directory has {}.", parts.join(", "))
+        };
+
+        if notable.is_empty() {
+            summary
+        } else {
+            format!("{} Notable files: {}.", summary, notable.join(", "))
+        }
+    }
+
+    fn format_git_diff(tool_content: &str) -> String {
+        format!("Git diff:\n```diff\n{}\n```", tool_content.trim_end())
+    }
+
+    fn format_write_file(tool_content: &str) -> String {
+        let mut path = None;
+        let mut content = None;
+        for line in tool_content.lines() {
+            if let Some(value) = line.strip_prefix("Wrote file: ") {
+                path = Some(value.trim().to_string());
+            }
+            if let Some(value) = tool_content.strip_prefix("Wrote file: ") {
+                let rest = value.lines().collect::<Vec<_>>();
+                if let Some(idx) = rest.iter().position(|line| line.starts_with("CONTENT:")) {
+                    let joined = rest[idx..].join("\n");
+                    content = joined
+                        .strip_prefix("CONTENT:")
+                        .map(|v| v.trim_start().to_string());
+                }
+                break;
+            }
+        }
+
+        match (path, content) {
+            (Some(path), Some(content)) => {
+                let ext = std::path::Path::new(&path)
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .unwrap_or("txt");
+                format!(
+                    "Created `{}`:\n```{}\n{}\n```",
+                    path,
+                    ext,
+                    content.trim_end()
+                )
+            }
+            _ => format!("Tool result:\n{}", tool_content),
+        }
+    }
+
+    fn format_run_command(tool_content: &str) -> String {
+        let command = tool_content
+            .lines()
+            .find_map(|line| line.strip_prefix("COMMAND: "))
+            .unwrap_or("command");
+        let output = tool_content
+            .split_once("OUTPUT:\n")
+            .map(|(_, output)| output.trim_end())
+            .unwrap_or("");
+
+        if output.is_empty() {
+            format!("Ran `{}` successfully.", command)
+        } else {
+            format!("Ran `{}` successfully.\n\n{}", command, output)
         }
     }
 
@@ -1172,6 +1420,93 @@ mod tests {
             base_url: "https://api.openai.com/v1/chat/completions".to_string(),
             model_name: "gpt-5.5".to_string(),
         }
+    }
+
+    #[test]
+    fn finalize_tool_followup_response_falls_back_when_blank() {
+        let response = ToolService::finalize_tool_followup_response(None, "   \n", "Plan updated.");
+        assert_eq!(response, "Tool result:\nPlan updated.");
+    }
+
+    #[test]
+    fn finalize_tool_followup_response_keeps_non_empty_response() {
+        let response = ToolService::finalize_tool_followup_response(
+            None,
+            "I updated the plan and will inspect the codebase next.",
+            "Plan updated.",
+        );
+        assert_eq!(
+            response,
+            "I updated the plan and will inspect the codebase next."
+        );
+    }
+
+    #[test]
+    fn response_looks_like_tool_call_detects_json_tool_calls() {
+        assert!(ToolService::response_looks_like_tool_call(
+            r#"[{"function":{"name":"read_file","arguments":{"path":"Cargo.toml"}}}]"#
+        ));
+        assert!(ToolService::response_looks_like_tool_call(
+            r#"{"tool":"read_file","args":{"path":"Cargo.toml"}}"#
+        ));
+    }
+
+    #[test]
+    fn finalize_tool_followup_response_falls_back_when_tool_call_repeats() {
+        let response = ToolService::finalize_tool_followup_response(
+            Some("read_file"),
+            r#"{"tool":"read_file","args":{"path":"Cargo.toml"}}"#,
+            "package = \"harper-workspace\"",
+        );
+        assert_eq!(response, "Tool result:\npackage = \"harper-workspace\"");
+    }
+
+    #[test]
+    fn finalize_tool_followup_response_formats_git_status_fallback() {
+        let response = ToolService::finalize_tool_followup_response(
+            Some("git_status"),
+            "   \n",
+            "Git status:\nM src/main.rs\n?? docs/testing/",
+        );
+        assert_eq!(
+            response,
+            "Git working directory has 1 modified, 1 untracked. Notable files: src/main.rs, docs/testing/."
+        );
+    }
+
+    #[test]
+    fn finalize_tool_followup_response_formats_run_command_fallback() {
+        let response = ToolService::finalize_tool_followup_response(
+            Some("run_command"),
+            "   \n",
+            "COMMAND: cargo fmt --all\nOUTPUT:\n",
+        );
+        assert_eq!(response, "Ran `cargo fmt --all` successfully.");
+    }
+
+    #[test]
+    fn response_looks_like_file_tool_call_detects_file_tools() {
+        assert!(ToolService::response_looks_like_file_tool_call(
+            r#"{"tool":"read_file","args":{"path":"Cargo.toml"}}"#
+        ));
+        assert!(ToolService::response_looks_like_file_tool_call(
+            r#"[SEARCH_REPLACE src/main.rs old new]"#
+        ));
+        assert!(!ToolService::response_looks_like_file_tool_call(
+            r#"{"tool":"run_command","args":{"command":"git status"}}"#
+        ));
+    }
+
+    #[test]
+    fn finalize_read_file_followup_response_falls_back_when_file_tool_repeats() {
+        let response = ToolService::finalize_read_file_followup_response(
+            r#"{"tool":"read_file","args":{"path":"package.json"}}"#,
+            "[package]\nname = \"harper-workspace\"\n",
+        );
+        assert_eq!(
+            response,
+            "Tool result:\n[package]\nname = \"harper-workspace\"\n"
+        );
     }
 
     #[test]
