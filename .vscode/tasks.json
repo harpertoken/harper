@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Bazel: Build harper_bin",
+      "type": "shell",
+      "command": "bazel build :harper_bin",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Bazel: Test harper_core smoke",
+      "type": "shell",
+      "command": "bazel test //lib/harper-core:harper_core_test",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Bazel: Run harper version",
+      "type": "shell",
+      "command": "bazel run :harper_bin -- --version",
+      "problemMatcher": []
+    }
+  ]
+}
