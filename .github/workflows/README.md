@@ -10,7 +10,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Project | `add-pr-to-project.yml` | Adds opened, reopened, edited, synchronized, and ready-for-review PRs to the Harper organization project at `https://github.com/orgs/harpertoken/projects/10`. Project item creation runs through the Harper app token with organization project access. | PR target events |
 | Milestone | `assign-pr-milestone.yml` | Assigns new PRs to `Maintenance`, `Near-term`, or `Long-term` from title and labels. Milestone edits run through the Harper app token. | PR target events |
 | Auto Merge | `auto-merge.yml` | Three jobs via `libnudget/auto-merge@v1`: `auto-merge` enables GitHub's built-in auto-merge (waits for `CI (ubuntu-latest)` + 1 review); `auto-merge-now` merges immediately via `BYPASS_TOKEN` bypassing ruleset checks; `cancel-auto-merge` disables queued auto-merge when the `auto-merge` label is removed. PR state changes run through the Harper app token. | `labeled`/`unlabeled`/PR events |
-| Bazel | `build-bazel.yml` | Builds `:harper_bin` with Bazel on Linux and macOS, plus a scoped Windows smoke build/test for `harper-core` (including lockfile repinning fallback). | Push/PR to `main`, Bazel branches |
+| Bazel | `build-bazel.yml` | Builds `:harper_bin` with Bazel on Linux and macOS, plus a scoped Windows smoke lane that builds `//lib/harper-ui:harper_ui`, runs `//lib/harper-core:harper_core_test`, checks the UI artifact, and dumps `harper_ui` params on failure. See `docs/development/bazel-windows-debugging.md` for the failure-analysis cookbook. | Push/PR to `main`, Bazel branches |
 | Bazel Smoke | `bazel-smoke.yml` | Daily `bazel test //...` to catch dependency drift outside PRs. | Daily cron, manual dispatch |
 | Benchmarks | `benchmarks.yml` | Runs `cargo bench` nightly and stores results as artifacts. | Daily cron, manual dispatch |
 | Integration | `integration.yml` | Executes `cargo test -- --include-ignored` against real services (requires secrets). | PRs touching app code, manual dispatch (with environment input) |
@@ -32,7 +32,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Nightly | `nightly.yml` | Uses `libnudget/rust-nightly` reusable workflow: runs tests, builds release, creates prerelease with tag `nightly-{sha}`. Benchmarks disabled for faster runs. | Daily cron (midnight UTC), manual dispatch |
 | Nix and Arch Packages | `nix-arch-packages.yml` | Generates Nix and Arch package manifests from published Linux release artifacts and uploads them for package-channel validation. | `harper-[0-9]*` tag push, manual dispatch |
 | npm Package | `npm-package.yml` | Packs the npm binary wrapper for a published Harper release artifact without publishing it. | `harper-[0-9]*` tag push, manual dispatch |
-| PR Checks | `pr-checks.yml` | Validates PR metadata and auto-labels via `config/labeler.yml`. Auto-label writes run through the Harper app token. | PR workflow_call, push to `main` |
+| PR Checks | `pr-checks.yml` | Validates PR metadata and auto-labels via `config/labeler.yml`. Auto-label writes run through the Harper app token. | PR events, push to `main` |
 | Release | `release.yml` | Creates release PRs or direct package releases for harper-core, harper-ui, harper-firmware, harper-mcp-server, harper-sandbox via `libnudget/release@v1.0.0`, then publishes the installable Harper CLI binary as a dedicated `harper-*` release through `libnudget/release-assets`. Release PR creation and stale overlapping release PR cleanup run through the Harper app token. Merge/direct release flows invoke `release-assets` inline, and manual `harper-*` tag pushes still trigger the same asset publishing path. The workflow passes `HARPER_UPDATE_SIGNING_KEY_PEM_B64` plus the repo-shipped updater public key into that reusable release-assets workflow. | Push to `main` touching lib dirs, tag push (`harper-*`), PR merged, manual dispatch |
 | Stale | `stale-issues.yml` | Reminds on issues inactive for 30 days, adds `needs-response`, and closes them after 14 more days without a human reply. Issue comments and label changes run through the Harper app token. | Daily cron, manual dispatch, issue comments |
 | Rust Fix | `rust-auto-fix.yml` | Applies automated `cargo fmt`/`clippy --fix` patches via `libnudget/rust-fix@v1` when `/rust-fix` comment is confirmed with `/confirm`. | Issue comment on PRs |
@@ -84,4 +84,4 @@ Current rules:
 Feel free to expand this file with additional details (matrix descriptions, secrets used, etc.) as workflows evolve.
 
 ## Last Updated
-2026-05-14
+2026-05-15
