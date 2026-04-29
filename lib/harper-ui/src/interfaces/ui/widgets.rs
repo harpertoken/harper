@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use ratatui::layout::Constraint;
 use ratatui::prelude::*;
 use ratatui::style::Modifier;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap};
 
 use super::app::{
