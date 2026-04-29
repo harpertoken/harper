@@ -81,15 +81,130 @@ jobs:
         Remove-Item -Recurse -Force "$env:TEMP\\*bazel*" -ErrorAction SilentlyContinue
         Remove-Item -Force "cargo-bazel-lock.json" -ErrorAction SilentlyContinue
     - name: Build with Bazel
+      id: build_bazel
       shell: pwsh
       run: |
         $env:CARGO_BAZEL_REPIN = "true"
-        bazel build :harper_bin
+        bazel build :harper_bin --verbose_failures -s
+      continue-on-error: true
+    - name: Dump harper_ui Bazel params on failure
+      if: steps.build_bazel.outcome == 'failure'
+      shell: pwsh
+      run: |
+        $params = Get-ChildItem -Path bazel-out -Recurse -Filter "libharper_ui-*.params" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $params) {
+          Write-Host "No harper_ui params file found under bazel-out."
+          exit 1
+        }
+
+        Write-Host "harper_ui params file: $($params.FullName)"
+        $lines = Get-Content $params.FullName
+        $lines
+
+        Write-Host ""
+        Write-Host "Extern artifact existence:"
+        $missing = 0
+        foreach ($line in $lines) {
+          if ($line -notmatch '^--extern=([^=]+)=(.+)$') {
+            continue
+          }
+          $crate = $matches[1]
+          $relativePath = $matches[2]
+          $artifactPath = Join-Path $PWD $relativePath
+          $exists = Test-Path $artifactPath
+          Write-Host ("{0}: {1} -> {2}" -f $crate, $exists, $artifactPath)
+          if (-not $exists) {
+            $missing += 1
+          }
+        }
+
+        Write-Host ""
+        Write-Host "Dependency search path existence:"
+        foreach ($line in $lines) {
+          if ($line -notmatch '^-Ldependency=(.+)$') {
+            continue
+          }
+          $relativePath = $matches[1]
+          $depPath = Join-Path $PWD $relativePath
+          $exists = Test-Path $depPath
+          Write-Host ("{0} -> {1}" -f $exists, $depPath)
+        }
+
+        if ($missing -gt 0) {
+          Write-Host ""
+          Write-Host "Missing extern artifacts: $missing"
+        }
+
+        $serdeExtern = ($lines | Where-Object { $_ -match '^--extern=serde=(.+)$' } | Select-Object -First 1)
+        $sysrootLine = ($lines | Where-Object { $_ -match '^--sysroot=(.+)$' } | Select-Object -First 1)
+        $targetLine = ($lines | Where-Object { $_ -match '^--target=(.+)$' } | Select-Object -First 1)
+        $depLines = $lines | Where-Object { $_ -match '^-Ldependency=(.+)$' }
+        $rustc = Get-ChildItem -Path bazel-out -Recurse -Filter "rustc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+        if ($serdeExtern -and $sysrootLine -and $targetLine -and $rustc) {
+          $null = $serdeExtern -match '^--extern=serde=(.+)$'
+          $serdePath = Join-Path $PWD $matches[1]
+          $serdeDir = Split-Path -Parent $serdePath
+          $null = $sysrootLine -match '^--sysroot=(.+)$'
+          $sysrootPath = Join-Path $PWD $matches[1]
+          $null = $targetLine -match '^--target=(.+)$'
+          $targetTriple = $matches[1]
+          $smokeDir = Join-Path $PWD "bazel-out/windows-rustc-smoke"
+          New-Item -ItemType Directory -Force -Path $smokeDir | Out-Null
+          $smokeSource = Join-Path $smokeDir "smoke.rs"
+          Set-Content -Path $smokeSource -Value @(
+            'use serde as _;',
+            '',
+            'fn main() {}'
+          )
+
+          $rustcArgs = @(
+            $smokeSource,
+            "--crate-name=windows_rustc_smoke",
+            "--crate-type=bin",
+            "--edition=2021",
+            "--target=$targetTriple",
+            "--sysroot=$sysrootPath",
+            "--extern=serde=$serdePath",
+            "-Ldependency=$serdeDir",
+            "--out-dir=$smokeDir"
+          )
+
+          foreach ($depLine in $depLines) {
+            $null = $depLine -match '^-Ldependency=(.+)$'
+            $depPath = Join-Path $PWD $matches[1]
+            $rustcArgs += "-Ldependency=$depPath"
+          }
+
+          $rustcArgsFile = Join-Path $smokeDir "smoke.rustc.params"
+          Set-Content -Path $rustcArgsFile -Value $rustcArgs
+
+          Write-Host ""
+          Write-Host "Direct rustc smoke command:"
+          Write-Host "$($rustc.FullName) @$rustcArgsFile"
+          & $rustc.FullName "@$rustcArgsFile"
+          Write-Host "Direct rustc smoke exit code: $LASTEXITCODE"
+        } else {
+          Write-Host ""
+          Write-Host "Skipping direct rustc smoke compile; required params or rustc.exe path were not available."
+        }
+
+        exit 1
     - name: Test harper-core with Bazel
       shell: pwsh
       run: |
         $env:CARGO_BAZEL_REPIN = "true"
-        bazel test //lib/harper-core:harper_core_test
+        bazel test //lib/harper-core:harper_core_test --verbose_failures -s
     - name: Test Bazel build
       shell: pwsh
-      run: bazel run :harper_bin -- --version
+      run: |
+        $executionRoot = (bazel info execution_root).Trim()
+        $harperExeRelative = [string](
+          bazel cquery --output=files //:harper_bin |
+          Select-Object -First 1
+        ).Trim()
+        $harperExe = Join-Path $executionRoot $harperExeRelative
+        $proc = Start-Process -FilePath $harperExe -ArgumentList "--version" -NoNewWindow -Wait -PassThru
+        if ($proc.ExitCode -ne 0) {
+          exit $proc.ExitCode
+        }
