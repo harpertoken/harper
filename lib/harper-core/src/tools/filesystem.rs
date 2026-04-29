@@ -28,9 +28,20 @@ use walkdir::WalkDir;
 use crate::core::io_traits::UserApproval;
 use std::sync::Arc;
 
+fn looks_like_absolute_path(raw_path: &str) -> bool {
+    let normalized = raw_path.replace('\\', "/");
+    normalized.starts_with('/')
+        || normalized.starts_with("~/")
+        || normalized.starts_with("//")
+        || normalized
+            .as_bytes()
+            .get(1)
+            .is_some_and(|byte| *byte == b':')
+}
+
 fn ground_workspace_path_for_cwd(raw_path: &str, cwd: &Path) -> HarperResult<String> {
     let path = Path::new(raw_path);
-    if !path.is_absolute() {
+    if !path.is_absolute() && !looks_like_absolute_path(raw_path) {
         return Ok(raw_path.to_string());
     }
 
@@ -145,7 +156,7 @@ fn resolve_read_target_for_cwd(raw_path: &str, cwd: &Path) -> HarperResult<Strin
     let grounded = match ground_workspace_path_for_cwd(raw_path, cwd) {
         Ok(grounded) => grounded,
         Err(err) => {
-            if Path::new(raw_path).is_absolute() {
+            if Path::new(raw_path).is_absolute() || looks_like_absolute_path(raw_path) {
                 if let Some(candidate) = find_workspace_file_match_for_cwd(raw_path, cwd)? {
                     return Ok(candidate);
                 }
@@ -350,6 +361,7 @@ mod tests {
     use crate::core::error::HarperResult;
     use crate::core::io_traits::UserApproval;
     use async_trait::async_trait;
+    use std::path::Path;
     use std::sync::Arc;
 
     struct AllowApproval;
@@ -376,7 +388,7 @@ mod tests {
             ground_workspace_path_for_cwd("/home/user/projects/my_project/Cargo.toml", temp.path())
                 .expect("grounded");
 
-        assert_eq!(grounded, workspace_file.to_string_lossy());
+        assert_eq!(Path::new(&grounded), workspace_file.as_path());
     }
 
     #[test]
@@ -411,7 +423,7 @@ mod tests {
         std::fs::write(&target, "[package]\nname = \"harper-core\"\n").expect("write");
 
         let resolved = resolve_read_target_for_cwd("Cargo.toml", temp.path()).expect("resolved");
-        assert_eq!(resolved, target.to_string_lossy());
+        assert_eq!(Path::new(&resolved), target.as_path());
     }
 
     #[test]
