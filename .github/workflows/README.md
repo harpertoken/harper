@@ -8,7 +8,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | --- | --- | --- | --- |
 | Apply Rulesets | `apply-rulesets.yml` | Applies branch ruleset definitions from `.github/rulesets/*.json` to GitHub. Edit `main-branch-protection.json` to change rules; the workflow syncs them on push. | Push to `main` touching rulesets, manual dispatch |
 | Auto Merge | `auto-merge.yml` | Three jobs via `libnudget/auto-merge@v1`: `auto-merge` enables GitHub's built-in auto-merge (waits for `CI (ubuntu-latest)` + 1 review); `auto-merge-now` merges immediately via `BYPASS_TOKEN` bypassing ruleset checks; `cancel-auto-merge` disables queued auto-merge when the `auto-merge` label is removed. | `labeled`/`unlabeled`/PR events |
-| Bazel CI | `build-bazel.yml` | Builds `:harper_bin` with Bazel on Linux and macOS, plus a scoped Windows smoke build/test for `harper-core` (including lockfile repinning fallback). | Push/PR to `main`, Bazel branches |
+| Bazel CI | `build-bazel.yml` | Builds `:harper_bin` with Bazel on Linux and macOS, plus a scoped Windows smoke lane that builds the UI binary, runs `//lib/harper-core:harper_core_test`, resolves the built `harper.exe` via `bazel cquery` and executes `--version`, and dumps `harper_ui` params on failure. See `docs/development/bazel-windows-debugging.md` for the failure-analysis cookbook. | Push/PR to `main`, Bazel branches |
 | Bazel Smoke | `bazel-smoke.yml` | Daily `bazel test //...` to catch dependency drift outside PRs. | Daily cron, manual dispatch |
 | Rust Benchmarks | `benchmarks.yml` | Runs `cargo bench` nightly and stores results as artifacts. | Daily cron, manual dispatch |
 | Integration Tests | `integration.yml` | Executes `cargo test -- --include-ignored` against real services (requires secrets). | PRs touching app code, manual dispatch (with environment input) |
@@ -66,6 +66,7 @@ Current rules:
 
 - **Action not found:** Verify the action path and version exist (e.g., `bazel-contrib/setup-bazel@0.15.0`). GitHub's error usually means the tag or repository is missing.
 - **Cache warnings:** Archived actions (such as the old Bazel setup) may emit 400s from the cache API. Migrating to an actively maintained action usually resolves this.
+- **Windows Bazel smoke failures:** Use `docs/development/bazel-windows-debugging.md` to interpret the params dump, extern existence checks, and direct `rustc` smoke compile.
 - **`auto-merge-now` fails with ruleset violation:** Ensure `BYPASS_TOKEN` secret is set to a PAT from an org admin account with `repo` scope. The `GITHUB_TOKEN` cannot bypass rulesets.
 - **Sandbox permissions (Codex/CI reproductions):** Some local sandbox sessions can mark `.git/refs/heads` with macOS provenance flags, blocking branch creation. If you see "Operation not permitted" writing inside `.git`, create/push branches from a fresh session or your host machine; the issue is environmental, not workflow-related.
 
