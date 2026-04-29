@@ -1,6 +1,6 @@
 # Harper Planner Next Steps
 
-This file captures the remaining planner/runtime work after the current planning, job, follow-up, retry, scoped `AGENTS.md`, and cross-process delivery changes.
+This file captures the remaining planner/runtime work after the current planning, job, follow-up, retry, scoped `AGENTS.md`, cross-process delivery, deterministic repo routing, structured codebase helper changes, and persisted authoring-manager workflow.
 
 ## Count
 
@@ -12,9 +12,9 @@ There are **3 real next steps** left without changing direction.
    - Refine the existing command output panel and active runtime display.
    - Add clearer truncation controls, richer status summaries, and better failure surfacing.
 
-2. **Legacy fallback cleanup**
-   - Reduce the remaining heuristic fallback paths where explicit command intent now exists.
-   - Prefer explicit retry/sandbox intent end to end over command-shape inference.
+2. **Semantic authoring depth**
+   - Extend the current authoring manager beyond the lightweight semantic graph.
+   - Improve Rust symbol/type/trait resolution and richer multi-file edit planning.
 
 3. **Planner follow-up history polish**
    - Extend the current single follow-up state into richer visible history if needed.
@@ -23,7 +23,7 @@ There are **3 real next steps** left without changing direction.
 ## Recommended Order
 
 1. Live command output polish
-2. Legacy fallback cleanup
+2. Semantic authoring depth
 3. Planner follow-up history polish
 
 ## Suggested Milestones
@@ -31,9 +31,10 @@ There are **3 real next steps** left without changing direction.
 ### Milestone 1: Runtime polish
 - Live command output polish
 
-### Milestone 2: Fallback cleanup
-- Reduce heuristic retry/sandbox fallback paths
-- Keep explicit intent paths as the primary contract
+### Milestone 2: Semantic authoring depth
+- Improve compiler-backed candidate ownership
+- Deepen symbol/reference-aware repo understanding
+- Improve multi-file authoring decomposition quality
 
 ### Milestone 3: Follow-up history
 - Add richer checkpoint/retry review history
@@ -54,15 +55,15 @@ There are **3 real next steps** left without changing direction.
 }
 ```
 
-### Seed 2: Fallback cleanup
+### Seed 2: Semantic authoring depth
 
 ```json
 {
-  "explanation": "Reduce legacy inference paths now that explicit retry and sandbox intent are available in the core tool contract.",
+  "explanation": "Deepen the authoring helper so repo changes rely on grounded semantic context instead of shallow candidate matching.",
   "items": [
-    { "step": "Find heuristic-only paths", "status": "pending" },
-    { "step": "Prefer explicit intent", "status": "pending" },
-    { "step": "Keep compatibility fallback", "status": "pending" }
+    { "step": "Improve trait and type links", "status": "pending" },
+    { "step": "Strengthen multi-file decomposition", "status": "pending" },
+    { "step": "Keep authoring reasoning grounded", "status": "pending" }
   ]
 }
 ```
@@ -84,10 +85,10 @@ There are **3 real next steps** left without changing direction.
 
 ```json
 {
-  "explanation": "Finish the remaining planner/runtime polish after core orchestration, scoped AGENTS resolution, retry handling, and cross-process delivery are in place.",
+  "explanation": "Finish the remaining planner/runtime polish after core orchestration, scoped AGENTS resolution, retry handling, codebase helpers, and authoring-manager workflow are in place.",
   "items": [
     { "step": "Polish live command output", "status": "pending" },
-    { "step": "Reduce legacy fallback paths", "status": "pending" },
+    { "step": "Deepen semantic authoring context", "status": "pending" },
     { "step": "Improve follow-up history UX", "status": "pending" }
   ]
 }

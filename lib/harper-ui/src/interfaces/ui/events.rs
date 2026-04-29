@@ -111,6 +111,7 @@ pub(crate) fn create_chat_state(
         sidebar_entries: Vec::new(),
     };
     chat_state.refresh_review_state();
+    chat_state.follow_latest_messages();
     chat_state
 }
 
@@ -158,6 +159,9 @@ fn parse_command_list(input: &str) -> Vec<String> {
 
 fn start_execution_policy_editor(app: &mut TuiApp, field: ExecutionPolicyListField) {
     let input = match field {
+        ExecutionPolicyListField::HeaderWidgets => {
+            settings::header_widgets_summary(&app.header_widgets)
+        }
         ExecutionPolicyListField::AllowedCommands => app.allowed_commands.join(", "),
         ExecutionPolicyListField::BlockedCommands => app.blocked_commands.join(", "),
     };
@@ -321,6 +325,9 @@ pub fn handle_event(
                     KeyCode::Enter => {
                         let values = parse_command_list(&editor.input);
                         match editor.field {
+                            ExecutionPolicyListField::HeaderWidgets => {
+                                app.header_widgets = settings::parse_header_widgets(&values);
+                            }
                             ExecutionPolicyListField::AllowedCommands => {
                                 app.allowed_commands = values;
                             }
@@ -329,7 +336,7 @@ pub fn handle_event(
                             }
                         }
                         app.execution_policy_editor = None;
-                        app.set_status_message("Updated execution policy command list".to_string());
+                        app.set_status_message("Updated execution policy settings".to_string());
                         return EventResult::Continue;
                     }
                     KeyCode::Backspace => {
@@ -795,14 +802,18 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                 app.approval_profile = settings::next_approval_profile(app.approval_profile);
             }
             1 => {
-                app.sandbox_profile = settings::next_sandbox_profile(app.sandbox_profile);
+                app.execution_strategy = settings::next_execution_strategy(app.execution_strategy);
             }
             2 => {
+                app.sandbox_profile = settings::next_sandbox_profile(app.sandbox_profile);
+            }
+            3 => {
                 app.retry_max_attempts = settings::next_retry_max_attempts(app.retry_max_attempts);
             }
-            3 => start_execution_policy_editor(app, ExecutionPolicyListField::AllowedCommands),
-            4 => start_execution_policy_editor(app, ExecutionPolicyListField::BlockedCommands),
-            5 => return EventResult::SaveExecutionPolicy,
+            4 => start_execution_policy_editor(app, ExecutionPolicyListField::HeaderWidgets),
+            5 => start_execution_policy_editor(app, ExecutionPolicyListField::AllowedCommands),
+            6 => start_execution_policy_editor(app, ExecutionPolicyListField::BlockedCommands),
+            7 => return EventResult::SaveExecutionPolicy,
             _ => {}
         },
         AppState::ViewSession(session_id, _, _) => {
@@ -1001,20 +1012,20 @@ fn handle_process_list(app: &mut TuiApp) {
 fn handle_char_input(app: &mut TuiApp, c: char) {
     if let AppState::Chat(chat_state) = &mut app.state {
         chat_state.input.push(c);
-        chat_state.reset_completion();
+        refresh_chat_completions(chat_state);
     }
 }
 
 fn handle_backspace(app: &mut TuiApp) {
     if let AppState::Chat(chat_state) = &mut app.state {
         chat_state.input.pop();
-        chat_state.reset_completion();
+        refresh_chat_completions(chat_state);
     }
 }
 fn handle_paste(app: &mut TuiApp, content: String) {
     if let AppState::Chat(chat_state) = &mut app.state {
         chat_state.input.push_str(&content);
-        chat_state.reset_completion();
+        refresh_chat_completions(chat_state);
     }
 }
 
@@ -1040,7 +1051,7 @@ fn handle_image_paste(app: &mut TuiApp) {
             Ok(file_path) => {
                 let reference = format!("@{}", file_path.display());
                 chat_state.input.push_str(&reference);
-                chat_state.reset_completion();
+                refresh_chat_completions(chat_state);
                 app.set_info_message(format!(
                     "Image pasted and saved as: {}",
                     file_path.display()
@@ -1106,6 +1117,43 @@ fn handle_copy(app: &mut TuiApp) {
                 }
             }
         }
+    }
+}
+
+fn slash_command_candidates(input: &str) -> Vec<String> {
+    let commands = vec![
+        "/help",
+        "/quit",
+        "/clear",
+        "/exit",
+        "/audit",
+        "/strategy",
+        "/strategy auto",
+        "/strategy grounded",
+        "/strategy deterministic",
+        "/strategy model",
+        "/auth login github",
+        "/auth login google",
+        "/auth login apple",
+        "/auth logout",
+        "/auth status",
+    ];
+    let mut matches = commands
+        .into_iter()
+        .filter(|cmd| cmd.starts_with(input))
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+    matches.sort();
+    matches
+}
+
+fn refresh_chat_completions(chat_state: &mut ChatState) {
+    if chat_state.input.starts_with('/') {
+        chat_state.completion_candidates = slash_command_candidates(&chat_state.input);
+        chat_state.completion_index = 0;
+        chat_state.completion_prefix = Some(chat_state.input.clone());
+    } else {
+        chat_state.reset_completion();
     }
 }
 
@@ -1185,26 +1233,8 @@ fn handle_tab(app: &mut TuiApp) {
                     (chat_state.completion_index + 1) % chat_state.completion_candidates.len();
             }
         } else if chat_state.input.starts_with('/') {
-            // Command completion
             if chat_state.completion_candidates.is_empty() {
-                let commands = vec![
-                    "/help",
-                    "/quit",
-                    "/clear",
-                    "/exit",
-                    "/audit",
-                    "/auth login github",
-                    "/auth login google",
-                    "/auth login apple",
-                    "/auth logout",
-                    "/auth status",
-                ];
-                for cmd in commands {
-                    if cmd.starts_with(&chat_state.input) {
-                        chat_state.completion_candidates.push(cmd.to_string());
-                    }
-                }
-                chat_state.completion_candidates.sort();
+                chat_state.completion_candidates = slash_command_candidates(&chat_state.input);
                 chat_state.completion_index = 0;
             }
             if !chat_state.completion_candidates.is_empty() {
@@ -1372,7 +1402,7 @@ mod tests {
     #[test]
     fn test_enter_execution_policy_save_returns_async_event() {
         let mut app = TuiApp::new();
-        app.state = AppState::ExecutionPolicy(5);
+        app.state = AppState::ExecutionPolicy(7);
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
         let session_service = SessionService::new(&conn);
@@ -1389,7 +1419,7 @@ mod tests {
     fn test_enter_execution_policy_allowed_commands_opens_editor() {
         let mut app = TuiApp::new();
         app.allowed_commands = vec!["git".to_string()];
-        app.state = AppState::ExecutionPolicy(3);
+        app.state = AppState::ExecutionPolicy(5);
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
         let session_service = SessionService::new(&conn);
@@ -1429,7 +1459,7 @@ mod tests {
     fn test_enter_execution_policy_retry_attempts_cycles_value() {
         let mut app = TuiApp::new();
         app.retry_max_attempts = 1;
-        app.state = AppState::ExecutionPolicy(2);
+        app.state = AppState::ExecutionPolicy(3);
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
         let session_service = SessionService::new(&conn);

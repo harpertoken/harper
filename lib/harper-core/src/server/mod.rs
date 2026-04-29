@@ -923,54 +923,52 @@ pub async fn chat_endpoint(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if let Some(intent) = route_intent(&message) {
-        match intent {
-            crate::agent::intent::DeterministicIntent::ListChangedFiles(intent_args) => {
-                let mut git_cmd = std::process::Command::new("git");
-                git_cmd.arg("diff");
+    if let Some(crate::agent::intent::DeterministicIntent::ListChangedFiles(intent_args)) =
+        route_intent(&message)
+    {
+        let mut git_cmd = std::process::Command::new("git");
+        git_cmd.arg("diff");
 
-                if let Some(since) = intent_args.since {
-                    git_cmd.arg(format!("--since={}", since));
-                }
-                git_cmd.arg("--name-only");
-
-                if intent_args.ext.is_some() {
-                    git_cmd.arg("--");
-                    git_cmd.arg("*");
-                }
-
-                let output = git_cmd
-                    .output()
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                let files = String::from_utf8_lossy(&output.stdout);
-
-                let result = if files.trim().is_empty() {
-                    "No changed files found".to_string()
-                } else {
-                    format!("Changed files:\n{}", files)
-                };
-
-                let conn = state.conn.lock().map_err(|e| {
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        format!("Lock error: {:?}", e),
-                    )
-                })?;
-                claim_or_verify_session_access(&conn, &session_id, auth_user.as_ref())
-                    .map_err(|status| (status, "Session access denied".to_string()))?;
-                let _ = save_message(&conn, &session_id, "user", &message);
-                let _ = save_message(&conn, &session_id, "assistant", &result);
-                drop(conn);
-
-                return Ok(Json(ChatResponse {
-                    message: result,
-                    session_id,
-                    status: "completed".to_string(),
-                    pending_id: None,
-                    pending_tools: None,
-                }));
-            }
+        if let Some(since) = intent_args.since {
+            git_cmd.arg(format!("--since={}", since));
         }
+        git_cmd.arg("--name-only");
+
+        if intent_args.ext.is_some() {
+            git_cmd.arg("--");
+            git_cmd.arg("*");
+        }
+
+        let output = git_cmd
+            .output()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let files = String::from_utf8_lossy(&output.stdout);
+
+        let result = if files.trim().is_empty() {
+            "No changed files found".to_string()
+        } else {
+            format!("Changed files:\n{}", files)
+        };
+
+        let conn = state.conn.lock().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Lock error: {:?}", e),
+            )
+        })?;
+        claim_or_verify_session_access(&conn, &session_id, auth_user.as_ref())
+            .map_err(|status| (status, "Session access denied".to_string()))?;
+        let _ = save_message(&conn, &session_id, "user", &message);
+        let _ = save_message(&conn, &session_id, "assistant", &result);
+        drop(conn);
+
+        return Ok(Json(ChatResponse {
+            message: result,
+            session_id,
+            status: "completed".to_string(),
+            pending_id: None,
+            pending_tools: None,
+        }));
     }
 
     let conn = state.conn.lock().map_err(|e| {
@@ -2317,6 +2315,7 @@ mod tests {
                             has_error_output: false,
                         }],
                         followup: None,
+                        ..Default::default()
                     }),
                     updated_at: None,
                 },
@@ -2370,6 +2369,7 @@ mod tests {
                             has_error_output: false,
                         }],
                         followup: None,
+                        ..Default::default()
                     }),
                     updated_at: None,
                 },
@@ -2422,6 +2422,7 @@ mod tests {
                             has_error_output: false,
                         }],
                         followup: None,
+                        ..Default::default()
                     }),
                     updated_at: None,
                 },

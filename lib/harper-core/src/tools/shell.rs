@@ -1319,6 +1319,7 @@ mod tests {
     fn configured_sandbox_maps_runtime_policy() {
         let exec_policy = ExecPolicyConfig {
             approval_profile: Some(ApprovalProfile::AllowListed),
+            execution_strategy: None,
             allowed_commands: Some(vec!["git".to_string()]),
             blocked_commands: Some(vec!["rm".to_string()]),
             sandbox_profile: Some(SandboxProfile::Disabled),
@@ -1353,6 +1354,7 @@ mod tests {
     fn approval_profile_allow_all_skips_approval() {
         let exec_policy = ExecPolicyConfig {
             approval_profile: Some(ApprovalProfile::AllowAll),
+            execution_strategy: None,
             allowed_commands: None,
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Disabled),
@@ -1372,6 +1374,7 @@ mod tests {
     fn approval_profile_strict_requires_approval_even_for_allowlisted_commands() {
         let exec_policy = ExecPolicyConfig {
             approval_profile: Some(ApprovalProfile::Strict),
+            execution_strategy: None,
             allowed_commands: Some(vec!["git".to_string()]),
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Disabled),
@@ -1391,6 +1394,7 @@ mod tests {
     fn approval_profile_allow_listed_uses_allowlist() {
         let exec_policy = ExecPolicyConfig {
             approval_profile: Some(ApprovalProfile::AllowListed),
+            execution_strategy: None,
             allowed_commands: Some(vec!["git".to_string()]),
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Disabled),
@@ -1411,6 +1415,7 @@ mod tests {
     fn approval_profile_allow_listed_requires_approval_for_declared_writes() {
         let exec_policy = ExecPolicyConfig {
             approval_profile: Some(ApprovalProfile::AllowListed),
+            execution_strategy: None,
             allowed_commands: Some(vec!["cp".to_string()]),
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Workspace),
@@ -1443,6 +1448,7 @@ mod tests {
     fn approval_profile_allow_listed_skips_approval_for_writes_inside_writable_roots() {
         let exec_policy = ExecPolicyConfig {
             approval_profile: Some(ApprovalProfile::AllowListed),
+            execution_strategy: None,
             allowed_commands: Some(vec!["cp".to_string()]),
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Workspace),
@@ -1475,6 +1481,7 @@ mod tests {
     fn approval_profile_allow_listed_requires_approval_for_network_intent() {
         let exec_policy = ExecPolicyConfig {
             approval_profile: Some(ApprovalProfile::AllowListed),
+            execution_strategy: None,
             allowed_commands: Some(vec!["curl".to_string()]),
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Disabled),
@@ -1614,6 +1621,7 @@ mod tests {
 
         let exec_policy = ExecPolicyConfig {
             approval_profile: Some(ApprovalProfile::AllowAll),
+            execution_strategy: None,
             allowed_commands: None,
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Disabled),

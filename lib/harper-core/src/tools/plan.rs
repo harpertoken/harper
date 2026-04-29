@@ -13,7 +13,10 @@
 // limitations under the License.
 
 use crate::core::error::{HarperError, HarperResult};
-use crate::core::plan::{PlanItem, PlanJobStatus, PlanRuntime, PlanState, PlanStepStatus};
+use crate::core::plan::{
+    AuthoringPlannedEdit, AuthoringValidationStep, PlanItem, PlanJobStatus, PlanRuntime, PlanState,
+    PlanStepStatus, StructuredAuthoringPlan,
+};
 use rusqlite::Connection;
 
 pub fn update_plan(
@@ -60,10 +63,22 @@ pub fn update_plan(
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned);
 
+    let structured_authoring_plan = args
+        .get("authoring_plan")
+        .map(parse_authoring_plan)
+        .transpose()?;
+
+    let existing_runtime =
+        crate::memory::storage::load_plan_state(conn, session_id)?.and_then(|plan| plan.runtime);
+    let mut runtime = existing_runtime.unwrap_or_default();
+    if let Some(authoring_plan) = structured_authoring_plan {
+        runtime.set_authoring_structured_plan(authoring_plan);
+    }
+
     let plan = PlanState {
         explanation: explanation.clone(),
         items,
-        runtime: None,
+        runtime: (!runtime.is_empty()).then_some(runtime),
         updated_at: None,
     };
 
@@ -315,6 +330,48 @@ pub fn clear_plan_followup(conn: &Connection, session_id: &str) -> HarperResult<
     crate::memory::storage::save_plan_state(conn, session_id, &plan)
 }
 
+pub fn seed_plan_authoring_context(
+    conn: &Connection,
+    session_id: &str,
+    request: &str,
+    candidate_files: Vec<String>,
+) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.seed_authoring_context(request.to_string(), candidate_files);
+    })
+}
+
+pub fn mark_plan_authoring_plan_created(conn: &Connection, session_id: &str) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.mark_authoring_plan_created();
+    })
+}
+
+pub fn mark_plan_authoring_inspection(
+    conn: &Connection,
+    session_id: &str,
+    inspected_files: Vec<String>,
+) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.mark_authoring_inspection(inspected_files);
+    })
+}
+
+pub fn mark_plan_authoring_edit_applied(
+    conn: &Connection,
+    session_id: &str,
+    edited_files: Vec<String>,
+) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.mark_authoring_edit_applied(edited_files);
+    })
+}
+pub fn mark_plan_authoring_validated(conn: &Connection, session_id: &str) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.mark_authoring_validated();
+    })
+}
+
 pub fn replan_blocked_step(
     conn: &Connection,
     session_id: &str,
@@ -400,12 +457,149 @@ fn parse_status(value: Option<&serde_json::Value>) -> HarperResult<PlanStepStatu
     }
 }
 
+fn parse_authoring_plan(value: &serde_json::Value) -> HarperResult<StructuredAuthoringPlan> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| HarperError::Validation("authoring_plan must be an object".to_string()))?;
+
+    let parse_paths = |key: &str| -> HarperResult<Vec<String>> {
+        let Some(raw) = object.get(key) else {
+            return Ok(Vec::new());
+        };
+        let items = raw.as_array().ok_or_else(|| {
+            HarperError::Validation(format!("authoring_plan.{} must be an array", key))
+        })?;
+        let mut paths = Vec::new();
+        for item in items {
+            let path = item
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    HarperError::Validation(format!(
+                        "authoring_plan.{} entries must be non-empty strings",
+                        key
+                    ))
+                })?;
+            paths.push(path.to_string());
+        }
+        Ok(paths)
+    };
+
+    let parse_planned_edits = || -> HarperResult<Vec<AuthoringPlannedEdit>> {
+        let Some(raw) = object.get("planned_edits") else {
+            return Ok(Vec::new());
+        };
+        let items = raw.as_array().ok_or_else(|| {
+            HarperError::Validation("authoring_plan.planned_edits must be an array".to_string())
+        })?;
+        let mut edits = Vec::new();
+        for item in items {
+            let edit = item.as_object().ok_or_else(|| {
+                HarperError::Validation(
+                    "authoring_plan.planned_edits entries must be objects".to_string(),
+                )
+            })?;
+            let path = edit
+                .get("path")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    HarperError::Validation(
+                        "authoring_plan.planned_edits.path is required".to_string(),
+                    )
+                })?;
+            let change = edit
+                .get("change")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    HarperError::Validation(
+                        "authoring_plan.planned_edits.change is required".to_string(),
+                    )
+                })?;
+            let why = edit
+                .get("why")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(ToOwned::to_owned);
+            edits.push(AuthoringPlannedEdit {
+                path: path.to_string(),
+                change: change.to_string(),
+                why,
+            });
+        }
+        Ok(edits)
+    };
+
+    let parse_validation = || -> HarperResult<Vec<AuthoringValidationStep>> {
+        let Some(raw) = object.get("validation_plan") else {
+            return Ok(Vec::new());
+        };
+        let items = raw.as_array().ok_or_else(|| {
+            HarperError::Validation("authoring_plan.validation_plan must be an array".to_string())
+        })?;
+        let mut steps = Vec::new();
+        for item in items {
+            let step = item.as_object().ok_or_else(|| {
+                HarperError::Validation(
+                    "authoring_plan.validation_plan entries must be objects".to_string(),
+                )
+            })?;
+            let command = step
+                .get("command")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    HarperError::Validation(
+                        "authoring_plan.validation_plan.command is required".to_string(),
+                    )
+                })?;
+            let scope = step
+                .get("scope")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(ToOwned::to_owned);
+            steps.push(AuthoringValidationStep {
+                command: command.to_string(),
+                scope,
+            });
+        }
+        Ok(steps)
+    };
+
+    let plan = StructuredAuthoringPlan {
+        primary_files: parse_paths("primary_files")?,
+        supporting_files: parse_paths("supporting_files")?,
+        validation_files: parse_paths("validation_files")?,
+        planned_edits: parse_planned_edits()?,
+        validation_plan: parse_validation()?,
+    };
+
+    if plan.primary_files.is_empty()
+        && plan.supporting_files.is_empty()
+        && plan.planned_edits.is_empty()
+    {
+        return Err(HarperError::Validation(
+            "authoring_plan must include primary_files, supporting_files, or planned_edits"
+                .to_string(),
+        ));
+    }
+
+    Ok(plan)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         append_active_plan_job_output, clear_plan_followup, clear_plan_state,
-        finish_active_plan_job, finish_active_plan_job_with_output, replan_blocked_step,
-        set_plan_step_status, start_plan_job,
+        finish_active_plan_job, finish_active_plan_job_with_output, mark_plan_authoring_validated,
+        replan_blocked_step, set_plan_step_status, start_plan_job, update_plan,
     };
     use crate::core::plan::{PlanItem, PlanJobStatus, PlanState, PlanStepStatus};
     use rusqlite::Connection;
@@ -448,6 +642,92 @@ mod tests {
             plan.runtime
                 .as_ref()
                 .and_then(|runtime| runtime.active_job_id.clone())
+        );
+    }
+
+    #[test]
+    fn update_plan_persists_structured_authoring_plan() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+
+        let args = serde_json::json!({
+            "items": [{"step": "Inspect files", "status": "in_progress"}],
+            "authoring_plan": {
+                "primary_files": ["lib/harper-ui/src/interfaces/ui/widgets.rs"],
+                "supporting_files": ["lib/harper-core/src/agent/chat.rs"],
+                "planned_edits": [
+                    {
+                        "path": "lib/harper-ui/src/interfaces/ui/widgets.rs",
+                        "change": "Adjust planner retry rendering",
+                        "why": "UI render path"
+                    }
+                ],
+                "validation_plan": [
+                    {"command": "cargo check -p harper-ui", "scope": "narrow"}
+                ]
+            }
+        });
+
+        update_plan(&conn, "authoring-plan-session", &args).expect("update plan");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "authoring-plan-session")
+            .expect("load plan")
+            .expect("plan present");
+        let runtime = plan.runtime.expect("runtime present");
+        let authoring = runtime.authoring.expect("authoring runtime present");
+        let structured = authoring.structured_plan.expect("structured plan present");
+        assert_eq!(
+            structured.primary_files,
+            vec!["lib/harper-ui/src/interfaces/ui/widgets.rs".to_string()]
+        );
+        assert_eq!(structured.validation_plan.len(), 1);
+        assert!(authoring
+            .edit_scope
+            .iter()
+            .any(|path| path == "lib/harper-ui/src/interfaces/ui/widgets.rs"));
+    }
+
+    #[test]
+    fn mark_plan_authoring_validated_advances_phase() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::save_plan_state(
+            &conn,
+            "authoring-validated-session",
+            &PlanState {
+                explanation: None,
+                items: vec![PlanItem {
+                    step: "Validate changes".to_string(),
+                    status: PlanStepStatus::InProgress,
+                    job_id: None,
+                }],
+                runtime: Some(crate::core::plan::PlanRuntime {
+                    authoring: Some(crate::core::plan::AuthoringRuntime {
+                        request: Some("refactor planner flow".to_string()),
+                        phase: Some(crate::core::plan::AuthoringPhase::EditsApplied),
+                        candidate_files: vec![],
+                        inspected_files: vec![],
+                        edit_scope: vec![],
+                        structured_plan: None,
+                    }),
+                    ..Default::default()
+                }),
+                updated_at: None,
+            },
+        )
+        .expect("save plan");
+
+        mark_plan_authoring_validated(&conn, "authoring-validated-session")
+            .expect("mark validated");
+
+        let plan = crate::memory::storage::load_plan_state(&conn, "authoring-validated-session")
+            .expect("load plan")
+            .expect("plan present");
+        assert_eq!(
+            plan.runtime
+                .and_then(|rt| rt.authoring)
+                .and_then(|authoring| authoring.phase),
+            Some(crate::core::plan::AuthoringPhase::Validated)
         );
     }
 

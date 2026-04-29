@@ -185,6 +185,8 @@ fn check_permissions(path: &Path) -> Result<(), AgentError> {
 
 ## Validation Rules
 
+For routing, repo-aware tool use, transcript rendering, TUI command/file behavior, or authoring-manager changes, run the smoke checklist in `docs/testing/tui-routing-smoke.md`.
+
 ### File Type Restrictions
 ```rust
 const ALLOWED_EXTENSIONS: &[&str] = &[

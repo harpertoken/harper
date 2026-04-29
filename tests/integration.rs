@@ -890,6 +890,7 @@ Full output:
         // Create exec policy
         let exec_policy = ExecPolicyConfig {
             approval_profile: None,
+            execution_strategy: None,
             allowed_commands: None,
             blocked_commands: None,
             sandbox_profile: None,
@@ -976,12 +977,14 @@ Full output:
     #[test]
     fn test_syntax_highlighting_parsing() {
         use harper_workspace::interfaces::ui::widgets::parse_content_with_code;
+        use harper_workspace::interfaces::ui::Theme;
         use ratatui::style::Color;
         use syntect::highlighting::ThemeSet;
         use syntect::parsing::SyntaxSet;
 
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
+        let theme = Theme::default();
 
         // Test parsing content with code blocks
         let content = "Here is some Rust code:\n```rust\nfn main() {\n    println!(\"Hello!\");\n}\n```\nAnd that's it.";
@@ -989,6 +992,7 @@ Full output:
             &syntax_set,
             &theme_set,
             content,
+            &theme,
             Color::White,
             "base16-ocean.dark",
         );
@@ -996,8 +1000,8 @@ Full output:
         // Should have spans: plain text, highlighted code, plain text
         assert!(spans.len() >= 3, "Should have multiple spans");
 
-        // Check that some spans have different styles (indicating highlighting)
-        let has_highlighted = spans.iter().any(|span| span.style.fg != Some(Color::White));
+        // Check that some rendered lines have different styles (indicating highlighting)
+        let has_highlighted = spans.iter().any(|line| line.style.fg != Some(Color::White));
         assert!(has_highlighted, "Should have highlighted spans");
 
         // Test with multiple code blocks
@@ -1007,6 +1011,7 @@ Full output:
             &syntax_set,
             &theme_set,
             content_multi,
+            &theme,
             Color::White,
             "base16-ocean.dark",
         );
@@ -1015,10 +1020,14 @@ Full output:
             spans_multi.len() >= 3,
             "Should have at least 3 spans for multiple code blocks"
         );
-        // Note: reconstructed content excludes markdown markers (```) as they are not rendered
-        // Check that some spans are highlighted (not white) and some are plain (white)
-        let has_highlighted = spans_multi.iter().any(|s| s.style.fg != Some(Color::White));
-        let has_plain = spans_multi.iter().any(|s| s.style.fg == Some(Color::White));
+        // Note: reconstructed content excludes markdown markers (```) as they are not rendered.
+        // Check that some rendered lines are highlighted and that the plain text line is preserved.
+        let has_highlighted = spans_multi
+            .iter()
+            .any(|line| line.style.fg != Some(Color::White));
+        let has_plain = spans_multi
+            .iter()
+            .any(|line| line.to_string().contains("And"));
         assert!(has_highlighted, "Should have at least one highlighted span");
         assert!(has_plain, "Should have at least one plain text span");
 
@@ -1028,10 +1037,16 @@ Full output:
             &syntax_set,
             &theme_set,
             content_plain,
+            &theme,
             Color::White,
             "base16-ocean.dark",
         );
         assert_eq!(spans_plain.len(), 1, "Plain text should have one span");
-        assert_eq!(spans_plain[0].content, content_plain);
+        let reconstructed = spans_plain[0]
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>();
+        assert_eq!(reconstructed, content_plain);
     }
 }

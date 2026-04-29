@@ -54,7 +54,7 @@ pub use crate::runtime::utils;
 
 // Re-export runtime
 pub use crate::runtime::config::{
-    ApprovalProfile, ExecPolicyConfig, SandboxProfile, SupabaseAuthConfig,
+    ApprovalProfile, ExecPolicyConfig, ExecutionStrategy, SandboxProfile, SupabaseAuthConfig,
 };
 pub use crate::runtime::scheduler::TaskScheduler;
 

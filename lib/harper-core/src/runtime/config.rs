@@ -74,10 +74,11 @@ pub struct PromptConfig {
     pub system_prompt_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct UiConfig {
     pub theme: Option<String>,
     pub keys: Option<KeyConfig>,
+    pub header_widgets: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -100,6 +101,7 @@ pub struct ToolsConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExecPolicyConfig {
     pub approval_profile: Option<ApprovalProfile>,
+    pub execution_strategy: Option<ExecutionStrategy>,
     #[allow(dead_code)]
     pub allowed_commands: Option<Vec<String>>,
     #[allow(dead_code)]
@@ -115,6 +117,7 @@ impl Default for ExecPolicyConfig {
     fn default() -> Self {
         Self {
             approval_profile: Some(ApprovalProfile::AllowListed),
+            execution_strategy: Some(ExecutionStrategy::Auto),
             allowed_commands: None,
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Disabled),
@@ -139,6 +142,15 @@ pub enum ApprovalProfile {
     Strict,
     AllowListed,
     AllowAll,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionStrategy {
+    Auto,
+    Grounded,
+    Deterministic,
+    ModelOnly,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -466,6 +478,10 @@ impl UiConfig {
         }
         Ok(())
     }
+
+    pub fn effective_header_widgets(&self) -> Vec<String> {
+        self.header_widgets.clone().unwrap_or_default()
+    }
 }
 
 impl ToolsConfig {
@@ -480,6 +496,10 @@ impl ExecPolicyConfig {
     /// Validate exec policy configuration
     fn validate(&self) -> HarperResult<()> {
         Ok(())
+    }
+
+    pub fn effective_execution_strategy(&self) -> ExecutionStrategy {
+        self.execution_strategy.unwrap_or(ExecutionStrategy::Auto)
     }
 
     pub fn effective_approval_profile(&self) -> ApprovalProfile {
@@ -764,6 +784,7 @@ mod tests {
     fn workspace_sandbox_profile_sets_safe_defaults() {
         let config = ExecPolicyConfig {
             approval_profile: None,
+            execution_strategy: None,
             allowed_commands: None,
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Workspace),
@@ -786,6 +807,7 @@ mod tests {
     fn explicit_sandbox_fields_override_profile_defaults() {
         let config = ExecPolicyConfig {
             approval_profile: None,
+            execution_strategy: None,
             allowed_commands: None,
             blocked_commands: None,
             sandbox_profile: Some(SandboxProfile::Workspace),

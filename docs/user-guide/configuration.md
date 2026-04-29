@@ -28,10 +28,14 @@ Harper separates command approval policy from sandbox policy under `[exec_policy
 ```toml
 [exec_policy]
 approval_profile = "allow_listed"   # strict | allow_listed | allow_all
+execution_strategy = "auto"         # auto | grounded | deterministic | model
 sandbox_profile = "workspace"       # disabled | workspace | networked_workspace
 retry_max_attempts = 1
 retry_network_commands = ["curl", "wget"]
 retry_write_commands = ["mkdir", "touch"]
+
+[ui]
+header_widgets = ["model", "cwd", "strategy"]
 
 [exec_policy.sandbox]
 allowed_dirs = ["."]
@@ -39,12 +43,39 @@ writable_dirs = ["./tmp", "./build"]
 ```
 
 - `approval_profile` controls when Harper asks before running commands.
+- `execution_strategy` controls whether Harper prefers model-first grounded behavior, deterministic execution, or no deterministic shortcuts.
 - `sandbox_profile` controls the default sandbox boundary.
 - `retry_max_attempts` controls bounded automatic retries for retry-safe failures.
+- `header_widgets` controls which status items appear in the chat header. You can edit that list from `Settings -> Execution Policy`, and saving the screen writes the selection back to `config/local.toml`.
 - `allowed_dirs` are readable roots.
 - `writable_dirs` are writable roots.
 
+Supported `header_widgets` values:
+
+- `session`
+- `plan`
+- `agents`
+- `web`
+- `auth`
+- `focus`
+- `model`
+- `cwd`
+- `strategy`
+- `approval`
+- `activity`
+
 Under `allow_listed`, Harper still asks for approval when a command declares network access or writes outside configured writable roots, even if the command itself is allowlisted.
+
+## Repo-aware routing
+
+Harper now uses deterministic routing only for high-confidence workspace intents, not as a replacement for model reasoning.
+
+- direct operational facts such as `which branch am i on` or `which repo are we working on`
+- direct file reads such as `read Cargo.toml`
+- simple create/write prompts such as `create hello.rs with ...`
+- direct command prompts such as `run git status`
+
+For broader repo questions such as `tell me the codebase` or `find where X is rendered`, Harper first gathers structured codebase context, then lets the model answer from that grounded context. Deterministic summaries remain fallback only when the model returns an empty or low-value response.
 
 ## API Configuration
 
