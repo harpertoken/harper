@@ -31,6 +31,7 @@ use super::theme::Theme;
 use super::widgets;
 use harper_core::agent::chat::ChatService;
 use harper_core::core::io_traits::{RuntimeEventSink, UserApproval};
+use harper_core::core::plan::{PlanLoopOutcome, PlanLoopStage};
 use harper_core::core::ApiConfig;
 use harper_core::memory::session_service::SessionService;
 use harper_core::runtime::config::{ExecPolicyConfig, UiConfig};
@@ -213,6 +214,49 @@ fn spawn_sidebar_gathering(chat_state: &ChatState, ui_tx: &mpsc::Sender<UiUpdate
             .send(UiUpdate::SidebarEntries { sections })
             .await;
     });
+}
+
+fn infer_chat_loop_stage(status: &str) -> Option<PlanLoopStage> {
+    let normalized = status.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        s if s.starts_with("planning") => Some(PlanLoopStage::Planning),
+        s if s.starts_with("inspecting") => Some(PlanLoopStage::Inspecting),
+        s if s.starts_with("executing") || s.starts_with("running") => {
+            Some(PlanLoopStage::Executing)
+        }
+        s if s.starts_with("summarizing") => Some(PlanLoopStage::Feedback),
+        s if s.starts_with("responding")
+            || s.starts_with("thinking")
+            || s.starts_with("waiting for browser sign-in") =>
+        {
+            Some(PlanLoopStage::Responding)
+        }
+        s if s.starts_with("waiting approval")
+            || s.starts_with("resuming")
+            || s.starts_with("retrying") =>
+        {
+            Some(PlanLoopStage::Feedback)
+        }
+        _ => None,
+    }
+}
+
+fn final_chat_loop_outcome(
+    stage: Option<&PlanLoopStage>,
+    current: Option<&PlanLoopOutcome>,
+) -> PlanLoopOutcome {
+    match stage {
+        Some(PlanLoopStage::Responding) => PlanLoopOutcome::Responded,
+        Some(
+            PlanLoopStage::Planning
+            | PlanLoopStage::Inspecting
+            | PlanLoopStage::Executing
+            | PlanLoopStage::Feedback,
+        ) => PlanLoopOutcome::Succeeded,
+        Some(PlanLoopStage::RetryPending | PlanLoopStage::ReplanRequired) | None => {
+            current.cloned().unwrap_or(PlanLoopOutcome::Responded)
+        }
+    }
 }
 
 fn parse_strategy_command(
@@ -1048,6 +1092,36 @@ pub async fn run_tui(
                                     chat_state.active_agents = session_view.agents;
                                     chat_state.refresh_plan_state();
                                     chat_state.refresh_review_state();
+                                    if chat_state.active_plan.is_none() {
+                                        let outcome = final_chat_loop_outcome(
+                                            chat_state.loop_state.stage.as_ref(),
+                                            chat_state.loop_state.last_outcome.as_ref(),
+                                        );
+                                        let feedback = if matches!(outcome, PlanLoopOutcome::Responded) {
+                                            None
+                                        } else {
+                                            chat_state
+                                                .messages
+                                                .iter()
+                                                .rev()
+                                                .find(|message| message.role == "assistant")
+                                                .and_then(|message| {
+                                                    message
+                                                        .content
+                                                        .lines()
+                                                        .find(|line| !line.trim().is_empty())
+                                                })
+                                                .map(str::trim)
+                                                .map(ToOwned::to_owned)
+                                                .or_else(|| {
+                                                    chat_state
+                                                        .loop_state
+                                                        .last_feedback
+                                                        .clone()
+                                                })
+                                        };
+                                        chat_state.record_loop_outcome(outcome, feedback);
+                                    }
                                     should_clear_activity = true;
                                     if chat_state.sidebar_visible {
                                         spawn_sidebar_gathering(chat_state, &ui_tx);
@@ -1059,8 +1133,25 @@ pub async fn run_tui(
                             }
                         }
                         UiUpdate::ActivityUpdated { session_id, status } => {
-                            let matches_session = if let AppState::Chat(chat_state) = &app.state {
-                                chat_state.session_id == session_id
+                            let matches_session = if let AppState::Chat(chat_state) = &mut app.state {
+                                if chat_state.session_id == session_id {
+                                    if let Some(status_text) = status.as_deref() {
+                                        if let Some(stage) =
+                                            infer_chat_loop_stage(status_text)
+                                        {
+                                            chat_state.set_loop_stage(
+                                                stage,
+                                                Some(status_text.to_string()),
+                                            );
+                                        } else {
+                                            chat_state.loop_state.last_feedback =
+                                                Some(status_text.to_string());
+                                        }
+                                    }
+                                    true
+                                } else {
+                                    false
+                                }
                             } else {
                                 false
                             };
@@ -1077,23 +1168,43 @@ pub async fn run_tui(
                         } => {
                             if let AppState::Chat(chat_state) = &mut app.state {
                                 if chat_state.session_id == session_id {
-                                    let state = chat_state.command_output.get_or_insert(CommandOutputState {
-                                        command: command.clone(),
-                                        content: String::new(),
-                                        has_error: false,
-                                        done: false,
-                                    });
-                                    if state.command != command {
-                                        *state = CommandOutputState {
-                                            command,
-                                            content: String::new(),
-                                            has_error: is_error,
-                                            done,
+                                    let (current_command, has_error_output, is_done) = {
+                                        let state = chat_state.command_output.get_or_insert(
+                                            CommandOutputState {
+                                                command: command.clone(),
+                                                content: String::new(),
+                                                has_error: false,
+                                                done: false,
+                                            },
+                                        );
+                                        if state.command != command {
+                                            *state = CommandOutputState {
+                                                command,
+                                                content: String::new(),
+                                                has_error: is_error,
+                                                done,
+                                            };
+                                        }
+                                        state.content.push_str(&chunk);
+                                        state.has_error |= is_error;
+                                        state.done = done;
+                                        (state.command.clone(), state.has_error, state.done)
+                                    };
+                                    chat_state.set_loop_stage(
+                                        PlanLoopStage::Executing,
+                                        Some(format!("running {}", current_command)),
+                                    );
+                                    if is_done {
+                                        let outcome = if has_error_output {
+                                            PlanLoopOutcome::Failed
+                                        } else {
+                                            PlanLoopOutcome::Succeeded
                                         };
+                                        chat_state.record_loop_outcome(
+                                            outcome,
+                                            Some(format!("{} finished", current_command)),
+                                        );
                                     }
-                                    state.content.push_str(&chunk);
-                                    state.has_error |= is_error;
-                                    state.done = done;
                                 }
                             }
                         }
@@ -1123,6 +1234,10 @@ pub async fn run_tui(
                         UiUpdate::Error(err) => {
                             if let AppState::Chat(chat_state) = &mut app.state {
                                 chat_state.awaiting_response = false;
+                                chat_state.record_loop_outcome(
+                                    PlanLoopOutcome::Failed,
+                                    Some(err.clone()),
+                                );
                             }
                             app.set_activity_status(None);
                             app.set_error_message(err);
@@ -1194,4 +1309,30 @@ pub async fn run_tui(
     execute!(terminal.backend_mut(), LeaveAlternateScreen, cursor::Show)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{final_chat_loop_outcome, infer_chat_loop_stage};
+    use harper_core::core::plan::{PlanLoopOutcome, PlanLoopStage};
+
+    #[test]
+    fn summarizing_maps_to_feedback_stage() {
+        assert_eq!(
+            infer_chat_loop_stage("summarizing result"),
+            Some(PlanLoopStage::Feedback)
+        );
+    }
+
+    #[test]
+    fn deterministic_non_plan_completion_maps_to_succeeded() {
+        assert_eq!(
+            final_chat_loop_outcome(Some(&PlanLoopStage::Feedback), None),
+            PlanLoopOutcome::Succeeded
+        );
+        assert_eq!(
+            final_chat_loop_outcome(Some(&PlanLoopStage::Responding), None),
+            PlanLoopOutcome::Responded
+        );
+    }
 }

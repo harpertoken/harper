@@ -21,7 +21,9 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph
 use super::app::{AppState, ApprovalState, ReviewState, SessionInfo, TuiApp, UiMessage};
 use super::settings;
 use super::theme::Theme;
-use harper_core::core::plan::{PlanFollowup, PlanJobRecord, PlanJobStatus};
+use harper_core::core::plan::{
+    PlanFollowup, PlanJobRecord, PlanJobStatus, PlanLoopOutcome, PlanLoopStage,
+};
 use harper_core::{PlanRuntime, PlanState, PlanStepStatus, ResolvedAgents};
 
 // Refined shortcuts for a cleaner footer
@@ -71,52 +73,27 @@ const SESSIONS_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
 ];
 
 const EXPORT_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
-    &[
-        ("↑↓", "Move"),
-        ("Enter", "Export"),
-        ("Esc", "Back"),
-        ("Q", "Back"),
-    ],
+    &[("↑↓", "Move"), ("Enter", "Export"), ("Esc", "Back")],
     &[("J/K", "Move")],
 ];
 
 const PREVIEW_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
-    &[
-        ("↑↓", "Scroll"),
-        ("Enter", "Resume"),
-        ("Esc", "Back"),
-        ("Q", "Back"),
-    ],
+    &[("↑↓", "Scroll"), ("Enter", "Resume"), ("Esc", "Back")],
     &[("J/K", "Scroll")],
 ];
 
 const SETTINGS_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
-    &[
-        ("↑↓", "Move"),
-        ("Enter", "Open"),
-        ("Esc", "Back"),
-        ("Q", "Back"),
-    ],
+    &[("↑↓", "Move"), ("Enter", "Open"), ("Esc", "Back")],
     &[("J/K", "Move")],
 ];
 
 const PROFILE_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
-    &[
-        ("↑↓", "Move"),
-        ("Enter", "Run"),
-        ("Esc", "Back"),
-        ("Q", "Back"),
-    ],
+    &[("↑↓", "Move"), ("Enter", "Run"), ("Esc", "Back")],
     &[("J/K", "Move")],
 ];
 
 const EXECUTION_POLICY_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
-    &[
-        ("↑↓", "Move"),
-        ("Enter", "Change"),
-        ("Esc", "Back"),
-        ("Q", "Back"),
-    ],
+    &[("↑↓", "Move"), ("Enter", "Change"), ("Esc", "Back")],
     &[("J/K", "Move")],
 ];
 
@@ -255,6 +232,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             let has_review = chat_state.active_review.is_some();
             let command_output_display = derive_command_output_display(chat_state);
             let has_command_output = command_output_display.is_some();
+            let has_chat_loop = !has_plan && should_render_chat_loop_panel(&chat_state.loop_state);
             let plan_height = chat_state
                 .active_plan
                 .as_ref()
@@ -264,6 +242,11 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .as_ref()
                 .map(command_output_panel_height)
                 .unwrap_or(0);
+            let chat_loop_height = if has_chat_loop {
+                chat_loop_panel_height(&chat_state.loop_state)
+            } else {
+                0
+            };
             let agents_height = chat_state
                 .active_agents
                 .as_ref()
@@ -282,6 +265,9 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             }
             if has_command_output {
                 constraints.push(Constraint::Length(command_output_height));
+            }
+            if has_chat_loop {
+                constraints.push(Constraint::Length(chat_loop_height));
             }
             if has_plan {
                 constraints.push(Constraint::Length(plan_height));
@@ -369,6 +355,15 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 }
                 next_panel_index += 1;
             }
+            if has_chat_loop {
+                draw_chat_loop_panel(
+                    frame,
+                    &chat_state.loop_state,
+                    theme,
+                    chunks[next_panel_index],
+                );
+                next_panel_index += 1;
+            }
             if has_plan {
                 if let Some(plan) = &chat_state.active_plan {
                     draw_plan_panel(
@@ -430,6 +425,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             let input_index = 2
                 + usize::from(has_review)
                 + usize::from(has_command_output)
+                + usize::from(has_chat_loop)
                 + usize::from(has_plan)
                 + usize::from(has_agents);
             frame.render_widget(input_widget, chunks[input_index]);
@@ -1277,6 +1273,10 @@ fn latest_action_summary(app: &TuiApp, chat_state: &super::app::ChatState) -> Op
         return Some(approval.command.clone());
     }
 
+    if let Some(command_output) = &chat_state.command_output {
+        return Some(command_output.command.clone());
+    }
+
     for msg in chat_state.messages.iter().rev() {
         for line in msg.content.lines().rev() {
             let trimmed = line.trim();
@@ -1286,20 +1286,7 @@ fn latest_action_summary(app: &TuiApp, chat_state: &super::app::ChatState) -> Op
         }
     }
 
-    chat_state
-        .messages
-        .iter()
-        .rev()
-        .find(|msg| msg.role != "system" && !msg.content.trim().is_empty())
-        .map(|msg| {
-            msg.content
-                .lines()
-                .next()
-                .unwrap_or_default()
-                .trim()
-                .to_string()
-        })
-        .filter(|line| !line.is_empty())
+    None
 }
 
 fn latest_rule_source(chat_state: &super::app::ChatState) -> Option<String> {
@@ -1330,6 +1317,12 @@ fn plan_panel_height(plan: &PlanState) -> u16 {
         lines += 1;
     }
     if let Some(runtime) = &plan.runtime {
+        if runtime.loop_stage.is_some()
+            || runtime.last_outcome.is_some()
+            || runtime.last_feedback.is_some()
+        {
+            lines += plan_loop_state_line_count(runtime);
+        }
         if runtime.followup.is_some() {
             lines += 2;
         }
@@ -1547,6 +1540,51 @@ fn draw_command_output_panel(
     frame.render_widget(widget, area);
 }
 
+fn chat_loop_panel_height(loop_state: &super::app::ChatLoopState) -> u16 {
+    (loop_state_line_count(
+        loop_state.stage.as_ref(),
+        loop_state.last_outcome.as_ref(),
+        loop_state.last_feedback.as_deref(),
+    ) + 2) as u16
+}
+
+fn should_render_chat_loop_panel(loop_state: &super::app::ChatLoopState) -> bool {
+    if !loop_state.has_state() {
+        return false;
+    }
+
+    !matches!(
+        (loop_state.stage.as_ref(), loop_state.last_outcome.as_ref()),
+        (
+            Some(PlanLoopStage::Responding),
+            Some(PlanLoopOutcome::Responded)
+        )
+    )
+}
+
+fn draw_chat_loop_panel(
+    frame: &mut Frame,
+    loop_state: &super::app::ChatLoopState,
+    theme: &Theme,
+    area: Rect,
+) {
+    let widget = Paragraph::new(loop_state_lines(
+        loop_state.stage.as_ref(),
+        loop_state.last_outcome.as_ref(),
+        loop_state.last_feedback.as_deref(),
+        theme,
+    ))
+    .block(
+        Block::default()
+            .title(" Loop State ")
+            .borders(Borders::TOP)
+            .border_style(theme.muted_style())
+            .padding(Padding::horizontal(1)),
+    )
+    .wrap(Wrap { trim: true });
+    frame.render_widget(widget, area);
+}
+
 fn detect_command_output_language(command: &str, content: &str) -> Option<&'static str> {
     let normalized_command = command.to_ascii_lowercase();
     if normalized_command.contains("git diff")
@@ -1688,6 +1726,7 @@ fn draw_plan_panel(
         ));
     }
     if let Some(runtime) = &plan.runtime {
+        lines.extend(plan_loop_state_lines(runtime, theme));
         lines.extend(plan_followup_lines(runtime, theme));
         lines.extend(plan_followup_history_lines(runtime, theme));
         lines.extend(plan_job_lines(
@@ -1956,6 +1995,94 @@ fn format_plan_runtime(runtime: &PlanRuntime) -> String {
         .or(runtime.active_tool.as_deref())
         .unwrap_or("task");
     format!("{}: {}", status, target)
+}
+
+fn plan_loop_state_lines(runtime: &PlanRuntime, theme: &Theme) -> Vec<Line<'static>> {
+    loop_state_lines(
+        runtime.loop_stage.as_ref(),
+        runtime.last_outcome.as_ref(),
+        runtime.last_feedback.as_deref(),
+        theme,
+    )
+}
+
+fn plan_loop_state_line_count(runtime: &PlanRuntime) -> usize {
+    loop_state_line_count(
+        runtime.loop_stage.as_ref(),
+        runtime.last_outcome.as_ref(),
+        runtime.last_feedback.as_deref(),
+    )
+}
+
+fn loop_state_lines(
+    stage: Option<&PlanLoopStage>,
+    outcome: Option<&PlanLoopOutcome>,
+    feedback: Option<&str>,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    if let Some(stage) = stage {
+        lines.push(Line::styled(
+            format!("loop: {}", format_loop_stage(stage)),
+            theme.muted_style().add_modifier(Modifier::ITALIC),
+        ));
+    }
+    if let Some(outcome) = outcome {
+        let color = match outcome {
+            PlanLoopOutcome::Succeeded
+            | PlanLoopOutcome::Checkpointed
+            | PlanLoopOutcome::Responded => theme.output,
+            PlanLoopOutcome::WaitingApproval | PlanLoopOutcome::RetryPending => {
+                Color::Rgb(245, 158, 11)
+            }
+            PlanLoopOutcome::Failed | PlanLoopOutcome::ReplanRequired => Color::Rgb(239, 68, 68),
+        };
+        lines.push(Line::styled(
+            format!("last outcome: {}", format_loop_outcome(outcome)),
+            Style::default().fg(color),
+        ));
+    }
+    if let Some(feedback) = feedback.filter(|value| !value.trim().is_empty()) {
+        lines.push(Line::styled(
+            format!("  {}", truncate_chat_summary(feedback, 72)),
+            theme.muted_style(),
+        ));
+    }
+    lines
+}
+
+fn loop_state_line_count(
+    stage: Option<&PlanLoopStage>,
+    outcome: Option<&PlanLoopOutcome>,
+    feedback: Option<&str>,
+) -> usize {
+    usize::from(stage.is_some())
+        + usize::from(outcome.is_some())
+        + usize::from(feedback.is_some_and(|value| !value.trim().is_empty()))
+}
+
+fn format_loop_stage(stage: &PlanLoopStage) -> &'static str {
+    match stage {
+        PlanLoopStage::Planning => "plan",
+        PlanLoopStage::Inspecting => "inspect",
+        PlanLoopStage::Executing => "execute",
+        PlanLoopStage::Feedback => "feedback",
+        PlanLoopStage::RetryPending => "retry",
+        PlanLoopStage::ReplanRequired => "replan",
+        PlanLoopStage::Responding => "respond",
+    }
+}
+
+fn format_loop_outcome(outcome: &PlanLoopOutcome) -> &'static str {
+    match outcome {
+        PlanLoopOutcome::WaitingApproval => "waiting approval",
+        PlanLoopOutcome::Succeeded => "succeeded",
+        PlanLoopOutcome::Failed => "failed",
+        PlanLoopOutcome::Checkpointed => "checkpointed",
+        PlanLoopOutcome::RetryPending => "retry suggested",
+        PlanLoopOutcome::ReplanRequired => "replan required",
+        PlanLoopOutcome::Responded => "responded",
+    }
 }
 
 fn plan_followup_lines(runtime: &PlanRuntime, theme: &Theme) -> Vec<Line<'static>> {
@@ -3434,6 +3561,7 @@ mod tests {
             plan_job_output_scroll: 0,
             navigation_focus: app::NavigationFocus::Messages,
             command_output: None,
+            loop_state: app::ChatLoopState::default(),
             agents_panel_expanded: false,
             agents_scroll_offset: 0,
             input: String::new(),
@@ -3656,7 +3784,7 @@ mod tests {
                 ],
                 followup: None,
                 followup_history: Vec::new(),
-                authoring: None,
+                ..Default::default()
             }),
             updated_at: None,
         };
@@ -3711,7 +3839,7 @@ mod tests {
             ],
             followup: None,
             followup_history: Vec::new(),
-            authoring: None,
+            ..Default::default()
         };
 
         let lines = plan_job_lines(&runtime, 0, true, &Theme::default());
@@ -3843,7 +3971,7 @@ mod tests {
                 }],
                 followup: None,
                 followup_history: Vec::new(),
-                authoring: None,
+                ..Default::default()
             }),
             updated_at: None,
         });
@@ -3885,5 +4013,70 @@ mod tests {
         assert!(lines[2]
             .to_string()
             .contains("checkpoint: Inspect output → Patch handler"));
+    }
+
+    #[test]
+    fn plan_loop_state_lines_render_stage_outcome_and_feedback() {
+        let runtime = PlanRuntime {
+            loop_stage: Some(PlanLoopStage::Inspecting),
+            last_outcome: Some(PlanLoopOutcome::RetryPending),
+            last_feedback: Some("inspect relevant files before editing".to_string()),
+            ..Default::default()
+        };
+
+        let lines = plan_loop_state_lines(&runtime, &Theme::default());
+
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].to_string().contains("loop: inspect"));
+        assert!(lines[1]
+            .to_string()
+            .contains("last outcome: retry suggested"));
+        assert!(lines[2]
+            .to_string()
+            .contains("inspect relevant files before editing"));
+    }
+
+    #[test]
+    fn loop_state_lines_render_non_plan_chat_state() {
+        let lines = loop_state_lines(
+            Some(&PlanLoopStage::Responding),
+            Some(&PlanLoopOutcome::Responded),
+            Some("answered directly without planning"),
+            &Theme::default(),
+        );
+
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].to_string().contains("loop: respond"));
+        assert!(lines[1].to_string().contains("last outcome: responded"));
+        assert!(lines[2]
+            .to_string()
+            .contains("answered directly without planning"));
+    }
+
+    #[test]
+    fn latest_action_summary_does_not_echo_plain_assistant_reply() {
+        let mut chat_state = empty_chat_state();
+        chat_state.messages.push(Message {
+            role: "user".to_string(),
+            content: "hi".to_string(),
+        });
+        chat_state.messages.push(Message {
+            role: "assistant".to_string(),
+            content: "Hello! How can I assist you today?".to_string(),
+        });
+
+        let app = app::TuiApp::default();
+        assert!(latest_action_summary(&app, &chat_state).is_none());
+    }
+
+    #[test]
+    fn respond_only_loop_panel_is_hidden() {
+        let loop_state = app::ChatLoopState {
+            stage: Some(PlanLoopStage::Responding),
+            last_outcome: Some(PlanLoopOutcome::Responded),
+            last_feedback: None,
+        };
+
+        assert!(!should_render_chat_loop_panel(&loop_state));
     }
 }

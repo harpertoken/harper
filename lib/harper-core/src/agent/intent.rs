@@ -334,6 +334,10 @@ fn infer_write_file_intent(query: &str, normalized: &str) -> Option<(String, Str
         }
     }
 
+    if let Some(generic) = infer_generic_named_file_intent(query, normalized) {
+        return Some(generic);
+    }
+
     let (file_kind, language_label) = if normalized.contains(" python ")
         || normalized.contains(" py file")
         || normalized.contains(" python file")
@@ -518,6 +522,50 @@ fn infer_write_file_intent(query: &str, normalized: &str) -> Option<(String, Str
     let content = starter_content_for(file_kind, &authoring_descriptor);
     let slug = slugify_filename(&authoring_slug_descriptor(&authoring_descriptor));
     Some((format!("{}.{}", slug, file_kind), content))
+}
+
+fn infer_generic_named_file_intent(query: &str, normalized: &str) -> Option<(String, String)> {
+    let file_name = ["file named ", "file name ", "named file ", "name the file "]
+        .iter()
+        .find_map(|marker| {
+            let idx = normalized.find(marker)?;
+            let tail = query[idx + marker.len()..].trim_start();
+            let token = tail
+                .split_whitespace()
+                .next()
+                .map(|value| {
+                    value.trim_matches(|c: char| {
+                        matches!(c, '.' | ',' | ';' | ':' | ')' | '(' | '"' | '\'' | '`')
+                    })
+                })
+                .filter(|value| !value.is_empty())?;
+            Some(token.to_string())
+        })?;
+
+    let content = infer_generic_named_file_content(normalized)?;
+    Some((file_name, content))
+}
+
+fn infer_generic_named_file_content(normalized: &str) -> Option<String> {
+    if normalized.contains("1 to 10") || normalized.contains("1 through 10") {
+        return Some(
+            (1..=10)
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+    }
+
+    if normalized.contains("1 to 5") || normalized.contains("1 through 5") {
+        return Some(
+            (1..=5)
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+    }
+
+    None
 }
 
 fn authoring_content_descriptor(descriptor: &str) -> String {
@@ -974,6 +1022,9 @@ fn infer_simple_run_command(query: &str, normalized: &str) -> Option<String> {
         candidate =
             candidate.trim_matches(|c: char| matches!(c, '.' | ',' | ';' | ':' | '"' | '\''));
         candidate = sanitize_natural_command_candidate(candidate);
+        if is_followup_command_placeholder(candidate) {
+            return None;
+        }
 
         let lowered = candidate.to_ascii_lowercase();
         match lowered.as_str() {
@@ -1064,6 +1115,20 @@ fn sanitize_natural_command_candidate(candidate: &str) -> &str {
         }
     }
     candidate
+}
+
+fn is_followup_command_placeholder(candidate: &str) -> bool {
+    matches!(
+        candidate.trim().to_ascii_lowercase().as_str(),
+        "that"
+            | "this"
+            | "it"
+            | "that one"
+            | "this one"
+            | "that command"
+            | "this command"
+            | "the command"
+    )
 }
 
 #[cfg(test)]
@@ -1472,6 +1537,12 @@ mod tests {
     }
 
     #[test]
+    fn does_not_route_placeholder_followup_as_literal_command() {
+        let intent = route_intent("run that command?");
+        assert_eq!(intent, None);
+    }
+
+    #[test]
     fn routes_natural_language_directory_command_intent() {
         let intent = route_intent("which directory are we in");
         assert_eq!(intent, Some(DeterministicIntent::CurrentDirectory));
@@ -1497,6 +1568,19 @@ mod tests {
             Some(DeterministicIntent::WriteFile(WriteFileIntent {
                 path: "note.txt".to_string(),
                 content: "i am niladri".to_string(),
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_generic_named_file_with_numeric_content() {
+        let intent =
+            route_intent("can you create a sample file name hello and put 1 to 10 in numbers");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::WriteFile(WriteFileIntent {
+                path: "hello".to_string(),
+                content: "1\n2\n3\n4\n5\n6\n7\n8\n9\n10".to_string(),
             }))
         );
     }

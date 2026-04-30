@@ -38,6 +38,7 @@ use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
+use serde::Serialize;
 
 use rustyline::Editor;
 use rustyline::Helper;
@@ -205,6 +206,46 @@ pub struct ChatService<'a> {
     execution_strategy: ExecutionStrategy,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ChatTurnDebugSummary {
+    pub strategy: String,
+    pub task_mode: String,
+    pub deterministic_intent: Option<String>,
+    pub normalized_command: Option<String>,
+    pub clarification: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TaskMode {
+    DirectDeterministic,
+    PlanThenAct,
+    InspectThenExecute,
+    ToolAssisted,
+    RespondOnly,
+}
+
+impl TaskMode {
+    fn initial_activity_label(self) -> &'static str {
+        match self {
+            Self::DirectDeterministic => "executing deterministic action",
+            Self::PlanThenAct => "planning task",
+            Self::InspectThenExecute => "inspecting repo context",
+            Self::ToolAssisted => "selecting tool",
+            Self::RespondOnly => "responding",
+        }
+    }
+
+    fn model_activity_label(self) -> &'static str {
+        match self {
+            Self::DirectDeterministic => "summarizing result",
+            Self::PlanThenAct => "reasoning over plan",
+            Self::InspectThenExecute => "reasoning over grounded context",
+            Self::ToolAssisted => "thinking",
+            Self::RespondOnly => "responding",
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl<'a> ChatService<'a> {
     const AUDIT_LOG_LIMIT: usize = 10;
@@ -248,6 +289,46 @@ impl<'a> ChatService<'a> {
     pub fn with_runtime_events(mut self, runtime_events: Arc<dyn RuntimeEventSink>) -> Self {
         self.runtime_events = Some(runtime_events);
         self
+    }
+
+    pub fn debug_turn_summary(&self, history: &[Message], user_msg: &str) -> ChatTurnDebugSummary {
+        let deterministic_intent = route_intent(user_msg).or_else(|| {
+            Self::infer_followup_write_file_intent(history, user_msg)
+                .map(DeterministicIntent::WriteFile)
+                .or_else(|| {
+                    Self::infer_followup_run_command_intent(history, user_msg)
+                        .map(DeterministicIntent::RunCommand)
+                })
+        });
+        let task_mode = if route_intent(user_msg).is_none() && deterministic_intent.is_some() {
+            TaskMode::DirectDeterministic
+        } else {
+            Self::decide_task_mode(self.execution_strategy, user_msg)
+        };
+
+        let normalized_command = deterministic_intent
+            .as_ref()
+            .and_then(|intent| match intent {
+                DeterministicIntent::RunCommand(intent) => {
+                    Some(Self::normalize_run_command_candidate(&intent.command))
+                }
+                _ => None,
+            });
+
+        let clarification = normalized_command.as_ref().and_then(|command| {
+            let tool_call = format!("[RUN_COMMAND {}]", command);
+            Self::clarification_for_underspecified_tool_call(user_msg, &tool_call)
+        });
+
+        ChatTurnDebugSummary {
+            strategy: Self::execution_strategy_name(self.execution_strategy).to_string(),
+            task_mode: Self::format_task_mode(task_mode).to_string(),
+            deterministic_intent: deterministic_intent
+                .as_ref()
+                .map(Self::format_deterministic_intent),
+            normalized_command,
+            clarification,
+        }
     }
 
     /// Create a new chat service for testing
@@ -896,7 +977,49 @@ impl<'a> ChatService<'a> {
             .find(|message| message.role == "user")
             .map(|message| message.content.clone())
             .unwrap_or_default();
+        let task_mode =
+            if self.should_force_followup_deterministic(history, &last_user_msg, session_id) {
+                TaskMode::DirectDeterministic
+            } else {
+                Self::decide_task_mode(self.execution_strategy, &last_user_msg)
+            };
+        self.emit_activity_update(
+            session_id,
+            Some(task_mode.initial_activity_label().to_string()),
+        );
+        self.persist_loop_stage(
+            session_id,
+            match task_mode {
+                TaskMode::DirectDeterministic | TaskMode::ToolAssisted => {
+                    crate::core::plan::PlanLoopStage::Executing
+                }
+                TaskMode::PlanThenAct => crate::core::plan::PlanLoopStage::Planning,
+                TaskMode::InspectThenExecute => crate::core::plan::PlanLoopStage::Inspecting,
+                TaskMode::RespondOnly => crate::core::plan::PlanLoopStage::Responding,
+            },
+            Some(task_mode.initial_activity_label().to_string()),
+        );
         let mut authoring_context = None;
+        if matches!(task_mode, TaskMode::PlanThenAct) {
+            self.emit_activity_update(session_id, Some("planning task".to_string()));
+            self.persist_loop_stage(
+                session_id,
+                crate::core::plan::PlanLoopStage::Planning,
+                Some("planning task".to_string()),
+            );
+        }
+        if matches!(
+            task_mode,
+            TaskMode::PlanThenAct | TaskMode::InspectThenExecute
+        ) && Self::request_needs_authoring_flow(&last_user_msg)
+        {
+            self.emit_activity_update(session_id, Some("inspecting repo context".to_string()));
+            self.persist_loop_stage(
+                session_id,
+                crate::core::plan::PlanLoopStage::Inspecting,
+                Some("inspecting repo context".to_string()),
+            );
+        }
         if let Some(authoring_request_context) =
             self.authoring_prompt_for_request(&last_user_msg).await?
         {
@@ -907,11 +1030,37 @@ impl<'a> ChatService<'a> {
             authoring_context = Some(authoring_request_context);
         }
 
-        if Self::should_prefer_deterministic_routing(self.execution_strategy, &last_user_msg) {
+        let should_try_deterministic_now =
+            self.should_force_followup_deterministic(history, &last_user_msg, session_id)
+                || (Self::should_prefer_deterministic_routing(
+                    self.execution_strategy,
+                    &last_user_msg,
+                ) && route_intent(&last_user_msg).is_some());
+        if !matches!(task_mode, TaskMode::RespondOnly) && should_try_deterministic_now {
+            self.emit_activity_update(
+                session_id,
+                Some("executing deterministic action".to_string()),
+            );
+            self.persist_loop_stage(
+                session_id,
+                crate::core::plan::PlanLoopStage::Executing,
+                Some("executing deterministic action".to_string()),
+            );
             if let Some((tool_name, tool_content)) = self
                 .try_handle_deterministic_intent(history, &last_user_msg, session_id)
                 .await?
             {
+                self.emit_activity_update(session_id, Some("summarizing result".to_string()));
+                self.persist_loop_stage(
+                    session_id,
+                    crate::core::plan::PlanLoopStage::Feedback,
+                    Some("summarizing result".to_string()),
+                );
+                self.persist_loop_outcome(
+                    session_id,
+                    crate::core::plan::PlanLoopOutcome::Succeeded,
+                    Some("deterministic action completed".to_string()),
+                );
                 return self
                     .summarize_deterministic_tool_result(
                         &client,
@@ -925,8 +1074,47 @@ impl<'a> ChatService<'a> {
             }
         }
 
-        self.emit_activity_update(session_id, Some("thinking".to_string()));
-        let mut response = self.call_llm(&client, &history_for_llm).await?;
+        self.emit_activity_update(
+            session_id,
+            Some(task_mode.model_activity_label().to_string()),
+        );
+        self.persist_loop_stage(
+            session_id,
+            match task_mode {
+                TaskMode::PlanThenAct => crate::core::plan::PlanLoopStage::Planning,
+                TaskMode::InspectThenExecute => crate::core::plan::PlanLoopStage::Inspecting,
+                TaskMode::DirectDeterministic | TaskMode::ToolAssisted => {
+                    crate::core::plan::PlanLoopStage::Executing
+                }
+                TaskMode::RespondOnly => crate::core::plan::PlanLoopStage::Responding,
+            },
+            Some(task_mode.model_activity_label().to_string()),
+        );
+        let mut response = match self.call_llm(&client, &history_for_llm).await {
+            Ok(response) => response,
+            Err(HarperError::Api(_)) | Err(HarperError::Command(_)) => {
+                if matches!(task_mode, TaskMode::RespondOnly) {
+                    return Ok(Self::model_backend_unavailable_reply());
+                }
+                if let Some((tool_name, tool_content)) = self
+                    .try_handle_deterministic_intent(history, &last_user_msg, session_id)
+                    .await?
+                {
+                    return self
+                        .summarize_deterministic_tool_result(
+                            &client,
+                            &mut history_for_llm,
+                            history,
+                            session_id,
+                            &tool_name,
+                            &tool_content,
+                        )
+                        .await;
+                }
+                return Ok(Self::model_backend_unavailable_reply());
+            }
+            Err(err) => return Err(err),
+        };
         let mut executed_tool_calls: HashSet<String> = HashSet::new();
         let mut injected_agents_guidance: HashSet<String> = HashSet::new();
         let mut last_tool_content: Option<String> = None;
@@ -990,10 +1178,11 @@ impl<'a> ChatService<'a> {
 
         for _ in 0..MAX_TOOL_ROUNDS {
             let clean_response = Self::sanitize_model_response(&response);
-            let tool_signature = Self::tool_call_signature(&clean_response);
+            let normalized_tool_call = Self::normalize_tool_call_for_execution(&clean_response);
+            let tool_signature = Self::tool_call_signature(&normalized_tool_call);
             let dedupe_key = tool_signature
                 .clone()
-                .unwrap_or_else(|| clean_response.clone());
+                .unwrap_or_else(|| normalized_tool_call.clone());
             if self.execution_strategy != ExecutionStrategy::Deterministic
                 && matches!(
                     self.execution_strategy,
@@ -1028,8 +1217,35 @@ impl<'a> ChatService<'a> {
                         required_tool
                     ),
                 });
-                self.emit_activity_update(session_id, Some("thinking".to_string()));
-                response = self.call_llm(&client, &history_for_llm).await?;
+                self.emit_activity_update(
+                    session_id,
+                    Some(task_mode.model_activity_label().to_string()),
+                );
+                response = match self.call_llm(&client, &history_for_llm).await {
+                    Ok(response) => response,
+                    Err(HarperError::Api(_)) | Err(HarperError::Command(_)) => {
+                        if matches!(task_mode, TaskMode::RespondOnly) {
+                            return Ok(Self::model_backend_unavailable_reply());
+                        }
+                        if let Some((tool_name, tool_content)) = self
+                            .try_handle_deterministic_intent(history, &last_user_msg, session_id)
+                            .await?
+                        {
+                            return self
+                                .summarize_deterministic_tool_result(
+                                    &client,
+                                    &mut history_for_llm,
+                                    history,
+                                    session_id,
+                                    &tool_name,
+                                    &tool_content,
+                                )
+                                .await;
+                        }
+                        return Ok(Self::model_backend_unavailable_reply());
+                    }
+                    Err(err) => return Err(err),
+                };
                 continue;
             }
             let merged_candidate_paths = authoring_context
@@ -1045,7 +1261,7 @@ impl<'a> ChatService<'a> {
                 });
             if let Some(authoring_retry_prompt) = Self::authoring_tool_retry_prompt(
                 &last_user_msg,
-                &clean_response,
+                &normalized_tool_call,
                 merged_candidate_paths.as_ref(),
                 saw_authoring_inspection,
                 saw_plan_update,
@@ -1056,12 +1272,15 @@ impl<'a> ChatService<'a> {
                     role: "system".to_string(),
                     content: authoring_retry_prompt,
                 });
-                self.emit_activity_update(session_id, Some("thinking".to_string()));
+                self.emit_activity_update(
+                    session_id,
+                    Some(task_mode.model_activity_label().to_string()),
+                );
                 response = self.call_llm(&client, &history_for_llm).await?;
                 continue;
             }
             if let Some(agents_prompt) = self.agents_guidance_for_tool_call(
-                &clean_response,
+                &normalized_tool_call,
                 session_id,
                 &injected_agents_guidance,
             )? {
@@ -1070,7 +1289,10 @@ impl<'a> ChatService<'a> {
                     role: "system".to_string(),
                     content: agents_prompt,
                 });
-                self.emit_activity_update(session_id, Some("thinking".to_string()));
+                self.emit_activity_update(
+                    session_id,
+                    Some(task_mode.model_activity_label().to_string()),
+                );
                 response = self.call_llm(&client, &history_for_llm).await?;
                 continue;
             }
@@ -1079,6 +1301,22 @@ impl<'a> ChatService<'a> {
                     return Ok(format!("Tool result:\n{}", content));
                 }
                 break;
+            }
+            if let Some(clarification) = Self::clarification_for_underspecified_tool_call(
+                &last_user_msg,
+                &normalized_tool_call,
+            ) {
+                self.persist_loop_stage(
+                    session_id,
+                    crate::core::plan::PlanLoopStage::Feedback,
+                    Some("clarification required".to_string()),
+                );
+                self.persist_loop_outcome(
+                    session_id,
+                    crate::core::plan::PlanLoopOutcome::Failed,
+                    Some(clarification.clone()),
+                );
+                return Ok(clarification);
             }
             let tool_option = {
                 let mut tool_service = ToolService::new(
@@ -1098,7 +1336,7 @@ impl<'a> ChatService<'a> {
                     .handle_tool_use(
                         &client,
                         &history_for_llm,
-                        &clean_response,
+                        &normalized_tool_call,
                         web_search_enabled,
                     )
                     .await?
@@ -1106,7 +1344,7 @@ impl<'a> ChatService<'a> {
 
             if let Some((tool_result, tool_content)) = tool_option {
                 self.notify_command_activity(session_id);
-                if let Some(tool_name) = Self::tool_name_from_tool_call(&clean_response) {
+                if let Some(tool_name) = Self::tool_name_from_tool_call(&normalized_tool_call) {
                     if tool_name == "update_plan" {
                         saw_plan_update = true;
                         if let Some(authoring_request_context) = authoring_context.as_ref() {
@@ -1135,10 +1373,11 @@ impl<'a> ChatService<'a> {
                             | "grep"
                     ) {
                         saw_authoring_inspection = true;
-                        let inspected = ToolService::target_paths_for_tool_call(&clean_response)
-                            .into_iter()
-                            .map(Self::normalize_authoring_path)
-                            .collect::<Vec<_>>();
+                        let inspected =
+                            ToolService::target_paths_for_tool_call(&normalized_tool_call)
+                                .into_iter()
+                                .map(Self::normalize_authoring_path)
+                                .collect::<Vec<_>>();
                         inspected_paths.extend(inspected.iter().cloned());
                         let _ = crate::tools::plan::mark_plan_authoring_inspection(
                             self.conn,
@@ -1150,7 +1389,7 @@ impl<'a> ChatService<'a> {
                         );
                     }
                     if matches!(tool_name.as_str(), "search_replace" | "write_file") {
-                        let edited = ToolService::target_paths_for_tool_call(&clean_response)
+                        let edited = ToolService::target_paths_for_tool_call(&normalized_tool_call)
                             .into_iter()
                             .map(Self::normalize_authoring_path)
                             .collect::<Vec<_>>();
@@ -1164,7 +1403,7 @@ impl<'a> ChatService<'a> {
                         );
                     }
                     if tool_name == "run_command"
-                        && Self::is_authoring_validation_command(&clean_response)
+                        && Self::is_authoring_validation_command(&normalized_tool_call)
                     {
                         let _ = crate::tools::plan::mark_plan_authoring_validated(
                             self.conn, session_id,
@@ -1185,6 +1424,17 @@ impl<'a> ChatService<'a> {
 
             break;
         }
+
+        self.persist_loop_stage(
+            session_id,
+            crate::core::plan::PlanLoopStage::Feedback,
+            Some("response ready".to_string()),
+        );
+        self.persist_loop_outcome(
+            session_id,
+            crate::core::plan::PlanLoopOutcome::Responded,
+            Some("response delivered".to_string()),
+        );
 
         Ok(Self::finalize_assistant_response(
             &response,
@@ -1272,6 +1522,25 @@ impl<'a> ChatService<'a> {
                 let _ = runtime_events.activity_updated(&session_id, status).await;
             });
         }
+    }
+
+    fn persist_loop_stage(
+        &self,
+        session_id: &str,
+        stage: crate::core::plan::PlanLoopStage,
+        feedback: Option<String>,
+    ) {
+        let _ = crate::tools::plan::set_plan_loop_stage(self.conn, session_id, stage, feedback);
+    }
+
+    fn persist_loop_outcome(
+        &self,
+        session_id: &str,
+        outcome: crate::core::plan::PlanLoopOutcome,
+        feedback: Option<String>,
+    ) {
+        let _ =
+            crate::tools::plan::record_plan_loop_outcome(self.conn, session_id, outcome, feedback);
     }
 
     fn plan_prompt_for_request(
@@ -1669,6 +1938,82 @@ impl<'a> ChatService<'a> {
         parsing::extract_tool_arg(trimmed, "[RUN_COMMAND").ok()
     }
 
+    fn normalize_tool_call_for_execution(tool_call_json: &str) -> String {
+        let Some(tool_name) = Self::tool_name_from_tool_call(tool_call_json) else {
+            return tool_call_json.to_string();
+        };
+        if tool_name != "run_command" {
+            return tool_call_json.to_string();
+        }
+        let Some(command) = Self::extract_run_command_text(tool_call_json) else {
+            return tool_call_json.to_string();
+        };
+        let normalized_command = Self::normalize_run_command_candidate(&command);
+        if normalized_command == command {
+            return tool_call_json.to_string();
+        }
+
+        let trimmed = tool_call_json.trim();
+        if let Ok(mut json_value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if let Some(args) = json_value.get_mut("args") {
+                if let Some(command_value) = args.get_mut("command") {
+                    *command_value = serde_json::Value::String(normalized_command.clone());
+                    return json_value.to_string();
+                }
+            }
+            if let Some(args) = json_value.get_mut("arguments") {
+                if let Some(command_value) = args.get_mut("command") {
+                    *command_value = serde_json::Value::String(normalized_command.clone());
+                    return json_value.to_string();
+                }
+            }
+        }
+
+        format!("[RUN_COMMAND {}]", normalized_command)
+    }
+
+    fn normalize_run_command_candidate(command: &str) -> String {
+        let mut candidate = command.trim();
+        if let Some(stripped) = candidate.strip_prefix("the ") {
+            candidate = stripped.trim();
+        }
+        if let Some(stripped) = candidate.strip_suffix(" command") {
+            candidate = stripped.trim();
+        }
+        candidate = candidate.trim_matches(|c: char| matches!(c, '"' | '\''));
+        candidate = candidate.trim_end_matches(['.', ',', ';', ':']);
+        let candidate = Self::trim_run_command_suffixes(candidate);
+        match candidate.to_ascii_lowercase().as_str() {
+            "git status" => "git status".to_string(),
+            "git diff" => "git diff".to_string(),
+            "clear" => "clear".to_string(),
+            "pwd" => "pwd".to_string(),
+            "ls" => "ls".to_string(),
+            "date" => "date".to_string(),
+            "whoami" => "whoami".to_string(),
+            _ => candidate.to_string(),
+        }
+    }
+
+    fn trim_run_command_suffixes(candidate: &str) -> &str {
+        let lowered = candidate.to_ascii_lowercase();
+        for suffix in [
+            " and summarize it",
+            " and summarize",
+            " then summarize it",
+            " then summarize",
+            " and explain it",
+            " and explain",
+            " and show me",
+        ] {
+            if lowered.ends_with(suffix) {
+                let idx = candidate.len() - suffix.len();
+                return candidate[..idx].trim();
+            }
+        }
+        candidate
+    }
+
     fn is_authoring_validation_command(tool_call_json: &str) -> bool {
         let Some(command) = Self::extract_run_command_text(tool_call_json) else {
             return false;
@@ -1810,6 +2155,90 @@ impl<'a> ChatService<'a> {
         None
     }
 
+    fn clarification_for_underspecified_tool_call(
+        user_msg: &str,
+        tool_call: &str,
+    ) -> Option<String> {
+        let tool_name = Self::tool_name_from_tool_call(tool_call)?;
+        let underspecified_prompt = Self::is_underspecified_prompt(user_msg);
+        if matches!(
+            tool_name.as_str(),
+            "read_file" | "write_file" | "search_replace"
+        ) && underspecified_prompt
+        {
+            let target_paths = ToolService::target_paths_for_tool_call(tool_call);
+            if target_paths
+                .iter()
+                .any(|path| Self::looks_like_placeholder_target(path))
+            {
+                return Some(
+                    "Your message is too ambiguous to act on safely. Name a real repository file or describe the task more specifically."
+                        .to_string(),
+                );
+            }
+        }
+
+        if tool_name == "run_command" {
+            let command = Self::extract_run_command_text(tool_call)
+                .map(|value| Self::normalize_run_command_candidate(&value))
+                .unwrap_or_default();
+            if Self::is_followup_run_command_placeholder(&command) {
+                return Some(
+                    "I do not know which previous command you mean. Name the exact command you want to run."
+                        .to_string(),
+                );
+            }
+        }
+
+        None
+    }
+
+    fn is_underspecified_prompt(user_msg: &str) -> bool {
+        let trimmed = user_msg.trim();
+        if trimmed.is_empty() {
+            return true;
+        }
+        let tokens = trimmed.split_whitespace().collect::<Vec<_>>();
+        tokens.len() <= 1
+            && trimmed.len() <= 4
+            && !trimmed.contains('/')
+            && !trimmed.contains('.')
+            && !trimmed.starts_with('/')
+            && !trimmed.starts_with('!')
+            && !trimmed.starts_with('@')
+    }
+
+    fn looks_like_placeholder_target(path: &Path) -> bool {
+        let rendered = path.to_string_lossy().to_ascii_lowercase();
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        rendered.contains("example.")
+            || rendered.contains("path/to/")
+            || rendered.contains("your_file")
+            || rendered.contains("placeholder")
+            || matches!(
+                file_name.as_str(),
+                "example.txt" | "example.rs" | "example.md" | "file.txt" | "note.txt" | "main.rs"
+            )
+    }
+
+    fn is_followup_run_command_placeholder(command: &str) -> bool {
+        matches!(
+            command.trim().to_ascii_lowercase().as_str(),
+            "that"
+                | "this"
+                | "it"
+                | "that one"
+                | "this one"
+                | "that command"
+                | "this command"
+                | "the command"
+        )
+    }
+
     async fn try_handle_deterministic_intent(
         &self,
         history: &[Message],
@@ -1819,6 +2248,12 @@ impl<'a> ChatService<'a> {
         let routed_intent = route_intent(user_msg).or_else(|| {
             Self::infer_followup_write_file_intent(history, user_msg)
                 .map(DeterministicIntent::WriteFile)
+                .or_else(|| {
+                    self.infer_followup_run_command_intent_for_session(
+                        history, user_msg, session_id,
+                    )
+                    .map(DeterministicIntent::RunCommand)
+                })
         });
         match routed_intent {
             Some(DeterministicIntent::ListChangedFiles(filters)) => {
@@ -1886,18 +2321,24 @@ impl<'a> ChatService<'a> {
                 Ok(Some(("write_file".to_string(), response)))
             }
             Some(DeterministicIntent::CodebaseSearch(intent)) => {
-                let response =
-                    crate::tools::codebase_investigator::search_text(&intent.pattern).await?;
+                let search_intent =
+                    Self::infer_codebase_search_intent_kind(user_msg, &intent.pattern);
+                let response = crate::tools::codebase_investigator::search_text_with_intent(
+                    &intent.pattern,
+                    search_intent,
+                )
+                .await?;
                 Ok(Some(("codebase_search".to_string(), response)))
             }
             Some(DeterministicIntent::RunCommand(intent)) => {
+                let command = Self::normalize_run_command_candidate(&intent.command);
                 let audit_ctx = CommandAuditContext {
                     conn: self.conn,
                     session_id: Some(session_id),
                     source: "intent_run_command",
                 };
                 let response = crate::tools::shell::execute_command(
-                    &format!("[RUN_COMMAND {}]", intent.command),
+                    &format!("[RUN_COMMAND {}]", command),
                     self.config,
                     &self.exec_policy,
                     None,
@@ -1906,11 +2347,7 @@ impl<'a> ChatService<'a> {
                     self.runtime_events.clone(),
                 )
                 .await?;
-                let rendered = format!(
-                    "COMMAND: {}\nOUTPUT:\n{}",
-                    intent.command,
-                    response.trim_end()
-                );
+                let rendered = format!("COMMAND: {}\nOUTPUT:\n{}", command, response.trim_end());
                 Ok(Some(("run_command".to_string(), rendered)))
             }
             None => Ok(None),
@@ -1977,6 +2414,130 @@ impl<'a> ChatService<'a> {
         Some(crate::agent::intent::WriteFileIntent { path, content })
     }
 
+    fn infer_followup_run_command_intent(
+        history: &[Message],
+        user_msg: &str,
+    ) -> Option<crate::agent::intent::RunCommandIntent> {
+        let normalized = user_msg.to_ascii_lowercase();
+        let wants_run = normalized == "run it"
+            || normalized == "run that"
+            || normalized == "run this"
+            || normalized == "run that command"
+            || normalized == "run this command"
+            || normalized == "execute it"
+            || normalized == "execute that"
+            || normalized == "execute this"
+            || normalized == "execute that command"
+            || normalized == "execute this command"
+            || normalized == "can you run that"
+            || normalized == "can you run this"
+            || normalized == "can you run that command"
+            || normalized == "can you execute that";
+        if !wants_run {
+            return None;
+        }
+
+        if let Some(previous_user_msg) = Self::previous_user_message(history, user_msg) {
+            if let Some(command) = route_intent(previous_user_msg)
+                .and_then(Self::canonical_command_for_deterministic_intent)
+            {
+                return Some(crate::agent::intent::RunCommandIntent { command });
+            }
+        }
+
+        let assistant_msg = history
+            .iter()
+            .rev()
+            .find(|message| message.role == "assistant")?;
+        let command = Self::extract_followup_run_command(&assistant_msg.content)?;
+        Some(crate::agent::intent::RunCommandIntent { command })
+    }
+
+    fn infer_followup_run_command_intent_for_session(
+        &self,
+        history: &[Message],
+        user_msg: &str,
+        session_id: &str,
+    ) -> Option<crate::agent::intent::RunCommandIntent> {
+        let normalized = user_msg.to_ascii_lowercase();
+        let wants_run = normalized == "run it"
+            || normalized == "run that"
+            || normalized == "run this"
+            || normalized == "run that command"
+            || normalized == "run this command"
+            || normalized == "execute it"
+            || normalized == "execute that"
+            || normalized == "execute this"
+            || normalized == "execute that command"
+            || normalized == "execute this command"
+            || normalized == "can you run that"
+            || normalized == "can you run this"
+            || normalized == "can you run that command"
+            || normalized == "can you execute that";
+        if !wants_run {
+            return None;
+        }
+
+        if let Ok(entries) = self.fetch_command_logs(session_id, 12) {
+            if let Some(command) = entries
+                .into_iter()
+                .map(|entry| Self::normalize_run_command_candidate(&entry.command))
+                .find(|command| {
+                    Self::looks_like_runnable_command(command)
+                        && !Self::is_followup_run_command_placeholder(command)
+                })
+            {
+                return Some(crate::agent::intent::RunCommandIntent { command });
+            }
+        }
+
+        Self::infer_followup_run_command_intent(history, user_msg)
+    }
+
+    fn should_force_followup_deterministic(
+        &self,
+        history: &[Message],
+        user_msg: &str,
+        session_id: &str,
+    ) -> bool {
+        route_intent(user_msg).is_none()
+            && (Self::infer_followup_write_file_intent(history, user_msg).is_some()
+                || self
+                    .infer_followup_run_command_intent_for_session(history, user_msg, session_id)
+                    .is_some())
+    }
+
+    fn canonical_command_for_deterministic_intent(intent: DeterministicIntent) -> Option<String> {
+        match intent {
+            DeterministicIntent::GitStatus => Some("git status".to_string()),
+            DeterministicIntent::GitDiff => Some("git diff".to_string()),
+            DeterministicIntent::GitBranch => Some("git branch --show-current".to_string()),
+            DeterministicIntent::RunCommand(intent) => {
+                Some(Self::normalize_run_command_candidate(&intent.command))
+            }
+            _ => None,
+        }
+    }
+
+    fn previous_user_message<'h>(
+        history: &'h [Message],
+        current_user_msg: &str,
+    ) -> Option<&'h str> {
+        let mut skipped_current = false;
+        for message in history
+            .iter()
+            .rev()
+            .filter(|message| message.role == "user")
+        {
+            if !skipped_current && message.content.trim() == current_user_msg.trim() {
+                skipped_current = true;
+                continue;
+            }
+            return Some(message.content.as_str());
+        }
+        None
+    }
+
     fn extract_backtick_segments(content: &str) -> Vec<String> {
         let mut segments = Vec::new();
         let mut remaining = content;
@@ -1992,6 +2553,99 @@ impl<'a> ChatService<'a> {
             remaining = &after_start[end + 1..];
         }
         segments
+    }
+
+    fn extract_followup_run_command(content: &str) -> Option<String> {
+        let mut candidates = Self::extract_backtick_segments(content)
+            .into_iter()
+            .map(|segment| Self::normalize_run_command_candidate(&segment))
+            .filter(|segment| Self::looks_like_runnable_command(segment))
+            .filter(|segment| !Self::is_followup_run_command_placeholder(segment))
+            .collect::<Vec<_>>();
+
+        candidates.extend(content.lines().filter_map(|line| {
+            let candidate = Self::extract_command_from_followup_line(line)?;
+            let candidate = Self::normalize_run_command_candidate(&candidate);
+            if Self::looks_like_runnable_command(&candidate) {
+                Some(candidate)
+            } else {
+                None
+            }
+        }));
+
+        candidates
+            .into_iter()
+            .find(|candidate| Self::looks_like_execution_command(candidate))
+            .or_else(|| {
+                Self::extract_backtick_segments(content)
+                    .into_iter()
+                    .map(|segment| Self::normalize_run_command_candidate(&segment))
+                    .find(|segment| {
+                        Self::looks_like_runnable_command(segment)
+                            && !Self::is_followup_run_command_placeholder(segment)
+                    })
+            })
+    }
+
+    fn extract_command_from_followup_line(line: &str) -> Option<String> {
+        let trimmed = line.trim().trim_matches('`');
+        if let Some(value) = trimmed.strip_prefix("COMMAND: ") {
+            return Some(value.trim().to_string());
+        }
+        if let Some(value) = trimmed.strip_prefix("$ ") {
+            let value = value
+                .split(" sh:")
+                .next()
+                .unwrap_or(value)
+                .split(" bash:")
+                .next()
+                .unwrap_or(value)
+                .trim();
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+        if let Some(value) = trimmed.strip_prefix("Ran `") {
+            let value = value.split('`').next().unwrap_or(value).trim();
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+        if Self::looks_like_runnable_command(trimmed) {
+            return Some(trimmed.to_string());
+        }
+        None
+    }
+
+    fn looks_like_runnable_command(candidate: &str) -> bool {
+        let trimmed = candidate.trim();
+        let lowered = trimmed.to_ascii_lowercase();
+        trimmed.starts_with("./")
+            || trimmed.starts_with('/')
+            || lowered.starts_with("cargo ")
+            || lowered.starts_with("python ")
+            || lowered.starts_with("python3 ")
+            || lowered.starts_with("bash ")
+            || lowered.starts_with("sh ")
+            || lowered.starts_with("chmod ")
+            || lowered.starts_with("npm ")
+            || lowered.starts_with("pnpm ")
+            || lowered.starts_with("git ")
+    }
+
+    fn looks_like_execution_command(candidate: &str) -> bool {
+        let trimmed = candidate.trim();
+        let lowered = trimmed.to_ascii_lowercase();
+        trimmed.starts_with("./")
+            || trimmed.starts_with('/')
+            || lowered.starts_with("cargo ")
+            || lowered.starts_with("python ")
+            || lowered.starts_with("python3 ")
+            || lowered.starts_with("bash ")
+            || lowered.starts_with("sh ")
+            || lowered.starts_with("npm ")
+            || lowered.starts_with("pnpm ")
+            || lowered.starts_with("git ")
     }
 
     fn looks_like_absolute_followup_path(path: &str) -> bool {
@@ -2079,13 +2733,7 @@ impl<'a> ChatService<'a> {
         tool_content: &str,
     ) -> Result<String, HarperError> {
         self.notify_command_activity(session_id);
-        if tool_name == "repo_identity"
-            || tool_name == "git_branch"
-            || tool_name == "git_status"
-            || tool_name == "git_diff"
-            || tool_name == "write_file"
-            || tool_name == "run_command"
-        {
+        if !Self::should_model_summarize_deterministic_result(self.execution_strategy, tool_name) {
             return Ok(Self::compact_deterministic_fallback(
                 tool_name,
                 tool_content,
@@ -2102,8 +2750,17 @@ impl<'a> ChatService<'a> {
             role: "system".to_string(),
             content: Self::deterministic_summary_instruction(tool_name).to_string(),
         });
-        self.emit_activity_update(session_id, Some("thinking".to_string()));
-        let response = self.call_llm(client, history_for_llm).await?;
+        self.emit_activity_update(session_id, Some("summarizing result".to_string()));
+        let response = match self.call_llm(client, history_for_llm).await {
+            Ok(response) => response,
+            Err(HarperError::Api(_)) | Err(HarperError::Command(_)) => {
+                return Ok(Self::compact_deterministic_fallback(
+                    tool_name,
+                    tool_content,
+                ));
+            }
+            Err(err) => return Err(err),
+        };
         if response.trim().is_empty()
             || Self::tool_call_signature(&response).is_some()
             || Self::deterministic_summary_is_low_value(tool_name, &response, tool_content)
@@ -2114,6 +2771,25 @@ impl<'a> ChatService<'a> {
             ));
         }
         Ok(response)
+    }
+
+    fn should_model_summarize_deterministic_result(
+        strategy: ExecutionStrategy,
+        tool_name: &str,
+    ) -> bool {
+        if matches!(strategy, ExecutionStrategy::Deterministic) {
+            return false;
+        }
+
+        !matches!(
+            tool_name,
+            "repo_identity"
+                | "git_branch"
+                | "git_status"
+                | "git_diff"
+                | "write_file"
+                | "run_command"
+        )
     }
 
     fn deterministic_summary_instruction(tool_name: &str) -> &'static str {
@@ -2326,6 +3002,9 @@ impl<'a> ChatService<'a> {
 
         let command = command.unwrap_or_else(|| "command".to_string());
         let output = output_lines.join("\n").trim().to_string();
+        if output == "Command execution cancelled by user" {
+            return format!("Cancelled `{}`.", command);
+        }
         if output.is_empty() {
             return format!("Ran `{}` successfully.", command);
         }
@@ -2338,10 +3017,13 @@ impl<'a> ChatService<'a> {
         let mut current_file = None;
         let mut current_snippet = None;
         let mut current_reasons: Option<String> = None;
+        let mut intent = "general";
 
         for line in tool_content.lines().skip(1) {
             let trimmed = line.trim();
-            if let Some(value) = trimmed.strip_prefix("FILE: ") {
+            if let Some(value) = trimmed.strip_prefix("INTENT: ") {
+                intent = value;
+            } else if let Some(value) = trimmed.strip_prefix("FILE: ") {
                 if let (Some(file), Some(snippet)) = (current_file.take(), current_snippet.take()) {
                     let reasons = current_reasons.take().unwrap_or_default();
                     let reason_suffix = if reasons.is_empty() {
@@ -2382,7 +3064,62 @@ impl<'a> ChatService<'a> {
             return format!("Tool result:\n{}", tool_content);
         }
 
-        format!("Top source matches:\n{}", bullets.join("\n"))
+        if intent == "defined" {
+            bullets.retain(|bullet| {
+                let lower = bullet.to_ascii_lowercase();
+                lower.contains(" enum ")
+                    || lower.contains(" struct ")
+                    || lower.contains(" trait ")
+                    || lower.contains(" type ")
+                    || lower.contains(" fn ")
+            });
+            if bullets.is_empty() {
+                return format!("Tool result:\n{}", tool_content);
+            }
+            bullets.truncate(2);
+        } else if intent == "calls" {
+            bullets.retain(|bullet| !bullet.to_ascii_lowercase().contains(" fn "));
+            if bullets.is_empty() {
+                return format!("Tool result:\n{}", tool_content);
+            }
+            bullets.truncate(4);
+        }
+
+        let heading = match intent {
+            "used" => "Top usage sites:",
+            "calls" => "Top call sites:",
+            "defined" => "Top definitions:",
+            _ => "Top source matches:",
+        };
+
+        format!("{}\n{}", heading, bullets.join("\n"))
+    }
+
+    fn infer_codebase_search_intent_kind(
+        user_msg: &str,
+        pattern: &str,
+    ) -> crate::tools::codebase_investigator::SearchIntentKind {
+        let lower = user_msg.to_ascii_lowercase();
+        if lower.contains("what calls")
+            || lower.contains("who calls")
+            || lower.contains(&format!("calls {}", pattern.to_ascii_lowercase()))
+        {
+            return crate::tools::codebase_investigator::SearchIntentKind::Calls;
+        }
+        if lower.contains("where is defined")
+            || lower.contains("what file defines")
+            || lower.contains("where is") && lower.contains(" defined ")
+        {
+            return crate::tools::codebase_investigator::SearchIntentKind::Defined;
+        }
+        if lower.contains("where is used")
+            || lower.contains("used in")
+            || lower.contains("where is") && lower.contains(" used ")
+        {
+            return crate::tools::codebase_investigator::SearchIntentKind::Used;
+        }
+
+        crate::tools::codebase_investigator::SearchIntentKind::General
     }
 
     fn summarize_codebase_overview(tool_content: &str) -> String {
@@ -2415,6 +3152,10 @@ impl<'a> ChatService<'a> {
         format!("Codebase overview:\n- {}", lines.join("\n- "))
     }
 
+    fn model_backend_unavailable_reply() -> String {
+        "The model backend is unavailable, and this request does not have a deterministic fallback. Start the configured model provider or ask a repo-grounded or command/file-specific question.".to_string()
+    }
+
     async fn try_handle_offline_shell_proxy(
         &mut self,
         user_msg: &str,
@@ -2423,8 +3164,17 @@ impl<'a> ChatService<'a> {
         if self.execution_strategy != ExecutionStrategy::Deterministic {
             return Ok(None);
         }
-        let commands = plan_offline_shell_commands(user_msg);
+        let commands = plan_offline_shell_commands(user_msg)
+            .into_iter()
+            .map(|command| Self::normalize_run_command_candidate(&command))
+            .collect::<Vec<_>>();
         if commands.is_empty() {
+            return Ok(None);
+        }
+        if commands
+            .iter()
+            .any(|command| Self::is_followup_run_command_placeholder(command))
+        {
             return Ok(None);
         }
 
@@ -2557,12 +3307,65 @@ impl<'a> ChatService<'a> {
         }
     }
 
+    fn format_task_mode(task_mode: TaskMode) -> &'static str {
+        match task_mode {
+            TaskMode::DirectDeterministic => "direct_deterministic",
+            TaskMode::PlanThenAct => "plan_then_act",
+            TaskMode::InspectThenExecute => "inspect_then_execute",
+            TaskMode::ToolAssisted => "tool_assisted",
+            TaskMode::RespondOnly => "respond_only",
+        }
+    }
+
+    fn format_deterministic_intent(intent: &DeterministicIntent) -> String {
+        match intent {
+            DeterministicIntent::ListChangedFiles(filters) => format!(
+                "list_changed_files(ext={:?},tracked_only={},since={:?})",
+                filters.ext, filters.tracked_only, filters.since
+            ),
+            DeterministicIntent::GitStatus => "git_status".to_string(),
+            DeterministicIntent::GitDiff => "git_diff".to_string(),
+            DeterministicIntent::GitBranch => "git_branch".to_string(),
+            DeterministicIntent::CurrentDirectory => "current_directory".to_string(),
+            DeterministicIntent::RepoIdentity => "repo_identity".to_string(),
+            DeterministicIntent::ReadFile(intent) => format!("read_file({})", intent.path),
+            DeterministicIntent::WriteFile(intent) => format!("write_file({})", intent.path),
+            DeterministicIntent::CodebaseOverview => "codebase_overview".to_string(),
+            DeterministicIntent::CodebaseSearch(intent) => {
+                format!("codebase_search({})", intent.pattern)
+            }
+            DeterministicIntent::RunCommand(intent) => format!("run_command({})", intent.command),
+        }
+    }
+
     fn should_prefer_deterministic_routing(strategy: ExecutionStrategy, user_msg: &str) -> bool {
         match strategy {
             ExecutionStrategy::Deterministic => true,
             ExecutionStrategy::Grounded => crate::agent::intent::route_intent(user_msg).is_some(),
             ExecutionStrategy::Auto | ExecutionStrategy::ModelOnly => false,
         }
+    }
+
+    fn decide_task_mode(strategy: ExecutionStrategy, user_msg: &str) -> TaskMode {
+        let needs_plan = Self::request_needs_plan(user_msg);
+        let needs_authoring = Self::request_needs_authoring_flow(user_msg);
+        if needs_authoring && needs_plan {
+            return TaskMode::PlanThenAct;
+        }
+        if needs_authoring {
+            return TaskMode::InspectThenExecute;
+        }
+        if needs_plan {
+            return TaskMode::PlanThenAct;
+        }
+        let is_routable = crate::agent::intent::route_intent(user_msg).is_some();
+        if Self::should_prefer_deterministic_routing(strategy, user_msg) && is_routable {
+            return TaskMode::DirectDeterministic;
+        }
+        if Self::request_requires_tool(user_msg).is_some() {
+            return TaskMode::ToolAssisted;
+        }
+        TaskMode::RespondOnly
     }
 
     fn response_looks_like_generic_capability_refusal(response: &str) -> bool {
@@ -2904,7 +3707,54 @@ impl AuditParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::intent::{route_intent, DeterministicIntent};
     use crate::core::{ApiConfig, ApiProvider};
+    use crate::memory::storage::CommandLogRecord;
+
+    #[derive(Debug)]
+    struct TurnDebug {
+        task_mode: TaskMode,
+        deterministic_intent: Option<DeterministicIntent>,
+        normalized_command: Option<String>,
+        clarification: Option<String>,
+    }
+
+    fn debug_turn(strategy: ExecutionStrategy, history: &[Message], user_msg: &str) -> TurnDebug {
+        let deterministic_intent = route_intent(user_msg).or_else(|| {
+            ChatService::infer_followup_write_file_intent(history, user_msg)
+                .map(DeterministicIntent::WriteFile)
+                .or_else(|| {
+                    ChatService::infer_followup_run_command_intent(history, user_msg)
+                        .map(DeterministicIntent::RunCommand)
+                })
+        });
+        let task_mode = if route_intent(user_msg).is_none() && deterministic_intent.is_some() {
+            TaskMode::DirectDeterministic
+        } else {
+            ChatService::decide_task_mode(strategy, user_msg)
+        };
+
+        let normalized_command = deterministic_intent
+            .as_ref()
+            .and_then(|intent| match intent {
+                DeterministicIntent::RunCommand(intent) => Some(
+                    ChatService::normalize_run_command_candidate(&intent.command),
+                ),
+                _ => None,
+            });
+
+        let clarification = normalized_command.as_ref().and_then(|command| {
+            let tool_call = format!("[RUN_COMMAND {}]", command);
+            ChatService::clarification_for_underspecified_tool_call(user_msg, &tool_call)
+        });
+
+        TurnDebug {
+            task_mode,
+            deterministic_intent,
+            normalized_command,
+            clarification,
+        }
+    }
 
     fn test_config() -> ApiConfig {
         ApiConfig {
@@ -3136,6 +3986,15 @@ mod tests {
     }
 
     #[test]
+    fn compact_deterministic_fallback_uses_intent_specific_codebase_heading() {
+        let tool_content = "CODEBASE_SEARCH\nQUERY: update_plan\nFOCUS: general\nINTENT: calls\nTOP_MATCHES:\nFILE: ./lib/harper-core/src/tools/mod.rs\nROLE: tooling\nREASONS: contains_all_terms\nSNIPPETS:\n- 513: let plan_result = plan::update_plan(self.conn, session_id, args)?;";
+        let summary = ChatService::compact_deterministic_fallback("codebase_search", tool_content);
+
+        assert!(summary.starts_with("Top call sites:\n"));
+        assert!(summary.contains("plan::update_plan"));
+    }
+
+    #[test]
     fn compact_deterministic_fallback_summarizes_codebase_overview() {
         let tool_content = "Workspace root: /Users/niladri/harper\nWorkspace package: harper-workspace\nWorkspace members: lib/harper-core, lib/harper-ui\nCrate roles: harper-core: runtime, tools, storage, agent logic; harper-ui: TUI state, events, widgets\nTop-level entries: AGENTS.md, Cargo.toml, lib\nLikely hotspots: lib/harper-core/src/agent/chat.rs, lib/harper-ui/src/interfaces/ui/widgets.rs";
         let summary =
@@ -3174,6 +4033,30 @@ mod tests {
             "codebase_search",
             response,
             tool_content
+        ));
+    }
+
+    #[test]
+    fn deterministic_strategy_does_not_model_summarize_codebase_search() {
+        assert!(!ChatService::should_model_summarize_deterministic_result(
+            ExecutionStrategy::Deterministic,
+            "codebase_search"
+        ));
+        assert!(!ChatService::should_model_summarize_deterministic_result(
+            ExecutionStrategy::Deterministic,
+            "codebase_overview"
+        ));
+        assert!(!ChatService::should_model_summarize_deterministic_result(
+            ExecutionStrategy::Deterministic,
+            "read_file"
+        ));
+    }
+
+    #[test]
+    fn grounded_strategy_can_still_model_summarize_codebase_search() {
+        assert!(ChatService::should_model_summarize_deterministic_result(
+            ExecutionStrategy::Grounded,
+            "codebase_search"
         ));
     }
 
@@ -3279,6 +4162,163 @@ mod tests {
             .content
             .starts_with("# Introduction to Artificial Intelligence"));
         assert!(intent.content.contains("## What Is AI?"));
+    }
+
+    #[test]
+    fn infer_followup_run_command_intent_uses_previous_assistant_command() {
+        let history = vec![
+            Message {
+                role: "user".to_string(),
+                content: "can you create a sample file name hello and put 1 to 10 in numbers"
+                    .to_string(),
+            },
+            Message {
+                role: "assistant".to_string(),
+                content: "Save this script as `create_hello.sh`, make it executable with `chmod +x create_hello.sh`, and run it with `./create_hello.sh`.".to_string(),
+            },
+        ];
+
+        let intent = ChatService::infer_followup_run_command_intent(&history, "run that command")
+            .expect("follow-up run command intent");
+
+        assert_eq!(intent.command, "./create_hello.sh");
+    }
+
+    #[test]
+    fn infer_followup_run_command_intent_prefers_previous_user_git_intent() {
+        let history = vec![
+            Message {
+                role: "user".to_string(),
+                content: "run the git status".to_string(),
+            },
+            Message {
+                role: "assistant".to_string(),
+                content:
+                    "Git working directory has 11 modified, 1 untracked. Notable files: app.rs."
+                        .to_string(),
+            },
+        ];
+
+        let intent = ChatService::infer_followup_run_command_intent(&history, "run that command")
+            .expect("follow-up run command intent");
+
+        assert_eq!(intent.command, "git status");
+    }
+
+    #[test]
+    fn infer_followup_run_command_intent_returns_none_without_previous_command() {
+        let history = vec![Message {
+            role: "assistant".to_string(),
+            content: "I created the file directly.".to_string(),
+        }];
+
+        let intent = ChatService::infer_followup_run_command_intent(&history, "run that command");
+        assert!(intent.is_none());
+    }
+
+    #[test]
+    fn infer_followup_run_command_prefers_session_command_log_over_assistant_summary() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        crate::memory::storage::init_db(&conn).expect("init db");
+        crate::memory::storage::insert_command_log(
+            &conn,
+            &CommandLogRecord::new(
+                Some("followup-session"),
+                "git status",
+                "test",
+                true,
+                false,
+                "rejected",
+                None,
+                None,
+                None,
+                None,
+                Some("Command execution cancelled by user".to_string()),
+            ),
+        )
+        .expect("insert command log");
+
+        let config = test_config();
+        let exec_policy = ExecPolicyConfig::default();
+        let chat = ChatService::new(
+            &conn,
+            &config,
+            None,
+            None,
+            Some("followup-session".to_string()),
+            HashMap::new(),
+            exec_policy,
+        );
+        let history = vec![Message {
+            role: "assistant".to_string(),
+            content: "Git working directory has 11 modified, 1 untracked. Notable files: app.rs."
+                .to_string(),
+        }];
+
+        let intent = chat
+            .infer_followup_run_command_intent_for_session(&history, "run that", "followup-session")
+            .expect("follow-up run command intent");
+
+        assert_eq!(intent.command, "git status");
+    }
+
+    #[test]
+    fn ambiguous_short_prompt_blocks_placeholder_read_file_tool_call() {
+        let clarification = ChatService::clarification_for_underspecified_tool_call(
+            "as",
+            r#"[READ_FILE example.txt]"#,
+        );
+        assert!(clarification.is_some());
+        assert!(clarification
+            .unwrap()
+            .contains("too ambiguous to act on safely"));
+    }
+
+    #[test]
+    fn non_placeholder_read_file_is_not_blocked_for_specific_prompt() {
+        let clarification = ChatService::clarification_for_underspecified_tool_call(
+            "read src/main.rs",
+            r#"[READ_FILE src/main.rs]"#,
+        );
+        assert!(clarification.is_none());
+    }
+
+    #[test]
+    fn normalize_tool_call_for_execution_strips_articles_from_git_status() {
+        let normalized =
+            ChatService::normalize_tool_call_for_execution(r#"[RUN_COMMAND the git status]"#);
+        assert_eq!(normalized, "[RUN_COMMAND git status]");
+    }
+
+    #[test]
+    fn ambiguous_run_that_placeholder_gets_clarification() {
+        let clarification = ChatService::clarification_for_underspecified_tool_call(
+            "run that",
+            r#"[RUN_COMMAND that]"#,
+        );
+        assert!(clarification.is_some());
+        assert!(clarification.unwrap().contains("which previous command"));
+    }
+
+    #[test]
+    fn normalize_run_command_candidate_strips_articles_for_deterministic_path() {
+        let normalized = ChatService::normalize_run_command_candidate("the git status");
+        assert_eq!(normalized, "git status");
+    }
+
+    #[test]
+    fn normalize_run_command_candidate_preserves_case_for_generic_commands() {
+        let normalized = ChatService::normalize_run_command_candidate("cat README.md");
+        assert_eq!(normalized, "cat README.md");
+    }
+
+    #[test]
+    fn extract_followup_run_command_parses_shell_echoed_command_line() {
+        let command = ChatService::extract_followup_run_command(
+            "$ the git status sh: the: command not found",
+        )
+        .expect("shell echoed command");
+        assert_eq!(command, "git status");
     }
 
     #[test]
@@ -3410,5 +4450,101 @@ mod tests {
             ExecutionStrategy::Auto,
             "read lib/harper-core/src/agent/chat.rs"
         ));
+    }
+
+    #[test]
+    fn decide_task_mode_prefers_direct_deterministic_for_grounded_routable_intent() {
+        assert_eq!(
+            ChatService::decide_task_mode(
+                ExecutionStrategy::Grounded,
+                "where is execution strategy used in this repo"
+            ),
+            TaskMode::DirectDeterministic
+        );
+    }
+
+    #[test]
+    fn decide_task_mode_uses_plan_then_act_for_multi_step_authoring() {
+        assert_eq!(
+            ChatService::decide_task_mode(
+                ExecutionStrategy::Grounded,
+                "refactor the planner flow in this repo and then update the tui followup rendering"
+            ),
+            TaskMode::PlanThenAct
+        );
+    }
+
+    #[test]
+    fn decide_task_mode_uses_respond_only_for_plain_question() {
+        assert_eq!(
+            ChatService::decide_task_mode(
+                ExecutionStrategy::Auto,
+                "what is the difference between grounded and deterministic"
+            ),
+            TaskMode::RespondOnly
+        );
+    }
+
+    #[test]
+    fn headless_turn_debug_normalizes_run_command_in_deterministic_mode() {
+        let debug = debug_turn(ExecutionStrategy::Deterministic, &[], "run the git status");
+
+        assert_eq!(debug.task_mode, TaskMode::DirectDeterministic);
+        assert!(matches!(
+            debug.deterministic_intent,
+            Some(DeterministicIntent::GitStatus)
+        ));
+        assert!(debug.normalized_command.is_none());
+        assert!(debug.clarification.is_none());
+    }
+
+    #[test]
+    fn headless_turn_debug_resolves_followup_run_command() {
+        let history = vec![Message {
+            role: "assistant".to_string(),
+            content: "Ran `git status`.\n```\nOn branch main\n```".to_string(),
+        }];
+
+        let debug = debug_turn(ExecutionStrategy::Deterministic, &history, "run that");
+
+        assert_eq!(debug.task_mode, TaskMode::DirectDeterministic);
+        assert!(matches!(
+            debug.deterministic_intent,
+            Some(DeterministicIntent::RunCommand(_))
+        ));
+        assert_eq!(debug.normalized_command.as_deref(), Some("git status"));
+        assert!(debug.clarification.is_none());
+    }
+
+    #[test]
+    fn headless_turn_debug_clarifies_unresolved_followup_run_command() {
+        let debug = debug_turn(ExecutionStrategy::Deterministic, &[], "run that");
+
+        assert_eq!(debug.task_mode, TaskMode::ToolAssisted);
+        assert!(debug.deterministic_intent.is_none());
+        assert!(debug.normalized_command.is_none());
+        assert!(debug.clarification.is_none());
+    }
+
+    #[test]
+    fn headless_turn_debug_grounded_routable_query_prefers_direct_deterministic() {
+        let debug = debug_turn(
+            ExecutionStrategy::Grounded,
+            &[],
+            "where is execution strategy used in this repo",
+        );
+
+        assert_eq!(debug.task_mode, TaskMode::DirectDeterministic);
+        assert!(matches!(
+            debug.deterministic_intent,
+            Some(DeterministicIntent::CodebaseSearch(_))
+        ));
+    }
+
+    #[test]
+    fn headless_turn_debug_auto_greeting_is_respond_only() {
+        let debug = debug_turn(ExecutionStrategy::Auto, &[], "hi");
+        assert_eq!(debug.task_mode, TaskMode::RespondOnly);
+        assert!(debug.deterministic_intent.is_none());
     }
 }

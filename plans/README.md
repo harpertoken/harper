@@ -9,13 +9,13 @@ This directory contains ready-to-use planner payloads for Harper's `update_plan`
 - `milestone-2-plan-job-coordination.json`
 - `milestone-3-cross-interface.json`
 - `milestone-4-planner-maturity.json`
-- `agents-md-improvement.json` - dedicated plan for improving `AGENTS.md` handling
-- `routing-improvement.json` - dedicated plan for strengthening deterministic and grounded routing
+- `agents-md-improvement.json` - completed record for the scoped `AGENTS.md` improvement workstream
+- `routing-improvement.json` - partially completed plan for the remaining routing work
 - `../PLANNER_NEXT_STEPS.md` - completed planner/runtime polish record for the last focused workstream
 
 ## Notes
 
 - All files use the same shape: `explanation` plus ordered `items`
-- Every item starts as `pending`
-- These plans are intended to be copied into Harper's `update_plan` tool flow
-- `PLANNER_NEXT_STEPS.md` is the exception: it now records a completed workstream rather than an active plan seed
+- Most plan files are intended to be copied into Harper's `update_plan` tool flow
+- Some files now record completed or partially completed workstreams rather than a fully pending seed
+- `PLANNER_NEXT_STEPS.md` and `agents-md-improvement.json` are completion-oriented records

@@ -47,16 +47,48 @@ The main interactive chat interface. This is what you use for:
 
 ### harper-batch
 
-Batch processing mode for running multiple operations:
+Shell-facing chat harness for non-TUI debugging and scripted runs:
 
 ```bash
-cargo run --bin harper-batch -- [options]
+cargo run -p harper-ui --bin harper-batch -- --prompt "..."
 ```
 
 Use this for:
-- Processing multiple files
-- Bulk operations
-- Non-interactive tasks
+- Verifying natural-language behavior without opening the TUI
+- Comparing `auto`, `grounded`, `deterministic`, and `model` strategy routing
+- Running repeatable prompt sequences in a single session
+- Capturing runtime activity and command output in shell or JSON form
+
+Supported options:
+
+- `--prompt <text>` repeatable prompt input
+- `--strategy <mode>` where mode is `auto`, `grounded`, `deterministic`, or `model`
+- `--json` machine-readable output
+- `--web` enable web search for the session
+
+Examples:
+
+```bash
+cargo run -p harper-ui --bin harper-batch -- --strategy deterministic --prompt "where is execution strategy used in this repo"
+```
+
+```bash
+cargo run -p harper-ui --bin harper-batch -- --strategy deterministic \
+  --prompt "run the git status" \
+  --prompt "run that"
+```
+
+```bash
+printf 'hi\nwhat is the difference between grounded and deterministic\n' \
+  | cargo run -p harper-ui --bin harper-batch -- --strategy auto
+```
+
+The output includes:
+
+- routing summary
+- runtime activity stages
+- command output when a tool executes
+- final assistant response
 
 ## How It Works
 
@@ -79,7 +111,7 @@ Use this for:
    - Reads user input
    - Sends to AI model
    - Displays response
-   - Handles commands (like `/help`, `/save`, etc.)
+   - Handles commands (like `/help`, `/strategy`, and `/agents`)
 
 ### Architecture
 

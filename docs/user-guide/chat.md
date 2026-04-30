@@ -22,9 +22,16 @@ Harper supports slash commands for various operations. All commands start with `
 | `/quit` | Same as /exit |
 | `/help` | Show available commands |
 | `/clear` | Clear the current session |
-| `/save` | Save current session to disk |
-| `/load` | Load a saved session |
 | `/audit` | View command history (e.g., `/audit 10`) |
+| `/strategy` | Show or change the execution strategy |
+| `/strategy auto` | Switch the live chat session to `auto` |
+| `/strategy grounded` | Switch the live chat session to `grounded` |
+| `/strategy deterministic` | Switch the live chat session to `deterministic` |
+| `/strategy model` | Switch the live chat session to `model` |
+| `/agents` | Show AGENTS context status for the current session |
+| `/agents status` | Same as `/agents` |
+| `/agents on` | Enable AGENTS context resolution in the TUI session |
+| `/agents off` | Disable AGENTS context resolution in the TUI session |
 
 ### Using Commands
 
@@ -36,10 +43,12 @@ Available commands:
 /exit, /quit - Exit the application
 /help    - Show this message
 /clear   - Clear current session
-/save    - Save current session
-/load    - Load a saved session
 /audit   - View command history
+/strategy - Show current execution strategy
+/agents  - Show AGENTS context status
 ```
+
+Typing `/` in the TUI opens the slash-command list. Use `↑` / `↓` or `Tab` to move through suggestions, then keep typing or submit the selected command from the normal message input.
 
 ## Chat Features
 
@@ -61,13 +70,7 @@ Harper maintains a history of your commands within the session. Use the up and d
 
 ### Session Persistence
 
-Your chat sessions can be saved and loaded later. This feature allows you to:
-
-- **Save Session**: Use `/save` to persist your conversation
-- **Load Session**: Use `/load` to restore a previous conversation
-- **Continue Later**: Pick up where you left off
-
-Sessions are stored locally and include your entire conversation history with the AI.
+Harper keeps local sessions in its built-in session store. Use the Home screen, History screen, export flow, and session preview flow to revisit previous conversations rather than relying on ad hoc chat commands.
 
 ### Command Logging
 
@@ -79,6 +82,24 @@ Harper logs all shell commands executed during your session. You can review thes
 - stdout/stderr previews
 
 This ensures every operation is traceable for security and debugging purposes.
+
+### Strategy-aware routing
+
+Execution strategy changes how Harper chooses between deterministic tools and model-backed reasoning:
+
+- `deterministic` prefers direct grounded tool execution for supported intents
+- `grounded` prefers deterministic grounding first for routable repo questions, then allows model synthesis when needed
+- `auto` remains tool-assisted and can still fall back to deterministic handling for supported prompts
+- `model` disables deterministic shortcuts
+
+For fast verification without the TUI, use `harper-batch`:
+
+```bash
+target/debug/harper-batch --strategy deterministic --prompt "where is execution strategy used in this repo"
+target/debug/harper-batch --strategy deterministic --prompt "run the git status" --prompt "run that"
+```
+
+That prints the selected strategy, task mode, routed deterministic intent, normalized command when one exists, runtime activity, and the final assistant reply.
 
 ## Sending Messages
 

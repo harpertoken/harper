@@ -1,10 +1,11 @@
 {
-  "index.html": "2026-04-28-home",
-  "installation.html": "2026-04-28-install-v6",
+  "index.html": "2026-05-01-home-v2",
+  "docs.html": "2026-05-01-docs-v1",
+  "installation.html": "2026-05-01-install-v7",
   "troubleshooting.html": "2026-04-28-troubleshooting",
-  "blog.html": "2026-04-28-blog-v3",
+  "blog.html": "2026-05-01-blog-v5",
   "changelog.html": "2026-04-28-changelog",
-  "server.html": "2026-04-28-server-v6",
+  "server.html": "2026-05-01-server-v7",
   "terms.html": "2026-04-28-terms",
   "privacy.html": "2026-04-28-privacy"
 }

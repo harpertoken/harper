@@ -2,20 +2,28 @@
 
 This plan treats routing as a product capability, not a growing pile of one-off heuristics.
 
-## Goal
+## Status
 
-Make Harper's routing more reliable, more explainable, and more meaningfully differentiated across `auto`, `grounded`, and `deterministic`.
+This workstream is partially complete. The core strategy split, broader deterministic coverage, follow-up command resolution, shell-visible routing diagnostics, and graceful no-backend fallback are now in place.
 
 ## Problems In The Current State
 
-- Deterministic routing is still rule-based and phrase-sensitive
-- `grounded` only recently became meaningfully different from `auto`
-- Overlapping intents still rely on code-order precedence instead of explicit ranking
+- Deterministic routing is still rule-based and phrase-sensitive in edge cases
+- Overlapping intents still rely too much on precedence and heuristics instead of explicit ranking
 - Multi-intent prompts are not decomposed into bounded deterministic steps
-- Error, compiler, and stack-trace prompts are only handled indirectly through generic codebase search phrasing
-- Symbol extraction works for common cases but still lacks full ambiguity handling
+- Error, compiler, and stack-trace prompts are still not first-class routing inputs
+- Search quality is still ranking-based, not true semantic xref
+- Symbol extraction is stronger, but ambiguity handling is still incomplete
 
-## Desired Behavior
+## What Is Already Done
+
+1. `grounded` now prefers deterministic routing when the request is clearly routable
+2. Deterministic coverage for common repo inspection, follow-up command resolution, and codebase tracing prompts is broader
+3. Shell-visible routing observability exists through `harper-batch` and `debug_turn_summary(...)`
+4. Strategy behavior is meaningfully differentiated across `deterministic`, `grounded`, `auto`, and `model`
+5. No-backend model failures now degrade cleanly when deterministic fallback exists, and return clear assistant messaging when it does not
+
+## Desired Remaining Behavior
 
 1. Let `grounded` prefer deterministic routing when the request is clearly routable
 2. Expand deterministic coverage for common repo inspection and codebase tracing prompts
@@ -35,14 +43,12 @@ Make Harper's routing more reliable, more explainable, and more meaningfully dif
 6. Add compiler/error/trace-specific extraction
 7. Add routing observability and regression coverage
 
-## Recommended Order
+## Recommended Remaining Order
 
-1. Strengthen grounded deterministic routing
-2. Expand deterministic inspection/search coverage
-3. Add ranked intent competition
-4. Add compiler/error/trace-aware routing
-5. Add bounded multi-intent decomposition
-6. Add routing observability and regression coverage
+1. Add ranked intent competition
+2. Add compiler/error/trace-aware routing
+3. Add bounded multi-intent decomposition
+4. Expand routing observability and regression coverage
 
 ## Validation Focus
 
@@ -59,4 +65,4 @@ Make Harper's routing more reliable, more explainable, and more meaningfully dif
 
 ## Planner Payload
 
-See `plans/routing-improvement.json`.
+See `plans/routing-improvement.json`, which now marks completed phases and leaves only the remaining routing work pending.

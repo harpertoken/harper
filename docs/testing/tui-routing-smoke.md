@@ -2,6 +2,23 @@
 
 Use this checklist to verify Harper’s repo-aware routing, grounded tool use, and TUI rendering after changes to chat routing, codebase helpers, file tools, or transcript rendering.
 
+Before opening the TUI, pre-check the same prompts through `harper-batch` so routing, command normalization, and follow-up resolution can be debugged from the shell first:
+
+```bash
+target/debug/harper-batch --strategy deterministic --prompt "where is execution strategy used in this repo"
+target/debug/harper-batch --strategy deterministic --prompt "run the git status" --prompt "run that"
+target/debug/harper-batch --strategy grounded --prompt "where is execution strategy used in this repo"
+target/debug/harper-batch --strategy auto --prompt "run the git status" --prompt "run that"
+```
+
+Read these fields in the shell output before moving to the TUI:
+
+- `ROUTING`
+- `DETERMINISTIC INTENT`
+- `NORMALIZED COMMAND`
+- `ACTIVITY`
+- `ASSISTANT`
+
 ## Prerequisites
 
 - Build from the current workspace.
@@ -24,7 +41,7 @@ Use this checklist to verify Harper’s repo-aware routing, grounded tool use, a
 ### Header and strategy UI
 
 - Type `/`
-- Press `Tab` to cycle slash completions
+- Press `↑` / `↓` or `Tab` to move through slash completions
 - `/strategy`
 - `/strategy auto`
 - `/strategy grounded`
@@ -62,6 +79,8 @@ Use this checklist to verify Harper’s repo-aware routing, grounded tool use, a
 - `Run git status and summarize it.`
 - `show git diff`
 - `check the code changes`
+- `run the git status`
+- `run that`
 
 ### Simple command routing
 
@@ -106,6 +125,7 @@ Use this exact sequence:
 - Codebase prompts do not answer with generic grep advice.
 - Open-ended authoring prompts inspect first and should not jump straight to a bad edit target.
 - `git status` runs `git status`, not `git status and summarize it`.
+- `run that` resolves to the prior runnable command when the prior turn produced one.
 - Create/modify prompts route to real write operations.
 - Created file responses show fenced content with syntax highlighting.
 - Diff/code outputs render with syntax-aware formatting when detectable.
@@ -115,7 +135,7 @@ Use this exact sequence:
 - [ ] Repo identity prompts return grounded repo/branch data.
 - [ ] Current working directory prompt returns the concrete workspace path.
 - [ ] Typing `/` opens slash completion suggestions.
-- [ ] `Tab` cycles slash completions.
+- [ ] `↑` / `↓` and `Tab` move through slash completions.
 - [ ] `/strategy` shows the current strategy and switching it changes the live session.
 - [ ] Header widget changes persist after save and restart.
 - [ ] Chat header only shows the widgets currently enabled.
@@ -123,6 +143,7 @@ Use this exact sequence:
 - [ ] Codebase overview uses grounded workspace context.
 - [ ] Codebase search returns relevant repo files, not generic prose.
 - [ ] Open-ended authoring builds context/plan before first edit.
+- [ ] `run that` resolves to the previous runnable command instead of executing the literal word `that`.
 - [ ] Git status/diff route to the correct underlying tool/command.
 - [ ] `clear`, `pwd`, and `ls` route as commands, not literal prose.
 - [ ] `run harper`, `run fmt`, `run check`, and `run tests` route as execution-layer commands.

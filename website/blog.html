@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Blog</title>
-    <meta name="harper-update-version" content="2026-04-28-blog-v3" />
+    <meta name="harper-update-version" content="2026-05-01-blog-v5" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -15,6 +15,7 @@
             <nav class="nav">
                 <a href="index.html" data-update-target="home">Home</a>
                 <a href="installation.html" data-update-target="install">Install</a>
+                <a href="docs.html" data-update-target="docs">Docs</a>
                 <a href="troubleshooting.html" data-update-target="troubleshooting">Troubleshooting</a>
                 <a href="blog.html" data-update-target="blog" aria-current="page">Blog</a>
                 <a href="changelog.html" data-update-target="changelog">Changelog</a>
@@ -28,6 +29,13 @@
             <div class="content-container">
                 <h1 class="hero-title">Notes from the codebase.</h1>
                 <p class="hero-lede">Short product and engineering notes from Harper. This page stays high level. The <a href="changelog.html">changelog</a> keeps the version-by-version detail.</p>
+
+                <article>
+                    <h2>May 2026 · Shell-first verification is now the default debug path</h2>
+                    <p>One of the most practical changes in recent Harper work is not visual. It is the addition of a shell-facing verification path through <code>harper-batch</code>. That matters because the fastest way to debug routing, command normalization, follow-up resolution, and strategy behavior is not to open the TUI first. It is to run the same prompts headlessly and inspect the control path directly.</p>
+                    <p>The useful shift is clarity. Harper can now report the selected strategy, task mode, routed deterministic intent, normalized command, runtime activity, and final assistant reply in one shell-visible flow. That makes prompts such as <code>where is execution strategy used in this repo</code>, <code>run the git status</code>, and <code>run that</code> much easier to validate before spending time on UI-specific issues.</p>
+                    <p>This also sharpened the product split between strategies. <code>deterministic</code> is now easier to verify as a strict grounded tool path. <code>grounded</code> prefers deterministic grounding first for supported repo questions and then allows model synthesis when needed. <code>auto</code> stays tool-assisted, but it no longer has to fail noisily when a deterministic fallback exists. The result is not that Harper became simpler. The result is that it became more inspectable.</p>
+                </article>
 
                 <article>
                     <h2>April 2026 · Cargo and Bazel validation got tighter</h2>
@@ -56,8 +64,8 @@
 
                 <article>
                     <h2>April 2026 · Execution strategy became explicit</h2>
-                    <p>Harper now exposes execution strategy directly in the TUI and local config. The point is not to turn the product into a classical deterministic router; the point is to make the tradeoff explicit. <code>auto</code> and <code>grounded</code> keep the model in the loop for normal repo work, while <code>deterministic</code> provides a stricter direct-tool mode for smoke checks and operational prompts.</p>
-                    <p>This also cleaned up a real failure mode in local-model sessions. Instead of letting weaker models either invent shell commands or refuse valid repo actions, Harper now feeds grounded repo context into the model first and only falls back to deterministic execution when the model response is empty, low-value, or invalid.</p>
+                    <p>Harper now exposes execution strategy directly in the TUI and local config. The point is to make the control path explicit. <code>deterministic</code> prefers strict direct-tool handling for supported intents, <code>grounded</code> prefers deterministic grounding first for routable repo questions and then allows model synthesis when needed, <code>auto</code> stays tool-assisted, and <code>model</code> disables deterministic shortcuts.</p>
+                    <p>This also cleaned up a real failure mode in local-model sessions. Harper now has a shell-verifiable path for repo-grounded prompts and command follow-ups, so weak or unavailable model backends no longer have to break every operational check. When the model backend is unavailable and no deterministic fallback exists, Harper now returns a clear assistant reply instead of surfacing a raw transport error.</p>
                 </article>
 
                 <article>
@@ -68,8 +76,8 @@
 
                 <article>
                     <h2>April 2026 · The TUI started showing work in progress</h2>
-                    <p>One of the bigger gaps in earlier Harper builds was responsiveness during a turn. The assistant could be working, but the interface did not make that state obvious enough. The TUI now carries explicit activity status, a visible pending assistant row, live plan updates, and command-output panels for shell work.</p>
-                    <p>The goal is not cosmetic animation. The goal is to remove ambiguity: thinking, waiting for approval, running a command, and returning a final reply are different states, and the interface should show them as different states.</p>
+                    <p>One of the bigger gaps in earlier Harper builds was responsiveness during a turn. The assistant could be working, but the interface did not make that state obvious enough. The TUI now carries explicit activity status, live plan updates, command-output panels for shell work, and persistent loop-state feedback for planned tasks.</p>
+                    <p>The goal is not cosmetic animation. The goal is to remove ambiguity: planning, inspecting, waiting for approval, running a command, and returning a final reply are different states, and the interface should show them as different states. The same core flow is also available headlessly through <code>harper-batch</code> for shell-first verification before opening the TUI.</p>
                 </article>
 
                 <article>

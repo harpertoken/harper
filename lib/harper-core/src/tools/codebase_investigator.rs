@@ -148,6 +148,14 @@ enum QueryFocus {
     General,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchIntentKind {
+    General,
+    Used,
+    Calls,
+    Defined,
+}
+
 /// Investigate codebase structural graph and relationships
 pub async fn investigate_codebase(
     response: &str,
@@ -183,7 +191,14 @@ pub async fn investigate_codebase(
 }
 
 pub async fn search_text(query: &str) -> HarperResult<String> {
-    let matches = collect_search_matches(query)?;
+    search_text_with_intent(query, SearchIntentKind::General).await
+}
+
+pub async fn search_text_with_intent(
+    query: &str,
+    intent: SearchIntentKind,
+) -> HarperResult<String> {
+    let matches = collect_search_matches_with_intent(query, intent)?;
     if matches.is_empty() {
         return Ok(format!("No source-focused matches found for '{}'.", query));
     }
@@ -198,9 +213,10 @@ pub async fn search_text(query: &str) -> HarperResult<String> {
     );
 
     Ok(format!(
-        "CODEBASE_SEARCH\nQUERY: {}\nFOCUS: {}\nTOP_MATCHES:\n{}",
+        "CODEBASE_SEARCH\nQUERY: {}\nFOCUS: {}\nINTENT: {}\nTOP_MATCHES:\n{}",
         query,
         focus.as_str(),
+        intent.as_str(),
         matches
             .into_iter()
             .take(8)
@@ -211,6 +227,13 @@ pub async fn search_text(query: &str) -> HarperResult<String> {
 }
 
 fn collect_search_matches(query: &str) -> HarperResult<Vec<SearchMatch>> {
+    collect_search_matches_with_intent(query, SearchIntentKind::General)
+}
+
+fn collect_search_matches_with_intent(
+    query: &str,
+    intent: SearchIntentKind,
+) -> HarperResult<Vec<SearchMatch>> {
     let terms: Vec<String> = query
         .split_whitespace()
         .map(|term| term.trim().to_ascii_lowercase())
@@ -224,6 +247,8 @@ fn collect_search_matches(query: &str) -> HarperResult<Vec<SearchMatch>> {
     }
 
     let focus = infer_query_focus(query, &terms);
+    let symbol_variants = search_symbol_variants(&terms);
+    let semantic_target = infer_semantic_symbol_target(query, &terms);
 
     let mut matches: Vec<SearchMatch> = Vec::new();
     for entry in WalkDir::new(".")
@@ -243,22 +268,35 @@ fn collect_search_matches(query: &str) -> HarperResult<Vec<SearchMatch>> {
             continue;
         }
 
-        let mut file_matches = Vec::new();
+        let mut scored_matches = Vec::new();
         for (idx, line) in content.lines().enumerate() {
-            let lower_line = line.to_ascii_lowercase();
-            if terms.iter().any(|term| lower_line.contains(term)) {
-                file_matches.push(format!("{}: {}", idx + 1, line.trim()));
-                if file_matches.len() >= 3 {
-                    break;
-                }
+            if let Some(score) = search_line_score(line, &terms, &symbol_variants, intent) {
+                scored_matches.push((score, idx, format!("{}: {}", idx + 1, line.trim())));
             }
         }
+
+        scored_matches.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        let line_score: i32 = scored_matches
+            .iter()
+            .take(3)
+            .map(|(score, _, _)| *score)
+            .sum();
+        let file_matches: Vec<String> = scored_matches
+            .into_iter()
+            .take(3)
+            .map(|(_, _, rendered)| rendered)
+            .collect();
 
         if file_matches.is_empty() {
             continue;
         }
 
-        let score = search_match_score(entry.path(), &lower, &file_matches, &terms, focus);
+        let semantic_bonus = extract_rust_semantic_file(entry.path())
+            .map(|semantic| search_semantic_bonus(&semantic, semantic_target.as_deref(), intent))
+            .unwrap_or(0);
+        let score = search_match_score(entry.path(), &lower, &file_matches, &terms, focus, intent)
+            + line_score
+            + semantic_bonus;
         matches.push(SearchMatch {
             score,
             path: entry.path().display().to_string(),
@@ -270,6 +308,238 @@ fn collect_search_matches(query: &str) -> HarperResult<Vec<SearchMatch>> {
 
     matches.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.path.cmp(&b.path)));
     Ok(matches)
+}
+
+fn infer_semantic_symbol_target(query: &str, terms: &[String]) -> Option<String> {
+    if let Some(start) = query.find('`') {
+        let rest = &query[start + 1..];
+        if let Some(end) = rest.find('`') {
+            let symbol = rest[..end].trim();
+            if !symbol.is_empty() {
+                return Some(symbol.to_string());
+            }
+        }
+    }
+
+    let symbol_like_tokens = query
+        .split(|ch: char| !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | ':')))
+        .filter(|token| {
+            !token.is_empty()
+                && (token.contains('_')
+                    || token.contains("::")
+                    || token.chars().any(|ch| ch.is_ascii_uppercase()))
+        })
+        .collect::<Vec<_>>();
+    if let Some(symbol) = symbol_like_tokens.first() {
+        return Some((*symbol).to_string());
+    }
+
+    if terms.len() == 1 {
+        Some(terms[0].clone())
+    } else {
+        Some(terms.join("_"))
+    }
+}
+
+fn search_line_score(
+    line: &str,
+    terms: &[String],
+    symbol_variants: &[String],
+    intent: SearchIntentKind,
+) -> Option<i32> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let lower = trimmed.to_ascii_lowercase();
+    let compact = compact_search_text(trimmed);
+    let compact_terms = compact_search_text(&terms.join(""));
+    let snake_case_variant = terms.join("_");
+    let camel_case_variant = terms
+        .iter()
+        .map(|term| {
+            let mut chars = term.chars();
+            match chars.next() {
+                Some(first) => first.to_ascii_uppercase().to_string() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<String>()
+        .to_ascii_lowercase();
+    let enum_decl = format!("enum {camel_case_variant}");
+    let struct_decl = format!("struct {camel_case_variant}");
+    let trait_decl = format!("trait {camel_case_variant}");
+    let type_decl = format!("type {camel_case_variant}");
+    let fn_decl = format!("fn {snake_case_variant}(");
+    let has_any_term = terms.iter().any(|term| lower.contains(term));
+    if !has_any_term {
+        return None;
+    }
+
+    let is_license_noise = lower.starts_with("//")
+        || lower.starts_with("/*")
+        || lower.starts_with('*')
+        || lower.contains("licensed under")
+        || lower.contains("apache license")
+        || lower.contains("http://www.apache.org/licenses");
+    let mut score = 5;
+
+    if terms.iter().all(|term| lower.contains(term)) {
+        score += 50;
+    }
+    if compact.contains(&compact_terms) {
+        score += 100;
+    }
+    if lower.contains(&snake_case_variant) {
+        score += 80;
+    }
+    if lower.contains(&camel_case_variant) {
+        score += 80;
+    }
+    if symbol_variants
+        .iter()
+        .any(|variant| lower.contains(variant))
+    {
+        score += 40;
+    }
+    if lower.contains(&format!(".{snake_case_variant}"))
+        || lower.contains(&format!("{snake_case_variant}("))
+        || lower.contains(&format!("({snake_case_variant}"))
+        || lower.contains(&format!("{snake_case_variant} ="))
+        || lower.contains(&format!("{snake_case_variant}:"))
+    {
+        score += 45;
+    }
+    if lower.starts_with("use ") {
+        score -= 35;
+    }
+    if lower.starts_with("fn ")
+        || lower.starts_with("pub fn ")
+        || lower.starts_with("struct ")
+        || lower.starts_with("enum ")
+        || lower.starts_with("impl ")
+    {
+        score -= 10;
+    }
+    if lower.contains("assert!(")
+        || lower.contains("assert_eq!(")
+        || lower.contains("assert_ne!(")
+        || lower.contains("contains(\"")
+        || lower.contains("expect(\"")
+        || lower.starts_with("#[test]")
+    {
+        score -= 140;
+    }
+    if is_license_noise {
+        score -= 120;
+    }
+
+    match intent {
+        SearchIntentKind::Used => {
+            if lower.starts_with("use ") {
+                score -= 35;
+            }
+            if lower.starts_with("fn ")
+                || lower.starts_with("pub fn ")
+                || lower.starts_with("struct ")
+                || lower.starts_with("enum ")
+                || lower.starts_with("type ")
+                || lower.starts_with("pub type ")
+            {
+                score -= 20;
+            }
+            if lower.contains(&format!(".{snake_case_variant}"))
+                || lower.contains(&format!("{snake_case_variant} ="))
+                || lower.contains(&format!("{snake_case_variant}:"))
+                || lower.contains(&format!("{snake_case_variant}("))
+                || lower.contains(&format!("app.{snake_case_variant}"))
+            {
+                score += 55;
+            }
+        }
+        SearchIntentKind::Calls => {
+            if lower.starts_with("fn ") || lower.starts_with("pub fn ") {
+                score -= 55;
+            }
+            if lower.contains(&format!("{snake_case_variant}("))
+                || lower.contains(&format!(".{snake_case_variant}("))
+            {
+                score += 70;
+            }
+        }
+        SearchIntentKind::Defined => {
+            if lower.contains(&enum_decl)
+                || lower.contains(&struct_decl)
+                || lower.contains(&trait_decl)
+                || lower.contains(&type_decl)
+                || lower.contains(&fn_decl)
+            {
+                score += 140;
+            } else if lower.starts_with("fn ")
+                || lower.starts_with("pub fn ")
+                || lower.starts_with("struct ")
+                || lower.starts_with("enum ")
+                || lower.starts_with("type ")
+                || lower.starts_with("pub type ")
+                || lower.starts_with("trait ")
+                || lower.starts_with("pub trait ")
+                || lower.starts_with("const ")
+                || lower.starts_with("pub const ")
+            {
+                score += 25;
+            }
+            if lower.starts_with("use ") {
+                score -= 45;
+            }
+            if lower.contains(&format!(": {camel_case_variant}"))
+                || lower.contains(&format!("-> {camel_case_variant}"))
+                || lower.contains(&format!("({camel_case_variant}"))
+            {
+                score -= 35;
+            }
+            if lower.contains(&format!(".{snake_case_variant}("))
+                || lower.contains(&format!(".{snake_case_variant}"))
+            {
+                score -= 20;
+            }
+        }
+        SearchIntentKind::General => {}
+    }
+
+    (score > 20).then_some(score)
+}
+
+fn search_symbol_variants(terms: &[String]) -> Vec<String> {
+    if terms.is_empty() {
+        return Vec::new();
+    }
+
+    let snake_case = terms.join("_");
+    let camel_case = terms
+        .iter()
+        .map(|term| {
+            let mut chars = term.chars();
+            match chars.next() {
+                Some(first) => first.to_ascii_uppercase().to_string() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<String>()
+        .to_ascii_lowercase();
+
+    let mut variants = vec![snake_case, camel_case, compact_search_text(&terms.join(""))];
+    variants.sort();
+    variants.dedup();
+    variants
+}
+
+fn compact_search_text(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 pub async fn authoring_context(query: &str) -> HarperResult<String> {
@@ -1928,16 +2198,26 @@ fn search_match_score(
     snippets: &[String],
     terms: &[String],
     focus: QueryFocus,
+    intent: SearchIntentKind,
 ) -> i32 {
     let path_str = path.to_string_lossy();
     let mut score = 0;
+    let compact_terms = compact_search_text(&terms.join(""));
 
     if path_str.starts_with("./lib/harper-ui/src") || path_str.starts_with("lib/harper-ui/src") {
-        score += 60;
+        score += if intent == SearchIntentKind::Defined {
+            20
+        } else {
+            60
+        };
     } else if path_str.starts_with("./lib/harper-core/src")
         || path_str.starts_with("lib/harper-core/src")
     {
-        score += 40;
+        score += if intent == SearchIntentKind::Defined {
+            70
+        } else {
+            40
+        };
     }
 
     if path_str.contains("widgets.rs") {
@@ -1963,8 +2243,60 @@ fn search_match_score(
         score += 20;
     }
 
+    if snippets.iter().any(|snippet| {
+        let snippet_lower = snippet.to_ascii_lowercase();
+        terms.iter().all(|term| snippet_lower.contains(term))
+    }) {
+        score += 45;
+    }
+
+    if snippets
+        .iter()
+        .any(|snippet| compact_search_text(snippet).contains(&compact_terms))
+    {
+        score += 60;
+    }
+
+    if snippets.iter().all(|snippet| {
+        let lower = snippet.to_ascii_lowercase();
+        lower.contains("licensed under")
+            || lower.contains("apache license")
+            || lower.contains("http://www.apache.org/licenses")
+    }) {
+        score -= 120;
+    }
+
     if content_lower.contains("planfollowup") || content_lower.contains("followup") {
         score += 10;
+    }
+
+    let compact_terms = compact_search_text(&terms.join(""));
+    match intent {
+        SearchIntentKind::Defined => {
+            if snippets.iter().any(|snippet| {
+                let lower = snippet.to_ascii_lowercase();
+                lower.contains(&format!("enum {}", compact_terms))
+                    || lower.contains(&format!("struct {}", compact_terms))
+                    || lower.contains(&format!("trait {}", compact_terms))
+                    || lower.contains(&format!("type {}", compact_terms))
+                    || lower.contains(&format!("fn {}(", terms.join("_")))
+            }) {
+                score += 180;
+            }
+            if snippets.iter().any(|snippet| snippet.contains("::")) {
+                score -= 50;
+            }
+        }
+        SearchIntentKind::Calls => {
+            if snippets.iter().any(|snippet| {
+                snippet
+                    .to_ascii_lowercase()
+                    .contains(&format!("fn {}(", terms.join("_")))
+            }) {
+                score -= 120;
+            }
+        }
+        SearchIntentKind::Used | SearchIntentKind::General => {}
     }
 
     match focus {
@@ -1997,6 +2329,65 @@ fn search_match_score(
     score
 }
 
+fn search_semantic_bonus(
+    semantic: &RustSemanticFile,
+    semantic_target: Option<&str>,
+    intent: SearchIntentKind,
+) -> i32 {
+    let Some(target) = semantic_target else {
+        return 0;
+    };
+    let lowered = target.to_ascii_lowercase();
+    let snake_case = lowered.replace("::", "_");
+    let target_variants = [lowered.as_str(), snake_case.as_str(), target];
+
+    match intent {
+        SearchIntentKind::Defined => {
+            if semantic.defines.iter().any(|symbol| {
+                target_variants
+                    .iter()
+                    .any(|variant| symbol.eq_ignore_ascii_case(variant))
+            }) {
+                260
+            } else {
+                0
+            }
+        }
+        SearchIntentKind::Calls => {
+            if semantic.calls.iter().any(|symbol| {
+                target_variants
+                    .iter()
+                    .any(|variant| symbol.eq_ignore_ascii_case(variant))
+            }) {
+                220
+            } else {
+                0
+            }
+        }
+        SearchIntentKind::Used => {
+            let import_hit = semantic.imports.iter().any(|symbol| {
+                target_variants
+                    .iter()
+                    .any(|variant| symbol.eq_ignore_ascii_case(variant))
+            });
+            let define_hit = semantic.defines.iter().any(|symbol| {
+                target_variants
+                    .iter()
+                    .any(|variant| symbol.eq_ignore_ascii_case(variant))
+            });
+            let call_hit = semantic.calls.iter().any(|symbol| {
+                target_variants
+                    .iter()
+                    .any(|variant| symbol.eq_ignore_ascii_case(variant))
+            });
+            (if define_hit { 60 } else { 0 })
+                + (if call_hit { 90 } else { 0 })
+                + (if import_hit { 25 } else { 0 })
+        }
+        SearchIntentKind::General => 0,
+    }
+}
+
 impl QueryFocus {
     fn as_str(self) -> &'static str {
         match self {
@@ -2005,6 +2396,17 @@ impl QueryFocus {
             QueryFocus::Tooling => "tooling",
             QueryFocus::Runtime => "runtime",
             QueryFocus::General => "general",
+        }
+    }
+}
+
+impl SearchIntentKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            SearchIntentKind::General => "general",
+            SearchIntentKind::Used => "used",
+            SearchIntentKind::Calls => "calls",
+            SearchIntentKind::Defined => "defined",
         }
     }
 }
@@ -2038,10 +2440,12 @@ mod tests {
 
     use super::{
         authoring_search_query, build_semantic_graph, build_workspace_definition_index,
-        classify_member_role, extract_rust_semantic_file, format_workspace_graph,
+        classify_member_role, collect_search_matches, collect_search_matches_with_intent,
+        extract_rust_semantic_file, format_search_match, format_workspace_graph,
         infer_edit_plan_candidates, infer_query_focus, is_searchable_file, path_relative_to_root,
-        resolve_symbol_candidates, rust_module_path, workspace_member_for_path, QueryFocus,
-        RustSemanticFile, SearchMatch, WorkspaceGraph, WorkspaceMemberOverview,
+        resolve_symbol_candidates, rust_module_path, search_line_score, search_symbol_variants,
+        workspace_member_for_path, QueryFocus, RustSemanticFile, SearchIntentKind, SearchMatch,
+        WorkspaceGraph, WorkspaceMemberOverview,
     };
     use std::path::Path;
 
@@ -2475,5 +2879,77 @@ struct Planner;
         let root = Path::new("/repo/lib/harper-core");
         let rel = path_relative_to_root(root, Path::new("/repo/lib/harper-core/src/lib.rs"));
         assert_eq!(rel, "src/lib.rs");
+    }
+
+    #[test]
+    fn search_matches_prefer_symbol_usage_over_license_comment_noise() {
+        let matches = collect_search_matches("execution strategy").unwrap();
+        let top = matches.first().expect("at least one search match");
+        let rendered = format_search_match(top);
+
+        assert!(
+            !rendered.contains("Licensed under")
+                && !rendered.contains("http://www.apache.org/licenses")
+        );
+        assert!(rendered.contains("ExecutionStrategy") || rendered.contains("execution_strategy"));
+    }
+
+    #[test]
+    fn search_matches_prefer_real_usage_sites_over_imports_for_execution_strategy() {
+        let matches =
+            collect_search_matches_with_intent("execution strategy", SearchIntentKind::Used)
+                .unwrap();
+        let top = matches.first().expect("at least one search match");
+        let top_snippet = top.snippets.first().expect("at least one top snippet");
+
+        assert!(
+            top_snippet.contains("execution_strategy") || top_snippet.contains("ExecutionStrategy")
+        );
+        assert!(!top_snippet.trim_start().starts_with("38: use "));
+        assert!(!top.path.contains("codebase_investigator.rs"));
+    }
+
+    #[test]
+    fn search_matches_prefer_call_sites_over_definitions_for_update_plan() {
+        let terms = vec!["update_plan".to_string()];
+        let symbol_variants = search_symbol_variants(&terms);
+        let call_score = search_line_score(
+            "let plan_result = plan::update_plan(self.conn, session_id, args)?;",
+            &terms,
+            &symbol_variants,
+            SearchIntentKind::Calls,
+        )
+        .expect("call site score");
+        let definition_score = search_line_score(
+            "pub fn update_plan(",
+            &terms,
+            &symbol_variants,
+            SearchIntentKind::Calls,
+        )
+        .expect("definition score");
+
+        assert!(call_score > definition_score);
+    }
+
+    #[test]
+    fn search_matches_prefer_exact_definition_for_execution_strategy() {
+        let terms = vec!["executionstrategy".to_string()];
+        let symbol_variants = search_symbol_variants(&terms);
+        let definition_score = search_line_score(
+            "pub enum ExecutionStrategy {",
+            &terms,
+            &symbol_variants,
+            SearchIntentKind::Defined,
+        )
+        .expect("definition score");
+        let import_score = search_line_score(
+            "use crate::runtime::config::{ExecPolicyConfig, ExecutionStrategy};",
+            &terms,
+            &symbol_variants,
+            SearchIntentKind::Defined,
+        )
+        .expect("import score");
+
+        assert!(definition_score > import_score);
     }
 }

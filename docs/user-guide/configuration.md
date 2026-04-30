@@ -43,7 +43,7 @@ writable_dirs = ["./tmp", "./build"]
 ```
 
 - `approval_profile` controls when Harper asks before running commands.
-- `execution_strategy` controls whether Harper prefers model-first grounded behavior, deterministic execution, or no deterministic shortcuts.
+- `execution_strategy` controls whether Harper prefers direct grounded tool execution, deterministic-first grounding with model synthesis, tool-assisted behavior, or no deterministic shortcuts.
 - `sandbox_profile` controls the default sandbox boundary.
 - `retry_max_attempts` controls bounded automatic retries for retry-safe failures.
 - `header_widgets` controls which status items appear in the chat header. You can edit that list from `Settings -> Execution Policy`, and saving the screen writes the selection back to `config/local.toml`.
@@ -68,14 +68,22 @@ Under `allow_listed`, Harper still asks for approval when a command declares net
 
 ## Repo-aware routing
 
-Harper now uses deterministic routing only for high-confidence workspace intents, not as a replacement for model reasoning.
+Harper now uses an explicit strategy-dependent control path for repo-aware work.
+
+- `deterministic` prefers direct grounded tool execution for supported intents
+- `grounded` prefers deterministic grounding first for routable repo questions, then allows model synthesis when needed
+- `auto` remains tool-assisted and can still fall back to deterministic handling for supported prompts
+- `model` disables deterministic shortcuts
+
+Supported deterministic-style intents still include:
 
 - direct operational facts such as `which branch am i on` or `which repo are we working on`
 - direct file reads such as `read Cargo.toml`
 - simple create/write prompts such as `create hello.rs with ...`
 - direct command prompts such as `run git status`
+- codebase prompts such as `where is X used`, `what calls X`, and `where is X defined`
 
-For broader repo questions such as `tell me the codebase` or `find where X is rendered`, Harper first gathers structured codebase context, then lets the model answer from that grounded context. Deterministic summaries remain fallback only when the model returns an empty or low-value response.
+For broader repo questions such as `tell me the codebase` or open-ended authoring prompts, Harper first gathers structured codebase or authoring context, then lets the model answer from that grounded context. If the model backend is unavailable and no deterministic fallback exists, Harper returns a clear assistant reply instead of a raw API error.
 
 ## API Configuration
 
