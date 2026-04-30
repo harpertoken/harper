@@ -110,6 +110,7 @@ pub(crate) fn create_chat_state(
         plan_job_output_scroll: 0,
         navigation_focus: NavigationFocus::Messages,
         command_output: None,
+        loop_state: super::app::ChatLoopState::default(),
         agents_panel_expanded: false,
         agents_scroll_offset: 0,
         input: String::new(),
@@ -791,14 +792,9 @@ pub fn handle_event(
                 KeyCode::Delete => return delete_selected_session(app),
                 KeyCode::Tab => handle_tab(app),
                 KeyCode::Char(c) => {
-                    // Handle q for quitting/returning only in non-input states
-                    if c == 'q' && !matches!(app.state, AppState::Chat(_)) {
-                        if matches!(app.state, AppState::Menu(_)) {
-                            return EventResult::Quit;
-                        } else {
-                            app.state = AppState::Menu(0);
-                            return EventResult::Continue;
-                        }
+                    // Handle q for quitting only on the home screen.
+                    if c == 'q' && matches!(app.state, AppState::Menu(_)) {
+                        return EventResult::Quit;
                     }
                     if c == 'l' {
                         if matches!(app.state, AppState::Chat(_)) {

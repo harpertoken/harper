@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use harper_core::core::plan::{PlanLoopOutcome, PlanLoopStage};
 use harper_core::core::Message;
 use harper_core::memory::session_service::GlobalStats;
 use harper_core::ResolvedAgents;
@@ -65,6 +66,19 @@ pub struct RenderedMessageBlock {
     pub lines: Vec<Line<'static>>,
 }
 
+#[derive(Clone, Default)]
+pub struct ChatLoopState {
+    pub stage: Option<PlanLoopStage>,
+    pub last_outcome: Option<PlanLoopOutcome>,
+    pub last_feedback: Option<String>,
+}
+
+impl ChatLoopState {
+    pub fn has_state(&self) -> bool {
+        self.stage.is_some() || self.last_outcome.is_some() || self.last_feedback.is_some()
+    }
+}
+
 #[derive(Clone)]
 pub struct ChatState {
     pub session_id: String,
@@ -81,6 +95,7 @@ pub struct ChatState {
     pub plan_job_output_scroll: usize,
     pub navigation_focus: NavigationFocus,
     pub command_output: Option<CommandOutputState>,
+    pub loop_state: ChatLoopState,
     pub agents_panel_expanded: bool,
     pub agents_scroll_offset: usize,
     pub input: String,
@@ -350,6 +365,20 @@ impl ChatState {
         self.completion_candidates.clear();
         self.completion_index = 0;
         self.completion_prefix = None;
+    }
+
+    pub fn set_loop_stage(&mut self, stage: PlanLoopStage, feedback: Option<String>) {
+        self.loop_state.stage = Some(stage);
+        if let Some(feedback) = feedback {
+            self.loop_state.last_feedback = Some(feedback);
+        }
+    }
+
+    pub fn record_loop_outcome(&mut self, outcome: PlanLoopOutcome, feedback: Option<String>) {
+        self.loop_state.last_outcome = Some(outcome);
+        if let Some(feedback) = feedback {
+            self.loop_state.last_feedback = Some(feedback);
+        }
     }
 
     pub fn set_navigation_focus(&mut self, focus: NavigationFocus) {

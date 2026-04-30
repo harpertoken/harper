@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harper · Docs</title>
+    <meta name="harper-update-version" content="2026-05-01-docs-v1" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
+</head>
+<body>
+    <div class="page">
+        <header class="site-header">
+            <div class="brand"><img src="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" alt="" />HARPER<span>·AI</span></div>
+            <nav class="nav">
+                <a href="index.html" data-update-target="home">Home</a>
+                <a href="installation.html" data-update-target="install">Install</a>
+                <a href="docs.html" data-update-target="docs" aria-current="page">Docs</a>
+                <a href="troubleshooting.html" data-update-target="troubleshooting">Troubleshooting</a>
+                <a href="blog.html" data-update-target="blog">Blog</a>
+                <a href="changelog.html" data-update-target="changelog">Changelog</a>
+                <a href="server.html" data-update-target="server">API Server</a>
+                <a href="terms.html" data-update-target="terms">Terms</a>
+                <a href="privacy.html" data-update-target="privacy">Privacy</a>
+            </nav>
+        </header>
+
+        <main class="surface">
+            <div class="content-container">
+                <h1 class="hero-title">Harper docs<br/><span>for daily use and debugging.</span></h1>
+                <p class="hero-lede">Start with installation and configuration, use the shell-first verification flow for routing checks, then move to the TUI only for UI-specific validation.</p>
+
+                <div class="actions">
+                    <a class="button primary" href="installation.html">Install Guide</a>
+                    <a class="button secondary" href="https://github.com/harpertoken/harper/tree/main/docs/user-guide">Full Docs on GitHub</a>
+                </div>
+
+                <h2>Core guides</h2>
+                <ul>
+                    <li><a href="installation.html">Installation</a> — setup, TUI commands, execution policy, routing, and shell-first verification</li>
+                    <li><a href="server.html">API Server</a> — config, runtime behavior, and integration details</li>
+                    <li><a href="troubleshooting.html">Troubleshooting</a> — common runtime, auth, and shell issues</li>
+                </ul>
+
+                <h2>Verification workflow</h2>
+                <p>Use <code>harper-batch</code> before opening the TUI when you need to verify routing, normalization, or follow-up behavior:</p>
+                <div class="code-wrapper">
+                    <pre><code>target/debug/harper-batch --strategy deterministic --prompt "where is execution strategy used in this repo"
+target/debug/harper-batch --strategy deterministic --prompt "run the git status" --prompt "run that"
+target/debug/harper-batch --strategy grounded --prompt "where is execution strategy used in this repo"</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>Read these fields first: <code>ROUTING</code>, <code>DETERMINISTIC INTENT</code>, <code>NORMALIZED COMMAND</code>, <code>ACTIVITY</code>, and <code>ASSISTANT</code>.</p>
+
+                <h2>User guide sections</h2>
+                <ul>
+                    <li><a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/about.md">About Harper</a></li>
+                    <li><a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/chat.md">Chat Interface</a></li>
+                    <li><a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/configuration.md">Configuration</a></li>
+                    <li><a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/quick-start.md">Quick Start</a></li>
+                </ul>
+            </div>
+        </main>
+
+        <footer class="footnote">
+            <a class="button secondary" href="index.html">← Back</a>
+        </footer>
+    </div>
+    <script src="nav-updates.js"></script>
+    <script>
+        const header = document.querySelector('.site-header');
+        window.addEventListener('scroll', () => {
+            header.classList.toggle('scrolled', window.scrollY > 50);
+        });
+    </script>
+</body>
+</html>

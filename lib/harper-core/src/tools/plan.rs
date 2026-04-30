@@ -14,8 +14,8 @@
 
 use crate::core::error::{HarperError, HarperResult};
 use crate::core::plan::{
-    AuthoringPlannedEdit, AuthoringValidationStep, PlanItem, PlanJobStatus, PlanRuntime, PlanState,
-    PlanStepStatus, StructuredAuthoringPlan,
+    AuthoringPlannedEdit, AuthoringValidationStep, PlanItem, PlanJobStatus, PlanLoopOutcome,
+    PlanLoopStage, PlanRuntime, PlanState, PlanStepStatus, StructuredAuthoringPlan,
 };
 use rusqlite::Connection;
 
@@ -71,6 +71,8 @@ pub fn update_plan(
     let existing_runtime =
         crate::memory::storage::load_plan_state(conn, session_id)?.and_then(|plan| plan.runtime);
     let mut runtime = existing_runtime.unwrap_or_default();
+    runtime.set_loop_stage(PlanLoopStage::Planning, Some("plan updated".to_string()));
+    runtime.record_outcome(PlanLoopOutcome::Responded, Some("plan ready".to_string()));
     if let Some(authoring_plan) = structured_authoring_plan {
         runtime.set_authoring_structured_plan(authoring_plan);
     }
@@ -129,6 +131,28 @@ pub fn set_plan_runtime_state(
 ) -> HarperResult<()> {
     update_plan_runtime(conn, session_id, |runtime| {
         runtime.set_active_tool_state(tool_name.to_string(), command, status.to_string());
+    })
+}
+
+pub fn set_plan_loop_stage(
+    conn: &Connection,
+    session_id: &str,
+    stage: PlanLoopStage,
+    feedback: Option<String>,
+) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.set_loop_stage(stage.clone(), feedback.clone());
+    })
+}
+
+pub fn record_plan_loop_outcome(
+    conn: &Connection,
+    session_id: &str,
+    outcome: PlanLoopOutcome,
+    feedback: Option<String>,
+) -> HarperResult<()> {
+    update_plan_runtime(conn, session_id, |runtime| {
+        runtime.record_outcome(outcome.clone(), feedback.clone());
     })
 }
 

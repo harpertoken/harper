@@ -53,8 +53,8 @@ Here are the commands you'll use most often:
 |---------|-------------|
 | `/help` | Show all available commands |
 | `/clear` | Start a new conversation |
-| `/save` | Save your current session |
-| `/load` | Load a saved session |
+| `/strategy` | Show or change the execution strategy |
+| `/agents` | Show AGENTS context status for the current session |
 | `/exit` | Exit Harper |
 
 ## Basic Workflows
@@ -76,14 +76,9 @@ Example:
 2. Paste it in Harper
 3. Ask what the error means
 
-### Saving Work
+### Revisiting Work
 
-1. After a productive session, type:
-   ```
-   > /save
-   ```
-2. Give your session a name when prompted
-3. Later, use `/load` to continue
+Use the Home screen, History screen, export flow, and session preview flow to revisit previous conversations. For routing and command-behavior checks, use `harper-batch` first before opening the TUI.
 
 ## Tips for Better Results
 

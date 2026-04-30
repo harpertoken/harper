@@ -43,6 +43,30 @@ pub enum PlanJobStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanLoopStage {
+    Planning,
+    Inspecting,
+    Executing,
+    Feedback,
+    RetryPending,
+    ReplanRequired,
+    Responding,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanLoopOutcome {
+    WaitingApproval,
+    Succeeded,
+    Failed,
+    Checkpointed,
+    RetryPending,
+    ReplanRequired,
+    Responded,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PlanJobRecord {
     pub job_id: String,
     pub tool: String,
@@ -142,6 +166,12 @@ pub struct PlanRuntime {
     #[serde(default)]
     pub followup_history: Vec<PlanFollowup>,
     #[serde(default)]
+    pub loop_stage: Option<PlanLoopStage>,
+    #[serde(default)]
+    pub last_outcome: Option<PlanLoopOutcome>,
+    #[serde(default)]
+    pub last_feedback: Option<String>,
+    #[serde(default)]
     pub authoring: Option<AuthoringRuntime>,
 }
 
@@ -156,6 +186,9 @@ impl PlanRuntime {
             && self.jobs.is_empty()
             && self.followup.is_none()
             && self.followup_history.is_empty()
+            && self.loop_stage.is_none()
+            && self.last_outcome.is_none()
+            && self.last_feedback.is_none()
             && self.authoring.is_none()
     }
 
@@ -168,6 +201,21 @@ impl PlanRuntime {
         self.active_tool = Some(tool.into());
         self.active_command = command;
         self.active_status = Some(status.into());
+        self.loop_stage = Some(PlanLoopStage::Executing);
+    }
+
+    pub fn set_loop_stage(&mut self, stage: PlanLoopStage, feedback: Option<String>) {
+        self.loop_stage = Some(stage);
+        if let Some(feedback) = feedback.filter(|value| !value.trim().is_empty()) {
+            self.last_feedback = Some(feedback);
+        }
+    }
+
+    pub fn record_outcome(&mut self, outcome: PlanLoopOutcome, feedback: Option<String>) {
+        self.last_outcome = Some(outcome);
+        if let Some(feedback) = feedback.filter(|value| !value.trim().is_empty()) {
+            self.last_feedback = Some(feedback);
+        }
     }
 
     pub fn start_job(
@@ -182,6 +230,18 @@ impl PlanRuntime {
         self.active_tool = Some(tool.clone());
         self.active_command = command.clone();
         self.active_status = Some(job_status_label(&status).to_string());
+        self.loop_stage = Some(match status {
+            PlanJobStatus::WaitingApproval => PlanLoopStage::RetryPending,
+            PlanJobStatus::Running => PlanLoopStage::Executing,
+            PlanJobStatus::Blocked | PlanJobStatus::Failed => PlanLoopStage::ReplanRequired,
+            PlanJobStatus::Succeeded => PlanLoopStage::Feedback,
+        });
+        self.last_outcome = Some(match status {
+            PlanJobStatus::WaitingApproval => PlanLoopOutcome::WaitingApproval,
+            PlanJobStatus::Running => PlanLoopOutcome::Responded,
+            PlanJobStatus::Blocked | PlanJobStatus::Failed => PlanLoopOutcome::Failed,
+            PlanJobStatus::Succeeded => PlanLoopOutcome::Succeeded,
+        });
         self.jobs.push(PlanJobRecord {
             job_id: job_id.clone(),
             tool,
@@ -208,6 +268,18 @@ impl PlanRuntime {
             job.status = status.clone();
         }
         self.active_status = Some(job_status_label(&status).to_string());
+        self.loop_stage = Some(match status {
+            PlanJobStatus::WaitingApproval => PlanLoopStage::RetryPending,
+            PlanJobStatus::Running => PlanLoopStage::Executing,
+            PlanJobStatus::Blocked | PlanJobStatus::Failed => PlanLoopStage::ReplanRequired,
+            PlanJobStatus::Succeeded => PlanLoopStage::Feedback,
+        });
+        self.last_outcome = Some(match status {
+            PlanJobStatus::WaitingApproval => PlanLoopOutcome::WaitingApproval,
+            PlanJobStatus::Running => PlanLoopOutcome::Responded,
+            PlanJobStatus::Blocked | PlanJobStatus::Failed => PlanLoopOutcome::Failed,
+            PlanJobStatus::Succeeded => PlanLoopOutcome::Succeeded,
+        });
     }
 
     pub fn set_active_job_output(
@@ -261,6 +333,7 @@ impl PlanRuntime {
 
     pub fn finish_active_job(&mut self, status: PlanJobStatus) {
         self.update_active_job_status(status);
+        self.loop_stage = Some(PlanLoopStage::Feedback);
         self.clear_active_state();
     }
 
@@ -273,6 +346,9 @@ impl PlanRuntime {
             self.archive_active_followup();
         }
         self.followup = Some(next_followup);
+        self.loop_stage = Some(PlanLoopStage::Feedback);
+        self.last_outcome = Some(PlanLoopOutcome::Checkpointed);
+        self.last_feedback = Some("checkpoint recorded".to_string());
     }
 
     pub fn set_retry_or_replan_followup(
@@ -303,6 +379,15 @@ impl PlanRuntime {
             self.archive_active_followup();
         }
         self.followup = Some(next_followup);
+        if retry_count <= 1 {
+            self.loop_stage = Some(PlanLoopStage::RetryPending);
+            self.last_outcome = Some(PlanLoopOutcome::RetryPending);
+            self.last_feedback = Some("retry suggested".to_string());
+        } else {
+            self.loop_stage = Some(PlanLoopStage::ReplanRequired);
+            self.last_outcome = Some(PlanLoopOutcome::ReplanRequired);
+            self.last_feedback = Some("replan required".to_string());
+        }
     }
 
     pub fn clear_followup(&mut self) {
@@ -511,7 +596,9 @@ pub struct PlanState {
 
 #[cfg(test)]
 mod tests {
-    use super::{AuthoringPhase, PlanFollowup, PlanJobStatus, PlanRuntime};
+    use super::{
+        AuthoringPhase, PlanFollowup, PlanJobStatus, PlanLoopOutcome, PlanLoopStage, PlanRuntime,
+    };
 
     #[test]
     fn runtime_deserializes_legacy_shape_with_empty_jobs() {
@@ -596,6 +683,31 @@ mod tests {
                 command: Some("cargo test".to_string()),
                 retry_count: 1
             }
+        );
+    }
+
+    #[test]
+    fn runtime_tracks_loop_stage_and_outcome_for_retry_and_checkpoint() {
+        let mut runtime = PlanRuntime::default();
+
+        runtime.set_loop_stage(PlanLoopStage::Planning, Some("plan updated".to_string()));
+        runtime.record_outcome(PlanLoopOutcome::Responded, Some("plan ready".to_string()));
+        runtime
+            .set_retry_or_replan_followup("Retry failing command", Some("cargo test".to_string()));
+        assert_eq!(runtime.loop_stage, Some(PlanLoopStage::RetryPending));
+        assert_eq!(runtime.last_outcome, Some(PlanLoopOutcome::RetryPending));
+
+        runtime
+            .set_retry_or_replan_followup("Retry failing command", Some("cargo test".to_string()));
+        assert_eq!(runtime.loop_stage, Some(PlanLoopStage::ReplanRequired));
+        assert_eq!(runtime.last_outcome, Some(PlanLoopOutcome::ReplanRequired));
+
+        runtime.set_checkpoint_followup("Inspect output", Some("Patch handler".to_string()));
+        assert_eq!(runtime.loop_stage, Some(PlanLoopStage::Feedback));
+        assert_eq!(runtime.last_outcome, Some(PlanLoopOutcome::Checkpointed));
+        assert_eq!(
+            runtime.last_feedback.as_deref(),
+            Some("checkpoint recorded")
         );
     }
 

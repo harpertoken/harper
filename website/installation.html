@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Installation</title>
-    <meta name="harper-update-version" content="2026-04-28-install-v6" />
+    <meta name="harper-update-version" content="2026-05-01-install-v7" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -15,6 +15,7 @@
             <nav class="nav">
                 <a href="index.html" data-update-target="home">Home</a>
                 <a href="installation.html" data-update-target="install" aria-current="page">Install</a>
+                <a href="docs.html" data-update-target="docs">Docs</a>
                 <a href="troubleshooting.html" data-update-target="troubleshooting">Troubleshooting</a>
                 <a href="blog.html" data-update-target="blog">Blog</a>
                 <a href="changelog.html" data-update-target="changelog">Changelog</a>
@@ -104,7 +105,7 @@ retry_max_attempts = 1
 header_widgets = ["model", "cwd", "strategy"]</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p>Approval profiles control whether commands always require approval, only allowlisted commands can run automatically, or all commands can run automatically. Under <code>allow_listed</code>, Harper still asks for approval when a command declares network access, or when it declares writes outside the configured sandbox writable roots, even if the command itself is allowlisted. Execution strategy controls whether Harper prefers model-first grounded behavior, deterministic execution, or no deterministic shortcuts. Sandbox profiles control whether command execution is unsandboxed, sandboxed to the workspace, or sandboxed with workspace access plus network enabled.</p>
+                <p>Approval profiles control whether commands always require approval, only allowlisted commands can run automatically, or all commands can run automatically. Under <code>allow_listed</code>, Harper still asks for approval when a command declares network access, or when it declares writes outside the configured sandbox writable roots, even if the command itself is allowlisted. Execution strategy controls whether Harper prefers strict direct grounded execution, deterministic-first grounding with model synthesis, tool-assisted behavior, or no deterministic shortcuts. Sandbox profiles control whether command execution is unsandboxed, sandboxed to the workspace, or sandboxed with workspace access plus network enabled.</p>
                 <p><code>header_widgets</code> controls which status items appear in the chat header. In <code>Settings -&gt; Execution Policy</code>, Harper now lets you edit that field in two ways at once: a checklist for toggling visible widgets and a synchronized comma-separated text field that shows exactly what will be written back to <code>config/local.toml</code>. Supported values are: <code>session</code>, <code>plan</code>, <code>agents</code>, <code>web</code>, <code>auth</code>, <code>focus</code>, <code>model</code>, <code>cwd</code>, <code>strategy</code>, <code>approval</code>, and <code>activity</code>. Keep only the fields you actually want visible.</p>
                 <p>The same screen also lets you edit <code>allowed_commands</code> and <code>blocked_commands</code> directly as comma-separated lists, so you do not have to hand-edit the local config for simple policy changes.</p>
                 <p><code>retry_max_attempts</code> controls bounded automatic retries for retry-safe commands. Network retries and write retries are still gated by command class and declared command intent.</p>
@@ -126,7 +127,7 @@ writable_dirs = ["./tmp", "./build"]</code></pre>
                 <p>Saving the profile updates <code>config/local.toml</code> and also applies to future commands in the current TUI session.</p>
 
                 <h2>Repo-aware routing</h2>
-                <p>Harper now uses a model-first grounded path for normal repo work. High-confidence intents still have deterministic grounding and fallback, but repo questions are no longer described as deterministic-only final answers.</p>
+                <p>Harper now uses an explicit control path for repo-aware work. <code>deterministic</code> prefers direct grounded tool execution for supported intents, <code>grounded</code> prefers deterministic grounding first for routable repo questions and then allows model synthesis when needed, <code>auto</code> remains tool-assisted, and <code>model</code> disables deterministic shortcuts.</p>
                 <ul>
                     <li><code>which branch am i on</code> → git branch lookup</li>
                     <li><code>which repo are we working on</code> → repo identity lookup</li>
@@ -135,7 +136,18 @@ writable_dirs = ["./tmp", "./build"]</code></pre>
                     <li><code>tell me the codebase</code> → structured workspace overview</li>
                     <li><code>create hello.rs with ...</code> → direct file creation/write flow</li>
                 </ul>
-                <p>For open-ended repo questions, Harper feeds the model grounded codebase and authoring context first, then validates tool use against runtime constraints. Deterministic summaries stay as fallback only when the model returns an empty, low-value, or invalid answer.</p>
+                <p>For open-ended repo questions, Harper still uses grounded codebase and authoring context before letting the model answer. Deterministic search and summaries remain available as the primary path in <code>deterministic</code>, and as fallback or explicit grounding in the other strategies. If the model backend is unavailable and there is no deterministic fallback, Harper now returns a clear assistant reply instead of a raw API error.</p>
+
+                <h2>Shell-first verification</h2>
+                <p>Before opening the TUI for routing or command-behavior checks, use the batch harness:</p>
+                <div class="code-wrapper">
+                    <pre><code>target/debug/harper-batch --strategy deterministic --prompt "where is execution strategy used in this repo"
+target/debug/harper-batch --strategy deterministic --prompt "run the git status" --prompt "run that"
+target/debug/harper-batch --strategy grounded --prompt "where is execution strategy used in this repo"
+target/debug/harper-batch --strategy auto --prompt "run the git status" --prompt "run that"</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>The shell output reports the selected strategy, task mode, routed deterministic intent, normalized command when one exists, runtime activity, and the final assistant reply. Use that to confirm routing and normalization first; then use the TUI only to confirm UI surfaces such as the loop panel, command-output panel, help modal, and slash completion list.</p>
 
                 <h2>File references and Tab completion</h2>
                 <p>Type <code>@</code> in the chat input to start a file or directory reference. Press <code>Tab</code> to autocomplete matching paths and keep pressing <code>Tab</code> to cycle through candidates.</p>

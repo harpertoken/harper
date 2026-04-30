@@ -1,15 +1,15 @@
 {
-  "explanation": "Finish Harper's planner/runtime system from live execution visibility through planner-quality orchestration.",
+  "explanation": "Harper's planner/runtime roadmap is partially complete. Live execution visibility, runtime jobs, scoped AGENTS resolution, and core planner feedback loops are in place. The remaining work is the unfinished cross-interface runtime surface, editable plan actions, and deeper orchestration maturity.",
   "items": [
-    { "step": "Add live output panel", "status": "pending" },
-    { "step": "Introduce job model", "status": "pending" },
-    { "step": "Build job list UI", "status": "pending" },
-    { "step": "Link steps to jobs", "status": "pending" },
+    { "step": "Add live output panel", "status": "completed" },
+    { "step": "Introduce job model", "status": "completed" },
+    { "step": "Build job list UI", "status": "completed" },
+    { "step": "Link steps to jobs", "status": "completed" },
     { "step": "Auto-advance on job finish", "status": "pending" },
-    { "step": "Handle blocked and failed states", "status": "pending" },
+    { "step": "Handle blocked and failed states", "status": "completed" },
     { "step": "Expose runtime over HTTP", "status": "pending" },
     { "step": "Add UI plan editing", "status": "pending" },
-    { "step": "Resolve scoped AGENTS rules", "status": "pending" },
+    { "step": "Resolve scoped AGENTS rules", "status": "completed" },
     { "step": "Improve planner orchestration", "status": "pending" }
   ]
 }

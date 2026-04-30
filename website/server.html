@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · API Server</title>
-    <meta name="harper-update-version" content="2026-04-28-server-v6" />
+    <meta name="harper-update-version" content="2026-05-01-server-v7" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -15,6 +15,7 @@
             <nav class="nav">
                 <a href="index.html" data-update-target="home">Home</a>
                 <a href="installation.html" data-update-target="install">Install</a>
+                <a href="docs.html" data-update-target="docs">Docs</a>
                 <a href="troubleshooting.html" data-update-target="troubleshooting">Troubleshooting</a>
                 <a href="blog.html" data-update-target="blog">Blog</a>
                 <a href="changelog.html" data-update-target="changelog">Changelog</a>
@@ -70,14 +71,15 @@ writable_dirs = ["./tmp", "./build"]</code></pre>
                 <p><code>allowed_dirs</code> are readable roots. <code>writable_dirs</code> are writable roots. This lets you keep most of the workspace readable while only allowing writes in specific subpaths.</p>
 
                 <h2>Deterministic repo routes</h2>
-                <p>Harper now uses a model-first grounded strategy for repo work:</p>
+                <p>Harper now uses an explicit control path for repo work:</p>
                 <ul>
-                    <li>Structured codebase and authoring helpers gather grounded context.</li>
-                    <li>The model reasons on top of that context for agentic repo questions.</li>
-                    <li>Deterministic routing and summaries remain available as fallback or explicit strategy choices.</li>
+                    <li><code>deterministic</code> prefers direct grounded tool execution for supported intents.</li>
+                    <li><code>grounded</code> prefers deterministic grounding first for routable repo questions, then allows model synthesis when needed.</li>
+                    <li><code>auto</code> remains tool-assisted and can still degrade to deterministic fallback for supported prompts.</li>
+                    <li><code>model</code> disables deterministic shortcuts.</li>
                 </ul>
-                <p>Examples of grounded routes include <code>git status</code>, <code>git diff</code>, repo identity, branch lookup, direct file reads, and simple create/write prompts. Codebase prompts such as <code>find where X is rendered</code> use a structured search helper first, then let the model summarize from that grounded result. Open-ended authoring prompts build authoring context, require plan/inspection before edits, and use deterministic fallback only when the model fails.</p>
-                <p>This keeps the execution path explicit and safe, while avoiding the older failure mode where a weaker local model would answer with generic prose instead of using the repo tools.</p>
+                <p>Examples of grounded routes include <code>git status</code>, <code>git diff</code>, repo identity, branch lookup, direct file reads, command follow-ups such as <code>run that</code>, and simple create/write prompts. Codebase prompts such as <code>where is X used</code>, <code>what calls X</code>, and <code>where is X defined</code> use a structured search helper with intent-aware ranking. Open-ended authoring prompts build authoring context, require plan/inspection before edits, and use deterministic fallback only when the model fails or is unavailable.</p>
+                <p>This keeps the execution path explicit and safe, while avoiding the older failure mode where a weaker local model would answer with generic prose instead of using the repo tools. If the model backend is unavailable and there is no deterministic fallback, Harper now returns a clear assistant reply instead of a raw API error.</p>
 
                 <h2>Run Harper with the server enabled</h2>
                 <p>Start Harper normally after enabling the server in config. If you only want the TUI, disable server startup with the flag below.</p>

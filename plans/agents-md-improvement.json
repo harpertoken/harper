@@ -1,13 +1,13 @@
 {
-  "explanation": "Improve Harper's AGENTS.md handling from a single appended file into a scoped instruction system with directory-aware behavior.",
+  "explanation": "AGENTS.md handling is complete for the originally scoped workstream: scoped resolution, nested precedence, path-aware filtering, and UI visibility are in place.",
   "items": [
-    { "step": "Define AGENTS scope rules", "status": "pending" },
-    { "step": "Walk parent directories safely", "status": "pending" },
-    { "step": "Merge nested AGENTS files", "status": "pending" },
-    { "step": "Honor deeper file precedence", "status": "pending" },
-    { "step": "Filter rules by touched paths", "status": "pending" },
-    { "step": "Expose resolved rules to planner", "status": "pending" },
-    { "step": "Show AGENTS sources in UI", "status": "pending" },
-    { "step": "Add regression tests", "status": "pending" }
+    { "step": "Define AGENTS scope rules", "status": "completed" },
+    { "step": "Walk parent directories safely", "status": "completed" },
+    { "step": "Merge nested AGENTS files", "status": "completed" },
+    { "step": "Honor deeper file precedence", "status": "completed" },
+    { "step": "Filter rules by touched paths", "status": "completed" },
+    { "step": "Expose resolved rules to planner", "status": "completed" },
+    { "step": "Show AGENTS sources in UI", "status": "completed" },
+    { "step": "Add regression tests", "status": "completed" }
   ]
 }

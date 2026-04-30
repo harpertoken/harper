@@ -1,5 +1,11 @@
 const STORAGE_PREFIX = "harper.site.seen.";
 
+function isAtPageBottom() {
+    const scrollBottom = window.scrollY + window.innerHeight;
+    const threshold = 16;
+    return scrollBottom >= document.documentElement.scrollHeight - threshold;
+}
+
 async function applyNavUpdateIndicators() {
     const currentPath = window.location.pathname.split("/").pop() || "index.html";
     const currentVersion = document
@@ -15,25 +21,53 @@ async function applyNavUpdateIndicators() {
 
     const updates = await response.json();
 
-    if (currentVersion) {
-        localStorage.setItem(`${STORAGE_PREFIX}${currentPath}`, currentVersion);
+    const renderIndicators = () => {
+        document.querySelectorAll(".nav a[data-update-target]").forEach((link) => {
+            const targetHref = link.getAttribute("href");
+            const latestVersion = targetHref ? updates[targetHref] : null;
+            if (!targetHref || !latestVersion) {
+                return;
+            }
+
+            const seenVersion = localStorage.getItem(`${STORAGE_PREFIX}${targetHref}`);
+            const hasUnread = seenVersion !== latestVersion;
+            link.classList.toggle("has-update", hasUnread);
+
+            if (!link.dataset.updateBound) {
+                link.addEventListener("click", () => {
+                    localStorage.setItem(`${STORAGE_PREFIX}${targetHref}`, latestVersion);
+                });
+                link.dataset.updateBound = "true";
+            }
+        });
+    };
+
+    renderIndicators();
+
+    if (!currentVersion) {
+        return;
     }
 
-    document.querySelectorAll(".nav a[data-update-target]").forEach((link) => {
-        const targetHref = link.getAttribute("href");
-        const latestVersion = targetHref ? updates[targetHref] : null;
-        if (!targetHref || !latestVersion) {
-            return;
+    const storageKey = `${STORAGE_PREFIX}${currentPath}`;
+    const markCurrentPageSeen = () => {
+        localStorage.setItem(storageKey, currentVersion);
+        renderIndicators();
+        window.removeEventListener("scroll", handleScroll);
+    };
+
+    const handleScroll = () => {
+        if (isAtPageBottom()) {
+            markCurrentPageSeen();
         }
+    };
 
-        const seenVersion = localStorage.getItem(`${STORAGE_PREFIX}${targetHref}`);
-        const hasUnread = seenVersion !== latestVersion;
-        link.classList.toggle("has-update", hasUnread);
-
-        link.addEventListener("click", () => {
-            localStorage.setItem(`${STORAGE_PREFIX}${targetHref}`, latestVersion);
-        });
-    });
+    if (localStorage.getItem(storageKey) !== currentVersion) {
+        if (isAtPageBottom()) {
+            markCurrentPageSeen();
+        } else {
+            window.addEventListener("scroll", handleScroll, { passive: true });
+        }
+    }
 }
 
 applyNavUpdateIndicators().catch(() => {});
