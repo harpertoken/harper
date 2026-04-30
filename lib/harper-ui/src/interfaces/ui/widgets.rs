@@ -18,9 +18,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap};
 
-use super::app::{
-    AppState, ApprovalState, CommandOutputState, ReviewState, SessionInfo, TuiApp, UiMessage,
-};
+use super::app::{AppState, ApprovalState, ReviewState, SessionInfo, TuiApp, UiMessage};
 use super::settings;
 use super::theme::Theme;
 use harper_core::core::plan::{PlanFollowup, PlanJobRecord, PlanJobStatus};
@@ -255,14 +253,14 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                     .as_ref()
                     .is_some_and(|agents| !agents.sources.is_empty());
             let has_review = chat_state.active_review.is_some();
-            let has_command_output = chat_state.command_output.is_some();
+            let command_output_display = derive_command_output_display(chat_state);
+            let has_command_output = command_output_display.is_some();
             let plan_height = chat_state
                 .active_plan
                 .as_ref()
                 .map(plan_panel_height)
                 .unwrap_or(0);
-            let command_output_height = chat_state
-                .command_output
+            let command_output_height = command_output_display
                 .as_ref()
                 .map(command_output_panel_height)
                 .unwrap_or(0);
@@ -366,7 +364,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 next_panel_index += 1;
             }
             if has_command_output {
-                if let Some(output) = &chat_state.command_output {
+                if let Some(output) = command_output_display.as_ref() {
                     draw_command_output_panel(frame, output, theme, chunks[next_panel_index]);
                 }
                 next_panel_index += 1;
@@ -1335,6 +1333,9 @@ fn plan_panel_height(plan: &PlanState) -> u16 {
         if runtime.followup.is_some() {
             lines += 2;
         }
+        if !runtime.followup_history.is_empty() {
+            lines += runtime.followup_history.len().min(2) + 1;
+        }
         lines += runtime.jobs.len().min(3);
         if runtime.jobs.len() > 3 {
             lines += 1;
@@ -1395,19 +1396,97 @@ fn draw_completion_popup(
     frame.render_widget(widget, area);
 }
 
-fn command_output_panel_height(output: &CommandOutputState) -> u16 {
-    let line_count = output.content.lines().count().clamp(1, 5);
-    (line_count + 3) as u16
+const MAX_COMMAND_OUTPUT_LINES: usize = 6;
+
+#[derive(Clone)]
+struct CommandOutputDisplay {
+    command: String,
+    content: String,
+    has_error: bool,
+    status_label: String,
+    total_line_count: usize,
+}
+
+fn derive_command_output_display(
+    chat_state: &super::app::ChatState,
+) -> Option<CommandOutputDisplay> {
+    if let Some(output) = &chat_state.command_output {
+        let trimmed = output.content.trim_end();
+        let content = if trimmed.trim().is_empty() {
+            "No output yet".to_string()
+        } else {
+            trimmed.to_string()
+        };
+        let status_label = chat_state
+            .active_plan
+            .as_ref()
+            .and_then(|plan| plan.runtime.as_ref())
+            .and_then(|runtime| runtime.active_status.clone())
+            .unwrap_or_else(|| {
+                if output.done {
+                    "done".to_string()
+                } else {
+                    "live".to_string()
+                }
+            });
+        let total_line_count = content.lines().count().max(1);
+        return Some(CommandOutputDisplay {
+            command: output.command.clone(),
+            content,
+            has_error: output.has_error,
+            status_label,
+            total_line_count,
+        });
+    }
+
+    let runtime = chat_state
+        .active_plan
+        .as_ref()
+        .and_then(|plan| plan.runtime.as_ref())?;
+    let job = runtime
+        .active_job_id
+        .as_deref()
+        .and_then(|job_id| runtime.jobs.iter().rev().find(|job| job.job_id == job_id))
+        .or_else(|| runtime.jobs.last())?;
+
+    let transcript = job.output_transcript.trim_end();
+    let preview = job.output_preview.as_deref().unwrap_or_default().trim_end();
+    let (content, total_line_count) = if transcript.trim().is_empty() {
+        let preview_content = if preview.trim().is_empty() {
+            "No output recorded yet".to_string()
+        } else {
+            preview.to_string()
+        };
+        let preview_lines = preview_content.lines().count().max(1);
+        (preview_content, preview_lines)
+    } else {
+        let transcript_content = transcript.to_string();
+        let transcript_lines = transcript_content.lines().count().max(1);
+        (transcript_content, transcript_lines)
+    };
+
+    Some(CommandOutputDisplay {
+        command: job.command.clone().unwrap_or_else(|| job.tool.clone()),
+        content,
+        has_error: job.has_error_output,
+        status_label: format!("{:?}", job.status).to_ascii_lowercase(),
+        total_line_count,
+    })
+}
+
+fn command_output_panel_height(output: &CommandOutputDisplay) -> u16 {
+    let visible_lines = output.total_line_count.clamp(1, MAX_COMMAND_OUTPUT_LINES);
+    let truncation_line = usize::from(output.total_line_count > MAX_COMMAND_OUTPUT_LINES);
+    (visible_lines + truncation_line + 4) as u16
 }
 
 fn draw_command_output_panel(
     frame: &mut Frame,
-    output: &CommandOutputState,
+    output: &CommandOutputDisplay,
     theme: &Theme,
     area: Rect,
 ) {
-    let status = if output.done { "done" } else { "live" };
-    let title = format!(" Command Output ({}) ", status);
+    let title = format!(" Command Output ({}) ", output.status_label);
     let color = if output.has_error {
         Color::Rgb(245, 158, 11)
     } else {
@@ -1422,6 +1501,16 @@ fn draw_command_output_panel(
     } else {
         output.content.trim_end()
     };
+    let total_lines = content.lines().count().max(1);
+    if total_lines > MAX_COMMAND_OUTPUT_LINES {
+        lines.push(Line::styled(
+            format!(
+                "showing last {} of {} lines",
+                MAX_COMMAND_OUTPUT_LINES, total_lines
+            ),
+            theme.muted_style(),
+        ));
+    }
     if let Some(language) = detect_command_output_language(&output.command, content) {
         let code = strip_command_output_prefix(content);
         let highlighted = if language == "diff" {
@@ -1435,13 +1524,13 @@ fn draw_command_output_panel(
                 &theme.syntax_theme,
             )
         };
-        let window = highlighted.len().saturating_sub(4);
+        let window = highlighted.len().saturating_sub(MAX_COMMAND_OUTPUT_LINES);
         lines.extend(highlighted.into_iter().skip(window));
     } else {
         for line in content
             .lines()
             .rev()
-            .take(4)
+            .take(MAX_COMMAND_OUTPUT_LINES)
             .collect::<Vec<_>>()
             .into_iter()
             .rev()
@@ -1600,6 +1689,7 @@ fn draw_plan_panel(
     }
     if let Some(runtime) = &plan.runtime {
         lines.extend(plan_followup_lines(runtime, theme));
+        lines.extend(plan_followup_history_lines(runtime, theme));
         lines.extend(plan_job_lines(
             runtime,
             selected_job,
@@ -1904,6 +1994,44 @@ fn plan_followup_lines(runtime: &PlanRuntime, theme: &Theme) -> Vec<Line<'static
                 theme.muted_style(),
             ),
         ],
+    }
+}
+
+fn plan_followup_history_lines(runtime: &PlanRuntime, theme: &Theme) -> Vec<Line<'static>> {
+    if runtime.followup_history.is_empty() {
+        return vec![];
+    }
+
+    let mut lines = vec![Line::styled(
+        "recent followups",
+        theme.muted_style().add_modifier(Modifier::ITALIC),
+    )];
+    for followup in runtime.followup_history.iter().rev().take(2) {
+        lines.push(format_followup_history_line(followup, theme));
+    }
+    lines
+}
+
+fn format_followup_history_line(followup: &PlanFollowup, theme: &Theme) -> Line<'static> {
+    match followup {
+        PlanFollowup::Checkpoint { step, next_step } => {
+            let summary = if let Some(next_step) = next_step {
+                format!(
+                    "checkpoint: {} → {}",
+                    truncate_chat_summary(step, 28),
+                    truncate_chat_summary(next_step, 28)
+                )
+            } else {
+                format!("checkpoint: {}", truncate_chat_summary(step, 60))
+            };
+            Line::styled(summary, theme.muted_style())
+        }
+        PlanFollowup::RetryOrReplan {
+            step, retry_count, ..
+        } => Line::styled(
+            format!("retry {}: {}", retry_count, truncate_chat_summary(step, 60)),
+            Style::default().fg(Color::Rgb(245, 158, 11)),
+        ),
     }
 }
 
@@ -3279,7 +3407,8 @@ fn plan_job_transcript_lines(job: &PlanJobRecord, theme: &Theme) -> Vec<Line<'st
 #[cfg(test)]
 mod tests {
     use super::*;
-    use harper_core::PlanItem;
+    use crate::interfaces::ui::app;
+    use harper_core::{core::Message, PlanItem};
     use ratatui::style::Color;
 
     fn setup() -> (SyntaxSet, ThemeSet) {
@@ -3287,6 +3416,39 @@ mod tests {
             SyntaxSet::load_defaults_newlines(),
             ThemeSet::load_defaults(),
         )
+    }
+
+    fn empty_chat_state() -> app::ChatState {
+        app::ChatState {
+            session_id: "session-1".to_string(),
+            messages: Vec::<Message>::new(),
+            awaiting_response: false,
+            active_plan: None,
+            active_agents: None,
+            active_review: None,
+            review_selected: 0,
+            plan_step_selected: 0,
+            plan_steps_expanded: false,
+            plan_job_selected: 0,
+            plan_jobs_expanded: false,
+            plan_job_output_scroll: 0,
+            navigation_focus: app::NavigationFocus::Messages,
+            command_output: None,
+            agents_panel_expanded: false,
+            agents_scroll_offset: 0,
+            input: String::new(),
+            web_search: false,
+            web_search_enabled: false,
+            completion_candidates: Vec::new(),
+            completion_index: 0,
+            scroll_offset: 0,
+            completion_prefix: None,
+            sidebar_visible: false,
+            sidebar_sections: Vec::new(),
+            rendered_message_cache: Vec::new(),
+            rendered_transcript_lines: Vec::new(),
+            render_cache_theme_key: String::new(),
+        }
     }
 
     #[test]
@@ -3493,6 +3655,7 @@ mod tests {
                     },
                 ],
                 followup: None,
+                followup_history: Vec::new(),
                 authoring: None,
             }),
             updated_at: None,
@@ -3547,6 +3710,7 @@ mod tests {
                 },
             ],
             followup: None,
+            followup_history: Vec::new(),
             authoring: None,
         };
 
@@ -3608,6 +3772,7 @@ mod tests {
                 command: Some("cargo test".to_string()),
                 retry_count: 2,
             }),
+            followup_history: Vec::new(),
             ..Default::default()
         };
 
@@ -3625,6 +3790,7 @@ mod tests {
                 step: "Inspect server file".to_string(),
                 next_step: Some("Patch handler".to_string()),
             }),
+            followup_history: Vec::new(),
             ..Default::default()
         };
 
@@ -3653,5 +3819,71 @@ mod tests {
         let content = "def greet():\n    print(\"Hello Joy\")";
 
         assert_eq!(detect_command_output_language(command, content), Some("py"));
+    }
+
+    #[test]
+    fn derive_command_output_display_falls_back_to_plan_runtime_job_output() {
+        let mut chat_state = empty_chat_state();
+        chat_state.active_plan = Some(PlanState {
+            explanation: None,
+            items: Vec::new(),
+            runtime: Some(PlanRuntime {
+                active_tool: Some("run_command".to_string()),
+                active_command: Some("cargo test".to_string()),
+                active_status: Some("running".to_string()),
+                active_job_id: Some("job-1".to_string()),
+                jobs: vec![PlanJobRecord {
+                    job_id: "job-1".to_string(),
+                    tool: "run_command".to_string(),
+                    command: Some("cargo test".to_string()),
+                    status: PlanJobStatus::Running,
+                    output_transcript: "line one\nline two\nline three".to_string(),
+                    output_preview: Some("line two\nline three".to_string()),
+                    has_error_output: false,
+                }],
+                followup: None,
+                followup_history: Vec::new(),
+                authoring: None,
+            }),
+            updated_at: None,
+        });
+
+        let output = derive_command_output_display(&chat_state).expect("derived output");
+
+        assert_eq!(output.command, "cargo test");
+        assert_eq!(output.status_label, "running");
+        assert_eq!(output.total_line_count, 3);
+        assert!(output.content.contains("line one"));
+        assert!(output.content.contains("line three"));
+    }
+
+    #[test]
+    fn plan_followup_history_lines_render_recent_entries() {
+        let runtime = PlanRuntime {
+            followup: None,
+            followup_history: vec![
+                PlanFollowup::Checkpoint {
+                    step: "Inspect output".to_string(),
+                    next_step: Some("Patch handler".to_string()),
+                },
+                PlanFollowup::RetryOrReplan {
+                    step: "Retry failing command".to_string(),
+                    command: Some("cargo test".to_string()),
+                    retry_count: 2,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let lines = plan_followup_history_lines(&runtime, &Theme::default());
+
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].to_string().contains("recent followups"));
+        assert!(lines[1]
+            .to_string()
+            .contains("retry 2: Retry failing command"));
+        assert!(lines[2]
+            .to_string()
+            .contains("checkpoint: Inspect output → Patch handler"));
     }
 }
