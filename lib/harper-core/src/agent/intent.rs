@@ -83,14 +83,6 @@ pub fn route_intent(query: &str) -> Option<DeterministicIntent> {
         return Some(DeterministicIntent::RepoIdentity);
     }
 
-    if is_changed_files_intent(&normalized, &tokens) {
-        return Some(DeterministicIntent::ListChangedFiles(ChangedFilesIntent {
-            ext: infer_extension_filter(&tokens),
-            tracked_only: tokens.contains(&"tracked"),
-            since: infer_since_filter(&tokens),
-        }));
-    }
-
     if is_codebase_overview_intent(&normalized) {
         return Some(DeterministicIntent::CodebaseOverview);
     }
@@ -109,6 +101,14 @@ pub fn route_intent(query: &str) -> Option<DeterministicIntent> {
     if let Some(pattern) = infer_codebase_search_pattern(query, &normalized) {
         return Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
             pattern,
+        }));
+    }
+
+    if is_changed_files_intent(&normalized, &tokens) {
+        return Some(DeterministicIntent::ListChangedFiles(ChangedFilesIntent {
+            ext: infer_extension_filter(&tokens),
+            tracked_only: tokens.contains(&"tracked"),
+            since: infer_since_filter(&tokens),
         }));
     }
 
@@ -250,16 +250,25 @@ fn is_codebase_overview_intent(normalized: &str) -> bool {
     let has_scope = normalized.contains("codebase")
         || normalized.contains("repo")
         || normalized.contains("repository")
-        || normalized.contains("project");
+        || normalized.contains("project")
+        || normalized.contains("workspace");
     let has_overview_signal = normalized.contains("tell me")
         || normalized.contains("check")
         || normalized.contains("summarize")
         || normalized.contains("describe")
         || normalized.contains("overview")
-        || normalized.contains("inspect");
+        || normalized.contains("inspect")
+        || normalized.contains("read me through")
+        || normalized.contains("walk me through")
+        || normalized.contains("quick overview")
+        || normalized.contains("high level overview");
 
     has_scope
         && has_overview_signal
+        && !is_changed_files_intent(
+            normalized,
+            &normalized.split_whitespace().collect::<Vec<_>>(),
+        )
         && !normalized.contains("find where")
         && !normalized.contains("where is")
         && !normalized.contains("where does")
@@ -269,9 +278,11 @@ fn is_codebase_overview_intent(normalized: &str) -> bool {
 
 fn infer_read_file_path(query: &str, tokens: &[&str]) -> Option<String> {
     let lower = query.to_ascii_lowercase();
-    let has_read_verb = ["read ", "open ", "show ", "view ", "look at "]
-        .iter()
-        .any(|marker| lower.contains(marker));
+    let has_read_verb = [
+        "read ", "open ", "show ", "view ", "look at ", "inspect ", "check ", "see ",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker));
     if !has_read_verb {
         return None;
     }
@@ -725,8 +736,22 @@ fn infer_codebase_search_pattern(query: &str, normalized: &str) -> Option<String
     let search_intent = normalized.contains("find where")
         || normalized.contains("where is")
         || normalized.contains("where does")
+        || normalized.contains("where is handled")
+        || normalized.contains("where is implemented")
+        || normalized.contains("where is defined")
+        || normalized.contains("where is used")
+        || normalized.contains("where does come from")
+        || normalized.contains("get set")
+        || normalized.contains("what file contains")
+        || normalized.contains("what files contain")
+        || normalized.contains("what calls")
+        || normalized.contains("what updates")
         || normalized.contains("what renders")
+        || (normalized.contains("how does") && normalized.contains(" flow"))
+        || (normalized.contains("how do") && normalized.contains(" flow"))
         || normalized.contains("who calls")
+        || normalized.contains("who handles")
+        || normalized.contains("who implements")
         || normalized.contains("find ")
         || normalized.contains("locate ");
 
@@ -742,10 +767,36 @@ fn infer_codebase_search_pattern(query: &str, normalized: &str) -> Option<String
         "where is ",
         "Where does ",
         "where does ",
+        "Where is handled ",
+        "where is handled ",
+        "Where is implemented ",
+        "where is implemented ",
+        "Where is defined ",
+        "where is defined ",
+        "Where is used ",
+        "where is used ",
+        "Where does ",
+        "where does ",
+        "What updates ",
+        "what updates ",
+        "What calls ",
+        "what calls ",
+        "What file contains ",
+        "what file contains ",
+        "What files contain ",
+        "what files contain ",
+        "How does ",
+        "how does ",
+        "How do ",
+        "how do ",
         "What renders ",
         "what renders ",
         "Who calls ",
         "who calls ",
+        "Who handles ",
+        "who handles ",
+        "Who implements ",
+        "who implements ",
         "Find ",
         "find ",
         "Locate ",
@@ -779,20 +830,124 @@ fn infer_codebase_search_pattern(query: &str, normalized: &str) -> Option<String
     }
 
     let cleaned = phrase
+        .replace(" come from", "")
+        .replace(" get set", "")
+        .replace(" gets set", "")
+        .replace(" is handled", "")
+        .replace(" handled", "")
+        .replace(" is implemented", "")
+        .replace(" implemented", "")
         .replace(" is rendered", "")
         .replace(" rendered", "")
         .replace(" render", "")
+        .replace(" updates", "")
+        .replace(" update", "")
         .replace(" called", "")
         .replace(" defined", "")
         .replace(" used", "")
+        .replace(" flows", "")
+        .replace(" flow", "")
         .trim()
         .to_string();
 
-    if cleaned.is_empty() {
+    if let Some(symbol) = extract_symbolic_search_target(&phrase) {
+        Some(symbol)
+    } else if cleaned.is_empty() {
         None
     } else {
         Some(cleaned)
     }
+}
+
+fn extract_symbolic_search_target(phrase: &str) -> Option<String> {
+    let primary_clause = primary_search_clause(phrase).unwrap_or(phrase);
+    if primary_clause_contains_multiple_symbol_targets(primary_clause) {
+        return None;
+    }
+    if let Some(symbol) = extract_backticked_symbol(primary_clause) {
+        return Some(symbol);
+    }
+    if let Some(symbol) = first_symbol_like_token(primary_clause) {
+        return Some(symbol);
+    }
+
+    if let Some(symbol) = extract_backticked_symbol(phrase) {
+        return Some(symbol);
+    }
+
+    first_symbol_like_token(phrase)
+}
+
+fn primary_clause_contains_multiple_symbol_targets(clause: &str) -> bool {
+    let lower = clause.to_ascii_lowercase();
+    if !(lower.contains(" and ") || lower.contains(" or ") || lower.contains(',')) {
+        return false;
+    }
+
+    symbol_like_tokens(clause).len() > 1
+}
+
+fn primary_search_clause(phrase: &str) -> Option<&str> {
+    let lower = phrase.to_ascii_lowercase();
+    let markers = [
+        " in ",
+        " from ",
+        " through ",
+        " within ",
+        " inside ",
+        " under ",
+        " for ",
+        " during ",
+        " across ",
+        " via ",
+    ];
+
+    let split_at = markers
+        .iter()
+        .filter_map(|marker| lower.find(marker))
+        .min()?;
+    Some(phrase[..split_at].trim())
+}
+
+fn first_symbol_like_token(phrase: &str) -> Option<String> {
+    symbol_like_tokens(phrase).into_iter().next()
+}
+
+fn symbol_like_tokens(phrase: &str) -> Vec<String> {
+    phrase
+        .split_whitespace()
+        .map(clean_symbol_token)
+        .filter(|token| is_symbol_like_token(token))
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn extract_backticked_symbol(phrase: &str) -> Option<String> {
+    let start = phrase.find('`')?;
+    let rest = &phrase[start + 1..];
+    let end = rest.find('`')?;
+    let symbol = rest[..end].trim();
+    if symbol.is_empty() {
+        None
+    } else {
+        Some(symbol.to_string())
+    }
+}
+
+fn clean_symbol_token(token: &str) -> &str {
+    token
+        .trim_matches(|c: char| matches!(c, '.' | ',' | ';' | ':' | ')' | '(' | '"' | '\'' | '`'))
+        .trim()
+}
+
+fn is_symbol_like_token(token: &str) -> bool {
+    if token.is_empty() {
+        return false;
+    }
+
+    token.contains("::")
+        || token.contains('_')
+        || token.chars().skip(1).any(|ch| ch.is_ascii_uppercase())
 }
 
 fn infer_simple_run_command(query: &str, normalized: &str) -> Option<String> {
@@ -1001,6 +1156,24 @@ mod tests {
     }
 
     #[test]
+    fn routes_quick_repo_overview_request() {
+        let intent = route_intent("give me a quick overview of this repo");
+        assert!(matches!(
+            intent,
+            Some(DeterministicIntent::CodebaseOverview)
+        ));
+    }
+
+    #[test]
+    fn routes_workspace_overview_request() {
+        let intent = route_intent("walk me through this workspace");
+        assert!(matches!(
+            intent,
+            Some(DeterministicIntent::CodebaseOverview)
+        ));
+    }
+
+    #[test]
     fn routes_direct_read_file_intent() {
         let intent = route_intent("Read Cargo.toml and tell me the package name.");
         assert_eq!(
@@ -1012,12 +1185,211 @@ mod tests {
     }
 
     #[test]
+    fn routes_can_you_read_named_file_request() {
+        let intent = route_intent("can you read the chat.rs file");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::ReadFile(ReadFileIntent {
+                path: "chat.rs".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_inspect_path_request() {
+        let intent = route_intent("inspect lib/harper-core/src/agent/chat.rs");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::ReadFile(ReadFileIntent {
+                path: "lib/harper-core/src/agent/chat.rs".to_string()
+            }))
+        );
+    }
+
+    #[test]
     fn routes_codebase_search_intent() {
         let intent = route_intent("Find where retry metadata is rendered in this repo.");
         assert_eq!(
             intent,
             Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
                 pattern: "retry metadata".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_where_is_handled_search_intent() {
+        let intent = route_intent("where is retry metadata handled in this repo");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "retry metadata".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_where_is_implemented_search_intent() {
+        let intent = route_intent("where is agents context implemented in this codebase");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "agents context".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_what_file_contains_search_intent() {
+        let intent = route_intent("what file contains execution strategy in this repo");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "execution strategy".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_who_handles_search_intent() {
+        let intent = route_intent("who handles retry metadata in this repository");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "retry metadata".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_where_is_used_search_intent() {
+        let intent = route_intent("where is execution strategy used in this repo");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "execution strategy".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_where_does_come_from_search_intent() {
+        let intent = route_intent("where does model label come from in this codebase");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "model label".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_what_calls_search_intent() {
+        let intent = route_intent("what calls update_plan in this repo");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "update_plan".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_where_does_get_set_search_intent() {
+        let intent = route_intent("where does model label get set in this codebase");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "model label".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_what_updates_search_intent() {
+        let intent = route_intent("what updates execution strategy in this repo");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "execution strategy".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_how_does_flow_search_intent() {
+        let intent = route_intent("how does approval flow in this repo");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "approval".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_backticked_symbol_search_intent() {
+        let intent = route_intent("what calls `update_plan` in this repo");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "update_plan".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_camel_case_symbol_search_intent() {
+        let intent = route_intent("where is PlanRuntime used in this codebase");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "PlanRuntime".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn routes_namespaced_symbol_search_intent() {
+        let intent = route_intent("where is ExecutionStrategy::Grounded defined in this repo");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "ExecutionStrategy::Grounded".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn prefers_primary_symbol_before_context_symbol() {
+        let intent = route_intent("what calls update_plan in ChatService in this repo");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "update_plan".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn prefers_primary_snake_case_symbol_before_type_context() {
+        let intent = route_intent("where does model_label get set in TuiApp in this codebase");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "model_label".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn keeps_full_phrase_for_multi_symbol_primary_clause() {
+        let intent =
+            route_intent("what calls update_plan and refresh_chat_render_cache in this repo");
+        assert_eq!(
+            intent,
+            Some(DeterministicIntent::CodebaseSearch(CodebaseSearchIntent {
+                pattern: "update_plan and refresh_chat_render_cache".to_string()
             }))
         );
     }

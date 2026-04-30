@@ -1,0 +1,13 @@
+{
+  "explanation": "Improve Harper routing from a mostly heuristic deterministic layer into a stronger strategy-aware system with better coverage, ambiguity handling, and observability.",
+  "items": [
+    { "step": "Strengthen grounded deterministic routing", "status": "pending" },
+    { "step": "Expand deterministic inspection coverage", "status": "pending" },
+    { "step": "Rank overlapping intent matches", "status": "pending" },
+    { "step": "Handle routing ambiguity explicitly", "status": "pending" },
+    { "step": "Add bounded multi-intent decomposition", "status": "pending" },
+    { "step": "Route compiler and trace prompts", "status": "pending" },
+    { "step": "Expose routing decisions for debugging", "status": "pending" },
+    { "step": "Add regression prompt coverage", "status": "pending" }
+  ]
+}
