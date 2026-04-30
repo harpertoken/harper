@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · API Server</title>
-    <meta name="harper-update-version" content="2026-05-01-server-v7" />
+    <meta name="harper-update-version" content="2026-05-01-server-v8" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -51,7 +51,7 @@ retry_max_attempts = 1
 header_widgets = ["model", "cwd", "strategy"]</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p><code>allow_listed</code> preserves the existing default behavior for safe commands, but Harper still asks for approval when the command declares network access or writes outside the configured writable roots. <code>strict</code> requires approval for every command. <code>allow_all</code> skips approval checks. <code>auto</code> and <code>grounded</code> keep the model in the loop for normal repo work, while <code>deterministic</code> prefers direct grounded tool execution for supported intents and <code>model</code> disables deterministic shortcuts. <code>workspace</code> enables sandboxing with workspace access and network disabled. <code>networked_workspace</code> enables the same workspace sandbox but allows network access.</p>
+                <p><code>allow_listed</code> preserves the existing default behavior for safe commands, but Harper still asks for approval when the command declares network access or writes outside the configured writable roots. <code>strict</code> requires approval for every command. <code>allow_all</code> skips approval checks. <code>deterministic</code> prefers direct grounded tool execution for supported intents, <code>grounded</code> prefers deterministic grounding first for routable repo questions and then allows model synthesis when needed, <code>auto</code> remains tool-assisted and can still fall back to deterministic handling for supported prompts, and <code>model</code> disables deterministic shortcuts. <code>workspace</code> enables sandboxing with workspace access and network disabled. <code>networked_workspace</code> enables the same workspace sandbox but allows network access.</p>
                 <p><code>header_widgets</code> controls the persistent chat header. In <code>Settings -&gt; Execution Policy</code>, Harper now exposes that field as both a checklist and a synchronized comma-separated text field, while saving still writes the selected widgets back to <code>config/local.toml</code>. Supported values are <code>session</code>, <code>plan</code>, <code>agents</code>, <code>web</code>, <code>auth</code>, <code>focus</code>, <code>model</code>, <code>cwd</code>, <code>strategy</code>, <code>approval</code>, and <code>activity</code>.</p>
                 <p><code>retry_max_attempts</code> controls bounded automatic retries for retry-safe commands. You can also tune which command classes qualify:</p>
                 <div class="code-wrapper">

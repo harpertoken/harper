@@ -47,5 +47,8 @@ rust_binary(
         ":harper_ui",
         "//lib/harper-core:harper_core",
     ] + all_crate_deps(normal = True),
+    proc_macro_deps = [
+        "@crates//:async-trait",
+    ],
     visibility = ["//visibility:public"],
 )
