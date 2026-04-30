@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Harper · Docs</title>
-    <meta name="harper-update-version" content="2026-05-01-docs-v1" />
+    <title>Docs</title>
+    <meta name="harper-update-version" content="2026-05-01-docs-v2" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -27,7 +27,7 @@
 
         <main class="surface">
             <div class="content-container">
-                <h1 class="hero-title">Harper docs<br/><span>for daily use and debugging.</span></h1>
+                <h1 class="hero-title">Docs<br/><span>for daily use and debugging.</span></h1>
                 <p class="hero-lede">Start with installation and configuration, use the shell-first verification flow for routing checks, then move to the TUI only for UI-specific validation.</p>
 
                 <div class="actions">
@@ -35,30 +35,21 @@
                     <a class="button secondary" href="https://github.com/harpertoken/harper/tree/main/docs/user-guide">Full Docs on GitHub</a>
                 </div>
 
-                <h2>Core guides</h2>
-                <ul>
-                    <li><a href="installation.html">Installation</a> — setup, TUI commands, execution policy, routing, and shell-first verification</li>
-                    <li><a href="server.html">API Server</a> — config, runtime behavior, and integration details</li>
-                    <li><a href="troubleshooting.html">Troubleshooting</a> — common runtime, auth, and shell issues</li>
-                </ul>
+                <h2>Start here</h2>
+                <p>The <a href="installation.html">installation guide</a> is the best entry point for most people. It covers setup, the current slash commands, execution policy, routing behavior, and the shell-first verification flow. If you are running Harper with the local HTTP interface enabled, the <a href="server.html">API Server</a> page explains the runtime model, configuration, and integration details. When something goes wrong in local development, the <a href="troubleshooting.html">troubleshooting guide</a> is the right place to check for auth, shell, and runtime issues.</p>
 
                 <h2>Verification workflow</h2>
-                <p>Use <code>harper-batch</code> before opening the TUI when you need to verify routing, normalization, or follow-up behavior:</p>
+                <p>Use <code>harper-batch</code> before opening the TUI when you need to verify routing, normalization, or follow-up behavior. This keeps the verification path close to the core chat flow and removes UI state from the first debugging step.</p>
                 <div class="code-wrapper">
-                    <pre><code>target/debug/harper-batch --strategy deterministic --prompt "where is execution strategy used in this repo"
-target/debug/harper-batch --strategy deterministic --prompt "run the git status" --prompt "run that"
-target/debug/harper-batch --strategy grounded --prompt "where is execution strategy used in this repo"</code></pre>
+                    <pre><code>cargo run -p harper-ui --bin harper-batch -- --strategy deterministic --prompt "where is execution strategy used in this repo"
+cargo run -p harper-ui --bin harper-batch -- --strategy deterministic --prompt "run the git status" --prompt "run that"
+cargo run -p harper-ui --bin harper-batch -- --strategy grounded --prompt "where is execution strategy used in this repo"</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p>Read these fields first: <code>ROUTING</code>, <code>DETERMINISTIC INTENT</code>, <code>NORMALIZED COMMAND</code>, <code>ACTIVITY</code>, and <code>ASSISTANT</code>.</p>
+                <p>Read <code>ROUTING</code>, <code>DETERMINISTIC INTENT</code>, <code>NORMALIZED COMMAND</code>, <code>ACTIVITY</code>, and <code>ASSISTANT</code> first. Those fields tell you whether Harper chose the right path before you spend time checking the TUI.</p>
 
-                <h2>User guide sections</h2>
-                <ul>
-                    <li><a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/about.md">About Harper</a></li>
-                    <li><a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/chat.md">Chat Interface</a></li>
-                    <li><a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/configuration.md">Configuration</a></li>
-                    <li><a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/quick-start.md">Quick Start</a></li>
-                </ul>
+                <h2>Deeper reading</h2>
+                <p>If you want the longer reference material, the full user guide still lives in the repository. The main pages are <a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/about.md">About Harper</a>, <a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/chat.md">Chat Interface</a>, <a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/configuration.md">Configuration</a>, and <a href="https://github.com/harpertoken/harper/blob/main/docs/user-guide/quick-start.md">Quick Start</a>. Use this page as the short path through the product, and use the repository docs when you need the full detail.</p>
             </div>
         </main>
 

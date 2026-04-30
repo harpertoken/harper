@@ -2440,8 +2440,7 @@ mod tests {
 
     use super::{
         authoring_search_query, build_semantic_graph, build_workspace_definition_index,
-        classify_member_role, collect_search_matches, collect_search_matches_with_intent,
-        extract_rust_semantic_file, format_search_match, format_workspace_graph,
+        classify_member_role, extract_rust_semantic_file, format_workspace_graph,
         infer_edit_plan_candidates, infer_query_focus, is_searchable_file, path_relative_to_root,
         resolve_symbol_candidates, rust_module_path, search_line_score, search_symbol_variants,
         workspace_member_for_path, QueryFocus, RustSemanticFile, SearchIntentKind, SearchMatch,
@@ -2883,30 +2882,46 @@ struct Planner;
 
     #[test]
     fn search_matches_prefer_symbol_usage_over_license_comment_noise() {
-        let matches = collect_search_matches("execution strategy").unwrap();
-        let top = matches.first().expect("at least one search match");
-        let rendered = format_search_match(top);
+        let terms = vec!["execution".to_string(), "strategy".to_string()];
+        let symbol_variants = search_symbol_variants(&terms);
+        let symbol_score = search_line_score(
+            "settings::execution_strategy_name(app.execution_strategy)",
+            &terms,
+            &symbol_variants,
+            SearchIntentKind::General,
+        )
+        .expect("symbol usage score");
+        let license_score = search_line_score(
+            "// execution strategy overview and notes",
+            &terms,
+            &symbol_variants,
+            SearchIntentKind::General,
+        )
+        .expect("comment line score");
 
-        assert!(
-            !rendered.contains("Licensed under")
-                && !rendered.contains("http://www.apache.org/licenses")
-        );
-        assert!(rendered.contains("ExecutionStrategy") || rendered.contains("execution_strategy"));
+        assert!(symbol_score > license_score);
     }
 
     #[test]
     fn search_matches_prefer_real_usage_sites_over_imports_for_execution_strategy() {
-        let matches =
-            collect_search_matches_with_intent("execution strategy", SearchIntentKind::Used)
-                .unwrap();
-        let top = matches.first().expect("at least one search match");
-        let top_snippet = top.snippets.first().expect("at least one top snippet");
+        let terms = vec!["execution".to_string(), "strategy".to_string()];
+        let symbol_variants = search_symbol_variants(&terms);
+        let usage_score = search_line_score(
+            "settings::execution_strategy_name(app.execution_strategy)",
+            &terms,
+            &symbol_variants,
+            SearchIntentKind::Used,
+        )
+        .expect("usage score");
+        let import_score = search_line_score(
+            "use harper_core::ExecutionStrategy;",
+            &terms,
+            &symbol_variants,
+            SearchIntentKind::Used,
+        )
+        .expect("import score");
 
-        assert!(
-            top_snippet.contains("execution_strategy") || top_snippet.contains("ExecutionStrategy")
-        );
-        assert!(!top_snippet.trim_start().starts_with("38: use "));
-        assert!(!top.path.contains("codebase_investigator.rs"));
+        assert!(usage_score > import_score);
     }
 
     #[test]

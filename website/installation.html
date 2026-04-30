@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Installation</title>
-    <meta name="harper-update-version" content="2026-05-01-install-v7" />
+    <meta name="harper-update-version" content="2026-05-01-install-v8" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -141,10 +141,10 @@ writable_dirs = ["./tmp", "./build"]</code></pre>
                 <h2>Shell-first verification</h2>
                 <p>Before opening the TUI for routing or command-behavior checks, use the batch harness:</p>
                 <div class="code-wrapper">
-                    <pre><code>target/debug/harper-batch --strategy deterministic --prompt "where is execution strategy used in this repo"
-target/debug/harper-batch --strategy deterministic --prompt "run the git status" --prompt "run that"
-target/debug/harper-batch --strategy grounded --prompt "where is execution strategy used in this repo"
-target/debug/harper-batch --strategy auto --prompt "run the git status" --prompt "run that"</code></pre>
+                    <pre><code>cargo run -p harper-ui --bin harper-batch -- --strategy deterministic --prompt "where is execution strategy used in this repo"
+cargo run -p harper-ui --bin harper-batch -- --strategy deterministic --prompt "run the git status" --prompt "run that"
+cargo run -p harper-ui --bin harper-batch -- --strategy grounded --prompt "where is execution strategy used in this repo"
+cargo run -p harper-ui --bin harper-batch -- --strategy auto --prompt "run the git status" --prompt "run that"</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <p>The shell output reports the selected strategy, task mode, routed deterministic intent, normalized command when one exists, runtime activity, and the final assistant reply. Use that to confirm routing and normalization first; then use the TUI only to confirm UI surfaces such as the loop panel, command-output panel, help modal, and slash completion list.</p>

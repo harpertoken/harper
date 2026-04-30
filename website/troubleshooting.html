@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Troubleshooting</title>
-    <meta name="harper-update-version" content="2026-04-28-troubleshooting" />
+    <meta name="harper-update-version" content="2026-05-01-troubleshooting-v2" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -61,7 +61,7 @@
                 <p>If that fails, start Harper with the server enabled in config, then run the TUI normally.</p>
 
                 <h2>Wrong provider or missing responses</h2>
-                <p>If requests hang or fail immediately, check provider settings in <code>config/local.toml</code> and make sure the selected model endpoint is reachable from your machine. For offline mode, confirm Ollama is running before starting Harper.</p>
+                <p>If requests hang or fail immediately, check provider settings in <code>config/local.toml</code> and make sure the selected model endpoint is reachable from your machine. For local offline setups, confirm Ollama is running before starting Harper. Current Harper builds also return a clear assistant reply when the model backend is unavailable and no deterministic fallback exists, so a clean failure usually points to provider reachability or configuration rather than a silent UI problem.</p>
 
                 <h2>No visible reply indicator</h2>
                 <p>If the assistant looks idle after you send a message, update to a recent build. Current TUI builds show a visible in-thread <code>Thinking...</code> row while the worker is waiting on a reply, plus header activity state for longer tool and approval flows.</p>
@@ -69,12 +69,27 @@
                 <h2>Sandbox or command approval confusion</h2>
                 <p>If a command does not run, check whether it was blocked by policy, waiting for approval, or denied by sandbox rules. Harper is designed to stop rather than silently escalate.</p>
 
-                <h2>Build issues while developing</h2>
-                <p>For local development problems, run the standard Rust loop first:</p>
+                <h2>Routing or follow-up behavior looks wrong</h2>
+                <p>Do not start in the TUI. Verify the same prompt through the shell harness first so you can see the selected strategy, task mode, deterministic intent, normalized command, activity, and final assistant reply without UI state in the way.</p>
                 <div class="code-wrapper">
-                    <pre><code>cargo fmt
-cargo clippy --all-targets --all-features
-cargo test</code></pre>
+                    <pre><code>cargo run -p harper-ui --bin harper-batch -- --strategy deterministic --prompt "where is execution strategy used in this repo"
+cargo run -p harper-ui --bin harper-batch -- --strategy deterministic --prompt "run the git status" --prompt "run that"
+cargo run -p harper-ui --bin harper-batch -- --strategy grounded --prompt "where is execution strategy used in this repo"</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>Read <code>ROUTING</code>, <code>DETERMINISTIC INTENT</code>, <code>NORMALIZED COMMAND</code>, <code>ACTIVITY</code>, and <code>ASSISTANT</code> first. If the shell path is wrong, fix core routing. If the shell path is right and the TUI still looks wrong, the problem is in UI state or rendering.</p>
+
+                <h2>Build issues while developing</h2>
+                <p>For local development problems, run the repository validation script first. It matches the current repo workflow more closely than an ad hoc sequence of Rust commands.</p>
+                <div class="code-wrapper">
+                    <pre><code>bash scripts/validate.sh</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>If you need to run commands by hand after that, use the same narrow checks Harper expects in development, including the full workspace clippy invocation with warnings denied.</p>
+                <div class="code-wrapper">
+                    <pre><code>cargo check --workspace
+cargo clippy --all-targets --all-features --workspace -- -A clippy::pedantic -D warnings
+cargo test --workspace</code></pre>
                     <button class="copy-btn"></button>
                 </div>
             </div>
