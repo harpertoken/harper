@@ -130,6 +130,7 @@ struct RustSemanticFile {
     path: String,
     module_path: String,
     defines: Vec<String>,
+    type_aliases: BTreeMap<String, String>,
     imports: Vec<String>,
     import_map: BTreeMap<String, String>,
     modules: Vec<String>,
@@ -1206,42 +1207,115 @@ fn infer_edit_plan_candidates(
     graph: Option<&WorkspaceGraph>,
     compiler: Option<&CompilerContext>,
 ) -> Vec<String> {
-    matches
-        .iter()
-        .take(5)
-        .map(|entry| {
-            let crate_name = workspace_member_for_path(Path::new(&entry.path), graph)
-                .map(|member| member.name.as_str())
-                .unwrap_or("<unknown>");
-            let role = match entry.role.as_str() {
-                "ui_widget_rendering" | "ui" => "primary_edit_or_render_validation",
-                "runtime" => "runtime_state_or_config_support",
-                "tooling" => "tool_or_execution_support",
-                "agent" => "agent_or_prompt_support",
-                _ => "supporting_file",
-            };
-            let validation_hint = compiler
-                .and_then(|ctx| {
-                    ctx.target_ownership
-                        .iter()
-                        .find(|(owned, _)| {
-                            entry.path.trim_start_matches("./") == owned.as_str()
-                                || entry.path.ends_with(owned.as_str())
-                                || owned.ends_with(entry.path.trim_start_matches("./"))
-                        })
-                        .map(|(_, kinds)| format!("validate_with={}", kinds.join("/")))
+    let Some(primary) = matches.first() else {
+        return Vec::new();
+    };
+
+    let primary_crate = workspace_member_for_path(Path::new(&primary.path), graph)
+        .map(|member| member.name.clone())
+        .unwrap_or_else(|| "<unknown>".to_string());
+    let primary_validation = validation_hint_for_path(&primary.path, compiler);
+    let mut plan = vec![format!(
+        "- PRIMARY: {} [crate={}] role={} ({}, {})",
+        primary.path,
+        primary_crate,
+        authoring_edit_role(&primary.role, true),
+        primary.reasons.join(", "),
+        primary_validation
+    )];
+
+    for entry in matches.iter().skip(1).take(4) {
+        let crate_name = workspace_member_for_path(Path::new(&entry.path), graph)
+            .map(|member| member.name.clone())
+            .unwrap_or_else(|| "<unknown>".to_string());
+        let support_reason = support_relation_reason(primary, entry, graph, compiler);
+        let validation_hint = validation_hint_for_path(&entry.path, compiler);
+        plan.push(format!(
+            "- SUPPORTING: {} [crate={}] role={} ({}, {}, {})",
+            entry.path,
+            crate_name,
+            authoring_edit_role(&entry.role, false),
+            support_reason,
+            entry.reasons.join(", "),
+            validation_hint
+        ));
+    }
+
+    plan
+}
+
+fn authoring_edit_role(role: &str, primary: bool) -> &'static str {
+    match (role, primary) {
+        ("ui_widget_rendering" | "ui", true) => "primary_edit_or_render_validation",
+        ("runtime", true) => "primary_runtime_edit",
+        ("tooling", true) => "primary_tooling_edit",
+        ("agent", true) => "primary_agent_or_prompt_edit",
+        ("ui_widget_rendering" | "ui", false) => "ui_or_render_support",
+        ("runtime", false) => "runtime_state_or_config_support",
+        ("tooling", false) => "tool_or_execution_support",
+        ("agent", false) => "agent_or_prompt_support",
+        _ if primary => "primary_edit_file",
+        _ => "supporting_file",
+    }
+}
+
+fn validation_hint_for_path(path: &str, compiler: Option<&CompilerContext>) -> String {
+    compiler
+        .and_then(|ctx| {
+            ctx.target_ownership
+                .iter()
+                .find(|(owned, _)| {
+                    path.trim_start_matches("./") == owned.as_str()
+                        || path.ends_with(owned.as_str())
+                        || owned.ends_with(path.trim_start_matches("./"))
                 })
-                .unwrap_or_else(|| "validate_with=source-check".to_string());
-            format!(
-                "- {} [crate={}] => {} ({}, {})",
-                entry.path,
-                crate_name,
-                role,
-                entry.reasons.join(", "),
-                validation_hint
-            )
+                .map(|(_, kinds)| format!("validate_with={}", kinds.join("/")))
         })
-        .collect()
+        .unwrap_or_else(|| "validate_with=source-check".to_string())
+}
+
+fn support_relation_reason(
+    primary: &SearchMatch,
+    candidate: &SearchMatch,
+    graph: Option<&WorkspaceGraph>,
+    compiler: Option<&CompilerContext>,
+) -> String {
+    let primary_path = Path::new(&primary.path);
+    let candidate_path = Path::new(&candidate.path);
+
+    if workspace_member_for_path(primary_path, graph).map(|member| member.name.as_str())
+        == workspace_member_for_path(candidate_path, graph).map(|member| member.name.as_str())
+    {
+        return "same_crate".to_string();
+    }
+
+    if primary_path.parent() == candidate_path.parent() {
+        return "same_directory".to_string();
+    }
+
+    let primary_target = compiler.and_then(|ctx| target_kinds_for_path(&primary.path, ctx));
+    let candidate_target = compiler.and_then(|ctx| target_kinds_for_path(&candidate.path, ctx));
+    if primary_target.is_some() && primary_target == candidate_target {
+        return "same_target_kind".to_string();
+    }
+
+    if primary.role == candidate.role {
+        return "same_role_family".to_string();
+    }
+
+    "ranked_candidate_context".to_string()
+}
+
+fn target_kinds_for_path<'a>(path: &str, compiler: &'a CompilerContext) -> Option<&'a [String]> {
+    compiler
+        .target_ownership
+        .iter()
+        .find(|(owned, _)| {
+            path.trim_start_matches("./") == owned.as_str()
+                || path.ends_with(owned.as_str())
+                || owned.ends_with(path.trim_start_matches("./"))
+        })
+        .map(|(_, kinds)| kinds.as_slice())
 }
 
 fn build_semantic_graph(matches: &[SearchMatch]) -> String {
@@ -1264,10 +1338,26 @@ fn build_semantic_graph(matches: &[SearchMatch]) -> String {
         .iter()
         .map(|file| {
             format!(
-                "FILE: {}\nMODULE: {}\nDEFINES: {}\nIMPORTS: {}\nCALLS: {}",
+                "FILE: {}\nMODULE: {}\nDEFINES: {}\nTYPE_LINKS: {}\nTRAIT_IMPLS: {}\nIMPORTS: {}\nCALLS: {}",
                 file.path,
                 file.module_path,
                 join_or_none(&file.defines),
+                join_or_none(
+                    &file
+                        .type_aliases
+                        .iter()
+                        .map(|(alias, target)| format!("{alias} -> {target}"))
+                        .collect::<Vec<_>>(),
+                ),
+                join_or_none(
+                    &file
+                        .method_traits
+                        .iter()
+                        .flat_map(|(method, traits)| {
+                            traits.iter().map(move |trait_name| format!("{method} via {trait_name}"))
+                        })
+                        .collect::<Vec<_>>(),
+                ),
                 join_or_none(&file.imports),
                 join_or_none(&file.calls),
             )
@@ -1322,6 +1412,21 @@ fn build_semantic_graph(matches: &[SearchMatch]) -> String {
                 }
             }
         }
+        for target in file.type_aliases.values() {
+            for resolved_symbol in resolve_symbol_candidates(file, target) {
+                if let Some(target_files) = definition_to_file.get(&resolved_symbol) {
+                    for target_file in target_files {
+                        if target_file == &file.path {
+                            continue;
+                        }
+                        linked.insert(format!(
+                            "- {} -> {} via type {}",
+                            file.path, target_file, resolved_symbol
+                        ));
+                    }
+                }
+            }
+        }
         relationships.extend(linked);
     }
 
@@ -1345,6 +1450,7 @@ fn extract_rust_semantic_file(path: &Path) -> Option<RustSemanticFile> {
         path: path.display().to_string(),
         module_path: rust_module_path(path),
         defines: visitor.defines.into_iter().collect(),
+        type_aliases: visitor.type_aliases,
         imports: visitor.imports.into_iter().collect(),
         import_map: visitor.import_map,
         modules: visitor.modules.into_iter().collect(),
@@ -1522,6 +1628,7 @@ fn rust_module_path(path: &Path) -> String {
 #[derive(Default)]
 struct RustSemanticVisitor {
     defines: BTreeSet<String>,
+    type_aliases: BTreeMap<String, String>,
     imports: BTreeSet<String>,
     import_map: BTreeMap<String, String>,
     modules: BTreeSet<String>,
@@ -1564,6 +1671,14 @@ impl<'ast> Visit<'ast> for RustSemanticVisitor {
         syn::visit::visit_item_trait(self, node);
     }
 
+    fn visit_item_type(&mut self, node: &'ast syn::ItemType) {
+        self.defines.insert(node.ident.to_string());
+        if let Some(target) = rust_type_symbol(&node.ty) {
+            self.type_aliases.insert(node.ident.to_string(), target);
+        }
+        syn::visit::visit_item_type(self, node);
+    }
+
     fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
         if node.content.is_none() {
             self.modules.insert(node.ident.to_string());
@@ -1574,9 +1689,10 @@ impl<'ast> Visit<'ast> for RustSemanticVisitor {
     fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
         let previous_trait = self.current_impl_trait.take();
         if let Some((_, path, _)) = &node.trait_ {
+            let trait_path = rust_path_name(path);
             if let Some(segment) = path.segments.last() {
                 self.imports.insert(segment.ident.to_string());
-                self.current_impl_trait = Some(segment.ident.to_string());
+                self.current_impl_trait = Some(trait_path);
             }
         }
         let previous_owner = self.current_impl_owner.take();
@@ -1689,6 +1805,24 @@ fn rust_type_name(ty: &syn::Type) -> Option<String> {
         syn::Type::Paren(paren) => rust_type_name(&paren.elem),
         _ => None,
     }
+}
+
+fn rust_type_symbol(ty: &syn::Type) -> Option<String> {
+    match ty {
+        syn::Type::Path(type_path) => Some(rust_path_name(&type_path.path)),
+        syn::Type::Reference(reference) => rust_type_symbol(&reference.elem),
+        syn::Type::Group(group) => rust_type_symbol(&group.elem),
+        syn::Type::Paren(paren) => rust_type_symbol(&paren.elem),
+        _ => None,
+    }
+}
+
+fn rust_path_name(path: &syn::Path) -> String {
+    path.segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::")
 }
 
 fn rust_expr_owner_name(
@@ -1903,11 +2037,11 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::{
-        authoring_search_query, build_workspace_definition_index, classify_member_role,
-        extract_rust_semantic_file, format_workspace_graph, infer_query_focus, is_searchable_file,
-        path_relative_to_root, resolve_symbol_candidates, rust_module_path,
-        workspace_member_for_path, QueryFocus, RustSemanticFile, WorkspaceGraph,
-        WorkspaceMemberOverview,
+        authoring_search_query, build_semantic_graph, build_workspace_definition_index,
+        classify_member_role, extract_rust_semantic_file, format_workspace_graph,
+        infer_edit_plan_candidates, infer_query_focus, is_searchable_file, path_relative_to_root,
+        resolve_symbol_candidates, rust_module_path, workspace_member_for_path, QueryFocus,
+        RustSemanticFile, SearchMatch, WorkspaceGraph, WorkspaceMemberOverview,
     };
     use std::path::Path;
 
@@ -2000,6 +2134,7 @@ pub fn authoring_context() {
             path: "src/tools/example.rs".to_string(),
             module_path: "tools::example".to_string(),
             defines: vec!["search_text".to_string()],
+            type_aliases: BTreeMap::new(),
             imports: Vec::new(),
             import_map: BTreeMap::new(),
             modules: Vec::new(),
@@ -2053,6 +2188,7 @@ fn run() {
             path: "lib/harper-core/src/tools/example.rs".to_string(),
             module_path: "tools::example".to_string(),
             defines: vec!["run".to_string()],
+            type_aliases: BTreeMap::new(),
             imports: vec!["searcher".to_string()],
             import_map,
             modules: Vec::new(),
@@ -2109,6 +2245,7 @@ fn run(planner: Planner) {
                 "Planner::replan".to_string(),
                 "Planner::Refactorable::replan".to_string(),
             ],
+            type_aliases: BTreeMap::new(),
             imports: Vec::new(),
             import_map: BTreeMap::new(),
             modules: Vec::new(),
@@ -2165,6 +2302,123 @@ fn execute() {
             Some(&["Runner".to_string()][..])
         );
         assert!(semantic.calls.iter().any(|c| c == "Planner::run"));
+    }
+
+    #[test]
+    fn extracts_type_alias_links_and_full_trait_identity() {
+        let src = r#"
+use crate::runtime::Runner as RuntimeRunner;
+
+type SharedRunner = RuntimeRunner;
+
+struct Planner;
+
+impl RuntimeRunner for Planner {
+    fn run(&self) {}
+}
+"#;
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(temp.path(), src).unwrap();
+        let semantic = extract_rust_semantic_file(temp.path()).unwrap();
+        assert_eq!(
+            semantic
+                .type_aliases
+                .get("SharedRunner")
+                .map(String::as_str),
+            Some("RuntimeRunner")
+        );
+        assert!(semantic
+            .defines
+            .iter()
+            .any(|d| d == "Planner::RuntimeRunner::run"));
+        assert_eq!(
+            semantic
+                .method_traits
+                .get("run")
+                .map(|traits| traits.as_slice()),
+            Some(&["RuntimeRunner".to_string()][..])
+        );
+    }
+
+    #[test]
+    fn semantic_graph_surfaces_type_links() {
+        let temp = tempfile::Builder::new().suffix(".rs").tempfile().unwrap();
+        std::fs::write(
+            temp.path(),
+            r#"
+type SharedPlanner = Planner;
+
+struct Planner;
+"#,
+        )
+        .unwrap();
+        let matches = vec![SearchMatch {
+            score: 10,
+            path: temp.path().display().to_string(),
+            role: "runtime".to_string(),
+            reasons: vec!["candidate".to_string()],
+            snippets: Vec::new(),
+        }];
+
+        let graph = build_semantic_graph(&matches);
+
+        assert!(graph.contains("TYPE_LINKS: SharedPlanner -> Planner"));
+    }
+
+    #[test]
+    fn edit_plan_candidates_distinguish_primary_and_supporting_files() {
+        let matches = vec![
+            SearchMatch {
+                score: 100,
+                path: "lib/harper-ui/src/interfaces/ui/widgets.rs".to_string(),
+                role: "ui_widget_rendering".to_string(),
+                reasons: vec!["matches_ui_render_focus".to_string()],
+                snippets: Vec::new(),
+            },
+            SearchMatch {
+                score: 90,
+                path: "lib/harper-ui/src/interfaces/ui/app.rs".to_string(),
+                role: "ui".to_string(),
+                reasons: vec!["contains_all_terms".to_string()],
+                snippets: Vec::new(),
+            },
+            SearchMatch {
+                score: 80,
+                path: "lib/harper-core/src/tools/plan.rs".to_string(),
+                role: "tooling".to_string(),
+                reasons: vec!["matches_tooling_focus".to_string()],
+                snippets: Vec::new(),
+            },
+        ];
+        let graph = WorkspaceGraph {
+            root: "/repo".to_string(),
+            package_name: Some("harper-workspace".to_string()),
+            members: vec![
+                WorkspaceMemberOverview {
+                    name: "harper-ui".to_string(),
+                    role: "lib".to_string(),
+                    root: "lib/harper-ui".to_string(),
+                    entrypoints: Vec::new(),
+                    notable_files: Vec::new(),
+                },
+                WorkspaceMemberOverview {
+                    name: "harper-core".to_string(),
+                    role: "lib".to_string(),
+                    root: "lib/harper-core".to_string(),
+                    entrypoints: Vec::new(),
+                    notable_files: Vec::new(),
+                },
+            ],
+        };
+
+        let plan = infer_edit_plan_candidates(&matches, Some(&graph), None);
+
+        assert_eq!(plan.len(), 3);
+        assert!(plan[0].contains("PRIMARY: lib/harper-ui/src/interfaces/ui/widgets.rs"));
+        assert!(plan[0].contains("primary_edit_or_render_validation"));
+        assert!(plan[1].contains("SUPPORTING: lib/harper-ui/src/interfaces/ui/app.rs"));
+        assert!(plan[1].contains("same_crate"));
+        assert!(plan[2].contains("SUPPORTING: lib/harper-core/src/tools/plan.rs"));
     }
 
     #[test]

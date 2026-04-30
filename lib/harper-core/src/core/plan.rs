@@ -140,6 +140,8 @@ pub struct PlanRuntime {
     #[serde(default)]
     pub followup: Option<PlanFollowup>,
     #[serde(default)]
+    pub followup_history: Vec<PlanFollowup>,
+    #[serde(default)]
     pub authoring: Option<AuthoringRuntime>,
 }
 
@@ -153,6 +155,7 @@ impl PlanRuntime {
             && self.active_job_id.is_none()
             && self.jobs.is_empty()
             && self.followup.is_none()
+            && self.followup_history.is_empty()
             && self.authoring.is_none()
     }
 
@@ -188,7 +191,7 @@ impl PlanRuntime {
             output_preview: None,
             has_error_output: false,
         });
-        self.followup = None;
+        self.archive_active_followup();
         job_id
     }
 
@@ -262,10 +265,14 @@ impl PlanRuntime {
     }
 
     pub fn set_checkpoint_followup(&mut self, step: impl Into<String>, next_step: Option<String>) {
-        self.followup = Some(PlanFollowup::Checkpoint {
+        let next_followup = PlanFollowup::Checkpoint {
             step: step.into(),
             next_step,
-        });
+        };
+        if self.followup.as_ref() != Some(&next_followup) {
+            self.archive_active_followup();
+        }
+        self.followup = Some(next_followup);
     }
 
     pub fn set_retry_or_replan_followup(
@@ -282,15 +289,36 @@ impl PlanRuntime {
             }) if existing_step == &step => retry_count.saturating_add(1),
             _ => 1,
         };
-        self.followup = Some(PlanFollowup::RetryOrReplan {
+        let next_followup = PlanFollowup::RetryOrReplan {
             step,
             command,
             retry_count,
-        });
+        };
+        let should_archive_existing = !matches!(
+            self.followup.as_ref(),
+            Some(PlanFollowup::RetryOrReplan { step: existing_step, .. })
+                if existing_step == followup_step(&next_followup)
+        );
+        if should_archive_existing {
+            self.archive_active_followup();
+        }
+        self.followup = Some(next_followup);
     }
 
     pub fn clear_followup(&mut self) {
-        self.followup = None;
+        self.archive_active_followup();
+    }
+
+    fn archive_active_followup(&mut self) {
+        const MAX_FOLLOWUP_HISTORY: usize = 8;
+
+        if let Some(current) = self.followup.take() {
+            self.followup_history.push(current);
+            if self.followup_history.len() > MAX_FOLLOWUP_HISTORY {
+                let overflow = self.followup_history.len() - MAX_FOLLOWUP_HISTORY;
+                self.followup_history.drain(0..overflow);
+            }
+        }
     }
 
     pub fn seed_authoring_context(
@@ -452,6 +480,13 @@ fn job_status_label(status: &PlanJobStatus) -> &'static str {
     }
 }
 
+fn followup_step(followup: &PlanFollowup) -> &str {
+    match followup {
+        PlanFollowup::Checkpoint { step, .. } => step.as_str(),
+        PlanFollowup::RetryOrReplan { step, .. } => step.as_str(),
+    }
+}
+
 fn preview_text(text: &str, max_chars: usize) -> Option<String> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
@@ -530,6 +565,37 @@ mod tests {
                 command: Some("cargo test".to_string()),
                 retry_count: 2,
             })
+        );
+    }
+
+    #[test]
+    fn runtime_archives_followup_history_on_clear_and_replace() {
+        let mut runtime = PlanRuntime::default();
+
+        runtime.set_checkpoint_followup("Inspect output", Some("Patch handler".to_string()));
+        runtime.clear_followup();
+        runtime
+            .set_retry_or_replan_followup("Retry failing command", Some("cargo test".to_string()));
+
+        assert_eq!(runtime.followup_history.len(), 1);
+        assert_eq!(
+            runtime.followup_history[0],
+            PlanFollowup::Checkpoint {
+                step: "Inspect output".to_string(),
+                next_step: Some("Patch handler".to_string())
+            }
+        );
+
+        runtime.set_checkpoint_followup("Review failure", Some("Apply fix".to_string()));
+
+        assert_eq!(runtime.followup_history.len(), 2);
+        assert_eq!(
+            runtime.followup_history[1],
+            PlanFollowup::RetryOrReplan {
+                step: "Retry failing command".to_string(),
+                command: Some("cargo test".to_string()),
+                retry_count: 1
+            }
         );
     }
 
