@@ -10,6 +10,7 @@ This directory contains ready-to-use planner payloads for Harper's `update_plan`
 - `milestone-3-cross-interface.json`
 - `milestone-4-planner-maturity.json`
 - `agents-md-improvement.json` - dedicated plan for improving `AGENTS.md` handling
+- `routing-improvement.json` - dedicated plan for strengthening deterministic and grounded routing
 
 ## Notes
 

@@ -907,7 +907,7 @@ impl<'a> ChatService<'a> {
             authoring_context = Some(authoring_request_context);
         }
 
-        if self.execution_strategy == ExecutionStrategy::Deterministic {
+        if Self::should_prefer_deterministic_routing(self.execution_strategy, &last_user_msg) {
             if let Some((tool_name, tool_content)) = self
                 .try_handle_deterministic_intent(history, &last_user_msg, session_id)
                 .await?
@@ -2557,6 +2557,14 @@ impl<'a> ChatService<'a> {
         }
     }
 
+    fn should_prefer_deterministic_routing(strategy: ExecutionStrategy, user_msg: &str) -> bool {
+        match strategy {
+            ExecutionStrategy::Deterministic => true,
+            ExecutionStrategy::Grounded => crate::agent::intent::route_intent(user_msg).is_some(),
+            ExecutionStrategy::Auto | ExecutionStrategy::ModelOnly => false,
+        }
+    }
+
     fn response_looks_like_generic_capability_refusal(response: &str) -> bool {
         let lower = response.to_ascii_lowercase();
         lower.contains("none of the provided tools")
@@ -3374,5 +3382,33 @@ mod tests {
             Some(ExecutionStrategy::ModelOnly)
         );
         assert_eq!(ChatService::parse_execution_strategy("bogus"), None);
+    }
+
+    #[test]
+    fn grounded_prefers_deterministic_routing_for_routable_repo_intents() {
+        assert!(ChatService::should_prefer_deterministic_routing(
+            ExecutionStrategy::Grounded,
+            "read lib/harper-core/src/agent/chat.rs"
+        ));
+        assert!(ChatService::should_prefer_deterministic_routing(
+            ExecutionStrategy::Grounded,
+            "show git diff"
+        ));
+    }
+
+    #[test]
+    fn grounded_does_not_force_deterministic_routing_for_open_ended_requests() {
+        assert!(!ChatService::should_prefer_deterministic_routing(
+            ExecutionStrategy::Grounded,
+            "explain whether the current retry architecture is a good long-term design"
+        ));
+    }
+
+    #[test]
+    fn auto_does_not_prefer_deterministic_routing_up_front() {
+        assert!(!ChatService::should_prefer_deterministic_routing(
+            ExecutionStrategy::Auto,
+            "read lib/harper-core/src/agent/chat.rs"
+        ));
     }
 }
