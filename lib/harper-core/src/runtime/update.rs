@@ -547,8 +547,14 @@ mod tests {
             )),
             InstallSource::Npm
         );
+
+        #[cfg(windows)]
+        let direct_path = Path::new(r"C:\Program Files\Harper\harper.exe");
+        #[cfg(not(windows))]
+        let direct_path = Path::new("/usr/local/bin/harper");
+
         assert_eq!(
-            InstallSource::infer_from_executable(Path::new("/usr/local/bin/harper")),
+            InstallSource::infer_from_executable(direct_path),
             InstallSource::Direct
         );
     }
