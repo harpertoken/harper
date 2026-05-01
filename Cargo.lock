@@ -1898,7 +1898,7 @@ dependencies = [
 
 [[package]]
 name = "harper-workspace"
-version = "0.7.0"
+version = "0.17.1"
 dependencies = [
  "assert_cmd",
  "criterion",
