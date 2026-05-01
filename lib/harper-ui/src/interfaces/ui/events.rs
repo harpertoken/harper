@@ -48,6 +48,7 @@ pub enum EventResult {
         provider: String,
     },
     SaveExecutionPolicy,
+    CheckForUpdates,
     SetPlanStepStatus {
         session_id: String,
         step_index: usize,
@@ -937,6 +938,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             5 => start_execution_policy_editor(app, ExecutionPolicyListField::AllowedCommands),
             6 => start_execution_policy_editor(app, ExecutionPolicyListField::BlockedCommands),
             7 => return EventResult::SaveExecutionPolicy,
+            8 => return EventResult::CheckForUpdates,
             _ => {}
         },
         AppState::ViewSession(session_id, _, _) => {
@@ -1255,6 +1257,9 @@ fn slash_command_candidates(input: &str) -> Vec<String> {
         "/strategy grounded",
         "/strategy deterministic",
         "/strategy model",
+        "/update",
+        "/update status",
+        "/update check",
         "/auth login github",
         "/auth login google",
         "/auth login apple",
@@ -1581,6 +1586,22 @@ mod tests {
             &session_service,
         );
         assert!(matches!(result, EventResult::SaveExecutionPolicy));
+    }
+
+    #[test]
+    fn test_enter_execution_policy_check_updates_returns_async_event() {
+        let mut app = TuiApp::new();
+        app.state = AppState::ExecutionPolicy(8);
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::CheckForUpdates));
     }
 
     #[test]
@@ -1969,6 +1990,11 @@ mod tests {
         let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
         chat_state.input = "/".to_string();
         refresh_chat_completions(&mut chat_state);
+        let expected = chat_state
+            .completion_candidates
+            .last()
+            .cloned()
+            .expect("at least one slash completion candidate");
         app.state = AppState::Chat(Box::new(chat_state));
 
         assert!(handle_completion_up(&mut app));
@@ -1976,6 +2002,22 @@ mod tests {
         let AppState::Chat(chat_state) = &app.state else {
             panic!("expected chat state");
         };
-        assert_eq!(chat_state.input, "/strategy model");
+        assert_eq!(chat_state.input, expected);
+    }
+
+    #[test]
+    fn slash_completion_includes_update_commands() {
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.input = "/u".to_string();
+        refresh_chat_completions(&mut chat_state);
+
+        assert!(chat_state
+            .completion_candidates
+            .iter()
+            .any(|candidate| candidate == "/update"));
+        assert!(chat_state
+            .completion_candidates
+            .iter()
+            .any(|candidate| candidate == "/update check"));
     }
 }

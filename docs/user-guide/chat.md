@@ -28,6 +28,9 @@ Harper supports slash commands for various operations. All commands start with `
 | `/strategy grounded` | Switch the live chat session to `grounded` |
 | `/strategy deterministic` | Switch the live chat session to `deterministic` |
 | `/strategy model` | Switch the live chat session to `model` |
+| `/update` | Show the cached update status in the TUI |
+| `/update status` | Same as `/update` |
+| `/update check` | Re-run the manifest check and refresh the header status |
 | `/agents` | Show AGENTS context status for the current session |
 | `/agents status` | Same as `/agents` |
 | `/agents on` | Enable AGENTS context resolution in the TUI session |
@@ -45,10 +48,13 @@ Available commands:
 /clear   - Clear current session
 /audit   - View command history
 /strategy - Show current execution strategy
+/update - Show or refresh update status
 /agents  - Show AGENTS context status
 ```
 
 Typing `/` in the TUI opens the slash-command list. Use `↑` / `↓` or `Tab` to move through suggestions, then keep typing or submit the selected command from the normal message input.
+
+`/update` shows the current cached update status from the header widget. Use `/update check` to re-run the manifest-backed update check on demand. The same refresh is also available from `Settings -> Execution Policy -> Check for Updates`. Harper now checks the default GitHub release manifest automatically, and `HARPER_UPDATE_MANIFEST_URL` can override that source when needed. Published direct-install artifacts are verified with both a SHA-256 checksum and a detached signature before Harper replaces the local binary.
 
 ## Chat Features
 
@@ -95,8 +101,8 @@ Execution strategy changes how Harper chooses between deterministic tools and mo
 For fast verification without the TUI, use `harper-batch`:
 
 ```bash
-target/debug/harper-batch --strategy deterministic --prompt "where is execution strategy used in this repo"
-target/debug/harper-batch --strategy deterministic --prompt "run the git status" --prompt "run that"
+cargo run -p harper-ui --bin harper-batch -- --strategy deterministic --prompt "where is execution strategy used in this repo"
+cargo run -p harper-ui --bin harper-batch -- --strategy deterministic --prompt "run the git status" --prompt "run that"
 ```
 
 That prints the selected strategy, task mode, routed deterministic intent, normalized command when one exists, runtime activity, and the final assistant reply.

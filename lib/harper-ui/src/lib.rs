@@ -16,6 +16,7 @@
 
 pub mod interfaces;
 pub mod plugins;
+pub mod update;
 
 #[cfg(test)]
 mod tests {

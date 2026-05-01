@@ -201,6 +201,10 @@ enum UiUpdate {
     SidebarEntries {
         sections: Vec<super::app::SidebarSection>,
     },
+    UpdateStatus {
+        status: Option<String>,
+        manual: bool,
+    },
     Error(String),
 }
 
@@ -297,6 +301,32 @@ fn parse_agents_command(input: &str) -> Option<AgentsCommand> {
     }
 }
 
+enum UpdateCommand {
+    ShowStatus,
+    Refresh,
+}
+
+fn spawn_update_status_refresh(ui_tx: &mpsc::Sender<UiUpdate>, manual: bool) {
+    let update_ui_tx = ui_tx.clone();
+    tokio::spawn(async move {
+        let status = crate::update::fetch_update_status().await;
+        let _ = update_ui_tx
+            .send(UiUpdate::UpdateStatus { status, manual })
+            .await;
+    });
+}
+
+fn parse_update_command(input: &str) -> Option<UpdateCommand> {
+    let trimmed = input.trim();
+    let command = trimmed.strip_prefix("/update")?;
+    let value = command.trim().to_ascii_lowercase();
+    match value.as_str() {
+        "" | "status" => Some(UpdateCommand::ShowStatus),
+        "check" | "refresh" => Some(UpdateCommand::Refresh),
+        _ => None,
+    }
+}
+
 pub async fn run_tui(
     conn: &Connection,
     api_config: &ApiConfig,
@@ -336,6 +366,8 @@ pub async fn run_tui(
     let (worker_tx, mut worker_rx) = mpsc::channel::<WorkerMsg>(10);
     let (ui_tx, mut ui_rx) = mpsc::channel::<UiUpdate>(10);
     let (approval_tx, mut approval_rx) = mpsc::channel::<ApprovalMessage>(1);
+
+    spawn_update_status_refresh(&ui_tx, false);
 
     // Clone data for worker
     let worker_api_config = api_config.clone();
@@ -559,6 +591,25 @@ pub async fn run_tui(
                                                 chat_state.set_navigation_focus(super::app::NavigationFocus::Messages);
                                                 app.set_status_message("AGENTS context disabled".to_string());
                                             }
+                                        }
+                                    }
+                                    continue;
+                                }
+                                if let Some(command) = parse_update_command(&msg) {
+                                    match command {
+                                        UpdateCommand::ShowStatus => {
+                                            if let Some(status) = &app.update_status {
+                                                app.set_info_message(format!("Current {}", status));
+                                            } else {
+                                                app.set_info_message(
+                                                    "No update status is cached yet. Use /update check."
+                                                        .to_string(),
+                                                );
+                                            }
+                                        }
+                                        UpdateCommand::Refresh => {
+                                            app.set_activity_status(Some("checking updates".to_string()));
+                                            spawn_update_status_refresh(&ui_tx, true);
                                         }
                                     }
                                     continue;
@@ -912,6 +963,10 @@ pub async fn run_tui(
                                 )),
                             }
                         }
+                        EventResult::CheckForUpdates => {
+                            app.set_activity_status(Some("checking updates".to_string()));
+                            spawn_update_status_refresh(&ui_tx, true);
+                        }
                         EventResult::SetPlanStepStatus {
                             session_id,
                             step_index,
@@ -1229,6 +1284,21 @@ pub async fn run_tui(
                         UiUpdate::SidebarEntries { sections } => {
                             if let AppState::Chat(chat_state) = &mut app.state {
                                 chat_state.sidebar_sections = sections;
+                            }
+                        }
+                        UiUpdate::UpdateStatus { status, manual } => {
+                            app.update_status = status;
+                            if manual {
+                                app.set_activity_status(None);
+                                if let Some(status) = &app.update_status {
+                                    app.set_status_message(format!("Checked {}", status));
+                                } else {
+                                    app.set_info_message("Update status is unavailable.".to_string());
+                                }
+                            } else if let Some(status) = &app.update_status {
+                                if status != "update: latest" && status != "update: local newer" {
+                                    app.set_info_message(format!("Startup {}", status));
+                                }
                             }
                         }
                         UiUpdate::Error(err) => {

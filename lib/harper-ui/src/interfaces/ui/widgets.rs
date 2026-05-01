@@ -1130,6 +1130,7 @@ fn draw_chat_summary(
     } else {
         None
     };
+    let update_status = app.update_status.clone();
     let activity_status = app.activity_status.as_ref().map(|status| {
         format!(
             "activity: {} {}",
@@ -1203,6 +1204,17 @@ fn draw_chat_summary(
                 status,
                 Style::default()
                     .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+    }
+    if header_widget_enabled(app, super::app::HeaderWidget::Update) {
+        if let Some(status) = update_status {
+            push_header_separator(&mut spans, theme);
+            spans.push(Span::styled(
+                status,
+                Style::default()
+                    .fg(theme.muted)
                     .add_modifier(Modifier::BOLD),
             ));
         }
@@ -2766,6 +2778,7 @@ fn draw_execution_policy(
         format!("Allowed Commands: {allowed}"),
         format!("Blocked Commands: {blocked}"),
         "Save and Apply".to_string(),
+        "Check for Updates".to_string(),
     ];
     let items: Vec<ListItem> = rows
         .iter()
@@ -2805,6 +2818,10 @@ fn draw_execution_policy(
         ),
         Line::styled(
             "Retry attempts bound autonomous retry before the planner stops and requires replanning.",
+            theme.muted_style(),
+        ),
+        Line::styled(
+            "Check for Updates refreshes the release manifest and the update header widget.",
             theme.muted_style(),
         ),
     ])

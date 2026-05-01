@@ -75,10 +75,12 @@ async fn main() -> Result<(), HarperError> {
     // Load .env file if it exists
     let _ = dotenvy::dotenv();
 
-    // Handle --version flag
     let args: Vec<String> = env::args().collect();
     if args.len() > 1 && (args[1] == "--version" || args[1] == "-v") {
         print_version();
+    }
+    if let Some(exit_code) = harper_ui::update::handle_update_command(&args).await {
+        std::process::exit(exit_code);
     }
     if let Some(exit_code) = auth::handle_auth_command(&args) {
         std::process::exit(exit_code);

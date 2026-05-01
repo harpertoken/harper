@@ -57,6 +57,13 @@ pub use crate::runtime::config::{
     ApprovalProfile, ExecPolicyConfig, ExecutionStrategy, SandboxProfile, SupabaseAuthConfig,
 };
 pub use crate::runtime::scheduler::TaskScheduler;
+pub use crate::runtime::update::{
+    compare_versions, current_target_key, download_release_artifact, evaluate_update,
+    extract_release_executable, fetch_release_manifest, install_downloaded_executable,
+    load_persisted_install_source, resolve_install_source, resolve_update_public_key,
+    save_persisted_install_source, verify_artifact_checksum, verify_artifact_signature,
+    InstallSource, ReleaseArtifact, ReleaseManifest, UpdateCheckResult,
+};
 
 #[cfg(test)]
 mod tests {
