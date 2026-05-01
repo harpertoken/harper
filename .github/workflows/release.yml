@@ -46,100 +46,198 @@ on:
           - merge
 
 jobs:
+  prepare-release-assets-inputs:
+    runs-on: ubuntu-latest
+    outputs:
+      binary_name: ${{ steps.outputs.outputs.binary_name }}
+      package_path: ${{ steps.outputs.outputs.package_path }}
+      manifest_name: ${{ steps.outputs.outputs.manifest_name }}
+      public_key_b64: ${{ steps.outputs.outputs.public_key_b64 }}
+      targets_json: ${{ steps.outputs.outputs.targets_json }}
+    steps:
+      - id: outputs
+        shell: bash
+        run: |
+          echo "binary_name=harper" >> "$GITHUB_OUTPUT"
+          echo "package_path=lib/harper-ui" >> "$GITHUB_OUTPUT"
+          echo "manifest_name=release-manifest.json" >> "$GITHUB_OUTPUT"
+          echo "public_key_b64=BDOY84nu7unipalQUWLr4dyBTisXYX/+9oyPdBQiZBo=" >> "$GITHUB_OUTPUT"
+          {
+            echo "targets_json<<'EOF'"
+            cat <<'EOF'
+          [
+            {
+              "target_key":"linux-x86_64",
+              "runner":"ubuntu-latest",
+              "rust_target":"x86_64-unknown-linux-gnu",
+              "binary_path":"target/x86_64-unknown-linux-gnu/release/harper",
+              "archive_name":"harper-linux-x86_64.tar.gz",
+              "archive_format":"tar.gz",
+              "smoke":true,
+              "setup_script":"",
+              "build_env_json":""
+            },
+            {
+              "target_key":"linux-aarch64",
+              "runner":"ubuntu-latest",
+              "rust_target":"aarch64-unknown-linux-gnu",
+              "binary_path":"target/aarch64-unknown-linux-gnu/release/harper",
+              "archive_name":"harper-linux-aarch64.tar.gz",
+              "archive_format":"tar.gz",
+              "smoke":false,
+              "setup_script":"sudo dpkg --add-architecture arm64 && if [ -f /etc/apt/sources.list.d/ubuntu.sources ] && ! sudo grep -q '^Architectures: amd64$' /etc/apt/sources.list.d/ubuntu.sources; then sudo sed -i '/^Types: deb$/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources; fi && for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do [ -f \"$file\" ] || continue; sudo perl -0pi -e 's/^deb\\s+(https?:\\/\\/(?:azure\\.archive|archive|security)\\.ubuntu\\.com\\/ubuntu)/deb [arch=amd64] $1/gm' \"$file\"; done && printf '%s\n' 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe restricted multiverse' 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe restricted multiverse' 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main universe restricted multiverse' 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main universe restricted multiverse' | sudo tee /etc/apt/sources.list.d/ubuntu-arm64.list >/dev/null && sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libssl-dev:arm64 pkg-config",
+              "build_env_json":"{\"CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER\":\"aarch64-linux-gnu-gcc\",\"PKG_CONFIG_ALLOW_CROSS\":\"1\",\"AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR\":\"/usr/lib/aarch64-linux-gnu\",\"AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR\":\"/usr/include\"}"
+            },
+            {
+              "target_key":"macos-x86_64",
+              "runner":"macos-15-intel",
+              "rust_target":"x86_64-apple-darwin",
+              "binary_path":"target/x86_64-apple-darwin/release/harper",
+              "archive_name":"harper-macos-x86_64.tar.gz",
+              "archive_format":"tar.gz",
+              "smoke":true,
+              "setup_script":"",
+              "build_env_json":""
+            },
+            {
+              "target_key":"macos-aarch64",
+              "runner":"macos-14",
+              "rust_target":"aarch64-apple-darwin",
+              "binary_path":"target/aarch64-apple-darwin/release/harper",
+              "archive_name":"harper-macos-aarch64.tar.gz",
+              "archive_format":"tar.gz",
+              "smoke":true,
+              "setup_script":"",
+              "build_env_json":""
+            },
+            {
+              "target_key":"windows-x86_64",
+              "runner":"windows-latest",
+              "rust_target":"x86_64-pc-windows-msvc",
+              "binary_path":"target/x86_64-pc-windows-msvc/release/harper.exe",
+              "archive_name":"harper-windows-x86_64.zip",
+              "archive_format":"zip",
+              "smoke":true,
+              "setup_script":"",
+              "build_env_json":""
+            }
+          ]
+          EOF
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
   release-pr:
+    needs: prepare-release-assets-inputs
     if: (github.event_name == 'push' && github.ref_type != 'tag') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      versions: ${{ steps.release.outputs.versions }}
+      head_sha: ${{ steps.head.outputs.sha }}
+      harper_core_version: ${{ steps.version.outputs.harper_core_version }}
     steps:
-      - uses: libnudget/release@v1.0.0
+      - id: release
+        uses: libnudget/release@v1.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           release_token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           packages: '[{"path": "lib/harper-core", "name": "harper-core"}, {"path": "lib/harper-ui", "name": "harper-ui"}, {"path": "lib/harper-firmware", "name": "harper-firmware"}, {"path": "lib/harper-mcp-server", "name": "harper-mcp-server"}, {"path": "lib/harper-sandbox", "name": "harper-sandbox"}]'
           version_bump: ${{ github.event.inputs.version_bump || 'patch' }}
           release_mode: ${{ github.event.inputs.release_mode || 'pr' }}
+      - id: head
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - id: version
+        shell: bash
+        env:
+          VERSIONS_JSON: ${{ steps.release.outputs.versions }}
+        run: |
+          value=$(printf '%s' "${VERSIONS_JSON:-{}}" | jq -r '."harper-core" // empty')
+          echo "harper_core_version=$value" >> "$GITHUB_OUTPUT"
 
   create-tags:
+    needs: prepare-release-assets-inputs
     if: |
       (github.event_name == 'pull_request' && github.event.action == 'closed' &&
        github.event.pull_request.merged == true) ||
       (github.event_name == 'workflow_dispatch' &&
        github.event.inputs.release_mode == 'merge')
     runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      versions: ${{ steps.release.outputs.versions }}
+      head_sha: ${{ steps.head.outputs.sha }}
+      harper_core_version: ${{ steps.version.outputs.harper_core_version }}
     steps:
-      - uses: libnudget/release@v1.0.0
+      - id: release
+        uses: libnudget/release@v1.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           packages: '[{"path": "lib/harper-core", "name": "harper-core"}, {"path": "lib/harper-ui", "name": "harper-ui"}, {"path": "lib/harper-firmware", "name": "harper-firmware"}, {"path": "lib/harper-mcp-server", "name": "harper-mcp-server"}, {"path": "lib/harper-sandbox", "name": "harper-sandbox"}]'
           release_mode: merge
+      - id: head
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - id: version
+        shell: bash
+        env:
+          VERSIONS_JSON: ${{ steps.release.outputs.versions }}
+        run: |
+          value=$(printf '%s' "${VERSIONS_JSON:-{}}" | jq -r '."harper-core" // empty')
+          echo "harper_core_version=$value" >> "$GITHUB_OUTPUT"
+
+  release-assets-from-direct:
+    needs: [prepare-release-assets-inputs, release-pr]
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.release_mode == 'direct' &&
+      needs.release-pr.result == 'success' &&
+      needs.release-pr.outputs.released == 'true' &&
+      needs.release-pr.outputs.harper_core_version != ''
+    uses: libnudget/release-assets/.github/workflows/release-assets.yml@main
+    with:
+      release_tag: harper-${{ needs.release-pr.outputs.harper_core_version }}
+      release_target_sha: ${{ needs.release-pr.outputs.head_sha }}
+      binary_name: ${{ needs.prepare-release-assets-inputs.outputs.binary_name }}
+      package_path: ${{ needs.prepare-release-assets-inputs.outputs.package_path }}
+      manifest_name: ${{ needs.prepare-release-assets-inputs.outputs.manifest_name }}
+      public_key_b64: ${{ needs.prepare-release-assets-inputs.outputs.public_key_b64 }}
+      targets_json: ${{ needs.prepare-release-assets-inputs.outputs.targets_json }}
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+      signing_key_pem_b64: ${{ secrets.HARPER_UPDATE_SIGNING_KEY_PEM_B64 }}
+
+  release-assets-from-merge:
+    needs: [prepare-release-assets-inputs, create-tags]
+    if: |
+      needs.create-tags.result == 'success' &&
+      needs.create-tags.outputs.released == 'true' &&
+      needs.create-tags.outputs.harper_core_version != ''
+    uses: libnudget/release-assets/.github/workflows/release-assets.yml@main
+    with:
+      release_tag: harper-${{ needs.create-tags.outputs.harper_core_version }}
+      release_target_sha: ${{ needs.create-tags.outputs.head_sha }}
+      binary_name: ${{ needs.prepare-release-assets-inputs.outputs.binary_name }}
+      package_path: ${{ needs.prepare-release-assets-inputs.outputs.package_path }}
+      manifest_name: ${{ needs.prepare-release-assets-inputs.outputs.manifest_name }}
+      public_key_b64: ${{ needs.prepare-release-assets-inputs.outputs.public_key_b64 }}
+      targets_json: ${{ needs.prepare-release-assets-inputs.outputs.targets_json }}
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+      signing_key_pem_b64: ${{ secrets.HARPER_UPDATE_SIGNING_KEY_PEM_B64 }}
 
   release-assets:
+    needs: prepare-release-assets-inputs
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     uses: libnudget/release-assets/.github/workflows/release-assets.yml@main
     with:
       release_tag: ${{ github.ref_name }}
       release_target_sha: ${{ github.sha }}
-      binary_name: harper
-      package_path: lib/harper-ui
-      manifest_name: release-manifest.json
-      public_key_b64: BDOY84nu7unipalQUWLr4dyBTisXYX/+9oyPdBQiZBo=
-      targets_json: >-
-        [
-          {
-            "target_key":"linux-x86_64",
-            "runner":"ubuntu-latest",
-            "rust_target":"x86_64-unknown-linux-gnu",
-            "binary_path":"target/x86_64-unknown-linux-gnu/release/harper",
-            "archive_name":"harper-linux-x86_64.tar.gz",
-            "archive_format":"tar.gz",
-            "smoke":true,
-            "setup_script":"",
-            "build_env_json":""
-          },
-          {
-            "target_key":"linux-aarch64",
-            "runner":"ubuntu-latest",
-            "rust_target":"aarch64-unknown-linux-gnu",
-            "binary_path":"target/aarch64-unknown-linux-gnu/release/harper",
-            "archive_name":"harper-linux-aarch64.tar.gz",
-            "archive_format":"tar.gz",
-            "smoke":false,
-            "setup_script":"sudo dpkg --add-architecture arm64 && if [ -f /etc/apt/sources.list.d/ubuntu.sources ] && ! sudo grep -q '^Architectures: amd64$' /etc/apt/sources.list.d/ubuntu.sources; then sudo sed -i '/^Types: deb$/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources; fi && for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do [ -f \"$file\" ] || continue; sudo perl -0pi -e 's/^deb\\s+(https?:\\/\\/(?:azure\\.archive|archive|security)\\.ubuntu\\.com\\/ubuntu)/deb [arch=amd64] $1/gm' \"$file\"; done && printf '%s\n' 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe restricted multiverse' 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe restricted multiverse' 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main universe restricted multiverse' 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main universe restricted multiverse' | sudo tee /etc/apt/sources.list.d/ubuntu-arm64.list >/dev/null && sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libssl-dev:arm64 pkg-config",
-            "build_env_json":"{\"CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER\":\"aarch64-linux-gnu-gcc\",\"PKG_CONFIG_ALLOW_CROSS\":\"1\",\"AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR\":\"/usr/lib/aarch64-linux-gnu\",\"AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR\":\"/usr/include\"}"
-          },
-          {
-            "target_key":"macos-x86_64",
-            "runner":"macos-15-intel",
-            "rust_target":"x86_64-apple-darwin",
-            "binary_path":"target/x86_64-apple-darwin/release/harper",
-            "archive_name":"harper-macos-x86_64.tar.gz",
-            "archive_format":"tar.gz",
-            "smoke":true,
-            "setup_script":"",
-            "build_env_json":""
-          },
-          {
-            "target_key":"macos-aarch64",
-            "runner":"macos-14",
-            "rust_target":"aarch64-apple-darwin",
-            "binary_path":"target/aarch64-apple-darwin/release/harper",
-            "archive_name":"harper-macos-aarch64.tar.gz",
-            "archive_format":"tar.gz",
-            "smoke":true,
-            "setup_script":"",
-            "build_env_json":""
-          },
-          {
-            "target_key":"windows-x86_64",
-            "runner":"windows-latest",
-            "rust_target":"x86_64-pc-windows-msvc",
-            "binary_path":"target/x86_64-pc-windows-msvc/release/harper.exe",
-            "archive_name":"harper-windows-x86_64.zip",
-            "archive_format":"zip",
-            "smoke":true,
-            "setup_script":"",
-            "build_env_json":""
-          }
-        ]
+      binary_name: ${{ needs.prepare-release-assets-inputs.outputs.binary_name }}
+      package_path: ${{ needs.prepare-release-assets-inputs.outputs.package_path }}
+      manifest_name: ${{ needs.prepare-release-assets-inputs.outputs.manifest_name }}
+      public_key_b64: ${{ needs.prepare-release-assets-inputs.outputs.public_key_b64 }}
+      targets_json: ${{ needs.prepare-release-assets-inputs.outputs.targets_json }}
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
       signing_key_pem_b64: ${{ secrets.HARPER_UPDATE_SIGNING_KEY_PEM_B64 }}

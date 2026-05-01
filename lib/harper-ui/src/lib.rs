@@ -14,6 +14,13 @@
 
 //! UI components for Harper
 
+/// Version for the installable `harper` binary.
+///
+/// This remains aligned with the shipped binary's current release version
+/// source in `harper-core`, including the `HARPER_VERSION` override used by
+/// release automation.
+pub const CLI_VERSION: &str = harper_core::core::constants::VERSION;
+
 pub mod interfaces;
 pub mod plugins;
 pub mod update;

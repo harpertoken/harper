@@ -380,7 +380,12 @@ fn save_persisted_install_source_from_home(
 }
 
 fn parse_version_triplet(version: &str) -> Option<[u64; 3]> {
-    let trimmed = version.trim().trim_start_matches('v');
+    let trimmed = version.trim();
+    let trimmed = trimmed
+        .find(|ch: char| ch.is_ascii_digit() || ch == 'v')
+        .and_then(|index| trimmed.get(index..))
+        .unwrap_or(trimmed)
+        .trim_start_matches('v');
     let core = trimmed.split(['-', '+']).next()?;
     let mut parts = core.split('.');
 
@@ -563,6 +568,14 @@ mod tests {
     fn compares_versions_semantically() {
         assert_eq!(compare_versions("0.16.0", "0.16.1"), Some(Ordering::Less));
         assert_eq!(compare_versions("v0.16.1", "0.16.1"), Some(Ordering::Equal));
+        assert_eq!(
+            compare_versions("0.17.1", "harper-0.17.2"),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            compare_versions("harper-0.17.2", "0.17.2"),
+            Some(Ordering::Equal)
+        );
         assert_eq!(
             compare_versions("0.17.0", "0.16.9"),
             Some(Ordering::Greater)
