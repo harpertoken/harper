@@ -63,7 +63,7 @@ jobs:
           echo "manifest_name=release-manifest.json" >> "$GITHUB_OUTPUT"
           echo "public_key_b64=BDOY84nu7unipalQUWLr4dyBTisXYX/+9oyPdBQiZBo=" >> "$GITHUB_OUTPUT"
           {
-            echo "targets_json<<'EOF'"
+            echo "targets_json<<EOF"
             cat <<'EOF'
           [
             {
