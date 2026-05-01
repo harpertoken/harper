@@ -152,7 +152,9 @@ jobs:
         env:
           VERSIONS_JSON: ${{ steps.release.outputs.versions }}
         run: |
-          value=$(printf '%s' "${VERSIONS_JSON:-{}}" | jq -r '."harper-core" // empty')
+          versions_json=${VERSIONS_JSON:-}
+          [ -n "$versions_json" ] || versions_json='{}'
+          value=$(printf '%s' "$versions_json" | jq -r '."harper-core" // empty')
           echo "harper_core_version=$value" >> "$GITHUB_OUTPUT"
 
   create-tags:
@@ -183,7 +185,9 @@ jobs:
         env:
           VERSIONS_JSON: ${{ steps.release.outputs.versions }}
         run: |
-          value=$(printf '%s' "${VERSIONS_JSON:-{}}" | jq -r '."harper-core" // empty')
+          versions_json=${VERSIONS_JSON:-}
+          [ -n "$versions_json" ] || versions_json='{}'
+          value=$(printf '%s' "$versions_json" | jq -r '."harper-core" // empty')
           echo "harper_core_version=$value" >> "$GITHUB_OUTPUT"
 
   release-assets-from-direct:
