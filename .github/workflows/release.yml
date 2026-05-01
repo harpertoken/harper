@@ -61,7 +61,7 @@ jobs:
           echo "binary_name=harper" >> "$GITHUB_OUTPUT"
           echo "package_path=lib/harper-ui" >> "$GITHUB_OUTPUT"
           echo "manifest_name=release-manifest.json" >> "$GITHUB_OUTPUT"
-          echo "public_key_b64=BDOY84nu7unipalQUWLr4dyBTisXYX/+9oyPdBQiZBo=" >> "$GITHUB_OUTPUT"
+          echo "public_key_b64=9kEE0GQW9lm0SmyulN/TxVnC6dNs730Wc7ttS7apBsw=" >> "$GITHUB_OUTPUT"
           {
             echo "targets_json<<EOF"
             cat <<'EOF'
