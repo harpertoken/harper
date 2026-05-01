@@ -1,32 +1,32 @@
 # Harper
 
-Welcome to Harper, an AI agent for intelligent interactions with AI models. Harper provides a powerful command-line interface for chatting with AI, with features like clipboard integration, session management, and more.
+Harper is a terminal-first AI agent for code and shell work. It keeps command execution visible, supports approval-gated workflows, tracks multi-step work explicitly, and maintains an audit trail instead of hiding what it did.
 
 ## Features
 
-- **Chat Interface**: Interactive conversations with AI models
-- **Clipboard Integration**: Process images and text from your clipboard
-- **Session Management**: Save and load conversation sessions
-- **Command History**: Access previous commands with arrow keys
-- **Audit Trail**: Review all executed commands for security
+- **Visible command execution**: Harper shows the concrete commands it plans to run
+- **Approval gates**: Sensitive or higher-risk operations can require confirmation
+- **Session and plan tracking**: Conversations, titles, audit logs, and plans persist with the session
+- **Provider support**: Works with OpenAI, Gemini, SambaNova, Cerebras, and Ollama
+- **TUI and batch flows**: Use the interactive terminal UI or verify behavior headlessly with `harper-batch`
 
 ## Getting Started
 
 New to Harper? Start here:
 
-1. [Installation Guide](user-guide/installation.md) - Install Harper on your system
-2. [Quick Start](user-guide/quick-start.md) - Get up and running in 5 minutes
-3. [Configuration](user-guide/configuration.md) - Set up API keys and preferences
+1. [Installation Guide](user-guide/installation.md) - Install Harper from source, Homebrew, or direct release artifacts
+2. [Quick Start](user-guide/quick-start.md) - Get the TUI running and learn the basic interaction model
+3. [Configuration](user-guide/configuration.md) - Configure providers, execution policy, and UI behavior
 
 ## User Guide
 
 Learn about Harper's features in detail:
 
-- [About the Binary](user-guide/about.md) - How Harper runs, binary overview
-- [Chat Interface](user-guide/chat.md) - Commands, features, and tips for chatting
-- [Clipboard Features](user-guide/clipboard.md) - Working with images and text
+- [About the Binary](user-guide/about.md) - Runtime model, install source behavior, and binary overview
+- [Chat Interface](user-guide/chat.md) - Commands, routing, follow-ups, and update checks
+- [Clipboard Features](user-guide/clipboard.md) - Working with images and text from the terminal
 - [Configuration](user-guide/configuration.md) - Complete configuration options
-- [Troubleshooting](user-guide/troubleshooting.md) - Common issues and solutions
+- [Troubleshooting](user-guide/troubleshooting.md) - Common issues and validation paths
 
 ## Development
 
