@@ -202,7 +202,7 @@ enum UiUpdate {
         sections: Vec<super::app::SidebarSection>,
     },
     UpdateStatus {
-        status: Option<String>,
+        status: Result<Option<String>, String>,
         manual: bool,
     },
     Error(String),
@@ -1287,17 +1287,35 @@ pub async fn run_tui(
                             }
                         }
                         UiUpdate::UpdateStatus { status, manual } => {
-                            app.update_status = status;
-                            if manual {
-                                app.set_activity_status(None);
-                                if let Some(status) = &app.update_status {
-                                    app.set_status_message(format!("Checked {}", status));
-                                } else {
-                                    app.set_info_message("Update status is unavailable.".to_string());
+                            match status {
+                                Ok(status) => {
+                                    app.update_status = status;
+                                    if manual {
+                                        app.set_activity_status(None);
+                                        if let Some(status) = &app.update_status {
+                                            app.set_status_message(format!("Checked {}", status));
+                                        } else {
+                                            app.set_info_message(
+                                                "Update status is unavailable.".to_string(),
+                                            );
+                                        }
+                                    } else if let Some(status) = &app.update_status {
+                                        if status != "update: latest"
+                                            && status != "update: local newer"
+                                        {
+                                            app.set_info_message(format!("Startup {}", status));
+                                        }
+                                    }
                                 }
-                            } else if let Some(status) = &app.update_status {
-                                if status != "update: latest" && status != "update: local newer" {
-                                    app.set_info_message(format!("Startup {}", status));
+                                Err(err) => {
+                                    app.update_status = None;
+                                    if manual {
+                                        app.set_activity_status(None);
+                                        app.set_info_message(format!(
+                                            "Update check failed: {}",
+                                            err
+                                        ));
+                                    }
                                 }
                             }
                         }

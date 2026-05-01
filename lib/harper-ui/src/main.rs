@@ -43,7 +43,7 @@ macro_rules! handle_menu_error {
 }
 
 fn print_version() {
-    println!("harper v{}", harper_core::core::constants::VERSION);
+    println!("harper v{}", harper_ui::CLI_VERSION);
     std::process::exit(0);
 }
 
