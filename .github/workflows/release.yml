@@ -141,5 +141,5 @@ jobs:
           }
         ]
     secrets:
-      github_token: ${{ secrets.GITHUB_TOKEN }}
+      release_token: ${{ secrets.GITHUB_TOKEN }}
       signing_key_pem_b64: ${{ secrets.HARPER_UPDATE_SIGNING_KEY_PEM_B64 }}
