@@ -1,6 +1,6 @@
 # Installation
 
-This guide covers how to install Harper on your system. Harper is a Rust application that can be built from source.
+This guide covers the supported ways to install Harper and how updates behave for each install source.
 
 ## Prerequisites
 
@@ -34,7 +34,22 @@ Before installing Harper, ensure you have the following:
 
 ## Installation Methods
 
-### Method 1: Build from Source (Recommended)
+### Method 1: Homebrew
+
+Use Homebrew if you want a package-managed install on macOS.
+
+```bash
+brew tap harpertoken/tap
+brew install harpertoken/tap/harper-ai
+```
+
+To update later:
+
+```bash
+brew upgrade harpertoken/tap/harper-ai
+```
+
+### Method 2: Build from Source
 
 1. Clone the repository:
    ```bash
@@ -61,7 +76,20 @@ Before installing Harper, ensure you have the following:
    ./target/release/harper
    ```
 
-### Method 2: Using Make
+### Method 3: Direct Release Artifact
+
+Download the release artifact for your platform from GitHub Releases, extract it, and place the `harper` binary somewhere on your `PATH`.
+
+Direct installs support Harper's built-in updater:
+
+```bash
+harper self-update --check
+harper self-update
+```
+
+Direct self-update verifies the published manifest, checksum, and detached signature before replacing the local binary.
+
+### Method 4: Using Make
 
 If the project includes a Makefile:
 
@@ -74,9 +102,9 @@ make run
 
 ## Post-Installation
 
-### Configure API Key
+### Configure Provider Access
 
-After installation, you'll need to configure your AI API key:
+After installation, configure your provider settings:
 
 1. Create a config file:
    ```bash
@@ -85,14 +113,19 @@ After installation, you'll need to configure your AI API key:
    nano config/local.toml
    ```
 
-2. Add your API key:
+2. Add provider configuration:
    ```toml
-   [api]
-   key = "your-api-key-here"
-   provider = "OpenAI"
+   [provider]
+   name = "openai"
+   model = "gpt-5"
    ```
 
-3. Save and exit. You're ready to use Harper!
+3. Export the matching provider credential, for example:
+   ```bash
+   export OPENAI_API_KEY="your-api-key-here"
+   ```
+
+4. Save and exit. You're ready to use Harper.
 
 ## Verifying Installation
 
@@ -109,12 +142,15 @@ You should see a welcome message. If you get an error, check:
 
 ## Updating Harper
 
-To update to the latest version:
+Update paths depend on how Harper was installed:
 
-```bash
-git pull origin main
-cargo build --release
-```
+- **Homebrew**: `brew upgrade harpertoken/tap/harper-ai`
+- **Direct release install**: `harper self-update --check` or `harper self-update`
+- **Source build**:
+  ```bash
+  git pull origin main
+  cargo build --release
+  ```
 
 ## Uninstallation
 
