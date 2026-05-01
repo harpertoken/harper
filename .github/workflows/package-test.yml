@@ -17,104 +17,82 @@ name: Package Test
 on:
   push:
     tags:
-      - 'v*'
+      - 'harper-*'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  package:
-    runs-on: ${{ matrix.runner }}
+  package-preflight:
     if: github.repository_owner == 'harpertoken'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            target_key: linux-x86_64
-            rust_target: x86_64-unknown-linux-gnu
-            binary_path: target/x86_64-unknown-linux-gnu/release/harper
-            archive_name: harper-linux-x86_64.tar.gz
-            archive_format: tar.gz
-          - runner: ubuntu-latest
-            target_key: linux-aarch64
-            rust_target: aarch64-unknown-linux-gnu
-            binary_path: target/aarch64-unknown-linux-gnu/release/harper
-            archive_name: harper-linux-aarch64.tar.gz
-            archive_format: tar.gz
-          - runner: macos-13
-            target_key: macos-x86_64
-            rust_target: x86_64-apple-darwin
-            binary_path: target/x86_64-apple-darwin/release/harper
-            archive_name: harper-macos-x86_64.tar.gz
-            archive_format: tar.gz
-          - runner: macos-14
-            target_key: macos-aarch64
-            rust_target: aarch64-apple-darwin
-            binary_path: target/aarch64-apple-darwin/release/harper
-            archive_name: harper-macos-aarch64.tar.gz
-            archive_format: tar.gz
-          - runner: windows-latest
-            target_key: windows-x86_64
-            rust_target: x86_64-pc-windows-msvc
-            binary_path: target/x86_64-pc-windows-msvc/release/harper.exe
-            archive_name: harper-windows-x86_64.zip
-            archive_format: zip
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Add Rust target
-        run: rustup target add ${{ matrix.rust_target }}
-
-      - name: Install Linux ARM cross linker
-        if: matrix.rust_target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-
-      - name: Build harper release binary
-        run: cargo build --release --locked -p harper-ui --bin harper --target ${{ matrix.rust_target }}
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-
-      - name: Package artifacts
-        run: |
-          python3 - <<'PY'
-          import hashlib
-          import tarfile
-          import zipfile
-          from pathlib import Path
-
-          binary_path = Path("${{ matrix.binary_path }}")
-          archive_name = Path("${{ matrix.archive_name }}")
-          archive_format = "${{ matrix.archive_format }}"
-
-          if archive_format == "tar.gz":
-              with tarfile.open(archive_name, "w:gz") as archive:
-                  archive.add(binary_path, arcname=binary_path.name)
-          elif archive_format == "zip":
-              with zipfile.ZipFile(archive_name, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                  archive.write(binary_path, arcname=binary_path.name)
-          else:
-              raise SystemExit(f"unsupported archive format: {archive_format}")
-
-          digest = hashlib.sha256(archive_name.read_bytes()).hexdigest()
-          archive_name.with_suffix(archive_name.suffix + ".sha256").write_text(digest + "\\n", encoding="utf-8")
-          PY
-
-      - name: Smoke test binary
-        if: matrix.target_key != 'linux-aarch64'
-        run: ${{ matrix.binary_path }} --version
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: harper-${{ matrix.target_key }}-${{ github.run_id }}
-          path: |
-            target/release/harper
-            ${{ matrix.archive_name }}
-            ${{ matrix.archive_name }}.sha256
+    uses: libnudget/release-assets/.github/workflows/release-assets.yml@main
+    with:
+      release_tag: ${{ github.ref_name || 'workflow-dispatch' }}
+      release_target_sha: ${{ github.sha }}
+      binary_name: harper
+      package_path: lib/harper-ui
+      manifest_name: release-manifest.json
+      public_key_b64: BDOY84nu7unipalQUWLr4dyBTisXYX/+9oyPdBQiZBo=
+      publish_assets: false
+      targets_json: >-
+        [
+          {
+            "target_key":"linux-x86_64",
+            "runner":"ubuntu-latest",
+            "rust_target":"x86_64-unknown-linux-gnu",
+            "binary_path":"target/x86_64-unknown-linux-gnu/release/harper",
+            "archive_name":"harper-linux-x86_64.tar.gz",
+            "archive_format":"tar.gz",
+            "smoke":true,
+            "setup_script":"",
+            "build_env_json":""
+          },
+          {
+            "target_key":"linux-aarch64",
+            "runner":"ubuntu-latest",
+            "rust_target":"aarch64-unknown-linux-gnu",
+            "binary_path":"target/aarch64-unknown-linux-gnu/release/harper",
+            "archive_name":"harper-linux-aarch64.tar.gz",
+            "archive_format":"tar.gz",
+            "smoke":false,
+            "setup_script":"sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu",
+            "build_env_json":"{\"CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER\":\"aarch64-linux-gnu-gcc\"}"
+          },
+          {
+            "target_key":"macos-x86_64",
+            "runner":"macos-13",
+            "rust_target":"x86_64-apple-darwin",
+            "binary_path":"target/x86_64-apple-darwin/release/harper",
+            "archive_name":"harper-macos-x86_64.tar.gz",
+            "archive_format":"tar.gz",
+            "smoke":true,
+            "setup_script":"",
+            "build_env_json":""
+          },
+          {
+            "target_key":"macos-aarch64",
+            "runner":"macos-14",
+            "rust_target":"aarch64-apple-darwin",
+            "binary_path":"target/aarch64-apple-darwin/release/harper",
+            "archive_name":"harper-macos-aarch64.tar.gz",
+            "archive_format":"tar.gz",
+            "smoke":true,
+            "setup_script":"",
+            "build_env_json":""
+          },
+          {
+            "target_key":"windows-x86_64",
+            "runner":"windows-latest",
+            "rust_target":"x86_64-pc-windows-msvc",
+            "binary_path":"target/x86_64-pc-windows-msvc/release/harper.exe",
+            "archive_name":"harper-windows-x86_64.zip",
+            "archive_format":"zip",
+            "smoke":true,
+            "setup_script":"",
+            "build_env_json":""
+          }
+        ]
+    secrets:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      signing_key_pem_b64: ${{ secrets.HARPER_UPDATE_SIGNING_KEY_PEM_B64 }}
