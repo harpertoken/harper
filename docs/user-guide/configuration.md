@@ -35,7 +35,7 @@ retry_network_commands = ["curl", "wget"]
 retry_write_commands = ["mkdir", "touch"]
 
 [ui]
-header_widgets = ["model", "cwd", "strategy"]
+header_widgets = ["model", "cwd", "strategy", "update"]
 
 [exec_policy.sandbox]
 allowed_dirs = ["."]
@@ -47,6 +47,8 @@ writable_dirs = ["./tmp", "./build"]
 - `sandbox_profile` controls the default sandbox boundary.
 - `retry_max_attempts` controls bounded automatic retries for retry-safe failures.
 - `header_widgets` controls which status items appear in the chat header. You can edit that list from `Settings -> Execution Policy`, and saving the screen writes the selection back to `config/local.toml`.
+- `Settings -> Execution Policy` also includes `Check for Updates`, which refreshes the release manifest and the `update` header widget without leaving the TUI.
+- Direct self-update verifies both the published checksum and detached signature before replacing the local executable.
 - `allowed_dirs` are readable roots.
 - `writable_dirs` are writable roots.
 
@@ -62,6 +64,7 @@ Supported `header_widgets` values:
 - `cwd`
 - `strategy`
 - `approval`
+- `update`
 - `activity`
 
 Under `allow_listed`, Harper still asks for approval when a command declares network access or writes outside configured writable roots, even if the command itself is allowlisted.

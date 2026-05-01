@@ -77,6 +77,9 @@ SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
 /strategy grounded
 /strategy deterministic
 /strategy model
+/update
+/update status
+/update check
 /auth login github
 /auth status
 /auth logout</code></pre>
@@ -85,6 +88,7 @@ SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
                 <p>Typing <code>/</code> opens the full slash-command list in the TUI. Use <code>↑</code>/<code>↓</code> or <code>Tab</code> to move through suggestions, then keep typing or submit the command directly from the chat input.</p>
                 <p>For auth commands, <code>/auth login github</code> opens the browser, Harper polls the local server for completion, and <code>/auth status</code> reports the currently stored local TUI session.</p>
                 <p><code>/strategy</code> shows the current execution strategy. Use <code>/strategy auto</code>, <code>/strategy grounded</code>, <code>/strategy deterministic</code>, or <code>/strategy model</code> to switch the live chat session without leaving the conversation.</p>
+                <p><code>/update</code> reports the current cached update state from the chat header. Use <code>/update check</code> to re-run the release-manifest check and refresh that header status. The same action is also available in <code>Settings -&gt; Execution Policy -&gt; Check for Updates</code>. Harper uses the default GitHub release manifest automatically, and <code>HARPER_UPDATE_MANIFEST_URL</code> can override that source when needed.</p>
                 <p><code>/agents</code> reports AGENTS context status for the current TUI session. Use <code>/agents on</code> or <code>/agents off</code> to enable or disable AGENTS context resolution in the UI, and <code>/agents status</code> to inspect the current setting.</p>
                 <p>When sign-in succeeds, Harper stores the local TUI auth session in the OS credential store (macOS Keychain, Linux keyring, or Windows Credential Manager) instead of writing the active tokens to a JSON file under your home directory.</p>
                 <p>Harper also exposes the same auth state through <code>Settings -&gt; Profile</code>. When signed out, that screen offers login actions for the configured providers. When signed in, it shows the current account, plus <code>Logout</code> and <code>Refresh Session</code>.</p>
@@ -102,11 +106,11 @@ sandbox_profile = "disabled"        # disabled | workspace | networked_workspace
 retry_max_attempts = 1
 
 [ui]
-header_widgets = ["model", "cwd", "strategy"]</code></pre>
+header_widgets = ["model", "cwd", "strategy", "update"]</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <p>Approval profiles control whether commands always require approval, only allowlisted commands can run automatically, or all commands can run automatically. Under <code>allow_listed</code>, Harper still asks for approval when a command declares network access, or when it declares writes outside the configured sandbox writable roots, even if the command itself is allowlisted. Execution strategy controls whether Harper prefers strict direct grounded execution, deterministic-first grounding with model synthesis, tool-assisted behavior, or no deterministic shortcuts. Sandbox profiles control whether command execution is unsandboxed, sandboxed to the workspace, or sandboxed with workspace access plus network enabled.</p>
-                <p><code>header_widgets</code> controls which status items appear in the chat header. In <code>Settings -&gt; Execution Policy</code>, Harper now lets you edit that field in two ways at once: a checklist for toggling visible widgets and a synchronized comma-separated text field that shows exactly what will be written back to <code>config/local.toml</code>. Supported values are: <code>session</code>, <code>plan</code>, <code>agents</code>, <code>web</code>, <code>auth</code>, <code>focus</code>, <code>model</code>, <code>cwd</code>, <code>strategy</code>, <code>approval</code>, and <code>activity</code>. Keep only the fields you actually want visible.</p>
+                <p><code>header_widgets</code> controls which status items appear in the chat header. In <code>Settings -&gt; Execution Policy</code>, Harper now lets you edit that field in two ways at once: a checklist for toggling visible widgets and a synchronized comma-separated text field that shows exactly what will be written back to <code>config/local.toml</code>. Supported values are: <code>session</code>, <code>plan</code>, <code>agents</code>, <code>web</code>, <code>auth</code>, <code>focus</code>, <code>model</code>, <code>cwd</code>, <code>strategy</code>, <code>approval</code>, <code>update</code>, and <code>activity</code>. Keep only the fields you actually want visible.</p>
                 <p>The same screen also lets you edit <code>allowed_commands</code> and <code>blocked_commands</code> directly as comma-separated lists, so you do not have to hand-edit the local config for simple policy changes.</p>
                 <p><code>retry_max_attempts</code> controls bounded automatic retries for retry-safe commands. Network retries and write retries are still gated by command class and declared command intent.</p>
                 <div class="code-wrapper">
@@ -170,6 +174,7 @@ Tab</code></pre>
                     <pre><code>brew install harpertoken/tap/harper-ai</code></pre>
                     <button class="copy-btn"></button>
                 </div>
+                <p>Direct release artifacts are versioned and packaged for updater consumption. Homebrew users should keep using <code>brew upgrade harpertoken/tap/harper-ai</code>. Direct binary installs can use <code>harper self-update --check</code> to inspect the published manifest and <code>harper self-update</code> to replace the installed binary. By default Harper checks the latest GitHub release manifest, and <code>HARPER_UPDATE_MANIFEST_URL</code> can override that source. Before replacing the local binary, Harper verifies both the published SHA-256 checksum and the detached release signature.</p>
                 <div class="code-wrapper">
                     <pre><code>harper --version</code></pre>
                     <button class="copy-btn"></button>

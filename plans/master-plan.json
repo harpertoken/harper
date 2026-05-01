@@ -10,6 +10,7 @@
     { "step": "Expose runtime over HTTP", "status": "pending" },
     { "step": "Add UI plan editing", "status": "pending" },
     { "step": "Resolve scoped AGENTS rules", "status": "completed" },
-    { "step": "Improve planner orchestration", "status": "pending" }
+    { "step": "Improve planner orchestration", "status": "pending" },
+    { "step": "Add distribution and self-update flow", "status": "completed" }
   ]
 }

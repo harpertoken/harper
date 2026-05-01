@@ -11,6 +11,7 @@ This directory contains ready-to-use planner payloads for Harper's `update_plan`
 - `milestone-4-planner-maturity.json`
 - `agents-md-improvement.json` - completed record for the scoped `AGENTS.md` improvement workstream
 - `routing-improvement.json` - partially completed plan for the remaining routing work
+- `distribution-and-self-update.json` - active plan for release artifacts, self-update, and remaining install-path polish
 - `../PLANNER_NEXT_STEPS.md` - completed planner/runtime polish record for the last focused workstream
 
 ## Notes

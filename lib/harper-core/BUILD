@@ -4,6 +4,7 @@ load("@crates//:defs.bzl", "all_crate_deps")
 rust_library(
     name = "harper_core",
     srcs = glob(["src/**/*.rs"]),
+    compile_data = ["src/runtime/update-public-key.b64"],
     deps = all_crate_deps(normal = True) + [
         "//lib/harper-firmware:harper_firmware",
         "//lib/harper-sandbox:harper_sandbox",

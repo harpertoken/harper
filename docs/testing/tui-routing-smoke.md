@@ -47,6 +47,8 @@ Read these fields in the shell output before moving to the TUI:
 - `/strategy grounded`
 - `/strategy deterministic`
 - `/strategy model`
+- `/update`
+- `/update check`
 - Open `Settings -> Execution Policy`
 - Change visible header widgets
 - Save settings
@@ -120,6 +122,8 @@ Use this exact sequence:
 - The chat header shows the configured widgets only.
 - The chat header shows the current working directory when `cwd` is enabled.
 - `/strategy` reports the current execution strategy and switching it updates the live chat session.
+- `/update` reports the current cached update state.
+- `/update check` refreshes the update widget against the default release manifest or an override URL.
 - Header widget changes made in `Settings -> Execution Policy` persist to `config/local.toml`.
 - `Cargo.toml` prompt goes through a real file read.
 - Codebase prompts do not answer with generic grep advice.
@@ -137,6 +141,8 @@ Use this exact sequence:
 - [ ] Typing `/` opens slash completion suggestions.
 - [ ] `↑` / `↓` and `Tab` move through slash completions.
 - [ ] `/strategy` shows the current strategy and switching it changes the live session.
+- [ ] `/update` reports current update state clearly.
+- [ ] `/update check` refreshes the update header widget against the default manifest or an override URL.
 - [ ] Header widget changes persist after save and restart.
 - [ ] Chat header only shows the widgets currently enabled.
 - [ ] Direct file read uses the real workspace file.

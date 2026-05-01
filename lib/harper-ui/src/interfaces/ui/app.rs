@@ -520,6 +520,7 @@ pub enum HeaderWidget {
     Cwd,
     Strategy,
     Approval,
+    Update,
     Activity,
 }
 
@@ -549,6 +550,7 @@ pub struct TuiApp {
     pub blocked_commands: Vec<String>,
     pub execution_policy_editor: Option<ExecutionPolicyEditorState>,
     pub header_widgets: Vec<HeaderWidget>,
+    pub update_status: Option<String>,
 }
 
 impl Default for TuiApp {
@@ -588,8 +590,10 @@ impl Default for TuiApp {
                 HeaderWidget::Cwd,
                 HeaderWidget::Strategy,
                 HeaderWidget::Approval,
+                HeaderWidget::Update,
                 HeaderWidget::Activity,
             ],
+            update_status: None,
         }
     }
 }
@@ -625,7 +629,7 @@ impl TuiApp {
     }
 
     pub fn execution_policy_row_count(&self) -> usize {
-        8
+        9
     }
 
     pub fn set_error_message(&mut self, content: String) {

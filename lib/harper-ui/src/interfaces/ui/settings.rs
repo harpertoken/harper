@@ -215,6 +215,7 @@ pub fn header_widget_name(widget: HeaderWidget) -> &'static str {
         HeaderWidget::Cwd => "cwd",
         HeaderWidget::Strategy => "strategy",
         HeaderWidget::Approval => "approval",
+        HeaderWidget::Update => "update",
         HeaderWidget::Activity => "activity",
     }
 }
@@ -235,6 +236,7 @@ pub fn available_header_widgets() -> &'static [HeaderWidget] {
         HeaderWidget::Cwd,
         HeaderWidget::Strategy,
         HeaderWidget::Approval,
+        HeaderWidget::Update,
         HeaderWidget::Activity,
     ]
 }
@@ -253,6 +255,7 @@ pub fn parse_header_widgets(values: &[String]) -> Vec<HeaderWidget> {
             "cwd" => Some(HeaderWidget::Cwd),
             "strategy" => Some(HeaderWidget::Strategy),
             "approval" => Some(HeaderWidget::Approval),
+            "update" => Some(HeaderWidget::Update),
             "activity" => Some(HeaderWidget::Activity),
             _ => None,
         };

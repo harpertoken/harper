@@ -1,5 +1,5 @@
 {
-  "checksum": "f82f1179a04fa4255d52f7d617f433f201e71dfd9de59eceebb5495dab039b8c",
+  "checksum": "2a30279df907640e5ad0c193929dc09575695db866178a99283e7d978e704464",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -6801,6 +6801,62 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
+    "derive_arbitrary 1.4.2": {
+      "name": "derive_arbitrary",
+      "version": "1.4.2",
+      "package_url": "https://github.com/rust-fuzz/arbitrary",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/derive_arbitrary/1.4.2/download",
+          "sha256": "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
+        }
+      },
+      "targets": [
+        {
+          "ProcMacro": {
+            "crate_name": "derive_arbitrary",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "derive_arbitrary",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "proc-macro2 1.0.106",
+              "target": "proc_macro2"
+            },
+            {
+              "id": "quote 1.0.45",
+              "target": "quote"
+            },
+            {
+              "id": "syn 2.0.117",
+              "target": "syn"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "1.4.2"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
     "derive_more 2.1.1": {
       "name": "derive_more",
       "version": "2.1.1",
@@ -8862,6 +8918,67 @@
       ],
       "license_file": "LICENSE.md"
     },
+    "filetime 0.2.27": {
+      "name": "filetime",
+      "version": "0.2.27",
+      "package_url": "https://github.com/alexcrichton/filetime",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/filetime/0.2.27/download",
+          "sha256": "f98844151eee8917efc50bd9e8318cb963ae8b297431495d3f758616ea5c57db"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "filetime",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "filetime",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "cfg-if 1.0.4",
+              "target": "cfg_if"
+            }
+          ],
+          "selects": {
+            "cfg(target_os = \"redox\")": [
+              {
+                "id": "libredox 0.1.16",
+                "target": "libredox"
+              }
+            ],
+            "cfg(unix)": [
+              {
+                "id": "libc 0.2.186",
+                "target": "libc"
+              }
+            ]
+          }
+        },
+        "edition": "2018",
+        "version": "0.2.27"
+      },
+      "license": "MIT/Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
     "find-msvc-tools 0.1.9": {
       "name": "find-msvc-tools",
       "version": "0.1.9",
@@ -9012,9 +9129,11 @@
         "crate_features": {
           "common": [
             "any_impl",
+            "any_zlib",
             "default",
             "miniz_oxide",
-            "rust_backend"
+            "rust_backend",
+            "zlib-rs"
           ],
           "selects": {}
         },
@@ -9027,6 +9146,10 @@
             {
               "id": "miniz_oxide 0.8.9",
               "target": "miniz_oxide"
+            },
+            {
+              "id": "zlib-rs 0.6.3",
+              "target": "zlib_rs"
             }
           ],
           "selects": {}
@@ -10818,9 +10941,9 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "harper-core 0.15.0": {
+    "harper-core 0.16.0": {
       "name": "harper-core",
-      "version": "0.15.0",
+      "version": "0.16.0",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -10897,6 +11020,10 @@
             {
               "id": "dotenvy 0.15.7",
               "target": "dotenvy"
+            },
+            {
+              "id": "flate2 1.1.9",
+              "target": "flate2"
             },
             {
               "id": "futures-util 0.3.32",
@@ -10983,6 +11110,10 @@
               "target": "sync_wrapper"
             },
             {
+              "id": "tar 0.4.45",
+              "target": "tar"
+            },
+            {
               "id": "tempfile 3.27.0",
               "target": "tempfile"
             },
@@ -11021,6 +11152,10 @@
             {
               "id": "windows-targets 0.53.5",
               "target": "windows_targets"
+            },
+            {
+              "id": "zip 4.6.1",
+              "target": "zip"
             }
           ],
           "selects": {}
@@ -11048,7 +11183,7 @@
           ],
           "selects": {}
         },
-        "version": "0.15.0"
+        "version": "0.16.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11189,9 +11324,9 @@
       ],
       "license_file": null
     },
-    "harper-sandbox 0.2.0": {
+    "harper-sandbox 0.3.0": {
       "name": "harper-sandbox",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "package_url": null,
       "repository": null,
       "targets": [
@@ -11261,7 +11396,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.2.0"
+        "version": "0.3.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11270,9 +11405,9 @@
       ],
       "license_file": null
     },
-    "harper-ui 0.14.0": {
+    "harper-ui 0.15.0": {
       "name": "harper-ui",
-      "version": "0.14.0",
+      "version": "0.15.0",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -11373,7 +11508,7 @@
           ],
           "selects": {}
         },
-        "version": "0.14.0"
+        "version": "0.15.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -15756,6 +15891,15 @@
         "compile_data_glob": [
           "**"
         ],
+        "deps": {
+          "common": [
+            {
+              "id": "redox_syscall 0.7.4",
+              "target": "syscall"
+            }
+          ],
+          "selects": {}
+        },
         "edition": "2021",
         "version": "0.1.16"
       },
@@ -20875,6 +21019,45 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
+    "plain 0.2.3": {
+      "name": "plain",
+      "version": "0.2.3",
+      "package_url": "https://github.com/randomites/plain",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/plain/0.2.3/download",
+          "sha256": "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "plain",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "plain",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "edition": "2015",
+        "version": "0.2.3"
+      },
+      "license": "MIT/Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
     "plist 1.9.0": {
       "name": "plist",
       "version": "1.9.0",
@@ -24245,6 +24428,53 @@
         },
         "edition": "2021",
         "version": "0.5.18"
+      },
+      "license": "MIT",
+      "license_ids": [
+        "MIT"
+      ],
+      "license_file": "LICENSE"
+    },
+    "redox_syscall 0.7.4": {
+      "name": "redox_syscall",
+      "version": "0.7.4",
+      "package_url": "https://gitlab.redox-os.org/redox-os/syscall",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/redox_syscall/0.7.4/download",
+          "sha256": "f450ad9c3b1da563fb6948a8e0fb0fb9269711c9c73d9ea1de5058c79c8d643a"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "syscall",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "syscall",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "bitflags 2.11.1",
+              "target": "bitflags"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.7.4"
       },
       "license": "MIT",
       "license_ids": [
@@ -29284,6 +29514,92 @@
         "data_glob": [
           "**"
         ]
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
+    "tar 0.4.45": {
+      "name": "tar",
+      "version": "0.4.45",
+      "package_url": "https://github.com/alexcrichton/tar-rs",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/tar/0.4.45/download",
+          "sha256": "22692a6476a21fa75fdfc11d452fda482af402c008cdbaf3476414e122040973"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "tar",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "tar",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default",
+            "xattr"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "filetime 0.2.27",
+              "target": "filetime"
+            }
+          ],
+          "selects": {
+            "aarch64-apple-darwin": [
+              {
+                "id": "xattr 1.6.1",
+                "target": "xattr"
+              }
+            ],
+            "aarch64-unknown-linux-gnu": [
+              {
+                "id": "xattr 1.6.1",
+                "target": "xattr"
+              }
+            ],
+            "cfg(unix)": [
+              {
+                "id": "libc 0.2.186",
+                "target": "libc"
+              }
+            ],
+            "x86_64-unknown-linux-gnu": [
+              {
+                "id": "xattr 1.6.1",
+                "target": "xattr"
+              }
+            ],
+            "x86_64-unknown-nixos-gnu": [
+              {
+                "id": "xattr 1.6.1",
+                "target": "xattr"
+              }
+            ]
+          }
+        },
+        "edition": "2021",
+        "version": "0.4.45"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -38472,6 +38788,69 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
+    "xattr 1.6.1": {
+      "name": "xattr",
+      "version": "1.6.1",
+      "package_url": "https://github.com/Stebalien/xattr",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/xattr/1.6.1/download",
+          "sha256": "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "xattr",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "xattr",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default",
+            "unsupported"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [],
+          "selects": {
+            "cfg(any(target_os = \"android\", target_os = \"linux\", target_os = \"macos\", target_os = \"hurd\"))": [
+              {
+                "id": "rustix 1.1.4",
+                "target": "rustix"
+              }
+            ],
+            "cfg(any(target_os = \"freebsd\", target_os = \"netbsd\"))": [
+              {
+                "id": "libc 0.2.186",
+                "target": "libc"
+              }
+            ]
+          }
+        },
+        "edition": "2021",
+        "version": "1.6.1"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
     "xdg-home 1.3.0": {
       "name": "xdg-home",
       "version": "1.3.0",
@@ -39615,6 +39994,131 @@
       ],
       "license_file": "LICENSE"
     },
+    "zip 4.6.1": {
+      "name": "zip",
+      "version": "4.6.1",
+      "package_url": "https://github.com/zip-rs/zip2.git",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/zip/4.6.1/download",
+          "sha256": "caa8cd6af31c3b31c6631b8f483848b91589021b28fffe50adada48d4f4d2ed1"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "zip",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "zip",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "_deflate-any",
+            "deflate",
+            "deflate-flate2",
+            "deflate-flate2-zlib-rs",
+            "deflate-zopfli"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "crc32fast 1.5.0",
+              "target": "crc32fast"
+            },
+            {
+              "id": "flate2 1.1.9",
+              "target": "flate2"
+            },
+            {
+              "id": "indexmap 2.14.0",
+              "target": "indexmap"
+            },
+            {
+              "id": "memchr 2.8.0",
+              "target": "memchr"
+            },
+            {
+              "id": "zopfli 0.8.3",
+              "target": "zopfli"
+            }
+          ],
+          "selects": {
+            "cfg(fuzzing)": [
+              {
+                "id": "arbitrary 1.4.2",
+                "target": "arbitrary"
+              }
+            ]
+          }
+        },
+        "edition": "2021",
+        "version": "4.6.1"
+      },
+      "license": "MIT",
+      "license_ids": [
+        "MIT"
+      ],
+      "license_file": "LICENSE"
+    },
+    "zlib-rs 0.6.3": {
+      "name": "zlib-rs",
+      "version": "0.6.3",
+      "package_url": "https://github.com/trifectatechfoundation/zlib-rs",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/zlib-rs/0.6.3/download",
+          "sha256": "3be3d40e40a133f9c916ee3f9f4fa2d9d63435b5fbe1bfc6d9dae0aa0ada1513"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "zlib_rs",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "zlib_rs",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "rust-allocator",
+            "std"
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.6.3"
+      },
+      "license": "Zlib",
+      "license_ids": [
+        "Zlib"
+      ],
+      "license_file": "LICENSE"
+    },
     "zmij 1.0.21": {
       "name": "zmij",
       "version": "1.0.21",
@@ -39684,6 +40188,74 @@
         "MIT"
       ],
       "license_file": "LICENSE-MIT"
+    },
+    "zopfli 0.8.3": {
+      "name": "zopfli",
+      "version": "0.8.3",
+      "package_url": "https://github.com/zopfli-rs/zopfli",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/zopfli/0.8.3/download",
+          "sha256": "f05cd8797d63865425ff89b5c4a48804f35ba0ce8d125800027ad6017d2b5249"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "zopfli",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "zopfli",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default",
+            "gzip",
+            "std",
+            "zlib"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "bumpalo 3.20.2",
+              "target": "bumpalo"
+            },
+            {
+              "id": "crc32fast 1.5.0",
+              "target": "crc32fast"
+            },
+            {
+              "id": "log 0.4.29",
+              "target": "log"
+            },
+            {
+              "id": "simd-adler32 0.3.9",
+              "target": "simd_adler32"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.8.3"
+      },
+      "license": "Apache-2.0",
+      "license_ids": [
+        "Apache-2.0"
+      ],
+      "license_file": null
     },
     "zune-core 0.5.1": {
       "name": "zune-core",
@@ -40044,11 +40616,11 @@
   },
   "binary_crates": [],
   "workspace_members": {
-    "harper-core 0.15.0": "lib/harper-core",
+    "harper-core 0.16.0": "lib/harper-core",
     "harper-firmware 0.1.3": "lib/harper-firmware",
     "harper-mcp-server 0.1.2": "lib/harper-mcp-server",
-    "harper-sandbox 0.2.0": "lib/harper-sandbox",
-    "harper-ui 0.14.0": "lib/harper-ui",
+    "harper-sandbox 0.3.0": "lib/harper-sandbox",
+    "harper-ui 0.15.0": "lib/harper-ui",
     "harper-workspace 0.7.0": ""
   },
   "conditions": {
@@ -40167,7 +40739,14 @@
       "x86_64-unknown-linux-gnu",
       "x86_64-unknown-nixos-gnu"
     ],
+    "cfg(any(target_os = \"android\", target_os = \"linux\", target_os = \"macos\", target_os = \"hurd\"))": [
+      "aarch64-apple-darwin",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-unknown-nixos-gnu"
+    ],
     "cfg(any(target_os = \"dragonfly\", target_os = \"freebsd\", target_os = \"hurd\", target_os = \"illumos\", target_os = \"cygwin\", all(target_os = \"horizon\", target_arch = \"arm\")))": [],
+    "cfg(any(target_os = \"freebsd\", target_os = \"netbsd\"))": [],
     "cfg(any(target_os = \"haiku\", target_os = \"redox\", target_os = \"nto\", target_os = \"aix\"))": [],
     "cfg(any(target_os = \"ios\", target_os = \"visionos\", target_os = \"watchos\", target_os = \"tvos\"))": [],
     "cfg(any(target_os = \"linux\", target_os = \"macos\", target_os = \"freebsd\", target_os = \"netbsd\", target_os = \"openbsd\", target_os = \"android\", target_os = \"illumos\"))": [
@@ -40318,6 +40897,7 @@
     "dashmap 6.1.0",
     "dirs 6.0.0",
     "dotenvy 0.15.7",
+    "flate2 1.1.9",
     "futures-util 0.3.32",
     "getrandom 0.4.2",
     "h2 0.4.13",
@@ -40343,6 +40923,7 @@
     "syn 2.0.117",
     "sync_wrapper 1.0.2",
     "syntect 5.3.0",
+    "tar 0.4.45",
     "tempfile 3.27.0",
     "thiserror 2.0.18",
     "thiserror-impl 2.0.18",
@@ -40355,7 +40936,8 @@
     "uuid 1.23.1",
     "walkdir 2.5.0",
     "windows-sys 0.61.2",
-    "windows-targets 0.53.5"
+    "windows-targets 0.53.5",
+    "zip 4.6.1"
   ],
   "direct_dev_deps": [
     "assert_cmd 2.2.1",
