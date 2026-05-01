@@ -103,8 +103,8 @@ jobs:
             "archive_name":"harper-linux-aarch64.tar.gz",
             "archive_format":"tar.gz",
             "smoke":false,
-            "setup_script":"sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu",
-            "build_env_json":"{\"CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER\":\"aarch64-linux-gnu-gcc\"}"
+            "setup_script":"sudo dpkg --add-architecture arm64 && sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libssl-dev:arm64 pkg-config",
+            "build_env_json":"{\"CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER\":\"aarch64-linux-gnu-gcc\",\"PKG_CONFIG_ALLOW_CROSS\":\"1\",\"AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR\":\"/usr/lib/aarch64-linux-gnu\",\"AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR\":\"/usr/include\"}"
           },
           {
             "target_key":"macos-x86_64",
