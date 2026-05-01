@@ -1,0 +1,134 @@
+name: Update Homebrew Tap
+
+"on":
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Installable Harper release tag"
+        required: true
+        type: string
+
+jobs:
+  update-homebrew-tap:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TAP_REPO: harpertoken/homebrew-tap
+      FORMULA_PATH: Formula/harper-ai.rb
+    steps:
+      - name: Checkout Harper
+        uses: actions/checkout@v4
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ github.event.inputs.release_tag }}" in
+            harper-*) ;;
+            *)
+              echo "release_tag must start with harper-"
+              exit 1
+              ;;
+          esac
+
+      - name: Download release tarball and compute sha256
+        id: tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="${{ github.event.inputs.release_tag }}"
+          tarball_url="https://github.com/harpertoken/harper/archive/refs/tags/${release_tag}.tar.gz"
+          curl -L "$tarball_url" -o harper-release.tar.gz
+          sha256=$(sha256sum harper-release.tar.gz | awk '{print $1}')
+          version="${release_tag#harper-}"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Clone homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh repo clone "$TAP_REPO" homebrew-tap
+
+      - name: Patch formula
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/update-homebrew-tap.py \
+            --release-tag "${{ github.event.inputs.release_tag }}" \
+            --sha256 "${{ steps.tarball.outputs.sha256 }}" \
+            --formula-path "homebrew-tap/$FORMULA_PATH"
+
+      - name: Check for formula changes
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git -C homebrew-tap diff --quiet -- "$FORMULA_PATH"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit formula update
+        if: steps.diff.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.tarball.outputs.version }}"
+          branch="automation/homebrew-tap-${version}"
+          git -C homebrew-tap checkout -B "$branch"
+          git -C homebrew-tap add "$FORMULA_PATH"
+          git -C homebrew-tap commit -m "build(tap): bump harper-ai ${version}"
+          echo "branch=$branch" >> "$GITHUB_ENV"
+
+      - name: Push tap branch
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C homebrew-tap push --force-with-lease origin "$branch"
+
+      - name: Open tap PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.tarball.outputs.version }}"
+          cat > pr-body.md <<EOF
+          ## Changes
+          - update \`harper-ai\` to \`${version}\`
+          - point the formula at \`${{ github.event.inputs.release_tag }}\`
+          - refresh the source tarball sha256
+
+          ## Validation
+          - downloaded the \`${{ github.event.inputs.release_tag }}\` source tarball
+          - recomputed sha256 in workflow
+          - patched \`Formula/harper-ai.rb\`
+          EOF
+          pr_url=$(gh pr list --repo "$TAP_REPO" --head "$branch" --json url --jq '.[0].url')
+          if [ -n "$pr_url" ]; then
+            gh pr edit "$pr_url" \
+              --repo "$TAP_REPO" \
+              --title "build(tap): bump harper-ai to ${version}" \
+              --body-file pr-body.md
+          else
+            gh pr create \
+              --repo "$TAP_REPO" \
+              --head "$branch" \
+              --base main \
+              --title "build(tap): bump harper-ai to ${version}" \
+              --body-file pr-body.md
+          fi
+
+      - name: Report no-op
+        if: steps.diff.outputs.changed != 'true'
+        shell: bash
+        run: echo "Formula already matches ${{ github.event.inputs.release_tag }}"

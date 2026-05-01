@@ -30,6 +30,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Rust Auto-Fix Bot | `rust-auto-fix.yml` | Applies automated `cargo fmt`/`clippy --fix` patches via `libnudget/rust-fix@v1` when `/rust-fix` comment is confirmed with `/confirm`. | Issue comment on PRs |
 | Cancel Runs Bot | `cancel-runs.yml` | Cancels in-progress runs when `/cancel-runs` is commented on PRs via `libnudget/cancel@v1`. Also triggers on `cancel-runs` label. | Issue comment on PRs, `cancel-runs` label |
 | Update Rust lockfiles | `update-lockfiles.yml` | Runs `cargo update` + `CARGO_BAZEL_REPIN=true bazel build :harper_bin` (repins `cargo-bazel-lock.json`), opens PR. | Weekly cron (Sunday midnight UTC), manual dispatch |
+| Update Homebrew Tap | `update-homebrew-tap.yml` | Manually updates `harpertoken/homebrew-tap/Formula/harper-ai.rb` for a published `harper-*` release by downloading the release tarball, recomputing sha256, patching the formula, and opening a PR in the tap repo. Requires `HOMEBREW_TAP_TOKEN`. | Manual dispatch |
 | Deploy Website | `website.yml` | Builds and deploys the website bundle to GitHub Pages. | Push to `main` touching `website/**`, manual dispatch |
 
 > **Tip:** Run `rg -n '^name:' .github/workflows` to see the canonical name shown in the Actions UI.
@@ -72,4 +73,4 @@ Current rules:
 Feel free to expand this file with additional details (matrix descriptions, secrets used, etc.) as workflows evolve.
 
 ## Last Updated
-2026-05-01
+2026-05-02
