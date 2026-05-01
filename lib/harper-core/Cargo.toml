@@ -54,7 +54,7 @@ walkdir = "2.5"
 tempfile = "3.10"
 flate2 = "1.1"
 tar = "0.4"
-zip = { version = "4.6.1", default-features = false, features = ["deflate"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 harper-firmware = { path = "../harper-firmware" }
 harper-sandbox = { path = "../harper-sandbox" }
 syn = { version = "2.0", features = ["full", "visit"] }

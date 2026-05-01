@@ -1,5 +1,5 @@
 {
-  "checksum": "777ca9d04eb7fab8d73e351f3e094c0347f442fa992b98b033f0770b0cc9a10d",
+  "checksum": "98467e8520f6559db858f83a12fe4454ea2b6d2cd2a5617627e839c2883a5adc",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -6801,62 +6801,6 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "derive_arbitrary 1.4.2": {
-      "name": "derive_arbitrary",
-      "version": "1.4.2",
-      "package_url": "https://github.com/rust-fuzz/arbitrary",
-      "repository": {
-        "Http": {
-          "url": "https://static.crates.io/crates/derive_arbitrary/1.4.2/download",
-          "sha256": "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
-        }
-      },
-      "targets": [
-        {
-          "ProcMacro": {
-            "crate_name": "derive_arbitrary",
-            "crate_root": "src/lib.rs",
-            "srcs": {
-              "allow_empty": true,
-              "include": [
-                "**/*.rs"
-              ]
-            }
-          }
-        }
-      ],
-      "library_target_name": "derive_arbitrary",
-      "common_attrs": {
-        "compile_data_glob": [
-          "**"
-        ],
-        "deps": {
-          "common": [
-            {
-              "id": "proc-macro2 1.0.106",
-              "target": "proc_macro2"
-            },
-            {
-              "id": "quote 1.0.45",
-              "target": "quote"
-            },
-            {
-              "id": "syn 2.0.117",
-              "target": "syn"
-            }
-          ],
-          "selects": {}
-        },
-        "edition": "2021",
-        "version": "1.4.2"
-      },
-      "license": "MIT OR Apache-2.0",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "license_file": "LICENSE-APACHE"
-    },
     "derive_more 2.1.1": {
       "name": "derive_more",
       "version": "2.1.1",
@@ -11154,7 +11098,7 @@
               "target": "windows_targets"
             },
             {
-              "id": "zip 4.6.1",
+              "id": "zip 8.6.0",
               "target": "zip"
             }
           ],
@@ -32483,6 +32427,52 @@
       ],
       "license_file": null
     },
+    "typed-path 0.12.3": {
+      "name": "typed-path",
+      "version": "0.12.3",
+      "package_url": "https://github.com/chipsenkbeil/typed-path",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/typed-path/0.12.3/download",
+          "sha256": "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "typed_path",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "typed_path",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default",
+            "std"
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.12.3"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
     "typeid 1.0.3": {
       "name": "typeid",
       "version": "1.0.3",
@@ -39994,14 +39984,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "zip 4.6.1": {
+    "zip 8.6.0": {
       "name": "zip",
-      "version": "4.6.1",
-      "package_url": "https://github.com/zip-rs/zip2.git",
+      "version": "8.6.0",
+      "package_url": "https://github.com/zip-rs/zip2",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/zip/4.6.1/download",
-          "sha256": "caa8cd6af31c3b31c6631b8f483848b91589021b28fffe50adada48d4f4d2ed1"
+          "url": "https://static.crates.io/crates/zip/8.6.0/download",
+          "sha256": "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
         }
       },
       "targets": [
@@ -40052,21 +40042,18 @@
               "target": "memchr"
             },
             {
+              "id": "typed-path 0.12.3",
+              "target": "typed_path"
+            },
+            {
               "id": "zopfli 0.8.3",
               "target": "zopfli"
             }
           ],
-          "selects": {
-            "cfg(fuzzing)": [
-              {
-                "id": "arbitrary 1.4.2",
-                "target": "arbitrary"
-              }
-            ]
-          }
+          "selects": {}
         },
-        "edition": "2021",
-        "version": "4.6.1"
+        "edition": "2024",
+        "version": "8.6.0"
       },
       "license": "MIT",
       "license_ids": [
@@ -40937,7 +40924,7 @@
     "walkdir 2.5.0",
     "windows-sys 0.61.2",
     "windows-targets 0.53.5",
-    "zip 4.6.1"
+    "zip 8.6.0"
   ],
   "direct_dev_deps": [
     "assert_cmd 2.2.1",
