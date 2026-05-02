@@ -239,6 +239,22 @@ mod tests {
             chat_service.preprocess_file_references("@valid.txt @ @invalid/ @another.txt"),
             "[READ_FILE valid.txt] @ [READ_FILE invalid/] [READ_FILE another.txt]"
         );
+        assert_eq!(
+            chat_service.preprocess_file_references("Check this @ /tmp/ignored.png"),
+            "Check this @ /tmp/ignored.png"
+        );
+        assert_eq!(
+            chat_service
+                .preprocess_file_references(r#"Check this @"/tmp/Screenshot 2026-05-02.png""#),
+            "Check this [IMAGE_INFO /tmp/Screenshot 2026-05-02.png]"
+        );
+        let image_path = std::env::temp_dir().join("Screenshot 2026-05-02 test.png");
+        std::fs::write(&image_path, b"not a decoded image").expect("write temp image");
+        assert_eq!(
+            chat_service.preprocess_file_references(&format!("'{}'", image_path.display())),
+            format!("[IMAGE_INFO {}]", image_path.display())
+        );
+        let _ = std::fs::remove_file(image_path);
         Ok(())
     }
 

@@ -1,41 +1,52 @@
-# Clipboard Features
+# Clipboard
 
-Harper provides powerful clipboard integration that allows you to work with both images and text from your system clipboard. This feature enables the AI to analyze and reference content you've copied.
+Harper supports pasted text, image file references, and image clipboard paste from the TUI.
 
 ## Overview
 
-Harper can access your clipboard contents and use them as context for conversations. This is particularly useful when you want to:
-- Analyze images you've captured
-- Reference text from other applications
-- Share code snippets or documents
+Harper only reads clipboard content when you explicitly paste it or use a paste shortcut. Use this when you want to:
+
+- Reference copied text from another application
+- Paste a screenshot from the system clipboard
+- Drag or paste image file paths from the terminal
 
 ## Image Processing
 
 ### How It Works
 
-Harper can process images directly from your clipboard. This is useful for:
+Harper can attach images in two ways:
+
+- Press `Ctrl+Shift+V` in the TUI to read an image from the system clipboard, save it to a temporary PNG file, and insert it as an `@file` reference.
+- Drag an image file into the terminal, or paste one or more image file paths. Harper turns supported paths into `@file` references.
+
+This is useful for:
+
 - Analyzing screenshots
 - Reviewing diagrams
 - Examining UI designs
-- Reading handwritten notes
 
 ### Supported Formats
 
 Harper supports the following image formats:
+
 - PNG (preferred)
 - JPEG/JPG
-- Other common image formats depending on your system
+- GIF
+- WebP
+- BMP
+- TIFF
 
 ### Using Images
 
-1. Copy an image to your clipboard (using your system's copy function)
-2. Paste or reference it in Harper
-3. The AI will analyze the image and provide insights
+1. Copy an image to your clipboard and press `Ctrl+Shift+V` in Harper, or drag an image file into the terminal.
+2. Harper inserts an `@file` reference into the input.
+3. Send the message with any extra context you want the model to use.
 
 Example workflow:
+
 ```
 > I took a screenshot of an error message, let me show you
-[paste image from clipboard]
+Ctrl+Shift+V
 > Can you help me understand what this error means?
 ```
 
@@ -43,7 +54,8 @@ Example workflow:
 
 ### How It Works
 
-Harper can read text from your clipboard to provide context. This includes:
+Harper can accept pasted text from the terminal paste event. `Ctrl+U` also pastes the internal cut buffer, or reads text from the system clipboard if that buffer is empty. This includes:
+
 - Copied code snippets
 - Error messages
 - Documentation
@@ -55,13 +67,12 @@ Harper can read text from your clipboard to provide context. This includes:
 2. Reference it in Harper
 
 Example:
+
 ```
 > Here's that error I mentioned
 [paste text from clipboard]
 > What does this error indicate?
 ```
-
-Or directly reference clipboard content in your message.
 
 ## Best Practices
 
@@ -70,38 +81,38 @@ Or directly reference clipboard content in your message.
 - Ensure the image is clear and readable
 - Include relevant context in your message
 - For screenshots, capture the entire relevant area
+- Prefer file-path paste or `Ctrl+Shift+V` when the terminal does not support direct image paste
 
 ### For Text
 
 - Copy only the relevant portion
 - Include any error codes or specific terminology
 - Mention the source application if relevant
+- Large multiline paste expands the input area up to the TUI limit
 
 ### General Tips
 
-1. **Clipboard Check**: Harper reads the clipboard when you explicitly reference it or paste content.
+1. **Clipboard Read**: Harper reads clipboard content only when you paste text, press `Ctrl+U`, or press `Ctrl+Shift+V`.
 
 2. **Privacy**: Remember that clipboard content is sent to the AI model when you use it. Avoid copying sensitive information like passwords or personal data.
 
 3. **Large Content**: For very large text, consider copying just the relevant sections rather than entire documents.
 
-4. **Format Preservation**: Text formatting may be preserved when copying from applications like code editors or word processors.
-
 ## Troubleshooting
 
 ### Images Not Processing
 
-- Ensure the image is in a supported format (PNG, JPEG)
-- Verify the image is actually in clipboard (try copying again)
-- Check that the image file is not corrupted
+- For clipboard images, use `Ctrl+Shift+V`, not plain text paste.
+- For dragged files, verify the pasted path points to an existing supported image file.
+- Check that the image file is not corrupted.
 
 ### Text Not Appearing
 
 - Verify text is copied to clipboard
 - Try copying again
-- Ensure you're not including non-text content
+- If normal terminal paste is blocked by your terminal, use `Ctrl+U` to read clipboard text.
 
 ### Large File Issues
 
-- For very large images, consider resizing before copying
+- For very large images, consider resizing before attaching
 - Text-heavy clipboard content may be truncated in very large cases

@@ -724,8 +724,8 @@ enabled = false
         // Set the working directory to the temp directory so it finds the config file
         command
             .current_dir(temp_dir.path())
-            .env("TERM", "dumb") // Force fallback to text menu
-            .stdin(Stdio::piped())
+            .env("TERM", "dumb")
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
@@ -745,25 +745,6 @@ enabled = false
         std::env::remove_var("DATABASE_PATH");
 
         let mut child = command.spawn().expect("Failed to start binary");
-
-        // Send quit command using the constant
-        use harper_core::core::constants::menu::QUIT;
-        use harper_core::core::constants::messages::GOODBYE;
-
-        let quit_command = format!("{QUIT}\n");
-        println!("Sending quit command: {:?}", quit_command.trim());
-
-        if let Some(mut stdin) = child.stdin.take() {
-            use std::io::Write;
-
-            stdin
-                .write_all(quit_command.as_bytes())
-                .expect("Failed to write to stdin");
-            stdin.flush().expect("Failed to flush stdin");
-        }
-
-        // Give the process some time to process the input
-        std::thread::sleep(std::time::Duration::from_millis(500));
 
         // Wait for the process to finish with a timeout
         let output = match wait_timeout::ChildExt::wait_timeout(
@@ -799,22 +780,19 @@ enabled = false
 {stderr}"
         );
 
+        assert_eq!(output.status.code(), Some(2));
         assert!(
-            output.status.success(),
-            "Process exited with status: {}",
-            output.status
+            stderr.contains("Harper requires an interactive terminal"),
+            "Should explain non-interactive CLI usage.
+Full stderr:
+{stderr}"
         );
-
-        if stderr.contains("TUI error") {
-            println!("TUI mode failed as expected in test environment, skipping goodbye check");
-        } else {
-            assert!(
-                stdout.contains(GOODBYE),
-                "Should print goodbye message. Expected '{GOODBYE}' in output.
-Full output:
-{stdout}"
-            );
-        }
+        assert!(
+            stderr.contains("harper-batch"),
+            "Should point non-interactive users to harper-batch.
+Full stderr:
+{stderr}"
+        );
     }
 
     #[test]

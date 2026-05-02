@@ -534,6 +534,20 @@ pub fn handle_event(
                             if !app.cut_buffer.is_empty() {
                                 chat_state.input.push_str(&app.cut_buffer);
                                 chat_state.reset_completion();
+                            } else {
+                                match Clipboard::new()
+                                    .and_then(|mut clipboard| clipboard.get_text())
+                                {
+                                    Ok(content) => {
+                                        chat_state.input.push_str(&content);
+                                        refresh_chat_completions(chat_state);
+                                        app.set_status_message("Pasted clipboard text".to_string());
+                                    }
+                                    Err(err) => app.set_error_message(format!(
+                                        "Clipboard text unavailable: {}",
+                                        err
+                                    )),
+                                }
                             }
                         }
                         return EventResult::Continue;
@@ -1096,7 +1110,9 @@ fn handle_process_list(app: &mut TuiApp) {
     let list = {
         #[cfg(unix)]
         {
-            std::process::Command::new("ps").arg("aux").output()
+            std::process::Command::new("ps")
+                .args(["-axo", "pid,pcpu,pmem,comm"])
+                .output()
         }
         #[cfg(windows)]
         {
@@ -1114,19 +1130,28 @@ fn handle_process_list(app: &mut TuiApp) {
     match list {
         Ok(output) => {
             if output.status.success() {
-                app.set_info_message(format!(
-                    "Process List (partial):\n{}",
-                    String::from_utf8_lossy(&output.stdout)
-                        .lines()
-                        .take(20)
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                ));
+                let processes = String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .take(9)
+                    .map(|line| truncate_process_line(line, 96))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                app.set_info_message(format!("Processes:\n{}", processes));
             } else {
                 app.set_error_message("Failed to retrieve process list".to_string());
             }
         }
         Err(e) => app.set_error_message(format!("Process list error: {}", e)),
+    }
+}
+
+fn truncate_process_line(line: &str, max_chars: usize) -> String {
+    let mut chars = line.chars();
+    let truncated = chars.by_ref().take(max_chars).collect::<String>();
+    if chars.next().is_some() {
+        format!("{truncated}…")
+    } else {
+        truncated
     }
 }
 
@@ -1144,10 +1169,103 @@ fn handle_backspace(app: &mut TuiApp) {
     }
 }
 fn handle_paste(app: &mut TuiApp, content: String) {
+    let mut status_message = None;
     if let AppState::Chat(chat_state) = &mut app.state {
-        chat_state.input.push_str(&content);
+        if let Some(reference) = dropped_image_references(&content) {
+            if !chat_state.input.is_empty()
+                && !chat_state
+                    .input
+                    .chars()
+                    .last()
+                    .is_some_and(char::is_whitespace)
+            {
+                chat_state.input.push(' ');
+            }
+            chat_state.input.push_str(&reference);
+            status_message = Some("Image path added as @file reference".to_string());
+        } else {
+            chat_state.input.push_str(&content);
+        }
         refresh_chat_completions(chat_state);
     }
+    if let Some(message) = status_message {
+        app.set_info_message(message);
+    }
+}
+
+fn dropped_image_references(content: &str) -> Option<String> {
+    let paths = parse_pasted_paths(content.trim());
+    if paths.is_empty() {
+        return None;
+    }
+
+    let mut references = Vec::with_capacity(paths.len());
+    for path in paths {
+        let path = PathBuf::from(path);
+        if !path.is_file() || !is_supported_image_path(&path) {
+            return None;
+        }
+        references.push(format_image_reference(&path));
+    }
+
+    Some(references.join(" "))
+}
+
+fn format_image_reference(path: &Path) -> String {
+    let display = path.to_string_lossy();
+    if display.chars().any(char::is_whitespace) {
+        format!("@\"{}\"", display.replace('"', "\\\""))
+    } else {
+        format!("@{}", display)
+    }
+}
+
+fn parse_pasted_paths(content: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    let mut chars = content.chars();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\\' => {
+                if let Some(next) = chars.next() {
+                    if matches!(next, ' ' | '"' | '\'' | '\\') {
+                        current.push(next);
+                    } else {
+                        current.push('\\');
+                        current.push(next);
+                    }
+                }
+            }
+            '"' | '\'' if quote.is_none() => quote = Some(ch),
+            '"' | '\'' if quote == Some(ch) => quote = None,
+            ch if ch.is_whitespace() && quote.is_none() => {
+                if !current.is_empty() {
+                    paths.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    if !current.is_empty() {
+        paths.push(current);
+    }
+
+    paths
+}
+
+fn is_supported_image_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "tif" | "tiff"
+            )
+        })
+        .unwrap_or(false)
 }
 
 fn handle_image_paste(app: &mut TuiApp) {
@@ -2019,5 +2137,29 @@ mod tests {
             .completion_candidates
             .iter()
             .any(|candidate| candidate == "/update check"));
+    }
+
+    #[test]
+    fn parse_pasted_paths_handles_quoted_and_escaped_paths() {
+        assert_eq!(
+            parse_pasted_paths(r#""/tmp/image one.png" /tmp/image\ two.jpg C:\Users\me\shot.png"#),
+            vec![
+                "/tmp/image one.png".to_string(),
+                "/tmp/image two.jpg".to_string(),
+                r#"C:\Users\me\shot.png"#.to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn dropped_image_references_accepts_image_paths() {
+        let image_path = std::env::temp_dir().join(format!("screen shot {}.png", Uuid::new_v4()));
+        std::fs::write(&image_path, b"not actually decoded here").expect("write image path");
+
+        let reference =
+            dropped_image_references(&format!("\"{}\"", image_path.display())).expect("reference");
+
+        assert_eq!(reference, format!("@\"{}\"", image_path.display()));
+        let _ = std::fs::remove_file(image_path);
     }
 }

@@ -118,6 +118,20 @@ fn built_in_tool_functions() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "search",
+            "description": "Search the web for current external information",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The web search query"
+                    }
+                },
+                "required": ["query"]
+            }
+        }),
+        json!({
             "name": "todo",
             "description": "Manage todo list. Supported actions: add, list, remove, clear",
             "parameters": {

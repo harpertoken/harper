@@ -42,7 +42,7 @@ cargo harper</code></pre>
                 <p><code>cargo harper</code> is a workspace alias for the normal local run: TUI plus the local HTTP server. If you want the TUI without starting the server, use <code>cargo run -p harper-ui --bin harper -- --no-server</code>.</p>
 
                 <h2>Local config split</h2>
-                <p>Use <code>config/local.toml</code> for local non-secret settings like provider choice, model, theme, and server port. Keep API keys and Supabase auth secrets in <code>.env</code>.</p>
+                <p>Use <code>config/local.toml</code> for local non-secret settings like provider choice, model, UI widgets, and server port. Keep API keys and Supabase auth secrets in <code>.env</code>.</p>
                 <div class="code-wrapper">
                     <pre><code>cp config/local.example.toml config/local.toml</code></pre>
                     <button class="copy-btn"></button>
@@ -88,7 +88,7 @@ SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
                 <p>Typing <code>/</code> opens the full slash-command list in the TUI. Use <code>↑</code>/<code>↓</code> or <code>Tab</code> to move through suggestions, then keep typing or submit the command directly from the chat input.</p>
                 <p>For auth commands, <code>/auth login github</code> opens the browser, Harper polls the local server for completion, and <code>/auth status</code> reports the currently stored local TUI session.</p>
                 <p><code>/strategy</code> shows the current execution strategy. Use <code>/strategy auto</code>, <code>/strategy grounded</code>, <code>/strategy deterministic</code>, or <code>/strategy model</code> to switch the live chat session without leaving the conversation.</p>
-                <p><code>/update</code> reports the current cached update state from the chat header. Use <code>/update check</code> to re-run the release-manifest check and refresh that header status. The same action is also available in <code>Settings -&gt; Execution Policy -&gt; Check for Updates</code>. Harper uses the default GitHub release manifest automatically, and <code>HARPER_UPDATE_MANIFEST_URL</code> can override that source when needed.</p>
+                <p><code>/update</code> reports the current cached update state from the chat header. Use <code>/update check</code> to re-run the release-manifest check and refresh that header status. The same action is also available in <code>Settings -&gt; Execution Policy -&gt; Updates</code>. Harper uses the default GitHub release manifest automatically, and <code>HARPER_UPDATE_MANIFEST_URL</code> can override that source when needed.</p>
                 <p><code>/agents</code> reports AGENTS context status for the current TUI session. Use <code>/agents on</code> or <code>/agents off</code> to enable or disable AGENTS context resolution in the UI, and <code>/agents status</code> to inspect the current setting.</p>
                 <p>When sign-in succeeds, Harper stores the local TUI auth session in the OS credential store (macOS Keychain, Linux keyring, or Windows Credential Manager) instead of writing the active tokens to a JSON file under your home directory.</p>
                 <p>Harper also exposes the same auth state through <code>Settings -&gt; Profile</code>. When signed out, that screen offers login actions for the configured providers. When signed in, it shows the current account, plus <code>Logout</code> and <code>Refresh Session</code>.</p>
@@ -96,6 +96,11 @@ SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
                 <p>Remote session operations refresh the TUI session automatically if the access token has expired. If refresh also fails, Harper will show the auth error directly and you will need to sign in again.</p>
                 <p>In both <code>History</code> and <code>Export</code>, press <code>D</code> or <code>Delete</code> to remove the selected session.</p>
                 <p>Empty states are explicit now: if the signed-in user has no remote sessions, <code>History</code> says so directly; if there are no exportable sessions, <code>Export</code> shows that state instead of a blank panel.</p>
+
+                <h2>Input and Clipboard</h2>
+                <p>The chat input accepts normal terminal paste and expands for multiline text up to the TUI limit. Type <code>/</code> to open slash-command suggestions, or write a normal message directly.</p>
+                <p><code>Ctrl+U</code> pastes Harper's internal cut buffer. If that buffer is empty, Harper reads text from the system clipboard. <code>Ctrl+Shift+V</code> reads an image from the system clipboard, saves it as a temporary PNG file, and inserts an <code>@file</code> reference into the input.</p>
+                <p>Terminal drag and drop is supported through pasted file paths. Drag an image file into the terminal, or paste one or more image paths, and Harper converts supported image files into <code>@file</code> references.</p>
 
                 <h2>Execution Policy in Settings</h2>
                 <p>Harper now exposes execution policy selection directly in the TUI under <code>Settings -&gt; Execution Policy</code>. That screen lets you choose an approval profile, choose an execution strategy, choose a sandbox profile, tune retry attempts for retry-safe command failures, edit <code>allowed_commands</code> and <code>blocked_commands</code>, choose which header widgets appear in chat, then save them back to <code>config/local.toml</code>.</p>

@@ -467,10 +467,10 @@ impl UiConfig {
     fn validate(&self) -> HarperResult<()> {
         if let Some(ref theme) = self.theme {
             match theme.as_str() {
-                "default" | "dark" | "light" | "github" | "cyberpunk" | "minimal" => {}
+                "minimal" => {}
                 _ => {
                     return Err(HarperError::Config(format!(
-                        "Invalid theme: {}. Supported themes: default, dark, light, github, cyberpunk, minimal",
+                        "Invalid theme: {}. Supported theme: minimal",
                         theme
                     )))
                 }

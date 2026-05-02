@@ -19,8 +19,8 @@ Controls AI backend selection and request behavior.
 
 | Key           | Type    | Required | Default          | Description                       |
 | ------------- | ------- | -------- | ---------------- | --------------------------------- |
-| `name`        | string  | yes      | —                | Provider identifier               |
-| `model`       | string  | yes      | —                | Model name                        |
+| `name`        | string  | yes      | none             | Provider identifier               |
+| `model`       | string  | yes      | none             | Model name                        |
 | `endpoint`    | string  | no       | provider default | Custom OpenAI-compatible endpoint |
 | `timeout_ms`  | integer | no       | 30000            | Request timeout                   |
 | `max_retries` | integer | no       | 0                | Retry count on failure            |
@@ -67,7 +67,7 @@ Terminal UI behavior.
 
 | Key               | Type   | Default    | Description            |
 | ----------------- | ------ | ---------- | ---------------------- |
-| `theme`           | string | `dark`     | `dark` / `light`       |
+| `theme`           | string | `minimal`  | Minimal terminal theme |
 | `show_exit_codes` | bool   | true       | Show status after run  |
 | `confirm_style`   | string | `explicit` | `explicit` / `compact` |
 | `vim_keys`        | bool   | true       | Enable j/k navigation  |
@@ -173,7 +173,7 @@ require_approval = true
 allow_pipes = false
 
 [ui]
-theme = "dark"
+theme = "minimal"
 ```
 
 ---

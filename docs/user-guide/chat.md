@@ -54,7 +54,7 @@ Available commands:
 
 Typing `/` in the TUI opens the slash-command list. Use `↑` / `↓` or `Tab` to move through suggestions, then keep typing or submit the selected command from the normal message input.
 
-`/update` shows the current cached update status from the header widget. Use `/update check` to re-run the manifest-backed update check on demand. The same refresh is also available from `Settings -> Execution Policy -> Check for Updates`. Harper now checks the default GitHub release manifest automatically, and `HARPER_UPDATE_MANIFEST_URL` can override that source when needed. Published direct-install artifacts are verified with both a SHA-256 checksum and a detached signature before Harper replaces the local binary.
+`/update` shows the current cached update status from the header widget. Use `/update check` to re-run the manifest-backed update check on demand. The same refresh is also available from `Settings -> Execution Policy -> Updates`. Harper now checks the default GitHub release manifest automatically, and `HARPER_UPDATE_MANIFEST_URL` can override that source when needed. Published direct-install artifacts are verified with both a SHA-256 checksum and a detached signature before Harper replaces the local binary.
 
 ## Chat Features
 
