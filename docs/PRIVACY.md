@@ -135,17 +135,17 @@ You have complete control over your data:
 
 #### Access Your Data
 ```bash
-# View all sessions
-harper  # Select option 2: List previous sessions
+# View previous sessions
+harper  # Open History from the Home screen
 
 # View specific session
-harper  # Select option 3: View a session's history
+harper  # Open History, select a session, then preview or resume it
 ```
 
 #### Export Your Data
 ```bash
 # Export session history
-harper  # Select option 4: Export a session's history
+harper  # Open Export from the Home screen
 ```
 
 #### Delete Your Data

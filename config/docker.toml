@@ -31,7 +31,7 @@ server_url = "http://localhost:5001"
 system_prompt_id = "default"
 
 [ui]
-theme = "default"
+theme = "minimal"
 
 [tools]
 # enabled_tools = ["read_file", "write_file", "run_command"]

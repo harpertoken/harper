@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(dead_code)]
 use ratatui::style::{Color, Modifier, Style};
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
@@ -39,73 +38,11 @@ pub struct Theme {
 
 impl Default for Theme {
     fn default() -> Self {
-        Self {
-            background: Color::Rgb(24, 24, 27), // Modern dark grey
-            foreground: Color::White,
-            accent: Color::Rgb(88, 166, 255),    // Modern blue
-            border: Color::Rgb(63, 63, 70),      // Zinc-700
-            title: Color::Rgb(255, 215, 0),      // Gold
-            input: Color::Rgb(0, 255, 255),      // Cyan
-            output: Color::Rgb(144, 238, 144),   // Light green
-            error: Color::Rgb(255, 99, 71),      // Tomato red
-            success: Color::Rgb(50, 205, 50),    // Lime green
-            warning: Color::Rgb(255, 165, 0),    // Orange
-            info: Color::Rgb(135, 206, 235),     // Sky blue
-            muted: Color::Rgb(128, 128, 128),    // Gray
-            highlight: Color::Rgb(255, 255, 0),  // Yellow
-            selection: Color::Rgb(70, 130, 180), // Steel blue
-            syntax_theme: "base16-ocean.dark".to_string(),
-            syntax_set: SyntaxSet::load_defaults_newlines(),
-            theme_set: ThemeSet::load_defaults(),
-        }
+        Self::minimal()
     }
 }
 
 impl Theme {
-    pub fn dark() -> Self {
-        Self {
-            background: Color::Rgb(0, 0, 0),       // True black
-            foreground: Color::Rgb(229, 229, 231), // Zinc-200
-            accent: Color::Rgb(59, 130, 246),      // Blue-500
-            border: Color::Rgb(39, 39, 42),        // Zinc-800
-            title: Color::Rgb(161, 161, 170),      // Zinc-400
-            input: Color::Rgb(96, 165, 250),       // Blue-400
-            output: Color::Rgb(16, 185, 129),      // Emerald-500
-            error: Color::Rgb(239, 68, 68),        // Red-500
-            success: Color::Rgb(34, 197, 94),      // Green-500
-            warning: Color::Rgb(245, 158, 11),     // Amber-500
-            info: Color::Rgb(6, 182, 212),         // Cyan-500
-            muted: Color::Rgb(82, 82, 91),         // Zinc-600
-            highlight: Color::Rgb(250, 204, 21),   // Yellow-400
-            selection: Color::Rgb(30, 58, 138),    // Blue-900
-            syntax_theme: "base16-ocean.dark".to_string(),
-            syntax_set: SyntaxSet::load_defaults_newlines(),
-            theme_set: ThemeSet::load_defaults(),
-        }
-    }
-
-    pub fn light() -> Self {
-        Self {
-            background: Color::White,
-            foreground: Color::Black,
-            accent: Color::Rgb(0, 122, 255),     // iOS blue
-            border: Color::Rgb(200, 200, 200),   // Light gray
-            title: Color::Rgb(88, 86, 214),      // Purple
-            input: Color::Rgb(0, 122, 255),      // Blue
-            output: Color::Rgb(40, 167, 69),     // Green
-            error: Color::Rgb(220, 53, 69),      // Red
-            success: Color::Rgb(40, 167, 69),    // Green
-            warning: Color::Rgb(255, 193, 7),    // Amber
-            info: Color::Rgb(23, 162, 184),      // Teal
-            muted: Color::Rgb(108, 117, 125),    // Muted gray
-            highlight: Color::Rgb(255, 235, 59), // Light yellow
-            selection: Color::Rgb(0, 123, 255),  // Primary blue
-            syntax_theme: "base16-ocean.light".to_string(),
-            syntax_set: SyntaxSet::load_defaults_newlines(),
-            theme_set: ThemeSet::load_defaults(),
-        }
-    }
-
     pub fn minimal() -> Self {
         Self {
             background: Color::Rgb(15, 15, 15),    // Deep, soft black
@@ -130,56 +67,8 @@ impl Theme {
 
     pub fn from_name(name: &str) -> Self {
         match name {
-            "dark" => Self::dark(),
-            "light" => Self::light(),
-            "github" => Self::github(),
-            "cyberpunk" => Self::cyberpunk(),
             "minimal" => Self::minimal(),
             _ => Self::default(),
-        }
-    }
-
-    pub fn github() -> Self {
-        Self {
-            background: Color::Rgb(13, 17, 23),    // GitHub dark bg
-            foreground: Color::Rgb(230, 237, 243), // GitHub text
-            accent: Color::Rgb(33, 136, 255),      // GitHub blue
-            border: Color::Rgb(48, 54, 61),        // GitHub border
-            title: Color::Rgb(125, 196, 228),      // GitHub cyan
-            input: Color::Rgb(33, 136, 255),       // GitHub blue
-            output: Color::Rgb(63, 185, 80),       // GitHub green
-            error: Color::Rgb(248, 81, 73),        // GitHub red
-            success: Color::Rgb(63, 185, 80),      // GitHub green
-            warning: Color::Rgb(219, 154, 4),      // GitHub yellow
-            info: Color::Rgb(125, 196, 228),       // GitHub cyan
-            muted: Color::Rgb(139, 148, 158),      // GitHub muted
-            highlight: Color::Rgb(255, 223, 93),   // GitHub highlight
-            selection: Color::Rgb(58, 117, 215),   // GitHub selection
-            syntax_theme: "base16-ocean.dark".to_string(),
-            syntax_set: SyntaxSet::load_defaults_newlines(),
-            theme_set: ThemeSet::load_defaults(),
-        }
-    }
-
-    pub fn cyberpunk() -> Self {
-        Self {
-            background: Color::Rgb(2, 2, 10),      // Deep space black
-            foreground: Color::Rgb(255, 255, 255), // Pure white
-            accent: Color::Rgb(255, 0, 153),       // Neon Pink
-            border: Color::Rgb(0, 255, 255),       // Neon Cyan
-            title: Color::Rgb(255, 255, 0),        // Neon Yellow
-            input: Color::Rgb(0, 255, 255),        // Neon Cyan
-            output: Color::Rgb(57, 255, 20),       // Neon Green
-            error: Color::Rgb(255, 49, 49),        // Neon Red
-            success: Color::Rgb(57, 255, 20),      // Neon Green
-            warning: Color::Rgb(255, 172, 28),     // Neon Orange
-            info: Color::Rgb(171, 32, 253),        // Neon Purple
-            muted: Color::Rgb(100, 100, 100),      // Dark Gray
-            highlight: Color::Rgb(255, 0, 255),    // Magenta
-            selection: Color::Rgb(0, 0, 255),      // Blue
-            syntax_theme: "base16-ocean.dark".to_string(),
-            syntax_set: SyntaxSet::load_defaults_newlines(),
-            theme_set: ThemeSet::load_defaults(),
         }
     }
 

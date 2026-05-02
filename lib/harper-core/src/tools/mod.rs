@@ -188,7 +188,14 @@ impl<'a> ToolService<'a> {
                         }
 
                         return self
-                            .handle_regular_json_tool(client, history, name, &args_json, response)
+                            .handle_regular_json_tool(
+                                client,
+                                history,
+                                name,
+                                &args_json,
+                                response,
+                                web_search_enabled,
+                            )
                             .await;
                     }
                 }
@@ -223,7 +230,14 @@ impl<'a> ToolService<'a> {
                 }
 
                 return self
-                    .handle_regular_json_tool(client, history, name, &args_json, response)
+                    .handle_regular_json_tool(
+                        client,
+                        history,
+                        name,
+                        &args_json,
+                        response,
+                        web_search_enabled,
+                    )
                     .await;
             }
         }
@@ -391,6 +405,7 @@ impl<'a> ToolService<'a> {
         tool_name: &str,
         args: &serde_json::Value,
         raw_response: &str,
+        web_search_enabled: bool,
     ) -> Result<Option<(String, String)>, HarperError> {
         self.sync_plan_before_tool(tool_name)?;
         match tool_name {
@@ -417,6 +432,25 @@ impl<'a> ToolService<'a> {
                         .call_llm_after_tool(client, history, raw_response, &command_result)
                         .await?;
                     Ok(Some((final_response, command_result)))
+                } else {
+                    Ok(None)
+                }
+            }
+
+            "search" => {
+                if !web_search_enabled {
+                    return Ok(Some((
+                        "Web search is off. Enable web mode and try again.".to_string(),
+                        "Web search is disabled for this session.".to_string(),
+                    )));
+                }
+                if let Some(query) = args.get("query").and_then(|v| v.as_str()) {
+                    let bracket_command = format!("[SEARCH: {}]", query);
+                    let search_result = web::perform_web_search(&bracket_command).await?;
+                    let final_response = self
+                        .call_llm_after_tool(client, history, raw_response, &search_result)
+                        .await?;
+                    Ok(Some((final_response, search_result)))
                 } else {
                     Ok(None)
                 }
@@ -1409,6 +1443,7 @@ mod tests {
     use crate::core::plan::{PlanItem, PlanState, PlanStepStatus};
     use crate::core::{ApiConfig, ApiProvider};
     use crate::runtime::config::ExecPolicyConfig;
+    use reqwest::Client;
     use rusqlite::Connection;
     use serde_json::json;
     use std::path::PathBuf;
@@ -1449,6 +1484,33 @@ mod tests {
         assert!(ToolService::response_looks_like_tool_call(
             r#"{"tool":"read_file","args":{"path":"Cargo.toml"}}"#
         ));
+    }
+
+    #[tokio::test]
+    async fn disabled_web_search_json_tool_returns_user_message() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        let config = test_config();
+        let exec_policy = ExecPolicyConfig::default();
+        let client = Client::new();
+        let mut service = ToolService::new(&conn, &config, &exec_policy, None, None);
+        let result = service
+            .handle_regular_json_tool(
+                &client,
+                &[],
+                "search",
+                &json!({"query": "current rust version"}),
+                r#"{"tool":"search","args":{"query":"current rust version"}}"#,
+                false,
+            )
+            .await
+            .expect("disabled search handling")
+            .expect("user-facing response");
+
+        assert_eq!(
+            result.0,
+            "Web search is off. Enable web mode and try again."
+        );
+        assert_eq!(result.1, "Web search is disabled for this session.");
     }
 
     #[test]

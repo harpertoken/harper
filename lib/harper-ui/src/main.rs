@@ -15,15 +15,11 @@
 use rusqlite::Connection;
 use std::env;
 
-use colored::Colorize;
-use harper_core::core::ApiConfig;
 use harper_core::error::HarperError;
 
-use std::io::{IsTerminal, Write};
-use turul_mcp_client::McpClient;
+use std::io::IsTerminal;
 
-#[allow(unused_imports)]
-use harper_core::runtime::config::{should_enable_server, ExecPolicyConfig, HarperConfig};
+use harper_core::runtime::config::{should_enable_server, HarperConfig};
 
 mod auth;
 
@@ -32,14 +28,6 @@ fn exit_on_error<T, E: std::fmt::Display>(result: Result<T, E>, message: &str) -
         eprintln!("{}: {}", message, e);
         std::process::exit(1);
     })
-}
-
-macro_rules! handle_menu_error {
-    ($expr:expr, $msg:expr) => {
-        if let Err(e) = $expr {
-            eprintln!("{}: {}", $msg, e.cli_message());
-        }
-    };
 }
 
 fn print_version() {
@@ -87,6 +75,13 @@ async fn main() -> Result<(), HarperError> {
     }
     let config = exit_on_error(HarperConfig::new(), "Failed to load configuration");
 
+    if !std::io::stdout().is_terminal() {
+        eprintln!(
+            "Harper requires an interactive terminal. Use harper-batch for non-interactive runs."
+        );
+        std::process::exit(2);
+    }
+
     let api_key = get_api_key(&config);
 
     let api_config = harper_core::core::ApiConfig {
@@ -98,16 +93,6 @@ async fn main() -> Result<(), HarperError> {
         base_url: config.api.base_url.clone(),
         model_name: config.api.model_name.clone(),
     };
-
-    // Display selected model information (only for non-TUI)
-    if !std::io::stdout().is_terminal() {
-        println!(
-            "🤖 Using {} - {}",
-            api_config.provider, api_config.model_name
-        );
-        println!("📍 API: {}", api_config.base_url);
-        println!("💾 Database: {}", config.database.path);
-    }
 
     // Ensure database directory exists
     if let Some(parent) = std::path::Path::new(&config.database.path).parent() {
@@ -126,16 +111,6 @@ async fn main() -> Result<(), HarperError> {
         "Failed to initialize database",
     );
 
-    let _prompt_id = config.prompts.system_prompt_id.clone();
-    let mut custom_commands = config.custom_commands.commands.clone().unwrap_or_default();
-    // Add default custom commands if none configured
-    if custom_commands.is_empty() {
-        custom_commands.insert(
-            "hello".to_string(),
-            "Please greet me warmly and introduce yourself as Harper AI assistant".to_string(),
-        );
-        custom_commands.insert("status".to_string(), "Please provide a summary of the current system status, available features, and any recent updates".to_string());
-    }
     let exec_policy = config.exec_policy.clone();
 
     // Check for --no-server flag
@@ -146,7 +121,7 @@ async fn main() -> Result<(), HarperError> {
     let server_enabled = should_enable_server(config.server.enabled.unwrap_or(false), &args);
     if server_enabled {
         let host = config.server.host.as_deref().unwrap_or("127.0.0.1");
-        let port = config.server.port.unwrap_or(8080);
+        let port = config.server.port.unwrap_or(8081);
         let addr = format!("{}:{}", host, port);
 
         let conn = std::sync::Arc::new(std::sync::Mutex::new(
@@ -181,101 +156,6 @@ async fn main() -> Result<(), HarperError> {
         }));
     }
 
-    // MCP client initialization
-    let mcp_client = if config.mcp.enabled {
-        match turul_mcp_client::transport::HttpTransport::new(&config.mcp.server_url) {
-            Ok(transport) => {
-                let client = turul_mcp_client::McpClientBuilder::new()
-                    .with_transport(Box::new(transport))
-                    .build();
-                match client.connect().await {
-                    Ok(_) => Some(client),
-                    Err(e) => {
-                        eprintln!("Failed to connect MCP client: {}", e);
-                        None
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("Failed to create MCP transport: {}", e);
-                None
-            }
-        }
-    } else {
-        None
-    };
-
-    #[allow(dead_code, unused_variables)]
-    async fn text_menu(
-        conn: &Connection,
-        api_config: &ApiConfig,
-        mcp_client: Option<&McpClient>,
-        prompt_id: Option<String>,
-        custom_commands: std::collections::HashMap<String, String>,
-        exec_policy: ExecPolicyConfig,
-    ) {
-        loop {
-            use harper_core::core::constants::messages;
-
-            println!("\n{}", messages::MAIN_MENU_TITLE.bold().yellow());
-            println!("1  Start session");
-            println!("2  History");
-            println!("3  View");
-            println!("4  Export");
-            println!("5  Quit");
-            print!("\n{}", messages::ENTER_CHOICE);
-            exit_on_error(std::io::stdout().flush(), "Failed to flush stdout");
-
-            let mut menu_choice = String::new();
-            exit_on_error(
-                std::io::stdin().read_line(&mut menu_choice),
-                "Failed to read input",
-            );
-
-            let session_service = harper_core::memory::session_service::SessionService::new(conn);
-            let mut api_cache = harper_core::core::cache::new_api_cache();
-
-            match menu_choice.trim() {
-                harper_core::core::constants::menu::START_CHAT => {
-                    println!("Enable web search for this session? (y/n): ");
-                    let mut choice = String::new();
-                    let _ = std::io::stdin().read_line(&mut choice);
-                    let web_search = choice.trim().eq_ignore_ascii_case("y");
-                    let mut chat_service = harper_core::agent::chat::ChatService::new(
-                        conn,
-                        api_config,
-                        mcp_client,
-                        Some(&mut api_cache),
-                        prompt_id.clone(),
-                        custom_commands.clone(),
-                        exec_policy.clone(),
-                    )
-                    .with_approver(std::sync::Arc::new(
-                        harper_core::core::io_traits::StdinApproval,
-                    ));
-                    handle_menu_error!(
-                        chat_service.start_session(web_search).await,
-                        "Error in chat session"
-                    );
-                }
-                harper_core::core::constants::menu::LIST_SESSIONS => {
-                    handle_menu_error!(session_service.list_sessions(), "Error listing sessions");
-                }
-                harper_core::core::constants::menu::VIEW_SESSION => {
-                    handle_menu_error!(session_service.view_session(), "Error viewing session");
-                }
-                harper_core::core::constants::menu::EXPORT_SESSION => {
-                    handle_menu_error!(session_service.export_session(), "Error exporting session");
-                }
-                harper_core::core::constants::menu::QUIT => {
-                    println!("{}", messages::GOODBYE.bold().yellow());
-                    break;
-                }
-                _ => println!("{}", "Invalid choice. Please try again.".red()),
-            }
-        }
-    }
-
     let session_service = harper_core::memory::session_service::SessionService::new(&conn);
 
     // Create theme
@@ -286,7 +166,6 @@ async fn main() -> Result<(), HarperError> {
         .map(|t| harper_ui::interfaces::ui::Theme::from_name(t))
         .unwrap_or_default();
 
-    // Try TUI first, fall back to text menu if TUI fails
     let custom_commands = config.custom_commands.commands.clone().unwrap_or_default();
     let server_base_url = server_enabled.then(|| {
         format!(
@@ -300,41 +179,22 @@ async fn main() -> Result<(), HarperError> {
         )
     });
 
-    let mut run_tui_success = false;
-    if std::io::stdout().is_terminal()
-        && harper_ui::interfaces::ui::run_tui(
-            &conn,
-            &api_config,
-            &session_service,
-            &theme,
-            &exec_policy,
-            &config.ui,
-            harper_ui::interfaces::ui::tui::TuiRunOptions {
-                custom_commands: custom_commands.clone(),
-                server_base_url,
-            },
-        )
-        .await
-        .is_ok()
-    {
-        run_tui_success = true;
-    }
-
-    if !run_tui_success {
-        if std::io::stdout().is_terminal() {
-            eprintln!("TUI not available, falling back to text menu...");
-        }
-
-        // Fall back to text menu
-        text_menu(
-            &conn,
-            &api_config,
-            mcp_client.as_ref(),
-            _prompt_id,
+    if let Err(err) = harper_ui::interfaces::ui::run_tui(
+        &conn,
+        &api_config,
+        &session_service,
+        &theme,
+        &exec_policy,
+        &config.ui,
+        harper_ui::interfaces::ui::tui::TuiRunOptions {
             custom_commands,
-            exec_policy.clone(),
-        )
-        .await;
+            server_base_url,
+        },
+    )
+    .await
+    {
+        eprintln!("TUI failed: {}", err);
+        std::process::exit(1);
     }
 
     if let Some(server_task) = server_task {

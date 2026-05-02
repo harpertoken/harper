@@ -1573,13 +1573,7 @@ fn render_auth_success(session: &AuthSession) -> String {
         .email
         .clone()
         .unwrap_or_else(|| "signed-in user".to_string());
-    render_auth_status_page_with_message(
-        "Sign-in complete",
-        &format!(
-            "Harper stored your session cookies for {}. Verifying active session with /auth/me...",
-            email
-        ),
-    )
+    render_auth_status_page_with_message("Signed in to Harper", &format!("Signed in as {}", email))
 }
 
 fn fallback_auth_session_from_supabase_tokens(
@@ -1778,6 +1772,13 @@ fn render_auth_status_page_with_message(title: &str, message: &str) -> String {
         padding: 1rem;
         border-radius: 10px;
       }}
+      details {{
+        margin-top: 1rem;
+      }}
+      summary {{
+        cursor: pointer;
+        color: #4b5563;
+      }}
       .muted {{ color: #6b7280; }}
       .ok {{ color: #065f46; }}
       .bad {{ color: #991b1b; }}
@@ -1787,11 +1788,16 @@ fn render_auth_status_page_with_message(title: &str, message: &str) -> String {
     <div class="card">
       <h1>{title}</h1>
       <p id="status" class="muted">{message}</p>
-      <pre id="payload">{{}}</pre>
+      <p id="next" class="muted"></p>
+      <details>
+        <summary>Show details</summary>
+        <pre id="payload">{{}}</pre>
+      </details>
     </div>
     <script>
       async function loadAuthState() {{
         const status = document.getElementById('status');
+        const next = document.getElementById('next');
         const payload = document.getElementById('payload');
         try {{
           const response = await fetch('/auth/me', {{
@@ -1805,14 +1811,17 @@ fn render_auth_status_page_with_message(title: &str, message: &str) -> String {
             const email = body.user && body.user.email ? body.user.email : body.user && body.user.user_id;
             status.textContent = `Signed in as ${{email}}`;
             status.className = 'ok';
+            next.textContent = 'You can close this tab and return to Harper.';
           }} else {{
             status.textContent = 'No active Harper session';
             status.className = 'bad';
+            next.textContent = '';
           }}
         }} catch (error) {{
           payload.textContent = JSON.stringify({{ error: String(error) }}, null, 2);
           status.textContent = 'Failed to query /auth/me';
           status.className = 'bad';
+          next.textContent = '';
         }}
       }}
       loadAuthState();
@@ -2133,7 +2142,10 @@ mod tests {
                 provider: Some(UserAuthProvider::Github),
             },
         });
-        assert!(html.contains("Verifying active session with /auth/me"));
+        assert!(html.contains("Signed in to Harper"));
+        assert!(html.contains("Signed in as user-a@example.com"));
+        assert!(html.contains("You can close this tab and return to Harper."));
+        assert!(html.contains("<summary>Show details</summary>"));
         assert!(html.contains("fetch('/auth/me'"));
     }
 

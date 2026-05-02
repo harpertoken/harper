@@ -47,7 +47,7 @@ writable_dirs = ["./tmp", "./build"]
 - `sandbox_profile` controls the default sandbox boundary.
 - `retry_max_attempts` controls bounded automatic retries for retry-safe failures.
 - `header_widgets` controls which status items appear in the chat header. You can edit that list from `Settings -> Execution Policy`, and saving the screen writes the selection back to `config/local.toml`.
-- `Settings -> Execution Policy` also includes `Check for Updates`, which refreshes the release manifest and the `update` header widget without leaving the TUI.
+- `Settings -> Execution Policy` also includes `Updates`, which refreshes the release manifest and the `update` header widget without leaving the TUI.
 - Direct self-update verifies both the published checksum and detached signature before replacing the local executable.
 - `allowed_dirs` are readable roots.
 - `writable_dirs` are writable roots.
@@ -177,7 +177,7 @@ session_dir = "./sessions"
 
 ```toml
 [ui]
-theme = "minimal"  # Options: minimal, cyberpunk, default, light, dark, github
+theme = "minimal"
 ```
 
 ## Environment Variables

@@ -171,7 +171,7 @@ To use a different port, update these files:
 
 ### Code (backend)
 - `config/local.toml` - main config
-- `lib/harper-ui/src/main.rs` - line 147, fallback default
+- `lib/harper-ui/src/main.rs` - server fallback when no config port is set
 
 ### VS Code extension
 - `extension.js` - server URL

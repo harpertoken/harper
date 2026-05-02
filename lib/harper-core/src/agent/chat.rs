@@ -540,8 +540,12 @@ impl<'a> ChatService<'a> {
         }
     }
 
-    /// Preprocess @file references into \[READ_FILE\] commands
+    /// Preprocess @file references into file or image tool commands.
     pub(crate) fn preprocess_file_references(&self, user_msg: &str) -> String {
+        if let Some(image_path) = parse_standalone_image_reference(user_msg) {
+            return format!("[IMAGE_INFO {}]", image_path);
+        }
+
         let mut processed = user_msg.to_string();
         let mut search_start = 0;
 
@@ -549,31 +553,26 @@ impl<'a> ChatService<'a> {
         while let Some(at_pos) = processed[search_start..].find('@') {
             let absolute_at_pos = search_start + at_pos;
 
-            // Find the end of the file path (next space or end of string)
             let after_at = &processed[absolute_at_pos + 1..];
-            let path_end = after_at.find(' ').unwrap_or(after_at.len());
-            let file_path = &after_at[..path_end];
+            let Some(reference) = parse_at_file_reference(after_at) else {
+                search_start = absolute_at_pos + 1;
+                continue;
+            };
+            let file_path = reference.path.as_str();
 
-            // Skip if empty or looks like a command (starts with / or !)
-            if !file_path.is_empty() && !file_path.starts_with('/') && !file_path.starts_with('!') {
-                // Replace @filepath with [READ_FILE filepath]
-                let replacement = format!("[READ_FILE {}]", file_path);
-                let old_pattern = format!("@{}", file_path);
-
-                // Find the position of the old pattern in the current processed string
-                if let Some(replace_pos) = processed[absolute_at_pos..].find(&old_pattern) {
-                    let actual_replace_pos = absolute_at_pos + replace_pos;
-                    processed.replace_range(
-                        actual_replace_pos..actual_replace_pos + old_pattern.len(),
-                        &replacement,
-                    );
-
-                    // Update search position to continue after this replacement
-                    search_start = actual_replace_pos + replacement.len();
+            let is_image_reference = is_supported_image_reference(file_path);
+            if !file_path.is_empty()
+                && !file_path.starts_with('!')
+                && (!file_path.starts_with('/') || is_image_reference)
+            {
+                let replacement = if is_image_reference {
+                    format!("[IMAGE_INFO {}]", file_path)
                 } else {
-                    // Pattern not found, skip this @ and continue
-                    search_start = absolute_at_pos + 1;
-                }
+                    format!("[READ_FILE {}]", file_path)
+                };
+                let replace_end = absolute_at_pos + 1 + reference.consumed;
+                processed.replace_range(absolute_at_pos..replace_end, &replacement);
+                search_start = absolute_at_pos + replacement.len();
             } else {
                 // Not a valid file reference, skip this @ and continue
                 search_start = absolute_at_pos + 1;
@@ -657,37 +656,11 @@ impl<'a> ChatService<'a> {
         }
     }
 
-    /// Start the chat session
-    pub async fn start_session(&mut self, web_search_enabled: bool) -> Result<(), HarperError> {
-        let (mut history, session_id) = self.create_session(web_search_enabled).await?;
-
-        self.display_session_start();
-        self.schedule_todo_reminder();
-
-        self.run_chat_loop(&session_id, &mut history, web_search_enabled)
-            .await
-    }
-
     /// Build system prompt
     pub async fn build_system_prompt(&self, web_search_enabled: bool) -> String {
         let prompt_builder =
             PromptBuilder::new(self.config, self.prompt_id.clone(), self.mcp_client);
         prompt_builder.build_system_prompt(web_search_enabled).await
-    }
-
-    /// Display session start
-    fn display_session_start(&self) {
-        println!(
-            "{}
-",
-            "🤖 Harper AI Assistant - Type /help for commands"
-                .bold()
-                .yellow()
-        );
-        println!(
-            "💡 Quick commands: /help, /exit, /clear, !shell, @file
-"
-        );
     }
 
     fn schedule_todo_reminder(&mut self) {
@@ -3153,7 +3126,7 @@ impl<'a> ChatService<'a> {
     }
 
     fn model_backend_unavailable_reply() -> String {
-        "The model backend is unavailable, and this request does not have a deterministic fallback. Start the configured model provider or ask a repo-grounded or command/file-specific question.".to_string()
+        "Model backend unavailable. Start it with `ollama serve`, or ask a file/command-specific question.".to_string()
     }
 
     async fn try_handle_offline_shell_proxy(
@@ -3582,6 +3555,91 @@ impl<'a> ChatService<'a> {
 
         Ok(context)
     }
+}
+
+struct AtFileReference {
+    path: String,
+    consumed: usize,
+}
+
+fn parse_at_file_reference(input: &str) -> Option<AtFileReference> {
+    let mut chars = input.char_indices();
+    let (_, first) = chars.next()?;
+
+    if first == '"' || first == '\'' {
+        let mut path = String::new();
+        let mut escaped = false;
+        for (index, ch) in chars {
+            if escaped {
+                path.push(ch);
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == first {
+                return Some(AtFileReference {
+                    path,
+                    consumed: index + ch.len_utf8(),
+                });
+            }
+            path.push(ch);
+        }
+        return None;
+    }
+
+    let end = input.find(char::is_whitespace).unwrap_or(input.len());
+    if end == 0 {
+        return None;
+    }
+
+    Some(AtFileReference {
+        path: input[..end].to_string(),
+        consumed: end,
+    })
+}
+
+fn is_supported_image_reference(path: &str) -> bool {
+    std::path::Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "tif" | "tiff"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn parse_standalone_image_reference(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let unquoted = if let Some(value) = trimmed
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+    {
+        value
+    } else if let Some(value) = trimmed
+        .strip_prefix('\'')
+        .and_then(|value| value.strip_suffix('\''))
+    {
+        value
+    } else {
+        trimmed
+    };
+
+    if !is_supported_image_reference(unquoted) {
+        return None;
+    }
+
+    let path = std::path::Path::new(unquoted);
+    path.is_file().then(|| unquoted.to_string())
 }
 
 fn parse_audit_params(args: Option<&str>) -> HarperResult<AuditParams> {

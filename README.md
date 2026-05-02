@@ -21,7 +21,7 @@ cargo harper
 
 You can use Harper to inspect files, patch code, run commands, and manage multi-step work without losing track of what’s happening. Commands stay explicit, risky actions can require approval, and every session keeps both an audit log and active plan state. If you want to plug it into an editor workflow, the HTTP review API is there for that.
 
-Configuration is straightforward. Copy `config/local.example.toml` to `config/local.toml` for local non-secret settings like provider choice, model, theme, and server port, and keep real secrets in `.env`. Sandboxed execution is supported on Linux (bubblewrap) and macOS (sandbox-exec), so commands can run in isolation when configured.
+Configuration is straightforward. Copy `config/local.example.toml` to `config/local.toml` for local non-secret settings like provider choice, model, UI widgets, and server port, and keep real secrets in `.env`. Sandboxed execution is supported on Linux (bubblewrap) and macOS (sandbox-exec), so commands can run in isolation when configured.
 
 If you are working on Harper itself, the normal development loop is:
 

@@ -133,6 +133,24 @@ fn wrapped_line_count(lines: &[Line<'static>], width: u16) -> usize {
         .sum()
 }
 
+fn input_area_height(input: &str, width: u16) -> u16 {
+    let content_width = width.saturating_sub(4).max(1);
+    let lines = if input.is_empty() {
+        vec![Line::raw("› Type / for commands, or write a message")]
+    } else {
+        input_lines(input, Style::default())
+    };
+    let content_height = wrapped_line_count(&lines, content_width) as u16;
+    content_height.saturating_add(1).clamp(3, 8)
+}
+
+fn input_lines(input: &str, input_style: Style) -> Vec<Line<'static>> {
+    input
+        .split('\n')
+        .map(|line| Line::from(vec![Span::styled(line.to_string(), input_style)]))
+        .collect()
+}
+
 pub fn parse_content_with_code(
     syntax_set: &SyntaxSet,
     theme_set: &ThemeSet,
@@ -258,6 +276,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .map(|review| review_panel_height(review, chat_state.review_selected))
                 .unwrap_or(0);
             let completion_height = completion_popup_height(chat_state);
+            let input_height = input_area_height(&chat_state.input, chat_area.width);
 
             let mut constraints = vec![Constraint::Length(3), Constraint::Min(5)];
             if has_review {
@@ -275,7 +294,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             if has_agents {
                 constraints.push(Constraint::Length(agents_height));
             }
-            constraints.push(Constraint::Length(3));
+            constraints.push(Constraint::Length(input_height));
 
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -410,16 +429,27 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .border_style(theme.muted_style())
                 .padding(Padding::horizontal(1));
 
-            let mut input_text = vec![Line::from(vec![
-                Span::styled("› ", Style::default().fg(theme.accent)),
-                Span::styled(&chat_state.input, Style::default().fg(theme.input)),
-            ])];
-            if chat_state.input.trim().is_empty() {
-                input_text.push(Line::from(Span::styled(
-                    "Type a message... (Ctrl+G for help)",
-                    theme.muted_style().add_modifier(Modifier::ITALIC),
-                )));
-            }
+            let input_text = if chat_state.input.is_empty() {
+                vec![Line::from(vec![
+                    Span::styled("› ", Style::default().fg(theme.accent)),
+                    Span::styled(
+                        "Type / for commands, or write a message",
+                        theme.muted_style().add_modifier(Modifier::ITALIC),
+                    ),
+                ])]
+            } else {
+                input_lines(&chat_state.input, Style::default().fg(theme.input))
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, line)| {
+                        let prefix = if index == 0 { "› " } else { "  " };
+                        let mut spans =
+                            vec![Span::styled(prefix, Style::default().fg(theme.accent))];
+                        spans.extend(line.spans);
+                        Line::from(spans)
+                    })
+                    .collect()
+            };
 
             let input_widget = Paragraph::new(input_text).block(input_block);
             let input_index = 2
@@ -1139,7 +1169,12 @@ fn draw_chat_summary(
         )
     });
     let last_action = latest_action_summary(app, chat_state);
-    let last_rule_source = latest_rule_source(chat_state);
+    let last_rule_source =
+        if chat_state.active_agents.is_some() && !chat_state.agents_panel_expanded {
+            latest_rule_source(chat_state)
+        } else {
+            None
+        };
 
     let mut spans: Vec<Span<'static>> = Vec::new();
     if header_widget_enabled(app, super::app::HeaderWidget::Session) {
@@ -1244,7 +1279,6 @@ fn draw_chat_summary(
         if !detail_spans.is_empty() {
             detail_spans.push(Span::raw("  "));
         }
-        detail_spans.push(Span::styled("rule src ", theme.muted_style()));
         detail_spans.push(Span::styled(
             truncate_chat_summary(&source, 24),
             theme.muted_style().add_modifier(Modifier::ITALIC),
@@ -1308,10 +1342,23 @@ fn latest_rule_source(chat_state: &super::app::ChatState) -> Option<String> {
             .iter()
             .rev()
             .find_map(|section| {
-                section
-                    .rules
-                    .last()
-                    .map(|rule| rule.source_path.display().to_string())
+                section.rules.last().map(|rule| {
+                    let source_path = &rule.source_path;
+                    std::env::current_dir()
+                        .ok()
+                        .and_then(|cwd| {
+                            source_path
+                                .strip_prefix(cwd)
+                                .ok()
+                                .map(|path| path.display().to_string())
+                        })
+                        .or_else(|| {
+                            source_path
+                                .file_name()
+                                .map(|name| name.to_string_lossy().to_string())
+                        })
+                        .unwrap_or_else(|| source_path.display().to_string())
+                })
             })
     })
 }
@@ -2590,9 +2637,9 @@ fn draw_sessions(
     let sessions_list = List::new(items).block(
         Block::default()
             .title(if remote_mode {
-                format!(" Remote Sessions ({position}) (Enter resume • → preview) ")
+                format!(" Remote Sessions ({position}) ")
             } else {
-                format!(" Sessions ({position}) (Enter resume • → preview) ")
+                format!(" Sessions ({position}) ")
             })
             .title_style(theme.accent_style().add_modifier(Modifier::BOLD))
             .borders(Borders::ALL)
@@ -2731,13 +2778,33 @@ fn draw_settings(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) 
         })
         .collect();
 
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(8), Constraint::Length(3)])
+        .split(area);
     let tools_list = List::new(items).block(
         Block::default()
             .title(" Settings ")
             .padding(Padding::uniform(1)),
     );
+    let context = Paragraph::new(settings_context(selected))
+        .style(theme.muted_style())
+        .block(Block::default().padding(Padding::horizontal(1)))
+        .wrap(Wrap { trim: true });
 
-    frame.render_widget(tools_list, area);
+    frame.render_widget(tools_list, chunks[0]);
+    frame.render_widget(context, chunks[1]);
+}
+
+fn settings_context(selected: usize) -> &'static str {
+    match selected {
+        0 => "Manage local sign-in state.",
+        1 => "Configure command approval, sandboxing, retries, and header widgets.",
+        2 => "Check web search availability.",
+        3 => "Show a local system information snapshot.",
+        4 => "Show a short local process snapshot.",
+        _ => "",
+    }
 }
 
 fn draw_execution_policy(
@@ -2759,26 +2826,26 @@ fn draw_execution_policy(
     };
     let rows = [
         format!(
-            "Approval Profile: {}",
+            "Approval: {}",
             settings::approval_profile_name(app.approval_profile)
         ),
         format!(
-            "Execution Strategy: {}",
+            "Strategy: {}",
             settings::execution_strategy_name(app.execution_strategy)
         ),
         format!(
-            "Sandbox Profile: {}",
+            "Sandbox: {}",
             settings::sandbox_profile_name(app.sandbox_profile)
         ),
-        format!("Retry Attempts: {}", app.retry_max_attempts),
+        format!("Retries: {}", app.retry_max_attempts),
         format!(
-            "Header Widgets: {}",
+            "Header: {}",
             settings::header_widgets_summary(&app.header_widgets)
         ),
-        format!("Allowed Commands: {allowed}"),
-        format!("Blocked Commands: {blocked}"),
-        "Save and Apply".to_string(),
-        "Check for Updates".to_string(),
+        format!("Allow: {allowed}"),
+        format!("Block: {blocked}"),
+        "Save".to_string(),
+        "Updates".to_string(),
     ];
     let items: Vec<ListItem> = rows
         .iter()
@@ -2795,72 +2862,67 @@ fn draw_execution_policy(
         })
         .collect();
 
-    let help = Paragraph::new(vec![
-        Line::styled(
-            "Approval profiles control whether commands auto-run or require approval.",
-            theme.muted_style(),
-        ),
-        Line::styled(
-            "Execution strategy controls model-first vs deterministic command/tool routing.",
-            theme.muted_style(),
-        ),
-        Line::styled(
-            "Sandbox profiles control workspace/network restrictions for command execution.",
-            theme.muted_style(),
-        ),
-        Line::styled(
-            "Saved values are written to config/local.toml and apply to future commands and header rendering.",
-            theme.muted_style(),
-        ),
-        Line::styled(
-            "Allowed/blocked command lists are comma-separated and refine the selected approval profile.",
-            theme.muted_style(),
-        ),
-        Line::styled(
-            "Retry attempts bound autonomous retry before the planner stops and requires replanning.",
-            theme.muted_style(),
-        ),
-        Line::styled(
-            "Check for Updates refreshes the release manifest and the update header widget.",
-            theme.muted_style(),
-        ),
-    ])
-    .block(Block::default().padding(Padding::uniform(1)))
-    .wrap(Wrap { trim: true });
+    let context = execution_policy_context(selected);
+    let context_widget = Paragraph::new(context)
+        .style(theme.muted_style())
+        .block(Block::default().padding(Padding::horizontal(1)))
+        .wrap(Wrap { trim: true });
 
     let editor_height = match app
         .execution_policy_editor
         .as_ref()
         .map(|editor| editor.field)
     {
-        Some(super::app::ExecutionPolicyListField::HeaderWidgets) => 16,
+        Some(super::app::ExecutionPolicyListField::HeaderWidgets) => 18,
         Some(_) => 4,
         None => 0,
     };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(12),
             Constraint::Min(8),
+            Constraint::Length(3),
             Constraint::Length(editor_height),
         ])
         .split(area);
 
-    frame.render_widget(help, chunks[0]);
     frame.render_widget(
         List::new(items).block(
             Block::default()
-                .title(" Execution Policy ")
+                .title(" Policy ")
                 .padding(Padding::uniform(1)),
         ),
-        chunks[1],
+        chunks[0],
     );
+    frame.render_widget(context_widget, chunks[1]);
     if let Some(editor) = &app.execution_policy_editor {
         match editor.field {
             super::app::ExecutionPolicyListField::HeaderWidgets => {
-                let items = settings::available_header_widgets()
+                let editor_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Min(8),
+                        Constraint::Length(3),
+                        Constraint::Length(1),
+                    ])
+                    .split(chunks[2]);
+                let widgets = settings::available_header_widgets();
+                let visible_item_capacity =
+                    editor_chunks[0].height.saturating_sub(2).max(1) as usize;
+                let selected_index = editor.selected_index.min(widgets.len().saturating_sub(1));
+                let max_scroll_start = widgets.len().saturating_sub(visible_item_capacity);
+                let scroll_start = if widgets.len() > visible_item_capacity {
+                    selected_index
+                        .saturating_sub(visible_item_capacity / 2)
+                        .min(max_scroll_start)
+                } else {
+                    0
+                };
+                let items = widgets
                     .iter()
                     .enumerate()
+                    .skip(scroll_start)
+                    .take(visible_item_capacity)
                     .map(|(index, widget)| {
                         let enabled = app.header_widgets.contains(widget);
                         let marker = if enabled { "[x]" } else { "[ ]" };
@@ -2889,14 +2951,10 @@ fn draw_execution_policy(
                         .style(style)
                     })
                     .collect::<Vec<_>>();
-                let editor_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(8), Constraint::Length(3)])
-                    .split(chunks[2]);
 
                 let editor_widget = List::new(items).block(
                     Block::default()
-                        .title(" Edit Header Widgets (Tab switch • Space/Enter toggle • S save) ")
+                        .title(" Header Widgets ")
                         .border_style(if editor.text_input_focused {
                             theme.muted_style()
                         } else {
@@ -2915,7 +2973,7 @@ fn draw_execution_policy(
                 };
                 let summary_widget = Paragraph::new(summary_text).block(
                     Block::default()
-                        .title(" Saved as (Tab switch • comma edit) ")
+                        .title(" Saved As ")
                         .border_style(if editor.text_input_focused {
                             theme.accent_style()
                         } else {
@@ -2930,11 +2988,16 @@ fn draw_execution_policy(
                         .style(Style::default().bg(theme.background).fg(theme.foreground)),
                     editor_chunks[1],
                 );
+                frame.render_widget(
+                    Paragraph::new("Space toggles • Tab comma edit • S saves")
+                        .style(theme.muted_style()),
+                    editor_chunks[2],
+                );
             }
             super::app::ExecutionPolicyListField::AllowedCommands => {
                 let editor_widget = Paragraph::new(editor.input.as_str()).block(
                     Block::default()
-                        .title(" Edit Allowed Commands (comma-separated) ")
+                        .title(" Allow ")
                         .padding(Padding::horizontal(1)),
                 );
                 frame.render_widget(editor_widget, chunks[2]);
@@ -2942,12 +3005,27 @@ fn draw_execution_policy(
             super::app::ExecutionPolicyListField::BlockedCommands => {
                 let editor_widget = Paragraph::new(editor.input.as_str()).block(
                     Block::default()
-                        .title(" Edit Blocked Commands (comma-separated) ")
+                        .title(" Block ")
                         .padding(Padding::horizontal(1)),
                 );
                 frame.render_widget(editor_widget, chunks[2]);
             }
         }
+    }
+}
+
+fn execution_policy_context(selected: usize) -> &'static str {
+    match selected {
+        0 => "Cycles how command approval is handled.",
+        1 => "Cycles command and tool routing behavior.",
+        2 => "Cycles filesystem and network sandbox limits.",
+        3 => "Cycles the retry limit for autonomous recovery.",
+        4 => "Opens the header widget selector.",
+        5 => "Edits comma-separated commands allowed by policy.",
+        6 => "Edits comma-separated commands blocked by policy.",
+        7 => "Writes the current policy settings to config/local.toml.",
+        8 => "Checks for a newer release and refreshes the cached update status.",
+        _ => "",
     }
 }
 
@@ -2965,7 +3043,7 @@ fn draw_profile(frame: &mut Frame, app: &TuiApp, selected: usize, theme: &Theme,
                         .user
                         .email
                         .clone()
-                        .unwrap_or_else(|| "—".to_string()),
+                        .unwrap_or_else(|| "none".to_string()),
                     theme.muted_style(),
                 ),
             ]),
@@ -2976,7 +3054,7 @@ fn draw_profile(frame: &mut Frame, app: &TuiApp, selected: usize, theme: &Theme,
                         .user
                         .display_name
                         .clone()
-                        .unwrap_or_else(|| "—".to_string()),
+                        .unwrap_or_else(|| "none".to_string()),
                     theme.muted_style(),
                 ),
             ]),
@@ -2988,7 +3066,7 @@ fn draw_profile(frame: &mut Frame, app: &TuiApp, selected: usize, theme: &Theme,
                         .provider
                         .as_ref()
                         .map(|provider| format!("{provider:?}"))
-                        .unwrap_or_else(|| "—".to_string()),
+                        .unwrap_or_else(|| "none".to_string()),
                     theme.muted_style(),
                 ),
             ]),
@@ -3079,7 +3157,7 @@ fn draw_view_session(
         append_rendered_message_lines(&mut message_lines, msg, theme, theme.input, theme.output);
     }
 
-    let title = format!(" Preview {} (Enter resume • Esc back) ", name);
+    let title = format!(" Preview {} ", name);
     let view = Paragraph::new(message_lines)
         .block(
             Block::default()
@@ -3560,6 +3638,15 @@ mod tests {
             SyntaxSet::load_defaults_newlines(),
             ThemeSet::load_defaults(),
         )
+    }
+
+    #[test]
+    fn input_lines_preserve_typed_text() {
+        let lines = input_lines("first\nsecond", Style::default());
+
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].to_string(), "first");
+        assert_eq!(lines[1].to_string(), "second");
     }
 
     fn empty_chat_state() -> app::ChatState {

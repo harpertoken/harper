@@ -122,10 +122,10 @@ This guide helps you resolve common issues you might encounter while using Harpe
 **Symptom**: Clipboard images aren't being analyzed.
 
 **Solutions**:
-1. Verify the image is in clipboard (copy again)
-2. Ensure it's a supported format (PNG, JPEG)
-3. Check image file size (not too large)
-4. Try pasting directly in terminal
+1. Use `Ctrl+Shift+V` for clipboard images in the TUI
+2. For terminal drag and drop, verify the pasted path points to an existing supported image file
+3. Ensure it's a supported format (PNG, JPEG, GIF, WebP, BMP, or TIFF)
+4. Check image file size and resize very large images before attaching
 
 #### Text Not Available
 
@@ -134,7 +134,8 @@ This guide helps you resolve common issues you might encounter while using Harpe
 **Solutions**:
 1. Copy text again
 2. Ensure you're not copying from a restricted app
-3. Try a simple text first
+3. Try a simple text paste first
+4. Use `Ctrl+U` to read system clipboard text if normal terminal paste is blocked
 
 ## Error Messages
 

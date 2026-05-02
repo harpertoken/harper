@@ -25,7 +25,8 @@ pub async fn perform_web_search(response: &str) -> crate::core::error::HarperRes
         .split_once(':')
         .map(|x| x.1)
         .unwrap_or("")
-        .trim_end_matches(']');
+        .trim_end_matches(']')
+        .trim();
 
     println!(
         "{} Searching the web for: {}",

@@ -362,7 +362,5 @@ async fn main() -> Result<(), HarperError> {
 }
 
 fn result_looks_like_backend_unavailable(response: &str) -> bool {
-    response
-        .trim()
-        .starts_with("The model backend is unavailable, and this request does not have a deterministic fallback.")
+    response.trim().starts_with("Model backend unavailable.")
 }
