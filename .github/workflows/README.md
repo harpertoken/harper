@@ -7,6 +7,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Workflow | File | What it does | Key trigger(s) |
 | --- | --- | --- | --- |
 | Apply Rulesets | `apply-rulesets.yml` | Applies branch ruleset definitions from `.github/rulesets/*.json` to GitHub. Edit `main-branch-protection.json` to change rules; the workflow syncs them on push. | Push to `main` touching rulesets, manual dispatch |
+| Add PR To Project | `add-pr-to-project.yml` | Adds opened, reopened, edited, synchronized, and ready-for-review PRs to the Harper organization project at `https://github.com/orgs/harpertoken/projects/10`. Requires `ADD_TO_PROJECT_PAT` with project write access. | PR target events |
 | Auto Merge | `auto-merge.yml` | Three jobs via `libnudget/auto-merge@v1`: `auto-merge` enables GitHub's built-in auto-merge (waits for `CI (ubuntu-latest)` + 1 review); `auto-merge-now` merges immediately via `BYPASS_TOKEN` bypassing ruleset checks; `cancel-auto-merge` disables queued auto-merge when the `auto-merge` label is removed. | `labeled`/`unlabeled`/PR events |
 | Bazel CI | `build-bazel.yml` | Builds `:harper_bin` with Bazel on Linux and macOS, plus a scoped Windows smoke build/test for `harper-core` (including lockfile repinning fallback). | Push/PR to `main`, Bazel branches |
 | Bazel Smoke | `bazel-smoke.yml` | Daily `bazel test //...` to catch dependency drift outside PRs. | Daily cron, manual dispatch |
@@ -73,4 +74,4 @@ Current rules:
 Feel free to expand this file with additional details (matrix descriptions, secrets used, etc.) as workflows evolve.
 
 ## Last Updated
-2026-05-02
+2026-05-06
