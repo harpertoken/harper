@@ -115,6 +115,27 @@ provider = "ProviderName"
 base_url = "https://api.example.com/v1"  # Optional: for custom endpoints
 ```
 
+## Azure Data Explorer
+
+Harper can run read-only KQL queries against Azure Data Explorer through the `adx_query` tool. For local use, set the cluster, database, and tenant. Harper will use Microsoft device-code login the first time it needs an ADX token:
+
+```bash
+export HARPER_ADX_CLUSTER_URL="https://your-cluster.kusto.windows.net"
+export HARPER_ADX_DATABASE="your_database"
+export HARPER_ADX_TENANT_ID="00000000-0000-0000-0000-000000000000"
+```
+
+Harper caches the resulting access token under the user cache directory until it expires. Set `HARPER_ADX_CLIENT_ID` to use a specific public/native app registration for device-code login.
+
+For server or CI use, set client credentials instead:
+
+```bash
+export HARPER_ADX_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+export HARPER_ADX_CLIENT_SECRET="your-client-secret"
+```
+
+Grant the user or service principal database viewer access in ADX before querying. Harper rejects Kusto management commands that start with `.` and asks for approval before sending a query.
+
 ## Model Configuration
 
 ### Selecting Models

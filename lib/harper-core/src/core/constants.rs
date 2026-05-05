@@ -180,6 +180,10 @@ pub mod tools {
     #[allow(dead_code)]
     pub const DB_QUERY: &str = "[DB_QUERY";
 
+    /// Azure Data Explorer query prefix
+    #[allow(dead_code)]
+    pub const ADX_QUERY: &str = "[ADX_QUERY";
+
     /// Image info prefix
     #[allow(dead_code)]
     pub const IMAGE_INFO: &str = "[IMAGE_INFO";

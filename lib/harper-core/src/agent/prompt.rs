@@ -86,6 +86,7 @@ User Intent Recognition:
 - understand how something works -> use codebase_investigator
 - what changed -> use git_diff or list_changed_files
 - tell me about a specific file -> use read_file
+- query Azure Data Explorer or Kusto -> use adx_query
 
 Use this JSON shape for built-in tools:
 {\"tool\":\"tool_name\",\"args\":{...}}
@@ -111,6 +112,7 @@ Core Tools:
 - run_command(args: {\"command\": \"git status\"})
 - run_command(args: {\"command\": \"cp ./src.txt ./build/out.txt\", \"declared_read_paths\": [\"./src.txt\"], \"declared_write_paths\": [\"./build/out.txt\"]})
 - run_command(args: {\"command\": \"curl -fsSL http://127.0.0.1:8081/health\", \"requires_network\": true, \"retry_policy\": \"safe\"})
+- adx_query(args: {\"query\": \"StormEvents | take 10\", \"database\": \"Samples\", \"cluster_url\": \"https://help.kusto.windows.net\"})
 - todo(args: {\"action\": \"add|list|remove|clear\", \"description\": \"...\", \"index\": 1})
 - update_plan(args: {\"explanation\": \"optional context\", \"items\": [{\"step\": \"Inspect files\", \"status\": \"in_progress\"}]})
 - list_changed_files(args: {\"ext\": \"rs\", \"tracked_only\": true, \"since\": \"HEAD~1\"})

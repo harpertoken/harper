@@ -1271,6 +1271,12 @@ impl<'a> ChatService<'a> {
             }
             if executed_tool_calls.contains(&dedupe_key) {
                 if let Some(content) = last_tool_content {
+                    if matches!(
+                        Self::tool_name_from_tool_call(&normalized_tool_call).as_deref(),
+                        Some("adx_query" | "azure_data_explorer")
+                    ) {
+                        return Ok(content);
+                    }
                     return Ok(format!("Tool result:\n{}", content));
                 }
                 break;
@@ -1317,7 +1323,11 @@ impl<'a> ChatService<'a> {
 
             if let Some((tool_result, tool_content)) = tool_option {
                 self.notify_command_activity(session_id);
+                let mut terminal_tool_result = false;
                 if let Some(tool_name) = Self::tool_name_from_tool_call(&normalized_tool_call) {
+                    if matches!(tool_name.as_str(), "adx_query" | "azure_data_explorer") {
+                        terminal_tool_result = true;
+                    }
                     if tool_name == "update_plan" {
                         saw_plan_update = true;
                         if let Some(authoring_request_context) = authoring_context.as_ref() {
@@ -1392,6 +1402,9 @@ impl<'a> ChatService<'a> {
                 history.push(tool_message.clone());
                 history_for_llm.push(tool_message);
                 response = tool_result;
+                if terminal_tool_result {
+                    break;
+                }
                 continue;
             }
 

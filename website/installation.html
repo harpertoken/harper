@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Installation</title>
-    <meta name="harper-update-version" content="2026-05-01-install-v8" />
+    <meta name="harper-update-version" content="2026-05-05-install-adx" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -90,6 +90,7 @@ SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
                 <p><code>/strategy</code> shows the current execution strategy. Use <code>/strategy auto</code>, <code>/strategy grounded</code>, <code>/strategy deterministic</code>, or <code>/strategy model</code> to switch the live chat session without leaving the conversation.</p>
                 <p><code>/update</code> reports the current cached update state from the chat header. Use <code>/update check</code> to re-run the release-manifest check and refresh that header status. The same action is also available in <code>Settings -&gt; Execution Policy -&gt; Updates</code>. Harper uses the default GitHub release manifest automatically, and <code>HARPER_UPDATE_MANIFEST_URL</code> can override that source when needed.</p>
                 <p><code>/agents</code> reports AGENTS context status for the current TUI session. Use <code>/agents on</code> or <code>/agents off</code> to enable or disable AGENTS context resolution in the UI, and <code>/agents status</code> to inspect the current setting.</p>
+                <p>Azure Data Explorer queries use the <code>adx_query</code> tool. Set <code>HARPER_ADX_CLUSTER_URL</code>, <code>HARPER_ADX_DATABASE</code>, and <code>HARPER_ADX_TENANT_ID</code>, then ask Harper for a read-only KQL query. Local use signs in with Microsoft device-code login. Server or CI use can also set <code>HARPER_ADX_CLIENT_ID</code> and <code>HARPER_ADX_CLIENT_SECRET</code>. Harper asks for approval before sending the query and rejects management commands that start with <code>.</code>.</p>
                 <p>When sign-in succeeds, Harper stores the local TUI auth session in the OS credential store (macOS Keychain, Linux keyring, or Windows Credential Manager) instead of writing the active tokens to a JSON file under your home directory.</p>
                 <p>Harper also exposes the same auth state through <code>Settings -&gt; Profile</code>. When signed out, that screen offers login actions for the configured providers. When signed in, it shows the current account, plus <code>Logout</code> and <code>Refresh Session</code>.</p>
                 <p>When you are signed in, Harper scopes session data to that account. <code>History</code>, <code>Export</code>, and <code>Statistics</code> all reflect the signed-in user only. When you are not signed in, those screens continue to use local-only data.</p>

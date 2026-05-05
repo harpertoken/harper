@@ -108,6 +108,11 @@ Additional constraints.
 | `GEMINI_API_KEY`     | provider | Gemini auth      |
 | `HARPER_CONFIG_PATH` | global   | Config override  |
 | `HARPER_DATA_DIR`    | global   | Storage override |
+| `HARPER_ADX_CLUSTER_URL` | tool | Azure Data Explorer cluster URL |
+| `HARPER_ADX_DATABASE` | tool | Azure Data Explorer database |
+| `HARPER_ADX_TENANT_ID` | tool | Microsoft Entra tenant ID |
+| `HARPER_ADX_CLIENT_ID` | tool | Optional Microsoft Entra application client ID |
+| `HARPER_ADX_CLIENT_SECRET` | tool | Optional Microsoft Entra application secret for service-principal auth |
 
 ---
 
