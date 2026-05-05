@@ -13,6 +13,13 @@ def replace_once(content: str, pattern: str, replacement: str) -> str:
     return updated
 
 
+def replace_exact(content: str, pattern: str, replacement: str, expected: int) -> str:
+    updated, count = re.subn(pattern, replacement, content, flags=re.MULTILINE)
+    if count != expected:
+        raise ValueError(f"pattern found {count} times, expected {expected}: {pattern}")
+    return updated
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Update harper-ai Homebrew formula to a released Harper version."
@@ -35,30 +42,26 @@ def main() -> int:
     formula_path = pathlib.Path(args.formula_path)
     content = formula_path.read_text(encoding="utf-8")
 
-    if f'version "{version}"' in content and tarball_url in content and args.sha256 in content:
+    if (
+        f'version "{version}"' in content
+        and content.count(f'      url "{tarball_url}"') == 2
+        and content.count(f'      sha256 "{args.sha256}"') == 2
+    ):
         print("formula already matches requested release")
         return 0
 
     content = replace_once(content, r'^  version ".*"$', f'  version "{version}"')
-    content = replace_once(
+    content = replace_exact(
         content,
         r'^      url "https://github\.com/harpertoken/harper/archive/refs/tags/.*\.tar\.gz"$',
         f'      url "{tarball_url}"',
+        2,
     )
-    content = replace_once(
+    content = replace_exact(
         content,
         r'^      sha256 "[0-9a-f]{64}"$',
         f'      sha256 "{args.sha256}"',
-    )
-    content = replace_once(
-        content,
-        r'^      url "https://github\.com/harpertoken/harper/archive/refs/tags/.*\.tar\.gz"$',
-        f'      url "{tarball_url}"',
-    )
-    content = replace_once(
-        content,
-        r'^      sha256 "[0-9a-f]{64}"$',
-        f'      sha256 "{args.sha256}"',
+        2,
     )
 
     formula_path.write_text(content, encoding="utf-8")
