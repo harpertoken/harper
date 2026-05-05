@@ -94,7 +94,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git -C homebrew-tap push --force-with-lease origin "$branch"
+          git -C homebrew-tap push \
+            --force-with-lease \
+            "https://x-access-token:${GH_TOKEN}@github.com/${TAP_REPO}.git" \
+            "$branch"
 
       - name: Open tap PR
         if: steps.diff.outputs.changed == 'true'
