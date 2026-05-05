@@ -56,6 +56,8 @@ Typing `/` in the TUI opens the slash-command list. Use `↑` / `↓` or `Tab` t
 
 `/update` shows the current cached update status from the header widget. Use `/update check` to re-run the manifest-backed update check on demand. The same refresh is also available from `Settings -> Execution Policy -> Updates`. Harper now checks the default GitHub release manifest automatically, and `HARPER_UPDATE_MANIFEST_URL` can override that source when needed. Published direct-install artifacts are verified with both a SHA-256 checksum and a detached signature before Harper replaces the local binary.
 
+For Azure Data Explorer, ask Harper for a KQL query after setting `HARPER_ADX_CLUSTER_URL`, `HARPER_ADX_DATABASE`, and `HARPER_ADX_TENANT_ID`. Harper routes read-only Kusto requests through `adx_query`, asks for approval, uses device-code login for local accounts, and rejects management commands that start with `.`.
+
 ## Chat Features
 
 ### Multi-line Input

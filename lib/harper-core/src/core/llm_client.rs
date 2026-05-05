@@ -132,6 +132,28 @@ fn built_in_tool_functions() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "adx_query",
+            "description": "Run a read-only KQL query against Azure Data Explorer. Credentials come from HARPER_ADX_* environment variables unless explicitly provided.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "cluster_url": {
+                        "type": "string",
+                        "description": "Azure Data Explorer cluster URL, for example https://help.kusto.windows.net"
+                    },
+                    "database": {
+                        "type": "string",
+                        "description": "ADX database name"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Read-only KQL query. Management commands that start with a dot are not allowed."
+                    }
+                },
+                "required": ["query"]
+            }
+        }),
+        json!({
             "name": "todo",
             "description": "Manage todo list. Supported actions: add, list, remove, clear",
             "parameters": {

@@ -17,6 +17,7 @@
 //! This module provides a unified interface to various tools
 //! for file operations, shell commands, web search, and todos.
 
+pub mod adx;
 pub mod api;
 pub mod code_analysis;
 pub mod codebase_investigator;
@@ -367,6 +368,14 @@ impl<'a> ToolService<'a> {
                 .call_llm_after_tool(client, history, response, &tool_result)
                 .await?;
             Ok(Some((final_response, tool_result)))
+        } else if response.to_uppercase().starts_with(tools::ADX_QUERY) {
+            self.sync_plan_before_tool("adx_query")?;
+            let args = adx::args_from_bracket_call(response)?;
+            let tool_result = adx::query_from_json(client, &args, self.approver.clone()).await?;
+            let final_response = self
+                .call_llm_after_tool(client, history, response, &tool_result)
+                .await?;
+            Ok(Some((final_response, tool_result)))
         } else if response.to_uppercase().starts_with(tools::IMAGE_INFO) {
             self.sync_plan_before_tool("image_info")?;
             self.execute_sync_tool(client, history, response, |_, response| {
@@ -537,6 +546,11 @@ impl<'a> ToolService<'a> {
                 } else {
                     Ok(None)
                 }
+            }
+            "adx_query" | "azure_data_explorer" => {
+                let query_result =
+                    adx::query_from_json(client, args, self.approver.clone()).await?;
+                Ok(Some((query_result.clone(), query_result)))
             }
             "update_plan" => {
                 let Some(session_id) = self.session_id else {
@@ -910,6 +924,7 @@ SYSTEM INSTRUCTION: The tool has completed successfully. The output above is the
             || upper.starts_with(tools::CODE_ANALYZE)
             || upper.starts_with(tools::CODEBASE_INVESTIGATE)
             || upper.starts_with(tools::DB_QUERY)
+            || upper.starts_with(tools::ADX_QUERY)
             || upper.starts_with(tools::IMAGE_INFO)
             || upper.starts_with(tools::IMAGE_RESIZE)
             || upper.starts_with(tools::SCREENPIPE)
@@ -1511,6 +1526,30 @@ mod tests {
             "Web search is off. Enable web mode and try again."
         );
         assert_eq!(result.1, "Web search is disabled for this session.");
+    }
+
+    #[tokio::test]
+    async fn adx_json_tool_missing_query_returns_terminal_guidance() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        let config = test_config();
+        let exec_policy = ExecPolicyConfig::default();
+        let client = Client::new();
+        let mut service = ToolService::new(&conn, &config, &exec_policy, None, None);
+        let result = service
+            .handle_regular_json_tool(
+                &client,
+                &[],
+                "adx_query",
+                &json!({}),
+                r#"{"tool":"adx_query","args":{}}"#,
+                false,
+            )
+            .await
+            .expect("adx guidance")
+            .expect("terminal response");
+
+        assert_eq!(result.0, result.1);
+        assert!(result.0.contains("needs a `query` field"));
     }
 
     #[test]
