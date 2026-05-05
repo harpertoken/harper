@@ -1,0 +1,20 @@
+---
+name: Add PR To Project
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize, ready_for_review]
+
+jobs:
+  add-pr-to-project:
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'harpertoken'
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Add PR to project
+        uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: https://github.com/orgs/harpertoken/projects/10
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
