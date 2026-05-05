@@ -81,6 +81,8 @@ jobs:
           version="${{ steps.tarball.outputs.version }}"
           branch="automation/homebrew-tap-${version}"
           git -C homebrew-tap checkout -B "$branch"
+          git -C homebrew-tap config user.name "github-actions[bot]"
+          git -C homebrew-tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git -C homebrew-tap add "$FORMULA_PATH"
           git -C homebrew-tap commit -m "build(tap): bump harper-ai ${version}"
           echo "branch=$branch" >> "$GITHUB_ENV"
