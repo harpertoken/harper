@@ -57,17 +57,12 @@ brew upgrade harpertoken/tap/harper-ai
    cd harper
    ```
 
-2. Build the release version:
+2. Build Harper:
    ```bash
    cargo build --release
    ```
 
-3. Build Harper:
-   ```bash
-   cargo build --release
-   ```
-
-4. Run Harper:
+3. Run Harper:
    ```bash
    # Option 1: Using cargo
    cargo run -p harper-ui --bin harper

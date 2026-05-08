@@ -1381,8 +1381,32 @@ fn slash_command_candidates(input: &str) -> Vec<String> {
         "/auth login github",
         "/auth login google",
         "/auth login apple",
+        "/auth login",
         "/auth logout",
         "/auth status",
+        "/plan show",
+        "/plan list",
+        "/plan ls",
+        "/plan add",
+        "/plan start",
+        "/plan done",
+        "/plan block",
+        "/plan clear",
+        "/session list",
+        "/session ls",
+        "/session show",
+        "/session open",
+        "/history show",
+        "/history list",
+        "/config show",
+        "/config set approval",
+        "/config set strategy",
+        "/config set sandbox",
+        "/config set retries",
+        "/status",
+        "/update apply",
+        "/run",
+        "/ask",
     ];
     let mut matches = commands
         .into_iter()
@@ -2008,6 +2032,36 @@ mod tests {
     }
 
     #[test]
+    fn enter_submits_native_shell_commands_from_chat_input() {
+        for command in [
+            "/plan show",
+            "/session list",
+            "/config show",
+            "/status",
+            "/run pwd",
+        ] {
+            let mut app = TuiApp::new();
+            let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+            chat_state.input = command.to_string();
+            app.state = AppState::Chat(Box::new(chat_state));
+            let conn = rusqlite::Connection::open_in_memory().unwrap();
+            harper_core::memory::storage::init_db(&conn).unwrap();
+            let session_service = SessionService::new(&conn);
+
+            let result = handle_event(
+                Event::Key(KeyCode::Enter.into()),
+                &mut app,
+                &session_service,
+            );
+            assert!(matches!(result, EventResult::SendMessage(message) if message == command));
+            let AppState::Chat(chat_state) = &app.state else {
+                panic!("expected chat state");
+            };
+            assert!(chat_state.input.is_empty());
+        }
+    }
+
+    #[test]
     fn test_enter_menu_load_sessions_returns_async_event() {
         let mut app = TuiApp::new();
         app.state = AppState::Menu(1); // Sessions
@@ -2137,6 +2191,25 @@ mod tests {
             .completion_candidates
             .iter()
             .any(|candidate| candidate == "/update check"));
+    }
+
+    #[test]
+    fn slash_completion_includes_native_shell_commands() {
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.input = "/h".to_string();
+        refresh_chat_completions(&mut chat_state);
+
+        assert!(chat_state
+            .completion_candidates
+            .iter()
+            .any(|candidate| candidate == "/history list"));
+
+        chat_state.input = "/auth l".to_string();
+        refresh_chat_completions(&mut chat_state);
+        assert!(chat_state
+            .completion_candidates
+            .iter()
+            .any(|candidate| candidate == "/auth login"));
     }
 
     #[test]

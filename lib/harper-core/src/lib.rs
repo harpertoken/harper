@@ -29,6 +29,11 @@ pub use crate::core::constants::VERSION;
 pub use crate::core::error::{HarperError, HarperResult};
 pub use crate::core::llm_client::call_llm;
 pub use crate::core::models::ProviderModels;
+pub use crate::core::native_shell::{
+    execute_native_shell_command, execute_native_shell_command_with_context,
+    parse_native_shell_command, resolve_session_target, AuthShellContext, ConfigShellContext,
+    NativeShellCommand, NativeShellContext, NativeShellOutcome, PlanShellCommand,
+};
 pub use crate::core::plan::{PlanItem, PlanRuntime, PlanState, PlanStepStatus};
 pub use crate::core::{ApiConfig, ApiProvider, Message};
 

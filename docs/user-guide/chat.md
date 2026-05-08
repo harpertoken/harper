@@ -12,7 +12,51 @@ After installation, run Harper from your terminal:
 
 You will see a welcome message followed by the chat prompt where you can type your messages.
 
-## Chat Commands
+## Native Shell Commands
+
+Harper has a native command shell for Harper concepts. These commands can be entered directly in the TUI input or passed to `harper-batch` with `--prompt`.
+
+```text
+ask "question or instruction"
+plan show
+plan list
+plan add "Inspect current planner state"
+plan done 1
+plan start 2
+plan block 3 "Waiting on CI"
+plan clear
+session list
+session ls
+session open 3
+session show 3
+history show
+history list
+history show 3
+auth status
+auth login
+auth login github
+auth logout
+update check
+update apply
+config show
+config set approval|strategy|sandbox|retries <value>
+status
+run cargo test -p harper-core
+help
+```
+
+Use `run ...` for operating-system commands. Harper routes that path through the existing command runner, approval policy, sandbox policy, and audit logging. Other native commands operate on Harper state such as the current plan, session history, auth state, update status, and execution policy.
+
+This is Harper-native command handling, not a Unix-compatible shell. Pipes, redirects, glob expansion, aliases beyond the documented Harper aliases, job control, and process substitution are intentionally not part of this command surface.
+
+For example:
+
+```bash
+cargo run -p harper-ui --bin harper-batch -- --prompt "plan add \"Inspect update flow\"" --prompt "plan show"
+cargo run -p harper-ui --bin harper-batch -- --prompt "session list" --prompt "config show"
+```
+
+## Slash Commands
 
 Harper supports slash commands for various operations. All commands start with `/`:
 
@@ -53,6 +97,8 @@ Available commands:
 ```
 
 Typing `/` in the TUI opens the slash-command list. Use `↑` / `↓` or `Tab` to move through suggestions, then keep typing or submit the selected command from the normal message input.
+
+Native shell commands can also use a leading slash, so `/plan show`, `/session list`, `/history show`, `/config show`, `/auth login`, `/status`, and `/run pwd` are accepted from the same input surface.
 
 `/update` shows the current cached update status from the header widget. Use `/update check` to re-run the manifest-backed update check on demand. The same refresh is also available from `Settings -> Execution Policy -> Updates`. Harper now checks the default GitHub release manifest automatically, and `HARPER_UPDATE_MANIFEST_URL` can override that source when needed. Published direct-install artifacts are verified with both a SHA-256 checksum and a detached signature before Harper replaces the local binary.
 
