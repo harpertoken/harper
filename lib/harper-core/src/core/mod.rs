@@ -24,6 +24,7 @@ pub mod error;
 pub mod io_traits;
 pub mod llm_client;
 pub mod models;
+pub mod native_shell;
 pub mod plan;
 pub mod plan_events;
 

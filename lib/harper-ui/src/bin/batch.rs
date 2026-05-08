@@ -17,7 +17,9 @@ use harper_core::core::io_traits::{DenyApproval, RuntimeEventSink, StdinApproval
 use harper_core::runtime::config::HarperConfig;
 use harper_core::{
     agent::chat::{ChatService, ChatTurnDebugSummary},
-    create_connection, init_db, ApiConfig, HarperError, Message, PlanState, ResolvedAgents,
+    create_connection, execute_native_shell_command_with_context, init_db,
+    parse_native_shell_command, resolve_session_target, ApiConfig, ConfigShellContext, HarperError,
+    Message, NativeShellContext, NativeShellOutcome, PlanState, ResolvedAgents,
 };
 use serde::Serialize;
 use std::collections::HashMap;
@@ -121,6 +123,61 @@ struct TurnResult {
     debug: TurnDebugOutput,
 }
 
+async fn execute_batch_run_command(
+    command: &str,
+    api_config: &ApiConfig,
+    exec_policy: &harper_core::ExecPolicyConfig,
+    approver: Arc<dyn harper_core::core::io_traits::UserApproval>,
+    runtime_events: Arc<BatchRuntimeEvents>,
+    conn: &rusqlite::Connection,
+    session_id: &str,
+) -> Result<String, HarperError> {
+    let audit_ctx = harper_core::tools::shell::CommandAuditContext {
+        conn,
+        session_id: Some(session_id),
+        source: "native_shell_batch",
+    };
+    let response = format!(
+        r#"[RUN_COMMAND {{"command":{}}}]"#,
+        serde_json::to_string(command)
+            .map_err(|err| HarperError::Validation(format!("Failed to encode command: {}", err)))?
+    );
+    harper_core::tools::shell::execute_command(
+        &response,
+        api_config,
+        exec_policy,
+        None,
+        Some(&audit_ctx),
+        Some(approver),
+        Some(runtime_events),
+    )
+    .await
+}
+
+fn format_batch_run_response(tool_response: &str, debug: &TurnDebugOutput) -> String {
+    if debug
+        .activity
+        .iter()
+        .any(|status| status == "approval rejected")
+        || tool_response
+            .trim()
+            .eq_ignore_ascii_case("Command execution cancelled by user")
+    {
+        return "Command was not run: approval rejected.".to_string();
+    }
+
+    if debug.command_error {
+        return "Command failed.".to_string();
+    }
+
+    let output = tool_response.trim_end();
+    if output.is_empty() {
+        "Command finished.".to_string()
+    } else {
+        output.to_string()
+    }
+}
+
 fn print_help() {
     println!("Harper Batch Processor");
     println!();
@@ -215,6 +272,21 @@ fn build_api_config(config: &HarperConfig) -> Result<ApiConfig, HarperError> {
     })
 }
 
+fn build_native_shell_context(config: &HarperConfig) -> NativeShellContext {
+    NativeShellContext {
+        auth: None,
+        config: Some(ConfigShellContext {
+            provider: config.api.provider.clone(),
+            model: config.api.model_name.clone(),
+            base_url: config.api.base_url.clone(),
+            database_path: config.database.path.clone(),
+            approval: format!("{:?}", config.exec_policy.effective_approval_profile()),
+            strategy: format!("{:?}", config.exec_policy.effective_execution_strategy()),
+            sandbox: format!("{:?}", config.exec_policy.effective_sandbox_profile()),
+        }),
+    }
+}
+
 async fn init_mcp_client(config: &HarperConfig) -> Option<McpClient> {
     if !config.mcp.enabled {
         return None;
@@ -237,6 +309,105 @@ fn latest_assistant_response(history: &[Message]) -> String {
         .unwrap_or_default()
 }
 
+fn format_session_messages(messages: &[Message]) -> String {
+    if messages.is_empty() {
+        return "Session has no messages.".to_string();
+    }
+    let mut lines = Vec::new();
+    for (index, message) in messages.iter().enumerate().take(20) {
+        let preview = message
+            .content
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .chars()
+            .take(160)
+            .collect::<String>();
+        lines.push(format!("{}. {}: {}", index + 1, message.role, preview));
+    }
+    if messages.len() > 20 {
+        lines.push(format!("{} more messages", messages.len() - 20));
+    }
+    lines.join("\n")
+}
+
+fn apply_config_set(config: &HarperConfig, key: &str, value: &str) -> Result<String, HarperError> {
+    let mut approval = config.exec_policy.effective_approval_profile();
+    let mut execution_strategy = config.exec_policy.effective_execution_strategy();
+    let mut sandbox = config.exec_policy.effective_sandbox_profile();
+    let mut retry_max_attempts = config.exec_policy.effective_retry_max_attempts();
+
+    match key.trim().to_ascii_lowercase().as_str() {
+        "approval" | "approval_profile" => {
+            approval = harper_ui::interfaces::ui::settings::parse_approval_profile(value)
+                .ok_or_else(|| {
+                    HarperError::Validation(
+                        "approval must be one of: strict, allow_listed, allow_all".to_string(),
+                    )
+                })?;
+        }
+        "strategy" | "execution_strategy" => {
+            execution_strategy = harper_ui::interfaces::ui::settings::parse_execution_strategy(
+                value,
+            )
+            .ok_or_else(|| {
+                HarperError::Validation(
+                    "strategy must be one of: auto, grounded, deterministic, model".to_string(),
+                )
+            })?;
+        }
+        "sandbox" | "sandbox_profile" => {
+            sandbox = harper_ui::interfaces::ui::settings::parse_sandbox_profile(value)
+                .ok_or_else(|| {
+                    HarperError::Validation(
+                        "sandbox must be one of: disabled, workspace, networked_workspace"
+                            .to_string(),
+                    )
+                })?;
+        }
+        "retries" | "retry_max_attempts" => {
+            retry_max_attempts = value.trim().parse::<u32>().map_err(|_| {
+                HarperError::Validation("retries must be a non-negative integer".to_string())
+            })?;
+        }
+        other => {
+            return Err(HarperError::Validation(format!(
+                "unsupported config key '{}'",
+                other
+            )));
+        }
+    }
+
+    let header_widgets = harper_ui::interfaces::ui::settings::parse_header_widgets(
+        &config.ui.effective_header_widgets(),
+    );
+    harper_ui::interfaces::ui::settings::save_execution_policy_settings(
+        harper_ui::interfaces::ui::settings::ExecPolicySettings {
+            approval,
+            execution_strategy,
+            sandbox,
+            retry_max_attempts,
+            allowed_commands: config
+                .exec_policy
+                .allowed_commands
+                .as_deref()
+                .unwrap_or(&[]),
+            blocked_commands: config
+                .exec_policy
+                .blocked_commands
+                .as_deref()
+                .unwrap_or(&[]),
+            header_widgets: &header_widgets,
+        },
+    )
+    .map_err(|err| HarperError::Io(format!("Failed to save config: {}", err)))?;
+
+    Ok(format!(
+        "Saved config {} = {} in config/local.toml",
+        key, value
+    ))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), HarperError> {
     let _ = dotenvy::dotenv();
@@ -255,7 +426,7 @@ async fn main() -> Result<(), HarperError> {
         ));
     }
 
-    let config = HarperConfig::new()?;
+    let mut config = HarperConfig::new()?;
     let api_config = build_api_config(&config)?;
     let conn = create_connection(&config.database.path)?;
     init_db(&conn)?;
@@ -273,13 +444,17 @@ async fn main() -> Result<(), HarperError> {
     )
     .with_runtime_events(runtime_events.clone());
 
-    if io::stdin().is_terminal() {
-        chat_service = chat_service.with_approver(Arc::new(StdinApproval));
+    let approver: Arc<dyn harper_core::core::io_traits::UserApproval> = if io::stdin().is_terminal()
+    {
+        Arc::new(StdinApproval)
     } else {
-        chat_service = chat_service.with_approver(Arc::new(DenyApproval));
-    }
+        Arc::new(DenyApproval)
+    };
+
+    chat_service = chat_service.with_approver(approver.clone());
 
     let (mut history, session_id) = chat_service.create_session(args.web).await?;
+    let mut shell_context = build_native_shell_context(&config);
 
     if let Some(strategy) = args.strategy.as_deref() {
         let strategy_command = format!("/strategy {}", strategy);
@@ -291,7 +466,134 @@ async fn main() -> Result<(), HarperError> {
 
     let mut results = Vec::new();
     for prompt in args.prompts {
+        let mut prompt = prompt;
         let routing = chat_service.debug_turn_summary(&history, &prompt);
+        if let Some(command) = parse_native_shell_command(&prompt)? {
+            match execute_native_shell_command_with_context(
+                &conn,
+                &session_id,
+                command,
+                &shell_context,
+            )? {
+                NativeShellOutcome::Handled(response) => {
+                    results.push(TurnResult {
+                        prompt,
+                        response,
+                        routing,
+                        debug: TurnDebugOutput::default(),
+                    });
+                    continue;
+                }
+                NativeShellOutcome::Ask(message) => {
+                    prompt = message;
+                }
+                NativeShellOutcome::Run(command) => {
+                    let tool_response = execute_batch_run_command(
+                        &command,
+                        &api_config,
+                        &config.exec_policy,
+                        approver.clone(),
+                        runtime_events.clone(),
+                        &conn,
+                        &session_id,
+                    )
+                    .await?;
+                    let debug = runtime_events.take_turn(&session_id);
+                    let response = format_batch_run_response(&tool_response, &debug);
+                    results.push(TurnResult {
+                        prompt,
+                        response,
+                        routing,
+                        debug,
+                    });
+                    continue;
+                }
+                NativeShellOutcome::UpdateCheck => {
+                    let response = harper_ui::update::fetch_update_status()
+                        .await
+                        .map(|status| status.unwrap_or_else(|| "No update status.".to_string()))
+                        .unwrap_or_else(|err| format!("Update check failed: {}", err));
+                    results.push(TurnResult {
+                        prompt,
+                        response,
+                        routing,
+                        debug: TurnDebugOutput::default(),
+                    });
+                    continue;
+                }
+                NativeShellOutcome::UpdateStatus => {
+                    results.push(TurnResult {
+                        prompt,
+                        response: "No update status is cached in batch. Use update check."
+                            .to_string(),
+                        routing,
+                        debug: TurnDebugOutput::default(),
+                    });
+                    continue;
+                }
+                NativeShellOutcome::UpdateApply => {
+                    results.push(TurnResult {
+                        prompt,
+                        response: "Update apply is intentionally explicit. Run: harper self-update"
+                            .to_string(),
+                        routing,
+                        debug: TurnDebugOutput::default(),
+                    });
+                    continue;
+                }
+                NativeShellOutcome::ConfigSet { key, value } => {
+                    let response = apply_config_set(&config, &key, &value)?;
+                    config = HarperConfig::new()?;
+                    shell_context = build_native_shell_context(&config);
+                    results.push(TurnResult {
+                        prompt,
+                        response,
+                        routing,
+                        debug: TurnDebugOutput::default(),
+                    });
+                    continue;
+                }
+                NativeShellOutcome::AuthLogin { provider } => {
+                    results.push(TurnResult {
+                        prompt,
+                        response: format!(
+                            "Auth login for '{}' is interactive. Run Harper in the TUI and use: auth login {}",
+                            provider, provider
+                        ),
+                        routing,
+                        debug: TurnDebugOutput::default(),
+                    });
+                    continue;
+                }
+                NativeShellOutcome::AuthLogout => {
+                    results.push(TurnResult {
+                        prompt,
+                        response: "Auth logout is only available in the interactive TUI."
+                            .to_string(),
+                        routing,
+                        debug: TurnDebugOutput::default(),
+                    });
+                    continue;
+                }
+                NativeShellOutcome::OpenSession { target, .. } => {
+                    let response =
+                        match resolve_session_target(&conn, &target).and_then(|session_id| {
+                            harper_core::memory::session_service::SessionService::new(&conn)
+                                .view_session_data(&session_id)
+                        }) {
+                            Ok(messages) => format_session_messages(&messages),
+                            Err(err) => format!("Session open failed: {}", err),
+                        };
+                    results.push(TurnResult {
+                        prompt,
+                        response,
+                        routing,
+                        debug: TurnDebugOutput::default(),
+                    });
+                    continue;
+                }
+            }
+        }
         chat_service
             .send_message(&prompt, &mut history, args.web, &session_id)
             .await?;
@@ -363,4 +665,32 @@ async fn main() -> Result<(), HarperError> {
 
 fn result_looks_like_backend_unavailable(response: &str) -> bool {
     response.trim().starts_with("Model backend unavailable.")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{format_batch_run_response, TurnDebugOutput};
+
+    #[test]
+    fn batch_run_response_reports_rejected_approval() {
+        let debug = TurnDebugOutput {
+            activity: vec![
+                "waiting approval: pwd".to_string(),
+                "approval rejected".to_string(),
+            ],
+            ..TurnDebugOutput::default()
+        };
+
+        assert_eq!(
+            format_batch_run_response("Command execution cancelled by user", &debug),
+            "Command was not run: approval rejected."
+        );
+    }
+
+    #[test]
+    fn batch_run_response_returns_successful_output() {
+        let debug = TurnDebugOutput::default();
+
+        assert_eq!(format_batch_run_response("hello\n", &debug), "hello");
+    }
 }

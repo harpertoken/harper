@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Installation</title>
-    <meta name="harper-update-version" content="2026-05-05-install-adx" />
+    <meta name="harper-update-version" content="2026-05-09-install-shell" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -64,8 +64,40 @@ SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
                     <button class="copy-btn"></button>
                 </div>
 
-                <h2>Slash commands in the TUI</h2>
-                <p>Harper accepts slash commands directly in the chat input. Start a conversation, place focus in the message box, type <code>/</code>, and then enter a command just like a normal message.</p>
+                <h2>Native commands and slash commands</h2>
+                <p>Harper accepts native commands directly in the chat input. Start a conversation, place focus in the message box, and enter a command just like a normal message.</p>
+                <div class="code-wrapper">
+                    <pre><code>ask "question or instruction"
+plan show
+plan list
+plan add "Inspect current planner state"
+plan done 1
+plan start 2
+plan block 3 "Waiting on CI"
+plan clear
+session list
+session ls
+session open 3
+session show 3
+history show
+history list
+history show 3
+auth status
+auth login
+auth login github
+auth logout
+update check
+update apply
+config show
+config set approval|strategy|sandbox|retries &lt;value&gt;
+status
+run cargo test -p harper-core
+help</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>Use <code>run ...</code> for operating-system commands. Harper routes that path through the existing command runner, approval policy, sandbox policy, and audit logging.</p>
+                <p>This is Harper-native command handling, not a Unix-compatible shell. Pipes, redirects, glob expansion, job control, and process substitution are intentionally outside this command surface.</p>
+                <p>Native commands can also use a leading slash. Typing <code>/</code> opens the full slash-command list in the TUI. Use <code>↑</code>/<code>↓</code> or <code>Tab</code> to move through suggestions, then keep typing or submit the command directly from the chat input.</p>
                 <div class="code-wrapper">
                     <pre><code>/help
 /agents
@@ -85,7 +117,6 @@ SUPABASE_ALLOWED_PROVIDERS=github</code></pre>
 /auth logout</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p>Typing <code>/</code> opens the full slash-command list in the TUI. Use <code>↑</code>/<code>↓</code> or <code>Tab</code> to move through suggestions, then keep typing or submit the command directly from the chat input.</p>
                 <p>For auth commands, <code>/auth login github</code> opens the browser, Harper polls the local server for completion, and <code>/auth status</code> reports the currently stored local TUI session.</p>
                 <p><code>/strategy</code> shows the current execution strategy. Use <code>/strategy auto</code>, <code>/strategy grounded</code>, <code>/strategy deterministic</code>, or <code>/strategy model</code> to switch the live chat session without leaving the conversation.</p>
                 <p><code>/update</code> reports the current cached update state from the chat header. Use <code>/update check</code> to re-run the release-manifest check and refresh that header status. The same action is also available in <code>Settings -&gt; Execution Policy -&gt; Updates</code>. Harper uses the default GitHub release manifest automatically, and <code>HARPER_UPDATE_MANIFEST_URL</code> can override that source when needed.</p>

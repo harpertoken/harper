@@ -174,6 +174,36 @@ pub fn sandbox_profile_name(profile: SandboxProfile) -> &'static str {
     }
 }
 
+pub fn parse_approval_profile(value: &str) -> Option<ApprovalProfile> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "strict" => Some(ApprovalProfile::Strict),
+        "allow_listed" | "allow-listed" | "allowlisted" => Some(ApprovalProfile::AllowListed),
+        "allow_all" | "allow-all" | "allowall" => Some(ApprovalProfile::AllowAll),
+        _ => None,
+    }
+}
+
+pub fn parse_execution_strategy(value: &str) -> Option<ExecutionStrategy> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "auto" => Some(ExecutionStrategy::Auto),
+        "grounded" => Some(ExecutionStrategy::Grounded),
+        "deterministic" => Some(ExecutionStrategy::Deterministic),
+        "model" | "model_only" | "model-only" => Some(ExecutionStrategy::ModelOnly),
+        _ => None,
+    }
+}
+
+pub fn parse_sandbox_profile(value: &str) -> Option<SandboxProfile> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "disabled" | "off" => Some(SandboxProfile::Disabled),
+        "workspace" => Some(SandboxProfile::Workspace),
+        "networked_workspace" | "networked-workspace" | "networked" => {
+            Some(SandboxProfile::NetworkedWorkspace)
+        }
+        _ => None,
+    }
+}
+
 pub fn next_approval_profile(profile: ApprovalProfile) -> ApprovalProfile {
     match profile {
         ApprovalProfile::Strict => ApprovalProfile::AllowListed,

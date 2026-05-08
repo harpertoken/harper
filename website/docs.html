@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Docs</title>
-    <meta name="harper-update-version" content="2026-05-05-docs-adx" />
+    <meta name="harper-update-version" content="2026-05-09-docs-shell" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -28,7 +28,7 @@
         <main class="surface">
             <div class="content-container">
                 <h1 class="hero-title">Docs<br/><span>for daily use and debugging.</span></h1>
-                <p class="hero-lede">Start with installation and configuration, use the shell-first verification flow for routing checks, then move to the TUI only for UI-specific validation.</p>
+                <p class="hero-lede">Start with installation and configuration, use native Harper commands for stateful work, and use batch mode for routing checks before UI-specific validation.</p>
 
                 <div class="actions">
                     <a class="button primary" href="installation.html">Install Guide</a>
@@ -36,7 +36,7 @@
                 </div>
 
                 <h2>Start here</h2>
-                <p>The <a href="installation.html">installation guide</a> is the best entry point for most people. It covers setup, the current slash commands, execution policy, routing behavior, Azure Data Explorer queries, and the shell-first verification flow. If you are running Harper with the local HTTP interface enabled, the <a href="server.html">API Server</a> page explains the runtime model, configuration, and integration details. When something goes wrong in local development, the <a href="troubleshooting.html">troubleshooting guide</a> is the right place to check for auth, shell, and runtime issues.</p>
+                <p>The <a href="installation.html">installation guide</a> is the best entry point for most people. It covers setup, native Harper commands, slash commands, execution policy, routing behavior, Azure Data Explorer queries, and the batch verification flow. If you are running Harper with the local HTTP interface enabled, the <a href="server.html">API Server</a> page explains the runtime model, configuration, and integration details. When something goes wrong in local development, the <a href="troubleshooting.html">troubleshooting guide</a> is the right place to check for auth, shell, and runtime issues.</p>
 
                 <h2>Verification workflow</h2>
                 <p>Use <code>harper-batch</code> before opening the TUI when you need to verify routing, normalization, or follow-up behavior. This keeps the verification path close to the core chat flow and removes UI state from the first debugging step.</p>

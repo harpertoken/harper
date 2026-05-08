@@ -170,6 +170,11 @@ enum WorkerMsg {
         web_search: bool,
         auth_user_id: Option<String>,
     },
+    ExecuteShellCommand {
+        command: String,
+        session_id: String,
+        auth_user_id: Option<String>,
+    },
     RetryPlanCommand {
         command: String,
         session_id: String,
@@ -327,6 +332,118 @@ fn parse_update_command(input: &str) -> Option<UpdateCommand> {
     }
 }
 
+fn build_native_shell_context(
+    app: &TuiApp,
+    api_config: &ApiConfig,
+    exec_policy: &ExecPolicyConfig,
+    db_path: Option<&str>,
+) -> harper_core::NativeShellContext {
+    let auth = app.auth_session.as_ref().map(|session| {
+        let user = session
+            .user
+            .email
+            .clone()
+            .or_else(|| session.user.display_name.clone())
+            .unwrap_or_else(|| session.user.user_id.clone());
+        harper_core::AuthShellContext {
+            status: format!("signed in as {}", user),
+        }
+    });
+
+    harper_core::NativeShellContext {
+        auth,
+        config: Some(harper_core::ConfigShellContext {
+            provider: api_config.provider.to_string(),
+            model: api_config.model_name.clone(),
+            base_url: api_config.base_url.clone(),
+            database_path: db_path.unwrap_or(":memory:").to_string(),
+            approval: format!("{:?}", exec_policy.effective_approval_profile()),
+            strategy: format!("{:?}", exec_policy.effective_execution_strategy()),
+            sandbox: format!("{:?}", exec_policy.effective_sandbox_profile()),
+        }),
+    }
+}
+
+fn apply_tui_config_set(app: &mut TuiApp, key: &str, value: &str) -> Result<String, String> {
+    match key.trim().to_ascii_lowercase().as_str() {
+        "approval" | "approval_profile" => {
+            app.approval_profile = settings::parse_approval_profile(value)
+                .ok_or("approval must be one of: strict, allow_listed, allow_all")?;
+        }
+        "strategy" | "execution_strategy" => {
+            app.execution_strategy = settings::parse_execution_strategy(value)
+                .ok_or("strategy must be one of: auto, grounded, deterministic, model")?;
+        }
+        "sandbox" | "sandbox_profile" => {
+            app.sandbox_profile = settings::parse_sandbox_profile(value)
+                .ok_or("sandbox must be one of: disabled, workspace, networked_workspace")?;
+        }
+        "retries" | "retry_max_attempts" => {
+            app.retry_max_attempts = value
+                .trim()
+                .parse::<u32>()
+                .map_err(|_| "retries must be a non-negative integer")?;
+        }
+        other => return Err(format!("unsupported config key '{}'", other)),
+    }
+
+    settings::save_execution_policy_settings(settings::ExecPolicySettings {
+        approval: app.approval_profile,
+        execution_strategy: app.execution_strategy,
+        sandbox: app.sandbox_profile,
+        retry_max_attempts: app.retry_max_attempts,
+        allowed_commands: &app.allowed_commands,
+        blocked_commands: &app.blocked_commands,
+        header_widgets: &app.header_widgets,
+    })
+    .map_err(|err| format!("Failed to save config: {}", err))?;
+
+    Ok(format!(
+        "Saved config {} = {} in config/local.toml",
+        key, value
+    ))
+}
+
+fn sync_exec_policy_from_app(app: &TuiApp, exec_policy: &Arc<Mutex<ExecPolicyConfig>>) {
+    if let Ok(mut policy) = exec_policy.lock() {
+        policy.approval_profile = Some(app.approval_profile);
+        policy.execution_strategy = Some(app.execution_strategy);
+        policy.sandbox_profile = Some(app.sandbox_profile);
+        policy.allowed_commands = if app.allowed_commands.is_empty() {
+            None
+        } else {
+            Some(app.allowed_commands.clone())
+        };
+        policy.blocked_commands = if app.blocked_commands.is_empty() {
+            None
+        } else {
+            Some(app.blocked_commands.clone())
+        };
+        policy.retry_max_attempts = Some(app.retry_max_attempts);
+    }
+}
+
+async fn start_tui_auth_login(app: &mut TuiApp, auth_client: &reqwest::Client, provider: &str) {
+    let Some(base_url) = app.auth_server_base_url.clone() else {
+        app.set_error_message("TUI auth requires the Harper server to be enabled".to_string());
+        return;
+    };
+    match auth::start_tui_auth_flow(auth_client, &base_url, provider).await {
+        Ok(flow) => {
+            app.auth_flow_id = Some(flow.flow_id.clone());
+            app.auth_last_poll_at = None;
+            match auth::launch_browser(&flow.login_url) {
+                Ok(_) => app.set_status_message(format!("Opened browser for {} sign-in", provider)),
+                Err(_) => {
+                    app.set_info_message(format!("Open this URL to sign in:\n{}", flow.login_url))
+                }
+            }
+            app.set_activity_status(Some("waiting for browser sign-in".to_string()));
+        }
+        Err(err) => app.set_error_message(format!("Auth login failed: {}", err)),
+    }
+}
+
 pub async fn run_tui(
     conn: &Connection,
     api_config: &ApiConfig,
@@ -377,6 +494,7 @@ pub async fn run_tui(
     let db_path = conn
         .path()
         .and_then(|p| Path::new(p).to_str().map(|s| s.to_string()));
+    let db_path_for_shell = db_path.clone();
 
     // Wrap MCP client in Arc if present
     // Note: This requires McpClient to be thread-safe (Send + Sync)
@@ -517,6 +635,81 @@ pub async fn run_tui(
                             let _ = ui_tx_clone.send(UiUpdate::Error(err.to_string())).await;
                         }
                     }
+                    WorkerMsg::ExecuteShellCommand {
+                        command,
+                        session_id,
+                        auth_user_id,
+                    } => {
+                        let exec_policy = worker_exec_policy
+                            .lock()
+                            .expect("worker exec policy lock")
+                            .clone();
+                        let audit_ctx = harper_core::tools::shell::CommandAuditContext {
+                            conn: &worker_conn,
+                            session_id: Some(&session_id),
+                            source: "native_shell_tui",
+                        };
+                        let response = format!(
+                            r#"[RUN_COMMAND {{"command":{}}}]"#,
+                            serde_json::to_string(&command)
+                                .expect("serialize native shell command payload")
+                        );
+                        let result = harper_core::tools::shell::execute_command(
+                            &response,
+                            &worker_api_config,
+                            &exec_policy,
+                            None,
+                            Some(&audit_ctx),
+                            Some(approver.clone()),
+                            Some(runtime_events.clone()),
+                        )
+                        .await;
+                        match result {
+                            Ok(_) => {
+                                let session_service = SessionService::new(&worker_conn);
+                                let session_view = match auth_user_id.as_deref() {
+                                    Some(user_id) => session_service
+                                        .load_session_state_view_for_user(&session_id, user_id)
+                                        .ok()
+                                        .flatten()
+                                        .unwrap_or_else(|| SessionStateView {
+                                            session_id: session_id.clone(),
+                                            user_id: Some(user_id.to_string()),
+                                            messages: harper_core::memory::storage::load_history(
+                                                &worker_conn,
+                                                &session_id,
+                                            )
+                                            .unwrap_or_default(),
+                                            plan: None,
+                                            agents: None,
+                                            agents_rendered: None,
+                                            agents_effective_rendered: None,
+                                        }),
+                                    None => session_service
+                                        .load_session_state_view(&session_id)
+                                        .unwrap_or_else(|_| SessionStateView {
+                                            session_id: session_id.clone(),
+                                            user_id: None,
+                                            messages: harper_core::memory::storage::load_history(
+                                                &worker_conn,
+                                                &session_id,
+                                            )
+                                            .unwrap_or_default(),
+                                            plan: None,
+                                            agents: None,
+                                            agents_rendered: None,
+                                            agents_effective_rendered: None,
+                                        }),
+                                };
+                                let _ = ui_tx_clone
+                                    .send(UiUpdate::MessageProcessed(session_view))
+                                    .await;
+                            }
+                            Err(err) => {
+                                let _ = ui_tx_clone.send(UiUpdate::Error(err.to_string())).await;
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -544,8 +737,135 @@ pub async fn run_tui(
                 if let Some(event) = event {
                     match events::handle_event(event, &mut app, session_service) {
                         EventResult::Quit => break,
-                        EventResult::SendMessage(msg) => {
+                        EventResult::SendMessage(mut msg) => {
+                            let shell_context = build_native_shell_context(
+                                &app,
+                                api_config,
+                                exec_policy,
+                                db_path_for_shell.as_deref(),
+                            );
                             if let AppState::Chat(chat_state) = &mut app.state {
+                                match harper_core::parse_native_shell_command(&msg) {
+                                    Ok(Some(command)) => {
+                                        let session_id = chat_state.session_id.clone();
+                                        match harper_core::execute_native_shell_command_with_context(
+                                            conn,
+                                            &session_id,
+                                            command,
+                                            &shell_context,
+                                        ) {
+                                            Ok(harper_core::NativeShellOutcome::Handled(response)) => {
+                                                chat_state.active_plan = harper_core::memory::storage::load_plan_state(conn, &session_id).ok().flatten();
+                                                app.set_info_message(response);
+                                                continue;
+                                            }
+                                            Ok(harper_core::NativeShellOutcome::Ask(prompt)) => {
+                                                msg = prompt;
+                                            }
+                                            Ok(harper_core::NativeShellOutcome::Run(command)) => {
+                                                chat_state.command_output = None;
+                                                app.set_activity_status(Some(format!("running: {}", command)));
+                                                let _ = worker_tx.send(WorkerMsg::ExecuteShellCommand {
+                                                    command,
+                                                    session_id,
+                                                    auth_user_id: app
+                                                        .auth_session
+                                                        .as_ref()
+                                                        .map(|session| session.user.user_id.clone()),
+                                                }).await;
+                                                continue;
+                                            }
+                                            Ok(harper_core::NativeShellOutcome::UpdateCheck) => {
+                                                app.set_activity_status(Some("checking updates".to_string()));
+                                                spawn_update_status_refresh(&ui_tx, true);
+                                                continue;
+                                            }
+                                            Ok(harper_core::NativeShellOutcome::UpdateStatus) => {
+                                                if let Some(status) = &app.update_status {
+                                                    app.set_info_message(format!("Current {}", status));
+                                                } else {
+                                                    app.set_info_message(
+                                                        "No update status is cached yet. Use /update check."
+                                                            .to_string(),
+                                                    );
+                                                }
+                                                continue;
+                                            }
+                                            Ok(harper_core::NativeShellOutcome::UpdateApply) => {
+                                                app.set_info_message(
+                                                    "Update apply is intentionally explicit. Run: harper self-update".to_string(),
+                                                );
+                                                continue;
+                                            }
+                                            Ok(harper_core::NativeShellOutcome::ConfigSet { key, value }) => {
+                                                match apply_tui_config_set(&mut app, &key, &value) {
+                                                    Ok(message) => {
+                                                        sync_exec_policy_from_app(&app, &ui_exec_policy);
+                                                        app.set_status_message(message);
+                                                    }
+                                                    Err(err) => app.set_error_message(err),
+                                                }
+                                                continue;
+                                            }
+                                            Ok(harper_core::NativeShellOutcome::AuthLogin { provider }) => {
+                                                start_tui_auth_login(&mut app, &auth_client, &provider).await;
+                                                continue;
+                                            }
+                                            Ok(harper_core::NativeShellOutcome::AuthLogout) => {
+                                                if let Err(err) = auth::clear_auth_session() {
+                                                    app.set_error_message(format!("Auth logout failed: {}", err));
+                                                } else {
+                                                    app.auth_session = None;
+                                                    app.auth_flow_id = None;
+                                                    app.auth_last_poll_at = None;
+                                                    app.set_status_message("Cleared local TUI auth session".to_string());
+                                                }
+                                                continue;
+                                            }
+                                            Ok(harper_core::NativeShellOutcome::OpenSession { target, preview }) => {
+                                                match harper_core::resolve_session_target(conn, &target) {
+                                                    Ok(target_session_id) => {
+                                                        if preview {
+                                                            match session_service.view_session_data(&target_session_id) {
+                                                                Ok(messages) => {
+                                                                    app.state = AppState::ViewSession(target_session_id, messages, 0);
+                                                                }
+                                                                Err(err) => app.set_error_message(format!("Error loading session preview: {}", err)),
+                                                            }
+                                                        } else {
+                                                            match session_service.load_session_state_view(&target_session_id) {
+                                                                Ok(session_view) => {
+                                                                    app.state = AppState::Chat(Box::new(events::create_chat_state(
+                                                                        session_view.session_id,
+                                                                        session_view.messages,
+                                                                        session_view.plan,
+                                                                        session_view.agents,
+                                                                        app.agents_context_enabled,
+                                                                    )));
+                                                                    if let AppState::Chat(chat_state) = &mut app.state {
+                                                                        spawn_sidebar_gathering(chat_state, &ui_tx);
+                                                                    }
+                                                                }
+                                                                Err(err) => app.set_error_message(format!("Error loading session: {}", err)),
+                                                            }
+                                                        }
+                                                    }
+                                                    Err(err) => app.set_error_message(err.to_string()),
+                                                }
+                                                continue;
+                                            }
+                                            Err(err) => {
+                                                app.set_error_message(err.to_string());
+                                                continue;
+                                            }
+                                        }
+                                    }
+                                    Ok(None) => {}
+                                    Err(err) => {
+                                        app.set_error_message(err.to_string());
+                                        continue;
+                                    }
+                                }
                                 if let Some(strategy) = parse_strategy_command(&msg, app.execution_strategy) {
                                     match strategy {
                                         Ok(new_strategy) => {
@@ -617,25 +937,7 @@ pub async fn run_tui(
                                 if let Some(command) = auth::parse_tui_auth_command(&msg) {
                                     match command {
                                         auth::TuiAuthCommand::Login { provider } => {
-                                            let Some(base_url) = app.auth_server_base_url.clone() else {
-                                                app.set_error_message("TUI auth requires the Harper server to be enabled".to_string());
-                                                continue;
-                                            };
-                                            match auth::start_tui_auth_flow(&auth_client, &base_url, &provider).await {
-                                                Ok(flow) => {
-                                                    app.auth_flow_id = Some(flow.flow_id.clone());
-                                                    app.auth_last_poll_at = None;
-                                                    match auth::launch_browser(&flow.login_url) {
-                                                        Ok(_) => app.set_status_message(format!("Opened browser for {} sign-in", provider)),
-                                                        Err(_) => app.set_info_message(format!(
-                                                            "Open this URL to sign in:\n{}",
-                                                            flow.login_url
-                                                        )),
-                                                    }
-                                                    app.set_activity_status(Some("waiting for browser sign-in".to_string()));
-                                                }
-                                                Err(err) => app.set_error_message(format!("Auth login failed: {}", err)),
-                                            }
+                                            start_tui_auth_login(&mut app, &auth_client, &provider).await;
                                             continue;
                                         }
                                         auth::TuiAuthCommand::Logout => {
@@ -1102,25 +1404,7 @@ pub async fn run_tui(
                             }
                         }
                         EventResult::StartProfileLogin { provider } => {
-                            let Some(base_url) = app.auth_server_base_url.clone() else {
-                                app.set_error_message("TUI auth requires the Harper server to be enabled".to_string());
-                                continue;
-                            };
-                            match auth::start_tui_auth_flow(&auth_client, &base_url, &provider).await {
-                                Ok(flow) => {
-                                    app.auth_flow_id = Some(flow.flow_id.clone());
-                                    app.auth_last_poll_at = None;
-                                    match auth::launch_browser(&flow.login_url) {
-                                        Ok(_) => app.set_status_message(format!("Opened browser for {} sign-in", provider)),
-                                        Err(_) => app.set_info_message(format!(
-                                            "Open this URL to sign in:\n{}",
-                                            flow.login_url
-                                        )),
-                                    }
-                                    app.set_activity_status(Some("waiting for browser sign-in".to_string()));
-                                }
-                                Err(err) => app.set_error_message(format!("Auth login failed: {}", err)),
-                            }
+                            start_tui_auth_login(&mut app, &auth_client, &provider).await;
                         }
                         EventResult::Continue => {}
                         EventResult::GatherSidebarEntries => {
