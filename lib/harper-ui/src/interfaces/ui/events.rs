@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 // Keyboard shortcut constants
 const HELP_MESSAGE: &str =
-    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | D/Delete:Remove Session | X:Exit | W:Web | B:Sidebar | A:Agents | /agents on|off | F:Findings | Ctrl+S:Plan | R:Retry | U:Replan | K:Ack | P:Jobs | M:Msgs | C:ID";
+    "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | D/Delete:Remove Session | X:Exit | W:Web | B:Sidebar | A:Agents | /agents on|off | F:Findings | Ctrl+S:Plan | Ctrl+O:Output | R:Retry | U:Replan | K:Ack | P:Jobs | M:Msgs | C:ID";
 
 use super::app::{
     AppState, ChatState, ExecutionPolicyEditorState, ExecutionPolicyListField, NavigationFocus,
@@ -111,6 +111,8 @@ pub(crate) fn create_chat_state(
         plan_job_output_scroll: 0,
         navigation_focus: NavigationFocus::Messages,
         command_output: None,
+        command_output_expanded: false,
+        command_output_scroll: 0,
         loop_state: super::app::ChatLoopState::default(),
         agents_panel_expanded: false,
         agents_scroll_offset: 0,
@@ -489,14 +491,34 @@ pub fn handle_event(
                         return EventResult::Quit;
                     }
                     KeyCode::Char('o') => {
-                        match &app.state {
+                        match &mut app.state {
                             AppState::Chat(chat_state) => {
-                                let session_id = chat_state.session_id.clone();
-                                match session_service.export_session_by_id(&session_id) {
-                                    Ok(path) => app
-                                        .set_info_message(format!("Session exported to {}", path)),
-                                    Err(e) => {
-                                        app.set_error_message(format!("Export failed: {}", e))
+                                if chat_state.command_output.is_some()
+                                    || chat_state
+                                        .active_plan
+                                        .as_ref()
+                                        .and_then(|plan| plan.runtime.as_ref())
+                                        .is_some_and(|runtime| !runtime.jobs.is_empty())
+                                {
+                                    chat_state.command_output_expanded =
+                                        !chat_state.command_output_expanded;
+                                    chat_state.command_output_scroll = 0;
+                                    let status_message = if chat_state.command_output_expanded {
+                                        "Command output maximized".to_string()
+                                    } else {
+                                        "Command output restored".to_string()
+                                    };
+                                    app.set_status_message(status_message);
+                                } else {
+                                    let session_id = chat_state.session_id.clone();
+                                    match session_service.export_session_by_id(&session_id) {
+                                        Ok(path) => app.set_info_message(format!(
+                                            "Session exported to {}",
+                                            path
+                                        )),
+                                        Err(e) => {
+                                            app.set_error_message(format!("Export failed: {}", e))
+                                        }
                                     }
                                 }
                             }
@@ -580,45 +602,7 @@ pub fn handle_event(
                         return EventResult::Continue;
                     }
                     KeyCode::Char('a') => {
-                        let mut status_message = None;
-                        if let AppState::Chat(chat_state) = &mut app.state {
-                            if chat_state.active_agents.is_some() {
-                                if !chat_state.agents_panel_expanded {
-                                    chat_state.agents_panel_expanded = true;
-                                    chat_state.agents_scroll_offset = 0;
-                                    chat_state.set_navigation_focus(NavigationFocus::Agents);
-                                    status_message =
-                                        Some("AGENTS panel expanded; focus on agents".to_string());
-                                } else if matches!(
-                                    chat_state.navigation_focus,
-                                    NavigationFocus::Agents
-                                ) {
-                                    chat_state.agents_panel_expanded = false;
-                                    chat_state.agents_scroll_offset = 0;
-                                    chat_state.set_navigation_focus(NavigationFocus::Messages);
-                                    status_message = Some(
-                                        "AGENTS panel collapsed; focus on messages".to_string(),
-                                    );
-                                } else {
-                                    chat_state.set_navigation_focus(NavigationFocus::Agents);
-                                    status_message = Some("Focus on AGENTS panel".to_string());
-                                }
-                            } else {
-                                if !chat_state.agents_panel_expanded {
-                                    chat_state.agents_panel_expanded = true;
-                                    chat_state.agents_scroll_offset = 0;
-                                    status_message = Some(
-                                        "AGENTS panel opened; no active sources yet".to_string(),
-                                    );
-                                } else {
-                                    chat_state.agents_panel_expanded = false;
-                                    status_message = Some("AGENTS panel collapsed".to_string());
-                                }
-                            }
-                        }
-                        if let Some(message) = status_message {
-                            app.set_status_message(message);
-                        }
+                        toggle_agents_panel(app);
                         return EventResult::Continue;
                     }
                     KeyCode::Char('f') => {
@@ -752,7 +736,11 @@ pub fn handle_event(
                 KeyCode::Esc => match &mut app.state {
                     AppState::Menu(_) => {}
                     AppState::Chat(chat_state) => {
-                        if chat_state.plan_jobs_expanded {
+                        if chat_state.command_output_expanded {
+                            chat_state.command_output_expanded = false;
+                            chat_state.command_output_scroll = 0;
+                            app.set_status_message("Command output closed".to_string());
+                        } else if chat_state.plan_jobs_expanded {
                             chat_state.plan_jobs_expanded = false;
                             chat_state.plan_job_output_scroll = 0;
                             chat_state.set_navigation_focus(NavigationFocus::Messages);
@@ -1037,6 +1025,38 @@ fn handle_web_search(app: &mut TuiApp) {
     );
 }
 
+fn toggle_agents_panel(app: &mut TuiApp) {
+    let mut status_message = None;
+    if let AppState::Chat(chat_state) = &mut app.state {
+        if chat_state.active_agents.is_some() {
+            if !chat_state.agents_panel_expanded {
+                chat_state.agents_panel_expanded = true;
+                chat_state.agents_scroll_offset = 0;
+                chat_state.set_navigation_focus(NavigationFocus::Agents);
+                status_message = Some("AGENTS panel expanded; focus on agents".to_string());
+            } else if matches!(chat_state.navigation_focus, NavigationFocus::Agents) {
+                chat_state.agents_panel_expanded = false;
+                chat_state.agents_scroll_offset = 0;
+                chat_state.set_navigation_focus(NavigationFocus::Messages);
+                status_message = Some("AGENTS panel collapsed; focus on messages".to_string());
+            } else {
+                chat_state.set_navigation_focus(NavigationFocus::Agents);
+                status_message = Some("Focus on AGENTS panel".to_string());
+            }
+        } else if !chat_state.agents_panel_expanded {
+            chat_state.agents_panel_expanded = true;
+            chat_state.agents_scroll_offset = 0;
+            status_message = Some("AGENTS panel opened; no active sources yet".to_string());
+        } else {
+            chat_state.agents_panel_expanded = false;
+            status_message = Some("AGENTS panel collapsed".to_string());
+        }
+    }
+    if let Some(message) = status_message {
+        app.set_status_message(message);
+    }
+}
+
 fn handle_shell_commands(app: &mut TuiApp) {
     let command_output = {
         #[cfg(unix)]
@@ -1170,6 +1190,7 @@ fn handle_backspace(app: &mut TuiApp) {
 }
 fn handle_paste(app: &mut TuiApp, content: String) {
     let mut status_message = None;
+    let content = normalize_pasted_text(&content);
     if let AppState::Chat(chat_state) = &mut app.state {
         if let Some(reference) = dropped_image_references(&content) {
             if !chat_state.input.is_empty()
@@ -1191,6 +1212,10 @@ fn handle_paste(app: &mut TuiApp, content: String) {
     if let Some(message) = status_message {
         app.set_info_message(message);
     }
+}
+
+fn normalize_pasted_text(content: &str) -> String {
+    content.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 fn dropped_image_references(content: &str) -> Option<String> {
@@ -1846,6 +1871,86 @@ mod tests {
     }
 
     #[test]
+    fn ctrl_o_toggles_command_output_browser() {
+        let mut app = TuiApp::new();
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.command_output = Some(super::super::app::CommandOutputState {
+            command: "cargo test".to_string(),
+            content: "line one\nline two".to_string(),
+            has_error: false,
+            done: true,
+        });
+        app.state = AppState::Chat(Box::new(chat_state));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL)),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert!(chat_state.command_output_expanded);
+    }
+
+    #[test]
+    fn esc_closes_command_output_browser_first() {
+        let mut app = TuiApp::new();
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.command_output = Some(super::super::app::CommandOutputState {
+            command: "cargo test".to_string(),
+            content: "line one\nline two".to_string(),
+            has_error: false,
+            done: true,
+        });
+        chat_state.command_output_expanded = true;
+        chat_state.command_output_scroll = 3;
+        app.state = AppState::Chat(Box::new(chat_state));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(Event::Key(KeyCode::Esc.into()), &mut app, &session_service);
+        assert!(matches!(result, EventResult::Continue));
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert!(!chat_state.command_output_expanded);
+        assert_eq!(chat_state.command_output_scroll, 0);
+    }
+
+    #[test]
+    fn ctrl_a_opens_agents_panel() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Chat(Box::new(create_chat_state(
+            "session".to_string(),
+            vec![],
+            None,
+            None,
+            true,
+        )));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)),
+            &mut app,
+            &session_service,
+        );
+
+        assert!(matches!(result, EventResult::Continue));
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert!(chat_state.agents_panel_expanded);
+    }
+
+    #[test]
     fn plan_steps_focus_complete_shortcut_returns_status_update() {
         let mut app = TuiApp::new();
         let mut chat_state = create_chat_state(
@@ -2059,6 +2164,57 @@ mod tests {
             };
             assert!(chat_state.input.is_empty());
         }
+    }
+
+    #[test]
+    fn paste_multiline_text_stays_in_chat_input() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Chat(Box::new(create_chat_state(
+            "session".to_string(),
+            vec![],
+            None,
+            None,
+            true,
+        )));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+        let pasted = "first line\nsecond line\nthird line".to_string();
+
+        let result = handle_event(Event::Paste(pasted.clone()), &mut app, &session_service);
+
+        assert!(matches!(result, EventResult::Continue));
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.input, pasted);
+    }
+
+    #[test]
+    fn paste_carriage_return_text_normalizes_to_multiline_input() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Chat(Box::new(create_chat_state(
+            "session".to_string(),
+            vec![],
+            None,
+            None,
+            true,
+        )));
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Paste("first line\rsecond line\r\nthird line".to_string()),
+            &mut app,
+            &session_service,
+        );
+
+        assert!(matches!(result, EventResult::Continue));
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.input, "first line\nsecond line\nthird line");
     }
 
     #[test]

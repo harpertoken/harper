@@ -30,6 +30,12 @@ use harper_core::{PlanRuntime, PlanState, PlanStepStatus, ResolvedAgents};
 
 const MAX_COMPLETION_POPUP_HEIGHT: u16 = 12;
 const MENU_BLOCK_VERTICAL_OVERHEAD: u16 = 3;
+const FOOTER_HEIGHT: u16 = 1;
+const SIDEBAR_WIDTH: u16 = 22;
+const MAX_COMMAND_OUTPUT_LINES: usize = 4;
+const COMPACT_HEIGHT_THRESHOLD: u16 = 36;
+const COMPACT_WIDTH_THRESHOLD: u16 = 100;
+const COMPACT_COMMAND_OUTPUT_LINES: usize = 3;
 
 // Refined shortcuts for a cleaner footer
 const CHAT_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
@@ -41,7 +47,7 @@ const CHAT_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
         ("F", "Findings"),
         ("M", "Msgs"),
         ("C", "ID"),
-        ("O", "Export"),
+        ("Ctrl+O", "Output"),
     ],
     &[
         ("X", "Exit"),
@@ -138,7 +144,8 @@ fn wrapped_line_count(lines: &[Line<'static>], width: u16) -> usize {
         .sum()
 }
 
-fn input_area_height(input: &str, width: u16) -> u16 {
+fn input_area_height(input: &str, width: u16, available_height: u16) -> u16 {
+    let compact = width <= COMPACT_WIDTH_THRESHOLD;
     let content_width = width.saturating_sub(4).max(1);
     let lines = if input.is_empty() {
         vec![Line::raw("› Type / for commands, or write a message")]
@@ -146,7 +153,19 @@ fn input_area_height(input: &str, width: u16) -> u16 {
         input_lines(input, Style::default())
     };
     let content_height = wrapped_line_count(&lines, content_width) as u16;
-    content_height.saturating_add(1).clamp(3, 8)
+    let multiline = input.contains('\n');
+    let max_height = if multiline {
+        available_height.saturating_sub(4).clamp(4, 12)
+    } else if compact {
+        4
+    } else {
+        8
+    };
+    content_height.saturating_add(1).clamp(3, max_height)
+}
+
+fn compact_layout(area: Rect) -> bool {
+    area.height <= COMPACT_HEIGHT_THRESHOLD || area.width <= COMPACT_WIDTH_THRESHOLD
 }
 
 fn input_lines(input: &str, input_style: Style) -> Vec<Line<'static>> {
@@ -154,6 +173,33 @@ fn input_lines(input: &str, input_style: Style) -> Vec<Line<'static>> {
         .split('\n')
         .map(|line| Line::from(vec![Span::styled(line.to_string(), input_style)]))
         .collect()
+}
+
+fn input_display_lines(
+    input: &str,
+    input_style: Style,
+    visible_capacity: usize,
+) -> Vec<Line<'static>> {
+    let mut lines = input_lines(input, input_style)
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            let prefix = if index == 0 { "› " } else { "  " };
+            let mut spans = vec![Span::styled(prefix, Style::default())];
+            spans.extend(line.spans);
+            Line::from(spans)
+        })
+        .collect::<Vec<_>>();
+
+    if visible_capacity > 0 && lines.len() > visible_capacity {
+        let hidden = lines.len() - visible_capacity;
+        lines = lines.split_off(hidden);
+        if let Some(first) = lines.first_mut() {
+            first.spans.insert(0, Span::raw("… "));
+        }
+    }
+
+    lines
 }
 
 pub fn parse_content_with_code(
@@ -221,23 +267,26 @@ pub fn refresh_chat_render_cache(chat_state: &mut super::app::ChatState, theme: 
 
 pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     let area = frame.area();
+    let compact = compact_layout(area);
     let compact_menu =
         matches!(app.state, AppState::Menu(_)) && area.height <= MAIN_MENU_ITEM_COUNT as u16 + 4;
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(2)])
+        .constraints([Constraint::Min(0), Constraint::Length(FOOTER_HEIGHT)])
         .split(area);
 
-    let main_area = if compact_menu { area } else { chunks[0] };
+    let hide_footer = !matches!(app.state, AppState::Chat(_)) && (compact || compact_menu);
+    let main_area = if hide_footer { area } else { chunks[0] };
     let footer_area = chunks[1];
 
     match &app.state {
         AppState::Menu(selected) => draw_zen_menu(frame, *selected, theme, main_area),
         AppState::Chat(chat_state) => {
-            let chat_area = if chat_state.sidebar_visible {
+            let show_sidebar = chat_state.sidebar_visible && area.width > COMPACT_WIDTH_THRESHOLD;
+            let chat_area = if show_sidebar {
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([Constraint::Length(26), Constraint::Min(0)])
+                    .constraints([Constraint::Length(SIDEBAR_WIDTH), Constraint::Min(0)])
                     .split(area);
                 draw_zen_sidebar(frame, &chat_state.sidebar_sections, theme, chunks[0]);
                 chunks[1]
@@ -245,46 +294,135 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 area
             };
 
-            let has_plan = chat_state
+            let mut has_plan = chat_state
                 .active_plan
                 .as_ref()
                 .is_some_and(|plan| !plan.items.is_empty() || plan.explanation.is_some());
-            let has_agents = chat_state.agents_panel_expanded
-                || chat_state
-                    .active_agents
-                    .as_ref()
-                    .is_some_and(|agents| !agents.sources.is_empty());
-            let has_review = chat_state.active_review.is_some();
+            let agents_focused = matches!(
+                chat_state.navigation_focus,
+                super::app::NavigationFocus::Agents
+            );
+            let has_agent_sources = chat_state
+                .active_agents
+                .as_ref()
+                .is_some_and(|agents| !agents.sources.is_empty());
+            let mut has_agents =
+                chat_state.agents_panel_expanded || agents_focused || has_agent_sources;
+            let mut has_review = chat_state.active_review.is_some();
             let command_output_display = derive_command_output_display(chat_state);
-            let has_command_output = command_output_display.is_some();
-            let has_chat_loop = !has_plan && should_render_chat_loop_panel(&chat_state.loop_state);
-            let plan_height = chat_state
+            let mut has_command_output = command_output_display.is_some();
+            let mut has_chat_loop =
+                !has_plan && should_render_chat_loop_panel(&chat_state.loop_state);
+            let mut plan_height = chat_state
                 .active_plan
                 .as_ref()
                 .map(plan_panel_height)
+                .map(|height| if compact { height.min(5) } else { height })
                 .unwrap_or(0);
-            let command_output_height = command_output_display
+            let mut command_output_height = command_output_display
                 .as_ref()
-                .map(command_output_panel_height)
+                .map(|output| command_output_panel_height(output, compact))
                 .unwrap_or(0);
-            let chat_loop_height = if has_chat_loop {
-                chat_loop_panel_height(&chat_state.loop_state)
+            let mut chat_loop_height = if has_chat_loop {
+                let height = chat_loop_panel_height(&chat_state.loop_state);
+                if compact {
+                    height.min(3)
+                } else {
+                    height
+                }
             } else {
                 0
             };
-            let agents_height = chat_state
+            let mut agents_height = chat_state
                 .active_agents
                 .as_ref()
-                .map(|agents| agents_panel_height(agents, chat_state.agents_panel_expanded))
-                .unwrap_or(6);
-            let review_height = chat_state
+                .map(|agents| {
+                    let height = agents_panel_height(
+                        agents,
+                        chat_state.agents_panel_expanded,
+                        agents_focused,
+                        compact,
+                    );
+                    if chat_state.input.contains('\n') && !agents_focused {
+                        height.min(1)
+                    } else {
+                        height
+                    }
+                })
+                .unwrap_or(if chat_state.agents_panel_expanded {
+                    if compact {
+                        4
+                    } else {
+                        6
+                    }
+                } else {
+                    1
+                });
+            let mut review_height = chat_state
                 .active_review
                 .as_ref()
                 .map(|review| review_panel_height(review, chat_state.review_selected))
+                .map(|height| if compact { height.min(5) } else { height })
                 .unwrap_or(0);
-            let input_height = input_area_height(&chat_state.input, chat_area.width);
+            let input_height =
+                input_area_height(&chat_state.input, chat_area.width, chat_area.height);
 
-            let mut constraints = vec![Constraint::Length(3), Constraint::Min(5)];
+            let summary_height = if compact { 1 } else { 2 };
+            let message_min_height = if compact { 3 } else { 5 };
+            let fixed_height = summary_height
+                + message_min_height
+                + input_height
+                + if has_review { review_height } else { 0 }
+                + if has_command_output {
+                    command_output_height
+                } else {
+                    0
+                }
+                + if has_chat_loop { chat_loop_height } else { 0 }
+                + if has_plan { plan_height } else { 0 }
+                + if has_agents { agents_height } else { 0 };
+            let mut overflow = fixed_height.saturating_sub(chat_area.height);
+            if overflow > 0 && has_agents && !agents_focused {
+                overflow = overflow.saturating_sub(agents_height);
+                has_agents = false;
+                agents_height = 0;
+            }
+            if overflow > 0 && has_chat_loop {
+                overflow = overflow.saturating_sub(chat_loop_height);
+                has_chat_loop = false;
+                chat_loop_height = 0;
+            }
+            if overflow > 0
+                && has_plan
+                && !matches!(
+                    chat_state.navigation_focus,
+                    super::app::NavigationFocus::PlanSteps | super::app::NavigationFocus::PlanJobs
+                )
+            {
+                overflow = overflow.saturating_sub(plan_height);
+                has_plan = false;
+                plan_height = 0;
+            }
+            if overflow > 0
+                && has_review
+                && !matches!(
+                    chat_state.navigation_focus,
+                    super::app::NavigationFocus::Review
+                )
+            {
+                overflow = overflow.saturating_sub(review_height);
+                has_review = false;
+                review_height = 0;
+            }
+            if overflow > 0 && has_command_output && !chat_state.command_output_expanded {
+                has_command_output = false;
+                command_output_height = 0;
+            }
+
+            let mut constraints = vec![
+                Constraint::Length(summary_height),
+                Constraint::Min(message_min_height),
+            ];
             if has_review {
                 constraints.push(Constraint::Length(review_height));
             }
@@ -307,7 +445,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .constraints(constraints)
                 .split(chat_area);
 
-            draw_chat_summary(frame, app, chat_state, theme, chunks[0]);
+            draw_chat_summary(frame, app, chat_state, theme, chunks[0], compact);
 
             let mut message_lines: Vec<Line<'static>> = Vec::new();
             let divider_width = chunks[1].width.saturating_sub(4);
@@ -340,11 +478,17 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 message_lines.push(Line::raw(""));
             }
 
-            let chat_block = Block::default()
-                .borders(Borders::NONE)
-                .padding(Padding::uniform(1));
-            let visible_line_capacity = chunks[1].height.saturating_sub(2) as usize;
-            let content_width = chunks[1].width.saturating_sub(2);
+            let chat_block = if compact {
+                Block::default().borders(Borders::NONE)
+            } else {
+                Block::default()
+                    .borders(Borders::NONE)
+                    .padding(Padding::horizontal(1))
+            };
+            let vertical_padding = 0;
+            let horizontal_padding = if compact { 0 } else { 2 };
+            let visible_line_capacity = chunks[1].height.saturating_sub(vertical_padding) as usize;
+            let content_width = chunks[1].width.saturating_sub(horizontal_padding);
             let total_wrapped_lines = wrapped_line_count(&message_lines, content_width);
             let messages_widget = Paragraph::new(message_lines)
                 .block(chat_block)
@@ -376,7 +520,13 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             }
             if has_command_output {
                 if let Some(output) = command_output_display.as_ref() {
-                    draw_command_output_panel(frame, output, theme, chunks[next_panel_index]);
+                    draw_command_output_panel(
+                        frame,
+                        output,
+                        theme,
+                        chunks[next_panel_index],
+                        compact,
+                    );
                 }
                 next_panel_index += 1;
             }
@@ -405,6 +555,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                                 chat_state.navigation_focus,
                                 super::app::NavigationFocus::PlanJobs
                             ),
+                            compact,
                         },
                         theme,
                         chunks[next_panel_index],
@@ -422,10 +573,8 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                         context_enabled: app.agents_context_enabled,
                         expanded: chat_state.agents_panel_expanded,
                         scroll_offset: chat_state.agents_scroll_offset,
-                        focused: matches!(
-                            chat_state.navigation_focus,
-                            super::app::NavigationFocus::Agents
-                        ),
+                        focused: agents_focused,
+                        compact,
                     },
                 );
             }
@@ -435,6 +584,12 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .border_style(theme.muted_style())
                 .padding(Padding::horizontal(1));
 
+            let input_index = 2
+                + usize::from(has_review)
+                + usize::from(has_command_output)
+                + usize::from(has_chat_loop)
+                + usize::from(has_plan)
+                + usize::from(has_agents);
             let input_text = if chat_state.input.is_empty() {
                 vec![Line::from(vec![
                     Span::styled("› ", Style::default().fg(theme.accent)),
@@ -444,26 +599,36 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                     ),
                 ])]
             } else {
-                input_lines(&chat_state.input, Style::default().fg(theme.input))
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, line)| {
-                        let prefix = if index == 0 { "› " } else { "  " };
-                        let mut spans =
-                            vec![Span::styled(prefix, Style::default().fg(theme.accent))];
-                        spans.extend(line.spans);
-                        Line::from(spans)
-                    })
-                    .collect()
+                input_display_lines(
+                    &chat_state.input,
+                    Style::default().fg(theme.input),
+                    chunks[input_index].height.saturating_sub(1) as usize,
+                )
+                .into_iter()
+                .map(|line| {
+                    let spans = line
+                        .spans
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, span)| {
+                            if index == 0 {
+                                Span::styled(
+                                    span.content.into_owned(),
+                                    Style::default().fg(theme.accent),
+                                )
+                            } else {
+                                span
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    Line::from(spans)
+                })
+                .collect()
             };
 
-            let input_widget = Paragraph::new(input_text).block(input_block);
-            let input_index = 2
-                + usize::from(has_review)
-                + usize::from(has_command_output)
-                + usize::from(has_chat_loop)
-                + usize::from(has_plan)
-                + usize::from(has_agents);
+            let input_widget = Paragraph::new(input_text)
+                .block(input_block)
+                .wrap(Wrap { trim: false });
             frame.render_widget(input_widget, chunks[input_index]);
 
             let completion_height = completion_popup_height(
@@ -503,7 +668,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         AppState::Stats(stats) => draw_stats(frame, stats, theme, main_area),
     }
 
-    if !matches!(app.state, AppState::Chat(_)) && !compact_menu {
+    if !matches!(app.state, AppState::Chat(_)) && !hide_footer {
         draw_zen_footer(frame, app, theme, footer_area);
     }
 
@@ -517,6 +682,9 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         }
         if chat_state.plan_jobs_expanded {
             draw_plan_jobs_browser(frame, chat_state, theme);
+        }
+        if chat_state.command_output_expanded {
+            draw_command_output_browser(frame, chat_state, theme);
         }
     }
 
@@ -1104,6 +1272,7 @@ fn draw_chat_summary(
     chat_state: &super::app::ChatState,
     theme: &Theme,
     area: Rect,
+    compact: bool,
 ) {
     let plan_status = chat_state
         .active_plan
@@ -1277,6 +1446,16 @@ fn draw_chat_summary(
     }
 
     let line = Line::from(spans);
+    if compact {
+        frame.render_widget(
+            Paragraph::new(line)
+                .style(Style::default().fg(theme.foreground))
+                .wrap(Wrap { trim: true }),
+            area,
+        );
+        return;
+    }
+
     let mut detail_spans = Vec::new();
     if let Some(action) = last_action {
         detail_spans.push(Span::styled("last ", theme.muted_style()));
@@ -1501,8 +1680,6 @@ fn draw_completion_popup(
     frame.render_widget(widget, area);
 }
 
-const MAX_COMMAND_OUTPUT_LINES: usize = 6;
-
 #[derive(Clone)]
 struct CommandOutputDisplay {
     command: String,
@@ -1579,10 +1756,20 @@ fn derive_command_output_display(
     })
 }
 
-fn command_output_panel_height(output: &CommandOutputDisplay) -> u16 {
-    let visible_lines = output.total_line_count.clamp(1, MAX_COMMAND_OUTPUT_LINES);
-    let truncation_line = usize::from(output.total_line_count > MAX_COMMAND_OUTPUT_LINES);
-    (visible_lines + truncation_line + 4) as u16
+fn command_output_line_limit(compact: bool) -> usize {
+    if compact {
+        COMPACT_COMMAND_OUTPUT_LINES
+    } else {
+        MAX_COMMAND_OUTPUT_LINES
+    }
+}
+
+fn command_output_panel_height(output: &CommandOutputDisplay, compact: bool) -> u16 {
+    let line_limit = command_output_line_limit(compact);
+    let visible_lines = output.total_line_count.clamp(1, line_limit);
+    let truncation_line = usize::from(output.total_line_count > line_limit);
+    let chrome = if compact { 3 } else { 4 };
+    (visible_lines + truncation_line + chrome) as u16
 }
 
 fn draw_command_output_panel(
@@ -1590,59 +1777,31 @@ fn draw_command_output_panel(
     output: &CommandOutputDisplay,
     theme: &Theme,
     area: Rect,
+    compact: bool,
 ) {
-    let title = format!(" Command Output ({}) ", output.status_label);
-    let color = if output.has_error {
-        Color::Rgb(245, 158, 11)
+    let title = format!(
+        " $ Command Output ({}) • Ctrl+O maximize ",
+        output.status_label
+    );
+    let line_limit = command_output_line_limit(compact);
+    let mut lines = if compact {
+        Vec::new()
     } else {
-        theme.output
+        vec![Line::styled(
+            truncate_chat_summary(&output.command, 96),
+            theme.muted_style().add_modifier(Modifier::ITALIC),
+        )]
     };
-    let mut lines = vec![Line::styled(
-        truncate_chat_summary(&output.command, 96),
-        theme.muted_style().add_modifier(Modifier::ITALIC),
-    )];
-    let content = if output.content.trim().is_empty() {
-        "No output yet"
-    } else {
-        output.content.trim_end()
-    };
-    let total_lines = content.lines().count().max(1);
-    if total_lines > MAX_COMMAND_OUTPUT_LINES {
+    if output.total_line_count > line_limit {
         lines.push(Line::styled(
             format!(
                 "showing last {} of {} lines",
-                MAX_COMMAND_OUTPUT_LINES, total_lines
+                line_limit, output.total_line_count
             ),
             theme.muted_style(),
         ));
     }
-    if let Some(language) = detect_command_output_language(&output.command, content) {
-        let code = strip_command_output_prefix(content);
-        let highlighted = if language == "diff" {
-            render_diff_lines(code, theme)
-        } else {
-            highlight_code_lines(
-                &theme.syntax_set,
-                &theme.theme_set,
-                language,
-                code,
-                &theme.syntax_theme,
-            )
-        };
-        let window = highlighted.len().saturating_sub(MAX_COMMAND_OUTPUT_LINES);
-        lines.extend(highlighted.into_iter().skip(window));
-    } else {
-        for line in content
-            .lines()
-            .rev()
-            .take(MAX_COMMAND_OUTPUT_LINES)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-        {
-            lines.push(Line::styled(line.to_string(), Style::default().fg(color)));
-        }
-    }
+    lines.extend(command_output_lines(output, theme, Some(line_limit)));
     let block = Block::default()
         .title(title)
         .borders(Borders::TOP)
@@ -1741,6 +1900,53 @@ fn strip_command_output_prefix(content: &str) -> &str {
     content.strip_prefix("Git diff:\n").unwrap_or(content)
 }
 
+fn command_output_lines(
+    output: &CommandOutputDisplay,
+    theme: &Theme,
+    line_limit: Option<usize>,
+) -> Vec<Line<'static>> {
+    let color = if output.has_error {
+        Color::Rgb(245, 158, 11)
+    } else {
+        theme.output
+    };
+    let content = if output.content.trim().is_empty() {
+        "No output yet"
+    } else {
+        output.content.trim_end()
+    };
+    if let Some(language) = detect_command_output_language(&output.command, content) {
+        let code = strip_command_output_prefix(content);
+        let highlighted = if language == "diff" {
+            render_diff_lines(code, theme)
+        } else {
+            highlight_code_lines(
+                &theme.syntax_set,
+                &theme.theme_set,
+                language,
+                code,
+                &theme.syntax_theme,
+            )
+        };
+        if let Some(limit) = line_limit {
+            let window = highlighted.len().saturating_sub(limit);
+            highlighted.into_iter().skip(window).collect()
+        } else {
+            highlighted
+        }
+    } else {
+        let content_lines = content.lines().collect::<Vec<_>>();
+        let start = line_limit
+            .map(|limit| content_lines.len().saturating_sub(limit))
+            .unwrap_or(0);
+        content_lines
+            .into_iter()
+            .skip(start)
+            .map(|line| Line::styled(line.to_string(), Style::default().fg(color)))
+            .collect()
+    }
+}
+
 fn draw_review_panel(
     frame: &mut Frame,
     review: &ReviewState,
@@ -1824,7 +2030,7 @@ fn draw_plan_panel(
 ) {
     let mut lines = Vec::new();
 
-    if let Some(explanation) = &plan.explanation {
+    if let Some(explanation) = plan.explanation.as_ref().filter(|_| !focus.compact) {
         lines.push(Line::styled(explanation.as_str(), theme.muted_style()));
     }
     if let Some(runtime) = plan
@@ -1837,7 +2043,7 @@ fn draw_plan_panel(
             theme.muted_style().add_modifier(Modifier::ITALIC),
         ));
     }
-    if let Some(runtime) = &plan.runtime {
+    if let Some(runtime) = plan.runtime.as_ref().filter(|_| !focus.compact) {
         lines.extend(plan_loop_state_lines(runtime, theme));
         lines.extend(plan_followup_lines(runtime, theme));
         lines.extend(plan_followup_history_lines(runtime, theme));
@@ -1879,10 +2085,11 @@ fn draw_plan_panel(
         }
     }
 
+    let step_capacity = if focus.compact { 2 } else { 4 };
     let step_window_start = selected_step
-        .saturating_sub(1)
-        .min(plan.items.len().saturating_sub(4));
-    let step_window_end = (step_window_start + 4).min(plan.items.len());
+        .saturating_sub(step_capacity / 2)
+        .min(plan.items.len().saturating_sub(step_capacity));
+    let step_window_end = (step_window_start + step_capacity).min(plan.items.len());
     for (offset, item) in plan.items[step_window_start..step_window_end]
         .iter()
         .enumerate()
@@ -1908,14 +2115,16 @@ fn draw_plan_panel(
         ]));
     }
 
-    if plan.items.len() > 4 {
+    if plan.items.len() > step_capacity {
         lines.push(Line::styled(
-            format!("{} more steps", plan.items.len() - 4),
+            format!("{} more steps", plan.items.len() - step_capacity),
             theme.muted_style(),
         ));
     }
 
-    let title = if focus.focused_steps {
+    let title = if focus.compact {
+        " Plan "
+    } else if focus.focused_steps {
         " Plan (Ctrl+S • C complete • I in-progress • B blocked • R retry • U replan • K ack • X clear) "
     } else if focus.focused_jobs {
         " Plan (jobs focused • Y/V or ↑/↓) "
@@ -1935,6 +2144,7 @@ fn draw_plan_panel(
 struct PlanPanelFocus {
     focused_steps: bool,
     focused_jobs: bool,
+    compact: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -1943,11 +2153,25 @@ struct AgentsPanelViewState {
     expanded: bool,
     scroll_offset: usize,
     focused: bool,
+    compact: bool,
 }
 
-fn agents_panel_height(agents: &ResolvedAgents, expanded: bool) -> u16 {
+fn agents_panel_height(
+    agents: &ResolvedAgents,
+    expanded: bool,
+    focused: bool,
+    compact: bool,
+) -> u16 {
+    if !expanded && !focused {
+        return 1;
+    }
+
+    if compact {
+        return if expanded { 4 } else { 2 };
+    }
+
     if expanded {
-        return 10;
+        return 7;
     }
 
     let section_lines: usize = agents
@@ -1968,10 +2192,12 @@ fn draw_agents_panel(
     view_state: AgentsPanelViewState,
 ) {
     let lines = if let Some(agents) = agents {
-        if view_state.expanded {
+        if !view_state.expanded && !view_state.focused {
+            Vec::new()
+        } else if view_state.expanded && !view_state.compact {
             expanded_agents_lines(agents, theme, view_state.scroll_offset, area.height)
         } else {
-            compact_agents_lines(agents, theme)
+            compact_agents_lines(agents, theme, view_state.compact)
         }
     } else {
         if view_state.context_enabled {
@@ -1999,13 +2225,29 @@ fn draw_agents_panel(
         }
     };
 
-    let title = if view_state.expanded && view_state.focused {
+    let title = if !view_state.expanded && !view_state.focused {
+        " AGENTS (Ctrl+A open) "
+    } else if view_state.compact {
+        " AGENTS "
+    } else if view_state.expanded && view_state.focused {
         " AGENTS (focused • Y/V or ↑/↓) "
     } else if view_state.expanded {
         " AGENTS (expanded • Ctrl+A focus) "
     } else {
         " AGENTS (Ctrl+A open) "
     };
+    if !view_state.expanded && !view_state.focused {
+        frame.render_widget(
+            Paragraph::new(Line::styled(
+                title.trim(),
+                theme.muted_style().add_modifier(Modifier::ITALIC),
+            ))
+            .wrap(Wrap { trim: true }),
+            area,
+        );
+        return;
+    }
+
     let block = Block::default()
         .title(title)
         .borders(Borders::TOP)
@@ -2015,9 +2257,14 @@ fn draw_agents_panel(
     frame.render_widget(widget, area);
 }
 
-fn compact_agents_lines(agents: &ResolvedAgents, theme: &Theme) -> Vec<Line<'static>> {
+fn compact_agents_lines(
+    agents: &ResolvedAgents,
+    theme: &Theme,
+    compact: bool,
+) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
-    for section in agents.effective_rule_sections.iter().take(2) {
+    let section_limit = if compact { 1 } else { 2 };
+    for section in agents.effective_rule_sections.iter().take(section_limit) {
         lines.push(Line::from(vec![
             Span::styled("•", Style::default().fg(theme.accent)),
             Span::raw(" "),
@@ -2029,16 +2276,19 @@ fn compact_agents_lines(agents: &ResolvedAgents, theme: &Theme) -> Vec<Line<'sta
                 Style::default().fg(theme.foreground),
             ),
         ]));
-        if let Some(preview) = section.rules.first() {
+        if let Some(preview) = section.rules.first().filter(|_| !compact) {
             lines.push(Line::styled(
                 format!("  {}", truncate_agents_rule(&preview.text)),
                 theme.muted_style(),
             ));
         }
     }
-    if agents.effective_rule_sections.len() > 2 {
+    if agents.effective_rule_sections.len() > section_limit {
         lines.push(Line::styled(
-            format!("{} more sections", agents.effective_rule_sections.len() - 2),
+            format!(
+                "{} more sections",
+                agents.effective_rule_sections.len() - section_limit
+            ),
             theme.muted_style(),
         ));
     }
@@ -2392,7 +2642,12 @@ fn draw_stats(
         ]),
     ];
 
-    let area = centered_rect(50, 40, area);
+    let compact = compact_layout(area);
+    let area = if compact {
+        centered_rect_width(60, area)
+    } else {
+        centered_rect(50, 40, area)
+    };
     let stats_widget = Paragraph::new(stats_lines).block(
         Block::default()
             .title(" Usage Statistics ")
@@ -2401,7 +2656,11 @@ fn draw_stats(
                     .fg(theme.foreground)
                     .add_modifier(Modifier::BOLD),
             )
-            .padding(Padding::uniform(2)),
+            .padding(if compact {
+                Padding::horizontal(1)
+            } else {
+                Padding::uniform(2)
+            }),
     );
 
     frame.render_widget(stats_widget, area);
@@ -2575,46 +2834,33 @@ fn footer_shortcuts_for_state(
 }
 
 fn draw_zen_footer(frame: &mut Frame, app: &TuiApp, theme: &Theme, area: Rect) {
-    let block = Block::default()
-        .borders(Borders::TOP)
-        .border_style(theme.muted_style());
-    let area = block.inner(area);
-    frame.render_widget(
-        block,
-        Rect {
-            x: area.x,
-            y: area.y.saturating_sub(1),
-            width: area.width,
-            height: area.height.saturating_add(1),
-        },
-    );
-
     let shortcuts = footer_shortcuts_for_state(&app.state);
+    let Some(row) = shortcuts.first() else {
+        return;
+    };
 
-    let num_cols = shortcuts.iter().map(|row| row.len()).max().unwrap_or(1) as u16;
+    let num_cols = row.len().max(1) as u16;
     let col_width = (area.width / num_cols).max(1);
-    for (row_idx, row) in shortcuts.iter().enumerate() {
-        for (col_idx, (key, label)) in row.iter().enumerate() {
-            let shortcut_area = Rect {
-                x: area.x + col_idx as u16 * col_width,
-                y: area.y + row_idx as u16,
-                width: col_width,
-                height: 1,
-            };
+    for (col_idx, (key, label)) in row.iter().enumerate() {
+        let shortcut_area = Rect {
+            x: area.x + col_idx as u16 * col_width,
+            y: area.y,
+            width: col_width,
+            height: 1,
+        };
 
-            let shortcut_text = Line::from(vec![
-                Span::styled(*key, Style::default().fg(theme.accent)),
-                Span::styled(format!(" {}", label), theme.muted_style()),
-            ]);
+        let shortcut_text = Line::from(vec![
+            Span::styled(*key, Style::default().fg(theme.accent)),
+            Span::styled(format!(" {}", label), theme.muted_style()),
+        ]);
 
-            frame.render_widget(Paragraph::new(shortcut_text), shortcut_area);
-        }
+        frame.render_widget(Paragraph::new(shortcut_text), shortcut_area);
     }
 }
 
 fn draw_approval(frame: &mut Frame, state: &ApprovalState, theme: &Theme) {
     let content = format!(
-        "{}\n\nCommand:\n{}\n\nControls: Y approve • N reject • Esc reject • ↑/↓ or J/K scroll",
+        "{}\n\nCommand:\n{}\n\nControls: Y approve • N/Esc reject • ↑/↓ or J/K scroll",
         state.prompt, state.command
     );
     let area = frame.area();
@@ -2655,6 +2901,7 @@ fn draw_sessions(
     theme: &Theme,
     area: Rect,
 ) {
+    let compact = compact_layout(area);
     if sessions.is_empty() {
         let detail = if remote_mode {
             "No remote sessions were found for the signed-in user. Local-only sessions remain available under Export."
@@ -2690,7 +2937,11 @@ fn draw_sessions(
         return;
     }
 
-    let visible_item_capacity = area.height.saturating_sub(2).max(2) as usize / 2;
+    let visible_item_capacity = if compact {
+        area.height.saturating_sub(2).max(1) as usize
+    } else {
+        area.height.saturating_sub(2).max(2) as usize / 2
+    };
     let visible_item_capacity = visible_item_capacity.max(1);
     let selected = selected.min(sessions.len().saturating_sub(1));
     let max_scroll_start = sessions.len().saturating_sub(visible_item_capacity);
@@ -2716,18 +2967,18 @@ fn draw_sessions(
             } else {
                 Style::default().bg(theme.background).fg(theme.foreground)
             };
-            ListItem::new(vec![
-                Line::from(vec![
-                    Span::styled(session.name.clone(), style),
-                    Span::styled("  ", theme.muted_style()),
-                    Span::styled(session.created_at.clone(), theme.muted_style()),
-                ]),
-                Line::from(vec![Span::styled(
+            let mut lines = vec![Line::from(vec![
+                Span::styled(session.name.clone(), style),
+                Span::styled("  ", theme.muted_style()),
+                Span::styled(session.created_at.clone(), theme.muted_style()),
+            ])];
+            if !compact {
+                lines.push(Line::from(vec![Span::styled(
                     truncate_chat_summary(&session.id, 48),
                     theme.muted_style(),
-                )]),
-            ])
-            .style(style)
+                )]));
+            }
+            ListItem::new(lines).style(style)
         })
         .collect();
 
@@ -2756,6 +3007,7 @@ fn draw_export_sessions(
     theme: &Theme,
     area: Rect,
 ) {
+    let compact = compact_layout(area);
     if sessions.is_empty() {
         let empty = Paragraph::new(vec![
             Line::from(vec![Span::styled(
@@ -2785,7 +3037,11 @@ fn draw_export_sessions(
         return;
     }
 
-    let visible_item_capacity = area.height.saturating_sub(2).max(2) as usize / 2;
+    let visible_item_capacity = if compact {
+        area.height.saturating_sub(2).max(1) as usize
+    } else {
+        area.height.saturating_sub(2).max(2) as usize / 2
+    };
     let visible_item_capacity = visible_item_capacity.max(1);
     let selected = selected.min(sessions.len().saturating_sub(1));
     let max_scroll_start = sessions.len().saturating_sub(visible_item_capacity);
@@ -2811,18 +3067,18 @@ fn draw_export_sessions(
             } else {
                 Style::default().bg(theme.background).fg(theme.foreground)
             };
-            ListItem::new(vec![
-                Line::from(vec![
-                    Span::styled(display_session_name(session), style),
-                    Span::styled("  ", theme.muted_style()),
-                    Span::styled(session.created_at.clone(), theme.muted_style()),
-                ]),
-                Line::from(vec![Span::styled(
+            let mut lines = vec![Line::from(vec![
+                Span::styled(display_session_name(session), style),
+                Span::styled("  ", theme.muted_style()),
+                Span::styled(session.created_at.clone(), theme.muted_style()),
+            ])];
+            if !compact {
+                lines.push(Line::from(vec![Span::styled(
                     truncate_chat_summary(&session.id, 48),
                     theme.muted_style(),
-                )]),
-            ])
-            .style(style)
+                )]));
+            }
+            ListItem::new(lines).style(style)
         })
         .collect();
 
@@ -2854,6 +3110,7 @@ fn display_session_name(session: &SessionInfo) -> String {
 }
 
 fn draw_settings(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
+    let compact = compact_layout(area);
     let tools = [
         "Profile",
         "Execution Policy",
@@ -2876,15 +3133,21 @@ fn draw_settings(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) 
         })
         .collect();
 
+    let constraints = if compact {
+        [Constraint::Min(5), Constraint::Length(1)]
+    } else {
+        [Constraint::Min(8), Constraint::Length(3)]
+    };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(8), Constraint::Length(3)])
+        .constraints(constraints)
         .split(area);
-    let tools_list = List::new(items).block(
-        Block::default()
-            .title(" Settings ")
-            .padding(Padding::uniform(1)),
-    );
+    let tools_list =
+        List::new(items).block(Block::default().title(" Settings ").padding(if compact {
+            Padding::horizontal(1)
+        } else {
+            Padding::uniform(1)
+        }));
     let context = Paragraph::new(settings_context(selected))
         .style(theme.muted_style())
         .block(Block::default().padding(Padding::horizontal(1)))
@@ -3548,6 +3811,51 @@ fn draw_plan_jobs_browser(frame: &mut Frame, chat_state: &super::app::ChatState,
     frame.render_widget(detail, chunks[2]);
 }
 
+fn draw_command_output_browser(
+    frame: &mut Frame,
+    chat_state: &super::app::ChatState,
+    theme: &Theme,
+) {
+    let Some(output) = derive_command_output_display(chat_state) else {
+        return;
+    };
+
+    let overlay_area = centered_rect(90, 80, frame.area());
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(4)])
+        .split(overlay_area);
+
+    frame.render_widget(Clear, overlay_area);
+
+    let title = Paragraph::new(format!(
+        "$ Command Output ({}) • Esc close • ↑/↓ scroll • {}",
+        output.status_label,
+        truncate_chat_summary(&output.command, 80)
+    ))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(theme.muted_style())
+            .style(Style::default().bg(theme.background)),
+    )
+    .style(Style::default().fg(theme.foreground));
+    frame.render_widget(title, chunks[0]);
+
+    let detail = Paragraph::new(command_output_lines(&output, theme, None))
+        .block(
+            Block::default()
+                .title(format!(" Output • {} lines ", output.total_line_count))
+                .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+                .border_style(theme.muted_style())
+                .style(Style::default().bg(theme.background))
+                .padding(Padding::horizontal(1)),
+        )
+        .scroll((chat_state.command_output_scroll as u16, 0))
+        .wrap(Wrap { trim: false });
+    frame.render_widget(detail, chunks[1]);
+}
+
 fn draw_plan_steps_browser(frame: &mut Frame, chat_state: &super::app::ChatState, theme: &Theme) {
     let Some(plan) = &chat_state.active_plan else {
         return;
@@ -3749,6 +4057,24 @@ mod tests {
         assert_eq!(lines[1].to_string(), "second");
     }
 
+    #[test]
+    fn input_display_lines_show_tail_when_multiline_input_overflows() {
+        let lines = input_display_lines("one\ntwo\nthree\nfour", Style::default(), 2);
+
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].to_string().contains("three"));
+        assert!(lines[0].to_string().starts_with("…"));
+        assert!(lines[1].to_string().contains("four"));
+    }
+
+    #[test]
+    fn multiline_input_height_uses_available_room() {
+        let input = "one\ntwo\nthree\nfour\nfive\nsix";
+
+        assert_eq!(input_area_height(input, 120, 20), 7);
+        assert_eq!(input_area_height(input, 120, 9), 5);
+    }
+
     fn empty_chat_state() -> app::ChatState {
         app::ChatState {
             session_id: "session-1".to_string(),
@@ -3765,6 +4091,8 @@ mod tests {
             plan_job_output_scroll: 0,
             navigation_focus: app::NavigationFocus::Messages,
             command_output: None,
+            command_output_expanded: false,
+            command_output_scroll: 0,
             loop_state: app::ChatLoopState::default(),
             agents_panel_expanded: false,
             agents_scroll_offset: 0,
@@ -3882,6 +4210,298 @@ mod tests {
             .collect::<String>();
 
         assert!(rendered.contains("Quit"));
+    }
+
+    #[test]
+    fn compact_layout_detects_small_terminal_room() {
+        assert!(compact_layout(Rect {
+            x: 0,
+            y: 0,
+            width: 80,
+            height: 26,
+        }));
+        assert!(!compact_layout(Rect {
+            x: 0,
+            y: 0,
+            width: 120,
+            height: 48,
+        }));
+    }
+
+    #[test]
+    fn compact_command_output_height_reclaims_rows() {
+        let output = CommandOutputDisplay {
+            command: "cargo test".to_string(),
+            content: (0..12)
+                .map(|index| format!("line {index}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            has_error: false,
+            status_label: "done".to_string(),
+            total_line_count: 12,
+        };
+
+        assert!(
+            command_output_panel_height(&output, true)
+                < command_output_panel_height(&output, false)
+        );
+    }
+
+    #[test]
+    fn default_command_output_height_is_globally_capped() {
+        let output = CommandOutputDisplay {
+            command: "cargo test".to_string(),
+            content: (0..12)
+                .map(|index| format!("line {index}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            has_error: false,
+            status_label: "done".to_string(),
+            total_line_count: 12,
+        };
+
+        assert_eq!(command_output_panel_height(&output, false), 9);
+    }
+
+    #[test]
+    fn footer_uses_one_row_globally() {
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Sessions(Vec::new(), 0);
+
+        let backend = TestBackend::new(120, 40);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let theme = Theme::default();
+
+        terminal
+            .draw(|frame| draw(frame, &app, &theme))
+            .expect("footer should render");
+
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(rendered.contains("Enter"));
+        assert!(rendered.contains("Resume"));
+        assert!(!rendered.contains("J/K Move"));
+    }
+
+    #[test]
+    fn draw_chat_compacts_crowded_terminal() {
+        let mut chat_state = empty_chat_state();
+        chat_state.messages.push(Message {
+            role: "user".to_string(),
+            content: "Keep the main transcript visible.".to_string(),
+        });
+        chat_state.sidebar_visible = true;
+        chat_state.sidebar_sections = vec![app::SidebarSection {
+            title: "Commands".to_string(),
+            entries: vec!["cargo test".to_string()],
+        }];
+        chat_state.command_output = Some(app::CommandOutputState {
+            command: "cargo test".to_string(),
+            content: (0..20)
+                .map(|index| format!("output line {index}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            has_error: false,
+            done: true,
+        });
+        chat_state.active_plan = Some(PlanState {
+            explanation: Some("Crowded terminal plan".to_string()),
+            items: (0..6)
+                .map(|index| PlanItem {
+                    step: format!("Step {index}"),
+                    status: PlanStepStatus::Pending,
+                    job_id: None,
+                })
+                .collect(),
+            runtime: None,
+            updated_at: None,
+        });
+
+        let theme = Theme::default();
+        refresh_chat_render_cache(&mut chat_state, &theme);
+
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Chat(Box::new(chat_state));
+
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+
+        terminal
+            .draw(|frame| draw(frame, &app, &theme))
+            .expect("crowded chat should render");
+
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(rendered.contains("Keep the main transcript visible."));
+        assert!(rendered.contains("Command Output"));
+        assert!(rendered.contains("Ctrl+O"));
+        assert!(!rendered.contains("Commands"));
+    }
+
+    #[test]
+    fn chat_shows_only_agents_hint_until_opened() {
+        let mut chat_state = empty_chat_state();
+        chat_state.messages.push(Message {
+            role: "user".to_string(),
+            content: "Keep chat space available.".to_string(),
+        });
+        chat_state.active_agents = Some(ResolvedAgents {
+            sources: vec![harper_core::core::agents::AgentsSource {
+                path: std::path::PathBuf::from("AGENTS.md"),
+                content: "Rules".to_string(),
+                sections: Vec::new(),
+            }],
+            effective_sections: Vec::new(),
+            effective_rule_sections: vec![harper_core::core::agents::EffectiveAgentsSection {
+                heading: Some("Harper Agent Rules".to_string()),
+                rules: Vec::new(),
+            }],
+        });
+
+        let theme = Theme::default();
+        refresh_chat_render_cache(&mut chat_state, &theme);
+
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Chat(Box::new(chat_state));
+
+        let backend = TestBackend::new(120, 36);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+
+        terminal
+            .draw(|frame| draw(frame, &app, &theme))
+            .expect("chat should render");
+
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(rendered.contains("Keep chat space available."));
+        assert!(rendered.contains("AGENTS"));
+        assert!(rendered.contains("Ctrl+A"));
+        assert!(!rendered.contains("Harper Agent Rules"));
+    }
+
+    #[test]
+    fn multiline_input_collapses_agents_to_preserve_input_room() {
+        let mut chat_state = empty_chat_state();
+        chat_state.input = "one\ntwo\nthree\nfour\nfive".to_string();
+        chat_state.agents_panel_expanded = true;
+        chat_state.active_agents = Some(ResolvedAgents {
+            sources: vec![harper_core::core::agents::AgentsSource {
+                path: std::path::PathBuf::from("AGENTS.md"),
+                content: "Rules".to_string(),
+                sections: Vec::new(),
+            }],
+            effective_sections: Vec::new(),
+            effective_rule_sections: vec![harper_core::core::agents::EffectiveAgentsSection {
+                heading: Some("Harper Agent Rules".to_string()),
+                rules: vec![harper_core::core::agents::EffectiveAgentsRule {
+                    text: "Do not occupy input space.".to_string(),
+                    source_path: std::path::PathBuf::from("AGENTS.md"),
+                }],
+            }],
+        });
+
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Chat(Box::new(chat_state));
+
+        let backend = TestBackend::new(120, 24);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let theme = Theme::default();
+
+        terminal
+            .draw(|frame| draw(frame, &app, &theme))
+            .expect("chat should render");
+
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(rendered.contains("one"));
+        assert!(rendered.contains("five"));
+        assert!(rendered.contains("AGENTS"));
+        assert!(!rendered.contains("Do not occupy input space."));
+    }
+
+    #[test]
+    fn long_input_wraps_inside_input_area() {
+        let mut chat_state = empty_chat_state();
+        chat_state.input =
+            "This pasted request is intentionally long so it must wrap before VISIBLE_TAIL"
+                .to_string();
+
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Chat(Box::new(chat_state));
+
+        let backend = TestBackend::new(54, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let theme = Theme::default();
+
+        terminal
+            .draw(|frame| draw(frame, &app, &theme))
+            .expect("chat should render");
+
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(rendered.contains("VISIBLE_TAIL"));
+    }
+
+    #[test]
+    fn draw_sessions_compacts_items_on_small_terminal() {
+        let sessions = (0..10)
+            .map(|index| SessionInfo {
+                id: format!("session-id-{index}"),
+                name: format!("Session {index}"),
+                created_at: "today".to_string(),
+            })
+            .collect::<Vec<_>>();
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Sessions(sessions, 7);
+
+        let backend = TestBackend::new(80, 8);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let theme = Theme::default();
+
+        terminal
+            .draw(|frame| draw(frame, &app, &theme))
+            .expect("compact sessions should render");
+
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(rendered.contains("Session 7"));
+        assert!(!rendered.contains("session-id-7"));
     }
 
     #[test]

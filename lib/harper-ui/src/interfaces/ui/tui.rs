@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
 
+use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
@@ -460,7 +461,12 @@ pub async fn run_tui(
     // Set up terminal
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen, cursor::Hide)?;
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        EnableBracketedPaste,
+        cursor::Hide
+    )?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -768,6 +774,8 @@ pub async fn run_tui(
                                             }
                                             Ok(harper_core::NativeShellOutcome::Run(command)) => {
                                                 chat_state.command_output = None;
+                                                chat_state.command_output_expanded = false;
+                                                chat_state.command_output_scroll = 0;
                                                 app.set_activity_status(Some(format!("running: {}", command)));
                                                 let _ = worker_tx.send(WorkerMsg::ExecuteShellCommand {
                                                     command,
@@ -978,6 +986,8 @@ pub async fn run_tui(
                                 chat_state.follow_latest_messages();
                                 chat_state.awaiting_response = true;
                                 chat_state.command_output = None;
+                                chat_state.command_output_expanded = false;
+                                chat_state.command_output_scroll = 0;
                                 app.set_activity_status(Some("thinking".to_string()));
 
                                 let _ = worker_tx.send(WorkerMsg::SendMessage {
@@ -1334,6 +1344,8 @@ pub async fn run_tui(
                             if let AppState::Chat(chat_state) = &mut app.state {
                                 if chat_state.session_id == session_id {
                                     chat_state.command_output = None;
+                                    chat_state.command_output_expanded = false;
+                                    chat_state.command_output_scroll = 0;
                                 }
                             }
                             app.set_activity_status(Some(format!("retrying: {}", command)));
@@ -1685,7 +1697,12 @@ pub async fn run_tui(
 
     // Restore terminal
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, cursor::Show)?;
+    execute!(
+        terminal.backend_mut(),
+        DisableBracketedPaste,
+        LeaveAlternateScreen,
+        cursor::Show
+    )?;
 
     Ok(())
 }
