@@ -5086,15 +5086,11 @@ dependencies = [
 
 [[package]]
 name = "turul-mcp-json-rpc-server"
-version = "0.3.38"
+version = "0.3.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dfb216e88b096da2a69872b14e38e12ab7e0347b591912875a98a12c1e2760a"
+checksum = "4e1bb8203ab517be181f5b414faf2b0b6536fa447833d43dcbe77e36ff25a279"
 dependencies = [
- "async-trait",
- "futures",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
+ "turul-rpc",
 ]
 
 [[package]]
@@ -5117,6 +5113,53 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "turul-mcp-json-rpc-server",
+]
+
+[[package]]
+name = "turul-rpc"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e66ef027a99edfc0261df760edaaf46a1af9ea3939212d6c9e1bc2a87b329668"
+dependencies = [
+ "turul-rpc-core",
+ "turul-rpc-jsonrpc",
+ "turul-rpc-server",
+]
+
+[[package]]
+name = "turul-rpc-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f45c6a218e558019298454250cf5fb99b192b2ff6f72d3c383839909ba08aea"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "turul-rpc-jsonrpc"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d16077edb01b5e028e25902f2afa29150fab3dd6a7abbbd29bcf5c286b5265a"
+dependencies = [
+ "serde",
+ "serde_json",
+ "turul-rpc-core",
+]
+
+[[package]]
+name = "turul-rpc-server"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52777797cc1b8ecf3505ca4853b06acb78c6e9e8d1c7ce2b708175af5ed59da4"
+dependencies = [
+ "async-trait",
+ "futures",
+ "serde",
+ "serde_json",
+ "turul-rpc-core",
+ "turul-rpc-jsonrpc",
 ]
 
 [[package]]
