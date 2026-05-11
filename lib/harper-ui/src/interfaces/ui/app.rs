@@ -96,6 +96,8 @@ pub struct ChatState {
     pub plan_job_output_scroll: usize,
     pub navigation_focus: NavigationFocus,
     pub command_output: Option<CommandOutputState>,
+    pub command_output_expanded: bool,
+    pub command_output_scroll: usize,
     pub loop_state: ChatLoopState,
     pub agents_panel_expanded: bool,
     pub agents_scroll_offset: usize,
@@ -338,6 +340,15 @@ fn should_skip_sidebar_workspace_entry(name: &str) -> bool {
 }
 
 impl ChatState {
+    fn has_command_output_display(&self) -> bool {
+        self.command_output.is_some()
+            || self
+                .active_plan
+                .as_ref()
+                .and_then(|plan| plan.runtime.as_ref())
+                .is_some_and(|runtime| !runtime.jobs.is_empty())
+    }
+
     pub fn follow_latest_messages(&mut self) {
         self.scroll_offset = 0;
     }
@@ -732,6 +743,15 @@ impl TuiApp {
         match &mut self.state {
             AppState::Menu(sel) => *sel = (*sel + 1) % MAIN_MENU_ITEM_COUNT,
             AppState::Chat(chat_state) => {
+                if chat_state.command_output_expanded {
+                    if chat_state.has_command_output_display() {
+                        chat_state.command_output_scroll =
+                            chat_state.command_output_scroll.saturating_add(1);
+                        return;
+                    }
+                    chat_state.command_output_expanded = false;
+                    chat_state.command_output_scroll = 0;
+                }
                 chat_state.normalize_navigation_focus();
                 match chat_state.navigation_focus {
                     NavigationFocus::Review => {
@@ -814,6 +834,15 @@ impl TuiApp {
                 }
             }
             AppState::Chat(chat_state) => {
+                if chat_state.command_output_expanded {
+                    if chat_state.has_command_output_display() {
+                        chat_state.command_output_scroll =
+                            chat_state.command_output_scroll.saturating_sub(1);
+                        return;
+                    }
+                    chat_state.command_output_expanded = false;
+                    chat_state.command_output_scroll = 0;
+                }
                 chat_state.normalize_navigation_focus();
                 match chat_state.navigation_focus {
                     NavigationFocus::Review => {
@@ -916,7 +945,8 @@ fn parse_review_state(content: &str) -> Option<ReviewState> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MessageType, TuiApp, UiMessage};
+    use super::{AppState, ChatState, MessageType, NavigationFocus, TuiApp, UiMessage};
+    use harper_core::core::Message;
     use std::time::{Duration, Instant};
 
     #[test]
@@ -966,5 +996,55 @@ mod tests {
 
         app.refresh_message();
         assert!(app.message.is_some());
+    }
+
+    #[test]
+    fn stale_command_output_expansion_does_not_trap_scrolling() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Chat(Box::new(ChatState {
+            session_id: "session".to_string(),
+            messages: vec![Message {
+                role: "user".to_string(),
+                content: "hello".to_string(),
+            }],
+            awaiting_response: false,
+            active_plan: None,
+            active_agents: None,
+            active_review: None,
+            review_selected: 0,
+            plan_step_selected: 0,
+            plan_steps_expanded: false,
+            plan_job_selected: 0,
+            plan_jobs_expanded: false,
+            plan_job_output_scroll: 0,
+            navigation_focus: NavigationFocus::Messages,
+            command_output: None,
+            command_output_expanded: true,
+            command_output_scroll: 5,
+            loop_state: super::ChatLoopState::default(),
+            agents_panel_expanded: false,
+            agents_scroll_offset: 0,
+            input: String::new(),
+            web_search: false,
+            web_search_enabled: false,
+            completion_candidates: Vec::new(),
+            completion_index: 0,
+            scroll_offset: 2,
+            completion_prefix: None,
+            sidebar_visible: false,
+            sidebar_sections: Vec::new(),
+            rendered_message_cache: Vec::new(),
+            rendered_transcript_lines: Vec::new(),
+            render_cache_theme_key: String::new(),
+        }));
+
+        app.next();
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert!(!chat_state.command_output_expanded);
+        assert_eq!(chat_state.command_output_scroll, 0);
+        assert_eq!(chat_state.scroll_offset, 1);
     }
 }
