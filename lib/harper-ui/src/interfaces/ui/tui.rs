@@ -268,6 +268,10 @@ fn final_chat_loop_outcome(
     }
 }
 
+fn display_command_info(app: &mut TuiApp, response: String) {
+    app.set_persistent_info_message(response);
+}
+
 fn parse_strategy_command(
     input: &str,
     current: ExecutionStrategy,
@@ -756,7 +760,7 @@ pub async fn run_tui(
                                         ) {
                                             Ok(harper_core::NativeShellOutcome::Handled(response)) => {
                                                 chat_state.active_plan = harper_core::memory::storage::load_plan_state(conn, &session_id).ok().flatten();
-                                                app.set_info_message(response);
+                                                display_command_info(&mut app, response);
                                                 continue;
                                             }
                                             Ok(harper_core::NativeShellOutcome::Ask(prompt)) => {
@@ -781,10 +785,11 @@ pub async fn run_tui(
                                                 continue;
                                             }
                                             Ok(harper_core::NativeShellOutcome::UpdateStatus) => {
-                                                if let Some(status) = &app.update_status {
-                                                    app.set_info_message(format!("Current {}", status));
+                                                if let Some(status) = app.update_status.clone() {
+                                                    display_command_info(&mut app, format!("Current {}", status));
                                                 } else {
-                                                    app.set_info_message(
+                                                    display_command_info(
+                                                        &mut app,
                                                         "No update status is cached yet. Use /update check."
                                                             .to_string(),
                                                     );
@@ -792,7 +797,8 @@ pub async fn run_tui(
                                                 continue;
                                             }
                                             Ok(harper_core::NativeShellOutcome::UpdateApply) => {
-                                                app.set_info_message(
+                                                display_command_info(
+                                                    &mut app,
                                                     "Update apply is intentionally explicit. Run: harper self-update".to_string(),
                                                 );
                                                 continue;
@@ -879,7 +885,7 @@ pub async fn run_tui(
                                             ));
                                         }
                                         Err(current_only) => {
-                                            app.set_info_message(format!(
+                                            display_command_info(&mut app, format!(
                                                 "Current execution strategy: {}",
                                                 settings::execution_strategy_name(current_only)
                                             ));
@@ -895,7 +901,7 @@ pub async fn run_tui(
                                             } else {
                                                 "off"
                                             };
-                                            app.set_info_message(format!("AGENTS context: {}", status));
+                                            display_command_info(&mut app, format!("AGENTS context: {}", status));
                                         }
                                         AgentsCommand::Set(enabled) => {
                                             app.agents_context_enabled = enabled;
@@ -918,10 +924,11 @@ pub async fn run_tui(
                                 if let Some(command) = parse_update_command(&msg) {
                                     match command {
                                         UpdateCommand::ShowStatus => {
-                                            if let Some(status) = &app.update_status {
-                                                app.set_info_message(format!("Current {}", status));
+                                            if let Some(status) = app.update_status.clone() {
+                                                display_command_info(&mut app, format!("Current {}", status));
                                             } else {
-                                                app.set_info_message(
+                                                display_command_info(
+                                                    &mut app,
                                                     "No update status is cached yet. Use /update check."
                                                         .to_string(),
                                                 );
@@ -955,7 +962,7 @@ pub async fn run_tui(
                                             let status = app.auth_session.as_ref().map(|session| {
                                                 session.user.email.clone().unwrap_or_else(|| session.user.user_id.clone())
                                             }).unwrap_or_else(|| "not signed in".to_string());
-                                            app.set_info_message(format!("TUI auth status: {}", status));
+                                            display_command_info(&mut app, format!("TUI auth status: {}", status));
                                             continue;
                                         }
                                     }
@@ -1685,7 +1692,8 @@ pub async fn run_tui(
 
 #[cfg(test)]
 mod tests {
-    use super::{final_chat_loop_outcome, infer_chat_loop_stage};
+    use super::{display_command_info, final_chat_loop_outcome, infer_chat_loop_stage};
+    use crate::interfaces::ui::app::{MessageType, TuiApp};
     use harper_core::core::plan::{PlanLoopOutcome, PlanLoopStage};
 
     #[test]
@@ -1706,5 +1714,27 @@ mod tests {
             final_chat_loop_outcome(Some(&PlanLoopStage::Responding), None),
             PlanLoopOutcome::Responded
         );
+    }
+
+    #[test]
+    fn native_shell_help_uses_persistent_info_message() {
+        let mut app = TuiApp::new();
+
+        display_command_info(&mut app, "Help".to_string());
+
+        let message = app.message.as_ref().expect("help message");
+        assert!(matches!(message.message_type, MessageType::Info));
+        assert!(message.expires_at.is_none());
+    }
+
+    #[test]
+    fn command_info_messages_do_not_expire() {
+        let mut app = TuiApp::new();
+
+        display_command_info(&mut app, "Current execution strategy: auto".to_string());
+
+        let message = app.message.as_ref().expect("command info message");
+        assert!(matches!(message.message_type, MessageType::Info));
+        assert!(message.expires_at.is_none());
     }
 }

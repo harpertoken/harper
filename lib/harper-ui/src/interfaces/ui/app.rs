@@ -29,6 +29,7 @@ use tokio::sync::oneshot;
 const MAX_SIDEBAR_PROBE_ENTRIES: usize = 5;
 const MAX_SIDEBAR_GIT_ENTRIES: usize = 4;
 const MAX_SIDEBAR_FILE_ENTRIES: usize = 6;
+pub const MAIN_MENU_ITEM_COUNT: usize = 6;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ReviewFindingState {
@@ -649,6 +650,10 @@ impl TuiApp {
         self.set_message(content, MessageType::Info, Some(Duration::from_secs(3)));
     }
 
+    pub fn set_persistent_info_message(&mut self, content: String) {
+        self.set_message(content, MessageType::Info, None);
+    }
+
     pub fn clear_message(&mut self) {
         self.message = None;
         self.help_selected = 0;
@@ -725,7 +730,7 @@ impl TuiApp {
         let profile_action_count = self.profile_action_count();
         let execution_policy_row_count = self.execution_policy_row_count();
         match &mut self.state {
-            AppState::Menu(sel) => *sel = (*sel + 1) % 6,
+            AppState::Menu(sel) => *sel = (*sel + 1) % MAIN_MENU_ITEM_COUNT,
             AppState::Chat(chat_state) => {
                 chat_state.normalize_navigation_focus();
                 match chat_state.navigation_focus {
@@ -801,7 +806,13 @@ impl TuiApp {
         let profile_action_count = self.profile_action_count();
         let execution_policy_row_count = self.execution_policy_row_count();
         match &mut self.state {
-            AppState::Menu(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
+            AppState::Menu(sel) => {
+                *sel = if *sel == 0 {
+                    MAIN_MENU_ITEM_COUNT - 1
+                } else {
+                    *sel - 1
+                }
+            }
             AppState::Chat(chat_state) => {
                 chat_state.normalize_navigation_focus();
                 match chat_state.navigation_focus {
@@ -939,6 +950,19 @@ mod tests {
             message_type: MessageType::Help,
             expires_at: None,
         });
+
+        app.refresh_message();
+        assert!(app.message.is_some());
+    }
+
+    #[test]
+    fn persistent_info_messages_do_not_expire() {
+        let mut app = TuiApp::new();
+        app.set_persistent_info_message("Help".to_string());
+
+        let message = app.message.as_ref().expect("info message");
+        assert!(matches!(message.message_type, MessageType::Info));
+        assert!(message.expires_at.is_none());
 
         app.refresh_message();
         assert!(app.message.is_some());

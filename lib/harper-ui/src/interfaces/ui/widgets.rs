@@ -18,13 +18,18 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap};
 
-use super::app::{AppState, ApprovalState, ReviewState, SessionInfo, TuiApp, UiMessage};
+use super::app::{
+    AppState, ApprovalState, ReviewState, SessionInfo, TuiApp, UiMessage, MAIN_MENU_ITEM_COUNT,
+};
 use super::settings;
 use super::theme::Theme;
 use harper_core::core::plan::{
     PlanFollowup, PlanJobRecord, PlanJobStatus, PlanLoopOutcome, PlanLoopStage,
 };
 use harper_core::{PlanRuntime, PlanState, PlanStepStatus, ResolvedAgents};
+
+const MAX_COMPLETION_POPUP_HEIGHT: u16 = 12;
+const MENU_BLOCK_VERTICAL_OVERHEAD: u16 = 3;
 
 // Refined shortcuts for a cleaner footer
 const CHAT_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
@@ -216,12 +221,14 @@ pub fn refresh_chat_render_cache(chat_state: &mut super::app::ChatState, theme: 
 
 pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     let area = frame.area();
+    let compact_menu =
+        matches!(app.state, AppState::Menu(_)) && area.height <= MAIN_MENU_ITEM_COUNT as u16 + 4;
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(2)])
         .split(area);
 
-    let main_area = chunks[0];
+    let main_area = if compact_menu { area } else { chunks[0] };
     let footer_area = chunks[1];
 
     match &app.state {
@@ -275,7 +282,6 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .as_ref()
                 .map(|review| review_panel_height(review, chat_state.review_selected))
                 .unwrap_or(0);
-            let completion_height = completion_popup_height(chat_state);
             let input_height = input_area_height(&chat_state.input, chat_area.width);
 
             let mut constraints = vec![Constraint::Length(3), Constraint::Min(5)];
@@ -460,6 +466,10 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 + usize::from(has_agents);
             frame.render_widget(input_widget, chunks[input_index]);
 
+            let completion_height = completion_popup_height(
+                chat_state,
+                chunks[input_index].y.saturating_sub(chat_area.y),
+            );
             if completion_height > 0 {
                 let popup_area = Rect {
                     x: chunks[input_index].x,
@@ -493,7 +503,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
         AppState::Stats(stats) => draw_stats(frame, stats, theme, main_area),
     }
 
-    if !matches!(app.state, AppState::Chat(_)) {
+    if !matches!(app.state, AppState::Chat(_)) && !compact_menu {
         draw_zen_footer(frame, app, theme, footer_area);
     }
 
@@ -1406,12 +1416,41 @@ fn plan_panel_height(plan: &PlanState) -> u16 {
     lines as u16
 }
 
-fn completion_popup_height(chat_state: &super::app::ChatState) -> u16 {
+fn completion_popup_height(chat_state: &super::app::ChatState, available_height: u16) -> u16 {
     if chat_state.input.starts_with('/') && !chat_state.completion_candidates.is_empty() {
-        (chat_state.completion_candidates.len() as u16) + 2
+        ((chat_state.completion_candidates.len() as u16) + 2)
+            .min(MAX_COMPLETION_POPUP_HEIGHT)
+            .min(available_height)
     } else {
         0
     }
+}
+
+fn completion_visible_range(
+    total: usize,
+    selected: usize,
+    visible_capacity: usize,
+) -> (usize, usize) {
+    selected_visible_range(total, selected, visible_capacity)
+}
+
+fn selected_visible_range(
+    total: usize,
+    selected: usize,
+    visible_capacity: usize,
+) -> (usize, usize) {
+    if total == 0 || visible_capacity == 0 {
+        return (0, 0);
+    }
+
+    let selected = selected.min(total.saturating_sub(1));
+    let visible_capacity = visible_capacity.min(total);
+    let half_window = visible_capacity / 2;
+    let max_start = total.saturating_sub(visible_capacity);
+    let start = selected.saturating_sub(half_window).min(max_start);
+    let end = start + visible_capacity;
+
+    (start, end)
 }
 
 fn draw_completion_popup(
@@ -1420,9 +1459,23 @@ fn draw_completion_popup(
     theme: &Theme,
     area: Rect,
 ) {
+    let selected_index = chat_state
+        .completion_candidates
+        .iter()
+        .position(|candidate| candidate == &chat_state.input)
+        .unwrap_or(chat_state.completion_index)
+        .min(chat_state.completion_candidates.len().saturating_sub(1));
+    let visible_capacity = area.height.saturating_sub(2) as usize;
+    let (window_start, window_end) = completion_visible_range(
+        chat_state.completion_candidates.len(),
+        selected_index,
+        visible_capacity,
+    );
     let items = chat_state
         .completion_candidates
         .iter()
+        .skip(window_start)
+        .take(window_end.saturating_sub(window_start))
         .map(|candidate| {
             let style = if candidate == &chat_state.input {
                 theme
@@ -2401,12 +2454,29 @@ fn draw_zen_menu(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) 
         "Settings",
         "Quit",
     ];
+    debug_assert_eq!(menu_items.len(), MAIN_MENU_ITEM_COUNT);
 
-    let area = centered_rect(40, 35, area);
+    let compact = area.height <= MAIN_MENU_ITEM_COUNT as u16 + MENU_BLOCK_VERTICAL_OVERHEAD;
+    let area = if compact {
+        centered_rect_width(40, area)
+    } else {
+        let min_menu_height = MAIN_MENU_ITEM_COUNT as u16 + MENU_BLOCK_VERTICAL_OVERHEAD;
+        centered_rect_with_min_height(40, 35, min_menu_height, area)
+    };
+    let visible_capacity = if compact {
+        area.height as usize
+    } else {
+        area.height.saturating_sub(MENU_BLOCK_VERTICAL_OVERHEAD) as usize
+    };
+    let selected = selected.min(menu_items.len().saturating_sub(1));
+    let (window_start, window_end) =
+        selected_visible_range(menu_items.len(), selected, visible_capacity);
 
     let items: Vec<ListItem> = menu_items
         .iter()
         .enumerate()
+        .skip(window_start)
+        .take(window_end.saturating_sub(window_start))
         .map(|(i, label)| {
             let (prefix, style) = if i == selected {
                 (
@@ -2426,16 +2496,20 @@ fn draw_zen_menu(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) 
         })
         .collect();
 
-    let menu = List::new(items).block(
-        Block::default()
-            .title("Harper")
-            .title_style(
-                Style::default()
-                    .fg(theme.foreground)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .padding(Padding::uniform(1)),
-    );
+    let menu = if compact {
+        List::new(items)
+    } else {
+        List::new(items).block(
+            Block::default()
+                .title("Harper")
+                .title_style(
+                    Style::default()
+                        .fg(theme.foreground)
+                        .add_modifier(Modifier::BOLD),
+                )
+                .padding(Padding::uniform(1)),
+        )
+    };
 
     frame.render_widget(menu, area);
 }
@@ -2458,6 +2532,30 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+fn centered_rect_width(percent_x: u16, area: Rect) -> Rect {
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(area)[1]
+}
+
+fn centered_rect_with_min_height(
+    percent_x: u16,
+    percent_y: u16,
+    min_height: u16,
+    area: Rect,
+) -> Rect {
+    let rect = centered_rect(percent_x, percent_y, area);
+    let height = rect.height.max(min_height).min(area.height);
+    let y = area.y + area.height.saturating_sub(height) / 2;
+
+    Rect { y, height, ..rect }
 }
 
 fn footer_shortcuts_for_state(
@@ -3631,7 +3729,9 @@ mod tests {
     use super::*;
     use crate::interfaces::ui::app;
     use harper_core::{core::Message, PlanItem};
+    use ratatui::backend::TestBackend;
     use ratatui::style::Color;
+    use ratatui::Terminal;
 
     fn setup() -> (SyntaxSet, ThemeSet) {
         (
@@ -3681,6 +3781,107 @@ mod tests {
             rendered_transcript_lines: Vec::new(),
             render_cache_theme_key: String::new(),
         }
+    }
+
+    #[test]
+    fn draw_slash_completion_popup_fits_small_terminal() {
+        let mut chat_state = empty_chat_state();
+        chat_state.input = "/".to_string();
+        chat_state.completion_candidates = (0..40)
+            .map(|index| format!("/command-{index}"))
+            .collect::<Vec<_>>();
+
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Chat(Box::new(chat_state));
+
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let theme = Theme::default();
+
+        terminal
+            .draw(|frame| draw(frame, &app, &theme))
+            .expect("slash completion popup should render");
+    }
+
+    #[test]
+    fn completion_visible_range_tracks_middle_selection() {
+        assert_eq!(completion_visible_range(40, 25, 10), (20, 30));
+    }
+
+    #[test]
+    fn completion_visible_range_clamps_near_end() {
+        assert_eq!(completion_visible_range(40, 39, 10), (30, 40));
+    }
+
+    #[test]
+    fn menu_rect_keeps_all_rows_visible_on_small_terminal() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: 80,
+            height: 18,
+        };
+
+        let menu_area = centered_rect_with_min_height(
+            40,
+            35,
+            MAIN_MENU_ITEM_COUNT as u16 + MENU_BLOCK_VERTICAL_OVERHEAD,
+            area,
+        );
+
+        assert_eq!(menu_area.height, 9);
+        assert_eq!(menu_area.y, 4);
+    }
+
+    #[test]
+    fn menu_visible_range_tracks_selection_like_completion_popup() {
+        assert_eq!(selected_visible_range(MAIN_MENU_ITEM_COUNT, 5, 3), (3, 6));
+    }
+
+    #[test]
+    fn menu_visible_range_shows_all_items_when_capacity_allows() {
+        assert_eq!(
+            selected_visible_range(MAIN_MENU_ITEM_COUNT, 5, MAIN_MENU_ITEM_COUNT),
+            (0, MAIN_MENU_ITEM_COUNT)
+        );
+    }
+
+    #[test]
+    fn draw_menu_fits_exact_item_height_terminal() {
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Menu(MAIN_MENU_ITEM_COUNT - 1);
+
+        let backend = TestBackend::new(80, MAIN_MENU_ITEM_COUNT as u16);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let theme = Theme::default();
+
+        terminal
+            .draw(|frame| draw(frame, &app, &theme))
+            .expect("compact menu should render");
+    }
+
+    #[test]
+    fn draw_menu_shows_quit_at_twenty_six_rows() {
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Menu(MAIN_MENU_ITEM_COUNT - 1);
+
+        let backend = TestBackend::new(80, 26);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let theme = Theme::default();
+
+        terminal
+            .draw(|frame| draw(frame, &app, &theme))
+            .expect("menu should render");
+
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(rendered.contains("Quit"));
     }
 
     #[test]
