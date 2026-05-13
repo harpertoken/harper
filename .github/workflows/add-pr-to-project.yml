@@ -13,8 +13,17 @@ jobs:
       contents: read
       pull-requests: read
     steps:
+      - id: app-token
+        name: Create Harper app token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HARPER_APP_ID }}
+          private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
+          permission-organization-projects: write
+          permission-pull-requests: read
+
       - name: Add PR to project
         uses: actions/add-to-project@v1.0.2
         with:
           project-url: https://github.com/orgs/harpertoken/projects/10
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          github-token: ${{ steps.app-token.outputs.token }}
