@@ -1,4 +1,4 @@
-# Copyright 2025 harpertoken
+# Copyright 2026 harpertoken
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,14 +13,14 @@
 # limitations under the License.
 
 name: rust
-description: 'Setup Rust toolchain and cache'
+description: "Setup Rust toolchain and cache"
 inputs:
   components:
-    description: 'Additional Rust components to install'
+    description: "Additional Rust components to install"
     required: false
-    default: ''
+    default: ""
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Install Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1

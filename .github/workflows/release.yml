@@ -136,11 +136,19 @@ jobs:
       head_sha: ${{ steps.head.outputs.sha }}
       harper_core_version: ${{ steps.version.outputs.harper_core_version }}
     steps:
+      - id: release-app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HARPER_APP_ID }}
+          private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
       - id: release
         uses: libnudget/release@v1.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          release_token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          release_token: ${{ steps.release-app-token.outputs.token }}
           packages: '[{"path": ".", "name": "harper-workspace"}, {"path": "lib/harper-core", "name": "harper-core"}, {"path": "lib/harper-ui", "name": "harper-ui"}, {"path": "lib/harper-firmware", "name": "harper-firmware"}, {"path": "lib/harper-mcp-server", "name": "harper-mcp-server"}, {"path": "lib/harper-sandbox", "name": "harper-sandbox"}]'
           version_bump: ${{ github.event.inputs.version_bump || 'patch' }}
           release_mode: ${{ github.event.inputs.release_mode || 'pr' }}
