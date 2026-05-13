@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Copyright 2026 harpertoken
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +21,7 @@ on:
 
 jobs:
   nightly-checks:
-    name: nightly-checks
+    name: Nightly
     uses: libnudget/rust-nightly/.github/workflows/nightly.yml@main
     with:
       rust-version: stable

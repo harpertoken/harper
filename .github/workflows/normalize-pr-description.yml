@@ -1,6 +1,7 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Copyright 2026 harpertoken
 
-name: Normalize PR Description
+name: PR Description
 
 on:
   pull_request_target:
@@ -11,6 +12,7 @@ permissions:
 
 jobs:
   normalize:
+    name: PR Description
     if: |
       github.repository_owner == 'harpertoken' &&
       github.event.pull_request.head.repo.fork == false &&

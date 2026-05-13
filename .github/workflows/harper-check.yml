@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+---
+name: Harper
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+jobs:
+  check:
+    name: Harper
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'harpertoken'
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - id: app-token
+        name: Create Harper app token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HARPER_APP_ID }}
+          private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
+          permission-checks: write
+          permission-pull-requests: read
+          permission-contents: read
+
+      - name: Publish check
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          gh api "repos/$REPO/check-runs" \
+            -X POST \
+            -f name='Harper' \
+            -f head_sha="$HEAD_SHA" \
+            -f status='completed' \
+            -f conclusion='success' \
+            -f output[title]='Harper automation' \
+            -f output[summary]='Harper app automation is active for this pull request.' \
+            --silent

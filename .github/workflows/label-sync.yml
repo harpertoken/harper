@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Copyright 2026 harpertoken
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-name: Label Sync
+name: Labels
 on:
   schedule:
     - cron: '0 0 * * 0'  # Weekly
@@ -23,6 +24,7 @@ permissions:
 
 jobs:
   label-sync:
+    name: Labels
     runs-on: ubuntu-latest
     if: github.repository_owner == 'harpertoken'
     steps:
