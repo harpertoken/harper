@@ -1,5 +1,5 @@
 {
-  "checksum": "d475029807f52f5466ef280147c2b92703d273a32011cb7291f5fe172e96a5fc",
+  "checksum": "aaf8c9add90213163f6e264849ebf1dd8dd55cc5df71664fb5c2809112f1c19b",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -891,14 +891,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "assert_cmd 2.2.1": {
+    "assert_cmd 2.2.2": {
       "name": "assert_cmd",
-      "version": "2.2.1",
+      "version": "2.2.2",
       "package_url": "https://github.com/assert-rs/assert_cmd.git",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/assert_cmd/2.2.1/download",
-          "sha256": "39bae1d3fa576f7c6519514180a72559268dd7d1fe104070956cb687bc6673bd"
+          "url": "https://static.crates.io/crates/assert_cmd/2.2.2/download",
+          "sha256": "2aa3a22042e45de04255c7bf3626e239f450200fd0493c1e382263544b20aea6"
         }
       },
       "targets": [
@@ -939,7 +939,7 @@
               "target": "anstyle"
             },
             {
-              "id": "assert_cmd 2.2.1",
+              "id": "assert_cmd 2.2.2",
               "target": "build_script_build"
             },
             {
@@ -973,7 +973,7 @@
           }
         },
         "edition": "2024",
-        "version": "2.2.1"
+        "version": "2.2.2"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -8862,14 +8862,14 @@
       ],
       "license_file": "LICENSE.md"
     },
-    "filetime 0.2.28": {
+    "filetime 0.2.29": {
       "name": "filetime",
-      "version": "0.2.28",
+      "version": "0.2.29",
       "package_url": "https://github.com/alexcrichton/filetime",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/filetime/0.2.28/download",
-          "sha256": "2d5b2eef6fafbf69f877e55509ce5b11a760690ac9700a2921be067aa6afaef6"
+          "url": "https://static.crates.io/crates/filetime/0.2.29/download",
+          "sha256": "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
         }
       },
       "targets": [
@@ -8908,7 +8908,7 @@
           }
         },
         "edition": "2018",
-        "version": "0.2.28"
+        "version": "0.2.29"
       },
       "license": "MIT/Apache-2.0",
       "license_ids": [
@@ -10879,9 +10879,9 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "harper-core 0.18.0": {
+    "harper-core 0.18.1": {
       "name": "harper-core",
-      "version": "0.18.0",
+      "version": "0.18.1",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -10976,7 +10976,7 @@
               "target": "h2"
             },
             {
-              "id": "hashbrown 0.16.1",
+              "id": "hashbrown 0.17.1",
               "target": "hashbrown"
             },
             {
@@ -11004,7 +11004,7 @@
               "target": "image"
             },
             {
-              "id": "jsonwebtoken 10.3.0",
+              "id": "jsonwebtoken 10.4.0",
               "target": "jsonwebtoken"
             },
             {
@@ -11068,7 +11068,7 @@
               "target": "tower"
             },
             {
-              "id": "turul-mcp-client 0.3.38",
+              "id": "turul-mcp-client 0.3.42",
               "target": "turul_mcp_client"
             },
             {
@@ -11121,7 +11121,7 @@
           ],
           "selects": {}
         },
-        "version": "0.18.0"
+        "version": "0.18.1"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11246,7 +11246,7 @@
               "target": "tracing"
             },
             {
-              "id": "turul-mcp-json-rpc-server 0.3.38",
+              "id": "turul-mcp-json-rpc-server 0.3.42",
               "target": "turul_mcp_json_rpc_server"
             }
           ],
@@ -11343,9 +11343,9 @@
       ],
       "license_file": null
     },
-    "harper-ui 0.17.0": {
+    "harper-ui 0.18.0": {
       "name": "harper-ui",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -11426,7 +11426,7 @@
               "target": "tokio"
             },
             {
-              "id": "turul-mcp-client 0.3.38",
+              "id": "turul-mcp-client 0.3.42",
               "target": "turul_mcp_client"
             },
             {
@@ -11446,7 +11446,7 @@
           ],
           "selects": {}
         },
-        "version": "0.17.0"
+        "version": "0.18.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11455,9 +11455,9 @@
       ],
       "license_file": null
     },
-    "harper-workspace 0.18.0": {
+    "harper-workspace 0.19.0": {
       "name": "harper-workspace",
-      "version": "0.18.0",
+      "version": "0.19.0",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -11482,7 +11482,7 @@
         "deps_dev": {
           "common": [
             {
-              "id": "assert_cmd 2.2.1",
+              "id": "assert_cmd 2.2.2",
               "target": "assert_cmd"
             },
             {
@@ -11541,7 +11541,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.18.0"
+        "version": "0.19.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11746,6 +11746,34 @@
         "compile_data_glob": [
           "**"
         ],
+        "crate_features": {
+          "common": [
+            "allocator-api2",
+            "default",
+            "default-hasher",
+            "equivalent",
+            "inline-more",
+            "raw-entry"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "allocator-api2 0.2.21",
+              "target": "allocator_api2"
+            },
+            {
+              "id": "equivalent 1.0.2",
+              "target": "equivalent"
+            },
+            {
+              "id": "foldhash 0.2.0",
+              "target": "foldhash"
+            }
+          ],
+          "selects": {}
+        },
         "edition": "2024",
         "version": "0.17.1"
       },
@@ -13319,7 +13347,7 @@
               "target": "yoke"
             },
             {
-              "id": "zerofrom 0.1.7",
+              "id": "zerofrom 0.1.8",
               "target": "zerofrom"
             },
             {
@@ -13753,7 +13781,7 @@
               "target": "yoke"
             },
             {
-              "id": "zerofrom 0.1.7",
+              "id": "zerofrom 0.1.8",
               "target": "zerofrom"
             },
             {
@@ -15147,14 +15175,14 @@
       ],
       "license_file": null
     },
-    "jsonwebtoken 10.3.0": {
+    "jsonwebtoken 10.4.0": {
       "name": "jsonwebtoken",
-      "version": "10.3.0",
+      "version": "10.4.0",
       "package_url": "https://github.com/Keats/jsonwebtoken",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/jsonwebtoken/10.3.0/download",
-          "sha256": "0529410abe238729a60b108898784df8984c87f6054c9c4fcacc47e4803c1ce1"
+          "url": "https://static.crates.io/crates/jsonwebtoken/10.4.0/download",
+          "sha256": "eba32bfb4ffdeaca3e34431072faf01745c9b26d25504aa7a6cf5684334fc4fc"
         }
       },
       "targets": [
@@ -15216,6 +15244,10 @@
             {
               "id": "simple_asn1 0.6.4",
               "target": "simple_asn1"
+            },
+            {
+              "id": "zeroize 1.8.2",
+              "target": "zeroize"
             }
           ],
           "selects": {
@@ -15232,7 +15264,7 @@
           }
         },
         "edition": "2024",
-        "version": "10.3.0"
+        "version": "10.4.0"
       },
       "license": "MIT",
       "license_ids": [
@@ -29352,7 +29384,7 @@
         "deps": {
           "common": [
             {
-              "id": "filetime 0.2.28",
+              "id": "filetime 0.2.29",
               "target": "filetime"
             }
           ],
@@ -31944,14 +31976,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "turul-mcp-client 0.3.38": {
+    "turul-mcp-client 0.3.42": {
       "name": "turul-mcp-client",
-      "version": "0.3.38",
+      "version": "0.3.42",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-client/0.3.38/download",
-          "sha256": "86b4d5b91a0946dc2dd4b3c3fa032f86451172ad4b5282605918fd3c26221725"
+          "url": "https://static.crates.io/crates/turul-mcp-client/0.3.42/download",
+          "sha256": "4be7a444d19f08f4bc5d759b9572c7d2dc6a76052ab557e83b1dcb2be93a313f"
         }
       },
       "targets": [
@@ -32033,11 +32065,11 @@
               "target": "tracing"
             },
             {
-              "id": "turul-mcp-json-rpc-server 0.3.38",
+              "id": "turul-mcp-json-rpc-server 0.3.42",
               "target": "turul_mcp_json_rpc_server"
             },
             {
-              "id": "turul-mcp-protocol 0.3.38",
+              "id": "turul-mcp-protocol 0.3.42",
               "target": "turul_mcp_protocol"
             },
             {
@@ -32057,7 +32089,7 @@
           ],
           "selects": {}
         },
-        "version": "0.3.38"
+        "version": "0.3.42"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32066,14 +32098,14 @@
       ],
       "license_file": null
     },
-    "turul-mcp-json-rpc-server 0.3.38": {
+    "turul-mcp-json-rpc-server 0.3.42": {
       "name": "turul-mcp-json-rpc-server",
-      "version": "0.3.38",
+      "version": "0.3.42",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-json-rpc-server/0.3.38/download",
-          "sha256": "2dfb216e88b096da2a69872b14e38e12ab7e0347b591912875a98a12c1e2760a"
+          "url": "https://static.crates.io/crates/turul-mcp-json-rpc-server/0.3.42/download",
+          "sha256": "3c3103e3832caad701bf655992aae53b8d0666e819025104f7f9585ee81028d5"
         }
       },
       "targets": [
@@ -32098,44 +32130,21 @@
         "crate_features": {
           "common": [
             "async",
-            "async-trait",
-            "default",
-            "futures"
+            "default"
           ],
           "selects": {}
         },
         "deps": {
           "common": [
             {
-              "id": "futures 0.3.32",
-              "target": "futures"
-            },
-            {
-              "id": "serde 1.0.228",
-              "target": "serde"
-            },
-            {
-              "id": "serde_json 1.0.149",
-              "target": "serde_json"
-            },
-            {
-              "id": "thiserror 2.0.18",
-              "target": "thiserror"
+              "id": "turul-rpc 0.1.0",
+              "target": "turul_rpc"
             }
           ],
           "selects": {}
         },
         "edition": "2024",
-        "proc_macro_deps": {
-          "common": [
-            {
-              "id": "async-trait 0.1.89",
-              "target": "async_trait"
-            }
-          ],
-          "selects": {}
-        },
-        "version": "0.3.38"
+        "version": "0.3.42"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32144,14 +32153,14 @@
       ],
       "license_file": null
     },
-    "turul-mcp-protocol 0.3.38": {
+    "turul-mcp-protocol 0.3.42": {
       "name": "turul-mcp-protocol",
-      "version": "0.3.38",
+      "version": "0.3.42",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-protocol/0.3.38/download",
-          "sha256": "30b36579e6dbf42094bedae6b63e1367eb649a28d42b482fd82f3b7611e2fc89"
+          "url": "https://static.crates.io/crates/turul-mcp-protocol/0.3.42/download",
+          "sha256": "37ac50f7834b9f5a34906b4dda0c5ee5e7a29be14dfebcd4952319c681ac0e34"
         }
       },
       "targets": [
@@ -32182,14 +32191,14 @@
         "deps": {
           "common": [
             {
-              "id": "turul-mcp-protocol-2025-11-25 0.3.38",
+              "id": "turul-mcp-protocol-2025-11-25 0.3.42",
               "target": "turul_mcp_protocol_2025_11_25"
             }
           ],
           "selects": {}
         },
         "edition": "2024",
-        "version": "0.3.38"
+        "version": "0.3.42"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32198,14 +32207,14 @@
       ],
       "license_file": null
     },
-    "turul-mcp-protocol-2025-11-25 0.3.38": {
+    "turul-mcp-protocol-2025-11-25 0.3.42": {
       "name": "turul-mcp-protocol-2025-11-25",
-      "version": "0.3.38",
+      "version": "0.3.42",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-protocol-2025-11-25/0.3.38/download",
-          "sha256": "73a21bd1f85d218efabc91867868473aedd50755917363c25d21df808f8b3c29"
+          "url": "https://static.crates.io/crates/turul-mcp-protocol-2025-11-25/0.3.42/download",
+          "sha256": "a78954356581b1469ca015d93721f85e5ae4a3c28143f48e37c56298d612c520"
         }
       },
       "targets": [
@@ -32248,7 +32257,7 @@
               "target": "thiserror"
             },
             {
-              "id": "turul-mcp-json-rpc-server 0.3.38",
+              "id": "turul-mcp-json-rpc-server 0.3.42",
               "target": "turul_mcp_json_rpc_server"
             }
           ],
@@ -32264,7 +32273,260 @@
           ],
           "selects": {}
         },
-        "version": "0.3.38"
+        "version": "0.3.42"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": null
+    },
+    "turul-rpc 0.1.0": {
+      "name": "turul-rpc",
+      "version": "0.1.0",
+      "package_url": "https://github.com/aussierobots/turul-rpc",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/turul-rpc/0.1.0/download",
+          "sha256": "e66ef027a99edfc0261df760edaaf46a1af9ea3939212d6c9e1bc2a87b329668"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "turul_rpc",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "turul_rpc",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "async"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "turul-rpc-core 0.1.0",
+              "target": "turul_rpc_core"
+            },
+            {
+              "id": "turul-rpc-jsonrpc 0.1.0",
+              "target": "turul_rpc_jsonrpc"
+            },
+            {
+              "id": "turul-rpc-server 0.1.0",
+              "target": "turul_rpc_server"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2024",
+        "version": "0.1.0"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": null
+    },
+    "turul-rpc-core 0.1.0": {
+      "name": "turul-rpc-core",
+      "version": "0.1.0",
+      "package_url": "https://github.com/aussierobots/turul-rpc",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/turul-rpc-core/0.1.0/download",
+          "sha256": "4f45c6a218e558019298454250cf5fb99b192b2ff6f72d3c383839909ba08aea"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "turul_rpc_core",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "turul_rpc_core",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "serde 1.0.228",
+              "target": "serde"
+            },
+            {
+              "id": "serde_json 1.0.149",
+              "target": "serde_json"
+            },
+            {
+              "id": "thiserror 2.0.18",
+              "target": "thiserror"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2024",
+        "version": "0.1.0"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": null
+    },
+    "turul-rpc-jsonrpc 0.1.0": {
+      "name": "turul-rpc-jsonrpc",
+      "version": "0.1.0",
+      "package_url": "https://github.com/aussierobots/turul-rpc",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/turul-rpc-jsonrpc/0.1.0/download",
+          "sha256": "1d16077edb01b5e028e25902f2afa29150fab3dd6a7abbbd29bcf5c286b5265a"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "turul_rpc_jsonrpc",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "turul_rpc_jsonrpc",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "serde 1.0.228",
+              "target": "serde"
+            },
+            {
+              "id": "serde_json 1.0.149",
+              "target": "serde_json"
+            },
+            {
+              "id": "turul-rpc-core 0.1.0",
+              "target": "turul_rpc_core"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2024",
+        "version": "0.1.0"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": null
+    },
+    "turul-rpc-server 0.1.0": {
+      "name": "turul-rpc-server",
+      "version": "0.1.0",
+      "package_url": "https://github.com/aussierobots/turul-rpc",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/turul-rpc-server/0.1.0/download",
+          "sha256": "52777797cc1b8ecf3505ca4853b06acb78c6e9e8d1c7ce2b708175af5ed59da4"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "turul_rpc_server",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "turul_rpc_server",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "async"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "futures 0.3.32",
+              "target": "futures"
+            },
+            {
+              "id": "serde 1.0.228",
+              "target": "serde"
+            },
+            {
+              "id": "serde_json 1.0.149",
+              "target": "serde_json"
+            },
+            {
+              "id": "turul-rpc-core 0.1.0",
+              "target": "turul_rpc_core"
+            },
+            {
+              "id": "turul-rpc-jsonrpc 0.1.0",
+              "target": "turul_rpc_jsonrpc"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2024",
+        "proc_macro_deps": {
+          "common": [
+            {
+              "id": "async-trait 0.1.89",
+              "target": "async_trait"
+            }
+          ],
+          "selects": {}
+        },
+        "version": "0.1.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -38934,7 +39196,7 @@
               "target": "stable_deref_trait"
             },
             {
-              "id": "zerofrom 0.1.7",
+              "id": "zerofrom 0.1.8",
               "target": "zerofrom"
             }
           ],
@@ -39483,14 +39745,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "zerofrom 0.1.7": {
+    "zerofrom 0.1.8": {
       "name": "zerofrom",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "package_url": "https://github.com/unicode-org/icu4x",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/zerofrom/0.1.7/download",
-          "sha256": "69faa1f2a1ea75661980b013019ed6687ed0e83d069bc1114e2cc74c6c04c4df"
+          "url": "https://static.crates.io/crates/zerofrom/0.1.8/download",
+          "sha256": "0ec05a11813ea801ff6d75110ad09cd0824ddba17dfe17128ea0d5f68e6c5272"
         }
       },
       "targets": [
@@ -39528,7 +39790,7 @@
           ],
           "selects": {}
         },
-        "version": "0.1.7"
+        "version": "0.1.8"
       },
       "license": "Unicode-3.0",
       "license_ids": [
@@ -39627,12 +39889,79 @@
         "crate_features": {
           "common": [
             "alloc",
-            "default"
+            "default",
+            "derive",
+            "zeroize_derive"
           ],
           "selects": {}
         },
         "edition": "2021",
+        "proc_macro_deps": {
+          "common": [
+            {
+              "id": "zeroize_derive 1.4.3",
+              "target": "zeroize_derive"
+            }
+          ],
+          "selects": {}
+        },
         "version": "1.8.2"
+      },
+      "license": "Apache-2.0 OR MIT",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
+    "zeroize_derive 1.4.3": {
+      "name": "zeroize_derive",
+      "version": "1.4.3",
+      "package_url": "https://github.com/RustCrypto/utils/tree/master/zeroize/derive",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/zeroize_derive/1.4.3/download",
+          "sha256": "85a5b4158499876c763cb03bc4e49185d3cccbabb15b33c627f7884f43db852e"
+        }
+      },
+      "targets": [
+        {
+          "ProcMacro": {
+            "crate_name": "zeroize_derive",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "zeroize_derive",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "proc-macro2 1.0.106",
+              "target": "proc_macro2"
+            },
+            {
+              "id": "quote 1.0.45",
+              "target": "quote"
+            },
+            {
+              "id": "syn 2.0.117",
+              "target": "syn"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "1.4.3"
       },
       "license": "Apache-2.0 OR MIT",
       "license_ids": [
@@ -39684,7 +40013,7 @@
               "target": "yoke"
             },
             {
-              "id": "zerofrom 0.1.7",
+              "id": "zerofrom 0.1.8",
               "target": "zerofrom"
             }
           ],
@@ -39751,7 +40080,7 @@
               "target": "yoke"
             },
             {
-              "id": "zerofrom 0.1.7",
+              "id": "zerofrom 0.1.8",
               "target": "zerofrom"
             }
           ],
@@ -40449,12 +40778,12 @@
   },
   "binary_crates": [],
   "workspace_members": {
-    "harper-core 0.18.0": "lib/harper-core",
+    "harper-core 0.18.1": "lib/harper-core",
     "harper-firmware 0.1.3": "lib/harper-firmware",
     "harper-mcp-server 0.1.3": "lib/harper-mcp-server",
     "harper-sandbox 0.3.1": "lib/harper-sandbox",
-    "harper-ui 0.17.0": "lib/harper-ui",
-    "harper-workspace 0.18.0": ""
+    "harper-ui 0.18.0": "lib/harper-ui",
+    "harper-workspace 0.19.0": ""
   },
   "conditions": {
     "aarch64-apple-darwin": [
@@ -40734,14 +41063,14 @@
     "futures-util 0.3.32",
     "getrandom 0.4.2",
     "h2 0.4.14",
-    "hashbrown 0.16.1",
+    "hashbrown 0.17.1",
     "hashlink 0.11.0",
     "hex-literal 1.1.0",
     "http 1.4.0",
     "http-body 1.0.1",
     "hyper 1.9.0",
     "image 0.25.10",
-    "jsonwebtoken 10.3.0",
+    "jsonwebtoken 10.4.0",
     "keyring 2.3.3",
     "lazy_static 1.5.0",
     "log 0.4.29",
@@ -40763,8 +41092,8 @@
     "tokio 1.52.3",
     "tower 0.5.3",
     "tracing 0.1.44",
-    "turul-mcp-client 0.3.38",
-    "turul-mcp-json-rpc-server 0.3.38",
+    "turul-mcp-client 0.3.42",
+    "turul-mcp-json-rpc-server 0.3.42",
     "urlencoding 2.1.3",
     "uuid 1.23.1",
     "walkdir 2.5.0",
@@ -40773,7 +41102,7 @@
     "zip 8.6.0"
   ],
   "direct_dev_deps": [
-    "assert_cmd 2.2.1",
+    "assert_cmd 2.2.2",
     "criterion 0.5.1",
     "num_cpus 1.17.0",
     "predicates 3.1.4",
