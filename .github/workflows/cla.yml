@@ -23,6 +23,13 @@ jobs:
     runs-on: ubuntu-latest
     if: github.repository_owner == 'harpertoken'
     steps:
+      - id: cla-app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HARPER_APP_ID }}
+          private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
@@ -43,4 +50,4 @@ jobs:
       - name: Run CLA bot
         uses: ./cla-bot/
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ steps.cla-app-token.outputs.token }}
