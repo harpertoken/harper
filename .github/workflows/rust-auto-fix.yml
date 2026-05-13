@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Copyright 2026 harpertoken
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,13 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-name: Rust Auto-Fix Bot
+name: Rust Fix
 on:
   issue_comment:
     types: [created]
 
 jobs:
   rust-auto-fix-request:
+    name: Request Fix
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/rust-fix') && github.repository_owner == 'harpertoken'
     runs-on: ubuntu-latest
     permissions:
@@ -48,6 +50,7 @@ jobs:
           });
 
   rust-auto-fix-execute:
+    name: Apply Fix
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/confirm') && github.repository_owner == 'harpertoken'
     runs-on: ubuntu-latest
     permissions:

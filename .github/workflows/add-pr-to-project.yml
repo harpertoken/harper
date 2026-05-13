@@ -1,5 +1,6 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 ---
-name: Add PR To Project
+name: Project
 
 on:
   pull_request_target:
@@ -7,6 +8,7 @@ on:
 
 jobs:
   add-pr-to-project:
+    name: Project
     runs-on: ubuntu-latest
     if: github.repository_owner == 'harpertoken'
     permissions:

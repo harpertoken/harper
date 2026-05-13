@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Copyright 2026 harpertoken
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,7 +42,7 @@ env:
 
 jobs:
   build:
-    name: build
+    name: Build
     runs-on: ubuntu-latest
     if: github.repository_owner == 'harpertoken'
 
@@ -68,7 +69,7 @@ jobs:
         # Basic test: ensure container starts without immediate crash
 
   e2e:
-    name: e2e
+    name: E2E
     runs-on: ubuntu-latest
     if: github.repository_owner == 'harpertoken'
 
@@ -90,7 +91,7 @@ jobs:
         cache-to: type=gha,mode=max
 
   publish:
-    name: publish
+    name: Publish
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.repository_owner == 'harpertoken'
     needs: [build, e2e]

@@ -6,38 +6,40 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 
 | Workflow | File | What it does | Key trigger(s) |
 | --- | --- | --- | --- |
-| Apply Rulesets | `apply-rulesets.yml` | Applies branch ruleset definitions from `.github/rulesets/*.json` to GitHub. Edit `main-branch-protection.json` to change rules; the workflow syncs them on push. | Push to `main` touching rulesets, manual dispatch |
-| Add PR To Project | `add-pr-to-project.yml` | Adds opened, reopened, edited, synchronized, and ready-for-review PRs to the Harper organization project at `https://github.com/orgs/harpertoken/projects/10`. Project item creation runs through the Harper app token with organization project access. | PR target events |
+| Rulesets | `apply-rulesets.yml` | Applies branch ruleset definitions from `.github/rulesets/*.json` to GitHub. Edit `main-branch-protection.json` to change rules; the workflow syncs them on push. | Push to `main` touching rulesets, manual dispatch |
+| Project | `add-pr-to-project.yml` | Adds opened, reopened, edited, synchronized, and ready-for-review PRs to the Harper organization project at `https://github.com/orgs/harpertoken/projects/10`. Project item creation runs through the Harper app token with organization project access. | PR target events |
+| Milestone | `assign-pr-milestone.yml` | Assigns new PRs to `Maintenance`, `Near-term`, or `Long-term` from title and labels. Milestone edits run through the Harper app token. | PR target events |
 | Auto Merge | `auto-merge.yml` | Three jobs via `libnudget/auto-merge@v1`: `auto-merge` enables GitHub's built-in auto-merge (waits for `CI (ubuntu-latest)` + 1 review); `auto-merge-now` merges immediately via `BYPASS_TOKEN` bypassing ruleset checks; `cancel-auto-merge` disables queued auto-merge when the `auto-merge` label is removed. PR state changes run through the Harper app token. | `labeled`/`unlabeled`/PR events |
-| Bazel CI | `build-bazel.yml` | Builds `:harper_bin` with Bazel on Linux and macOS, plus a scoped Windows smoke build/test for `harper-core` (including lockfile repinning fallback). | Push/PR to `main`, Bazel branches |
+| Bazel | `build-bazel.yml` | Builds `:harper_bin` with Bazel on Linux and macOS, plus a scoped Windows smoke build/test for `harper-core` (including lockfile repinning fallback). | Push/PR to `main`, Bazel branches |
 | Bazel Smoke | `bazel-smoke.yml` | Daily `bazel test //...` to catch dependency drift outside PRs. | Daily cron, manual dispatch |
-| Rust Benchmarks | `benchmarks.yml` | Runs `cargo bench` nightly and stores results as artifacts. | Daily cron, manual dispatch |
-| Integration Tests | `integration.yml` | Executes `cargo test -- --include-ignored` against real services (requires secrets). | PRs touching app code, manual dispatch (with environment input) |
-| Package Test | `package-test.yml` | Calls `libnudget/release-assets` in preflight mode to build, package, and smoke-test Harper release artifacts for Linux x86_64, Linux aarch64, macOS x86_64, macOS aarch64, and Windows x86_64 without publishing them. | Tag push (`harper-*`), manual dispatch |
-| Post Auto Merge CI | `post-auto-merge-ci.yml` | Re-runs fmt/clippy/tests on `main` after Auto Merge completes; also locks the merged PR via `gh pr lock`. PR lookups and lock actions run through the Harper app token. | Completion of Auto Merge workflow |
-| Normalize PR Description | `normalize-pr-description.yml` | Rewrites `## Summary`/`## Testing` bullet-style PR bodies into a single paragraph with backtick-wrapped technical terms via `libnudget/prune@v1`. Skips forks and dependabot. | PR opened/edited/ready_for_review |
+| Benchmarks | `benchmarks.yml` | Runs `cargo bench` nightly and stores results as artifacts. | Daily cron, manual dispatch |
+| Integration | `integration.yml` | Executes `cargo test -- --include-ignored` against real services (requires secrets). | PRs touching app code, manual dispatch (with environment input) |
+| Package | `package-test.yml` | Calls `libnudget/release-assets` in preflight mode to build, package, and smoke-test Harper release artifacts for Linux x86_64, Linux aarch64, macOS x86_64, macOS aarch64, and Windows x86_64 without publishing them. | Tag push (`harper-*`), manual dispatch |
+| Post-Merge CI | `post-auto-merge-ci.yml` | Re-runs fmt/clippy/tests on `main` after Auto Merge completes; also locks the merged PR via `gh pr lock`. PR lookups and lock actions run through the Harper app token. | Completion of Auto Merge workflow |
+| PR Description | `normalize-pr-description.yml` | Rewrites `## Summary`/`## Testing` bullet-style PR bodies into a single paragraph with backtick-wrapped technical terms via `libnudget/prune@v1`. Skips forks and dependabot. | PR opened/edited/ready_for_review |
 | Build | `build.yml` | Builds Docker image and runs e2e tests; publishes to GHCR/Docker Hub on merge to `main`. | Push/PR to `main` touching docker files, workflow dispatch |
 | CI | `ci.yml` | Runs on `main`/`develop`: validation checks, clippy, docs, unit+integration tests, release build, security audit, e2e tests. Also runs a weekly audit and coverage upload. | Push/PR to `main`/`develop`, weekly cron |
 | CLA | `cla.yml` | Enforces the Contributor License Agreement via cla-bot. PR and issue writes run through the Harper app token. | PR opened/synchronized |
 | CodeQL | `codeql.yml` | Performs CodeQL static analysis on Rust (security scanning). | Push/PR to `main`, weekly cron |
 | Dependency Review | `dependency-review.yml` | Uses GitHub's dependency-review action on PRs. | PR events |
 | Docs | `docs.yml` | Builds mkdocs documentation and deploys to GitHub Pages. | Push/PR touching docs |
-| Fix PR Title | `fix-pr-title.yml` | Rewrites PR titles into `[scope] message` format via `libnudget/title@v1`. Title edits run through the Harper app token. | PR events on `main` |
-| Label Sync | `label-sync.yml` | Syncs repository labels from `config/labeler.yml` via custom script. Label writes run through the Harper app token. | Weekly cron, manual dispatch |
-| Lock Merged PRs | `lock-merged-prs.yml` | Locks PRs after merge (via `gh pr lock`). Auto Merge path is handled by `post-auto-merge-ci.yml`. Lock actions run through the Harper app token. | PR closed (merged) |
+| PR Title | `fix-pr-title.yml` | Rewrites PR titles into `[scope] message` format via `libnudget/title@v1`. Title edits run through the Harper app token. | PR events on `main` |
+| Harper | `harper-check.yml` | Publishes a lightweight app-backed check so Harper automation appears as the Harper GitHub App in PR checks. | PR target events |
+| Labels | `label-sync.yml` | Syncs repository labels from `config/labeler.yml` via custom script. Label writes run through the Harper app token. | Weekly cron, manual dispatch |
+| Lock PRs | `lock-merged-prs.yml` | Locks PRs after merge (via `gh pr lock`). Auto Merge path is handled by `post-auto-merge-ci.yml`. Lock actions run through the Harper app token. | PR closed (merged) |
 | Nightly | `nightly.yml` | Uses `libnudget/rust-nightly` reusable workflow: runs tests, builds release, creates prerelease with tag `nightly-{sha}`. Benchmarks disabled for faster runs. | Daily cron (midnight UTC), manual dispatch |
 | PR Checks | `pr-checks.yml` | Validates PR metadata and auto-labels via `config/labeler.yml`. Auto-label writes run through the Harper app token. | PR workflow_call, push to `main` |
 | Release | `release.yml` | Creates release PRs or direct package releases for harper-core, harper-ui, harper-firmware, harper-mcp-server, harper-sandbox via `libnudget/release@v1.0.0`, then publishes the installable Harper CLI binary as a dedicated `harper-*` release through `libnudget/release-assets`. Release PR creation and stale overlapping release PR cleanup run through the Harper app token. Merge/direct release flows invoke `release-assets` inline, and manual `harper-*` tag pushes still trigger the same asset publishing path. The workflow passes `HARPER_UPDATE_SIGNING_KEY_PEM_B64` plus the repo-shipped updater public key into that reusable release-assets workflow. | Push to `main` touching lib dirs, tag push (`harper-*`), PR merged, manual dispatch |
-| Stale Issues | `stale-issues.yml` | Reminds on issues inactive for 30 days, adds `needs-response`, and closes them after 14 more days without a human reply. Issue comments and label changes run through the Harper app token. | Daily cron, manual dispatch, issue comments |
-| Rust Auto-Fix Bot | `rust-auto-fix.yml` | Applies automated `cargo fmt`/`clippy --fix` patches via `libnudget/rust-fix@v1` when `/rust-fix` comment is confirmed with `/confirm`. | Issue comment on PRs |
-| Cancel Runs Bot | `cancel-runs.yml` | Cancels in-progress runs when `/cancel-runs` is commented on PRs via `libnudget/cancel@v1`. Also triggers on `cancel-runs` label. | Issue comment on PRs, `cancel-runs` label |
-| Update Rust lockfiles | `update-lockfiles.yml` | Runs `cargo update` + `CARGO_BAZEL_REPIN=true bazel build :harper_bin` (repins `cargo-bazel-lock.json`), opens PR. PR creation runs through the Harper app token. | Weekly cron (Sunday midnight UTC), manual dispatch |
-| Update Homebrew Tap | `update-homebrew-tap.yml` | Manually updates `harpertoken/homebrew-tap/Formula/harper-ai.rb` for a published `harper-*` release by downloading the release tarball, recomputing sha256, patching the formula, and opening a PR in the tap repo. Requires `HOMEBREW_TAP_TOKEN`. | Manual dispatch |
-| Deploy Website | `website.yml` | Builds and deploys the website bundle to GitHub Pages. | Push to `main` touching `website/**`, manual dispatch |
+| Stale | `stale-issues.yml` | Reminds on issues inactive for 30 days, adds `needs-response`, and closes them after 14 more days without a human reply. Issue comments and label changes run through the Harper app token. | Daily cron, manual dispatch, issue comments |
+| Rust Fix | `rust-auto-fix.yml` | Applies automated `cargo fmt`/`clippy --fix` patches via `libnudget/rust-fix@v1` when `/rust-fix` comment is confirmed with `/confirm`. | Issue comment on PRs |
+| Cancel Runs | `cancel-runs.yml` | Cancels in-progress runs when `/cancel-runs` is commented on PRs via `libnudget/cancel@v1`. Also triggers on `cancel-runs` label. | Issue comment on PRs, `cancel-runs` label |
+| Lockfiles | `update-lockfiles.yml` | Runs `cargo update` + `CARGO_BAZEL_REPIN=true bazel build :harper_bin` (repins `cargo-bazel-lock.json`), opens PR. PR creation runs through the Harper app token. | Weekly cron (Sunday midnight UTC), manual dispatch |
+| Homebrew | `update-homebrew-tap.yml` | Manually updates `harpertoken/homebrew-tap/Formula/harper-ai.rb` for a published `harper-*` release by downloading the release tarball, recomputing sha256, patching the formula, and opening a PR in the tap repo. Requires `HOMEBREW_TAP_TOKEN`. | Manual dispatch |
+| Website | `website.yml` | Builds and deploys the website bundle to GitHub Pages. | Push to `main` touching `website/**`, manual dispatch |
 
 > **Tip:** Run `rg -n '^name:' .github/workflows` to see the canonical name shown in the Actions UI.
 
- > **Naming convention:** Workflow `name:` fields describe *what* the workflow does (`CI`, `Build`, `Rust Benchmarks`). Platform/architecture granularity (`ubuntu-latest`, `macos-latest`, `windows-latest`, `aarch64`, `x86_64`) belongs in job or matrix names inside the workflow e.g. `CI (ubuntu-latest)` not in the top-level workflow name.
+ > **Naming convention:** Workflow `name:` fields describe *what* the workflow does (`CI`, `Build`, `Benchmarks`). Platform/architecture granularity (`ubuntu-latest`, `macos-latest`, `windows-latest`, `aarch64`, `x86_64`) belongs in job or matrix names inside the workflow e.g. `CI (ubuntu-latest)` not in the top-level workflow name.
 
 ## Labels
 
@@ -76,4 +78,4 @@ Current rules:
 Feel free to expand this file with additional details (matrix descriptions, secrets used, etc.) as workflows evolve.
 
 ## Last Updated
-2026-05-13
+2026-05-14

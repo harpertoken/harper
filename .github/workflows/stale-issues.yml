@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Copyright 2026 harpertoken
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Stale Issues
+name: Stale
 
 on:
   schedule:
@@ -26,6 +27,7 @@ permissions:
 
 jobs:
   remind-stale-issues:
+    name: Mark Stale
     runs-on: ubuntu-latest
     if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.repository_owner == 'harpertoken'
     steps:
@@ -135,6 +137,7 @@ jobs:
             }
 
   clear-needs-response:
+    name: Clear Response
     runs-on: ubuntu-latest
     if: github.event_name == 'issue_comment' && github.repository_owner == 'harpertoken' && github.event.issue.pull_request == null && github.event.comment.user.type != 'Bot'
     steps:

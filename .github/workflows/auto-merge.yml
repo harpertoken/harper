@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Copyright 2026 harpertoken
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,6 +24,7 @@ permissions:
 
 jobs:
   auto-merge:
+    name: Auto Merge
     runs-on: ubuntu-latest
     if: >
       contains(github.event.pull_request.labels.*.name, 'auto-merge') &&
@@ -45,6 +47,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
   cancel-auto-merge:
+    name: Cancel Auto Merge
     runs-on: ubuntu-latest
     if: |
       github.event.action == 'unlabeled' &&
@@ -66,6 +69,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
   auto-merge-now:
+    name: Merge Now
     runs-on: ubuntu-latest
     if: >
       contains(github.event.pull_request.labels.*.name, 'auto-merge-now') &&
