@@ -1,13 +1,12 @@
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_binary")
 load("@crates//:defs.bzl", "aliases", "all_crate_deps")
 
-exports_files(glob(["src/**/*.rs", "assets/*"]))
+exports_files(glob(["src/**/*.rs"]))
 
 rust_library(
     name = "harper_ui",
     crate_root = "src/lib.rs",
     srcs = glob(["src/**/*.rs"], exclude = ["src/main.rs", "src/bin/batch.rs"]),
-    compile_data = ["assets/harper-menu-logo.png"],
     aliases = aliases(),
     deps = [
         "//lib/harper-core:harper_core",

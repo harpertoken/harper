@@ -30,7 +30,6 @@ use ratatui::Terminal;
 use super::app::{AppState, ApprovalState, ChatState, CommandOutputState, TuiApp};
 use super::auth;
 use super::events::{self, EventResult};
-use super::logo_image;
 use super::settings;
 use super::theme::Theme;
 use super::widgets;
@@ -491,11 +490,8 @@ pub async fn run_tui(
     )?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let terminal_image_protocol = logo_image::supported_protocol();
-    let mut rendered_logo_area = None;
 
     let mut app = TuiApp::new();
-    app.terminal_image_logo = terminal_image_protocol.is_some();
     app.show_menu_logo = ui_config.show_menu_logo.unwrap_or(true);
     app.mouse_capture = ui_config.mouse_capture.unwrap_or(false);
     let mut mouse_capture_enabled = false;
@@ -766,17 +762,6 @@ pub async fn run_tui(
             crate::interfaces::ui::widgets::refresh_chat_render_cache(chat_state, theme);
         }
         terminal.draw(|f| widgets::draw(f, &app, theme))?;
-        if let Some(protocol) = terminal_image_protocol {
-            let logo_area = widgets::menu_logo_image_area(&app, terminal.size()?.into());
-            if logo_area != rendered_logo_area {
-                logo_image::clear_images(terminal.backend_mut(), protocol)?;
-                if let Some(area) = logo_area {
-                    logo_image::render_logo(terminal.backend_mut(), area, protocol)?;
-                }
-                terminal.backend_mut().flush()?;
-                rendered_logo_area = logo_area;
-            }
-        }
 
         // Handle both UI events and worker updates
         tokio::select! {
@@ -1764,9 +1749,6 @@ pub async fn run_tui(
     }
 
     // Restore terminal
-    if let Some(protocol) = terminal_image_protocol {
-        logo_image::clear_images(terminal.backend_mut(), protocol)?;
-    }
     disable_raw_mode()?;
     if mouse_capture_enabled {
         execute!(terminal.backend_mut(), DisableMouseCapture)?;
