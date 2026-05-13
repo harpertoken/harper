@@ -3,6 +3,8 @@
 name: Harper
 
 on:
+  push:
+    branches: [main]
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
 
@@ -29,7 +31,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
 
@@ -40,5 +42,5 @@ jobs:
             -f status='completed' \
             -f conclusion='success' \
             -f output[title]='Harper automation' \
-            -f output[summary]='Harper app automation is active for this pull request.' \
+            -f output[summary]='Harper app automation is active for this ref.' \
             --silent
