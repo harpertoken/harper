@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::OnceLock;
-
-use image::imageops::FilterType;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::prelude::Frame;
 use ratatui::style::{Color, Modifier, Style};
@@ -43,15 +40,23 @@ const COMPACT_COMMAND_OUTPUT_LINES: usize = 3;
 const MAIN_MENU_ITEMS_WIDTH: u16 = 22;
 const MAIN_MENU_LOGO_WIDTH: u16 = 48;
 const MAIN_MENU_LOGO_HEIGHT: u16 = 14;
-const MAIN_MENU_LOGO_PNG: &[u8] = include_bytes!("../../../assets/harper-menu-logo.png");
-
-#[derive(Clone, Copy)]
-struct RgbaCell {
-    red: u8,
-    green: u8,
-    blue: u8,
-    alpha: u8,
-}
+const MAIN_MENU_LOGO_COLOR: Color = Color::Rgb(255, 122, 36);
+const MAIN_MENU_LOGO_ROWS: [&str; MAIN_MENU_LOGO_HEIGHT as usize] = [
+    "    ▗▄▄▛▀▙▖",
+    "▄▄▟▛█▄   ▝▜▄",
+    "     ▝▜▄▖  ▀▙▖",
+    "        ▀▙▄▗▟█▄▄▄",
+    "        ▗▟████████▙",
+    "       ▟██  ▟██████▌ ▄▄██▙▄▄",
+    "      ▐███████████▛▗█████████▙▖   ▄▟█████▄▄",
+    "      ▝████████▀▀  ▝███████████▖▗███████████▙▖",
+    "        ▝▀▀▀  ▗▟▀▜▙▄▝▀████▛▘▖▝█▘▐█▀▘ ▀████████▖",
+    "             ▄▛▘ ▗▄▄▟▄▄█▛▘ ▟█▖ ▗▄▟███▙▝▜███████▖",
+    "           ▗▟▀  ▗█▀▀▀▀▀▘    ▝█▖▀▘  ▀▜█▙▖▀██████▙",
+    "          ▗▛▘  ▗█▘           ▐▙       ▀▜▙▝▀█▀▀▀▘",
+    "         ▟▛   ▗█▘             ▜▙        ▝█▖",
+    "       ▗█▘    ▀▘               ▜▖         ▜▙",
+];
 
 // Refined shortcuts for a cleaner footer
 const CHAT_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
@@ -712,26 +717,6 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     if let Some(msg) = &app.message {
         draw_message_overlay(frame, msg, app.help_selected, theme);
     }
-}
-
-pub(crate) fn menu_logo_image_area(app: &TuiApp, area: Rect) -> Option<Rect> {
-    if !app.show_menu_logo || !matches!(app.state, AppState::Menu(_)) {
-        return None;
-    }
-
-    let compact = compact_layout(area);
-    let compact_menu = area.height <= MAIN_MENU_ITEM_COUNT as u16 + 4;
-    let hide_footer = compact || compact_menu;
-    let main_area = if hide_footer {
-        area
-    } else {
-        Rect {
-            height: area.height.saturating_sub(FOOTER_HEIGHT),
-            ..area
-        }
-    };
-
-    main_menu_logo_area(main_area)
 }
 
 fn render_diff_lines(content: &str, theme: &Theme) -> Vec<Line<'static>> {
@@ -2869,14 +2854,6 @@ fn main_menu_chunks(area: Rect) -> std::rc::Rc<[Rect]> {
         .split(area)
 }
 
-fn main_menu_logo_area(area: Rect) -> Option<Rect> {
-    if area.height < main_menu_min_height() || area.width < main_menu_width() {
-        return None;
-    }
-
-    Some(main_menu_chunks(main_menu_area(area))[0])
-}
-
 fn draw_main_menu_logo(frame: &mut Frame, area: Rect, theme: &Theme) {
     let logo = main_menu_logo_lines(theme.background);
     let logo_area = centered_fixed_width_rect(MAIN_MENU_LOGO_WIDTH, area);
@@ -2891,108 +2868,23 @@ fn main_menu_width() -> u16 {
     MAIN_MENU_LOGO_WIDTH.max(MAIN_MENU_ITEMS_WIDTH)
 }
 
-fn main_menu_logo_lines(background: Color) -> Vec<Line<'static>> {
-    let background = color_to_rgb(background).unwrap_or((15, 15, 15));
-    main_menu_logo_raster()
+fn main_menu_logo_lines(_background: Color) -> Vec<Line<'static>> {
+    MAIN_MENU_LOGO_ROWS
         .iter()
         .map(|row| {
             let spans = row
-                .iter()
-                .map(|(top, bottom)| {
-                    let top_visible = top.alpha > 96;
-                    let bottom_visible = bottom.alpha > 96;
-                    match (top_visible, bottom_visible) {
-                        (true, true) => {
-                            let top = sharpen_logo_color(*top, background);
-                            let bottom = sharpen_logo_color(*bottom, background);
-                            Span::styled(
-                                "▀",
-                                Style::default()
-                                    .fg(Color::Rgb(top.0, top.1, top.2))
-                                    .bg(Color::Rgb(bottom.0, bottom.1, bottom.2)),
-                            )
-                        }
-                        (true, false) => {
-                            let top = sharpen_logo_color(*top, background);
-                            Span::styled("▀", Style::default().fg(Color::Rgb(top.0, top.1, top.2)))
-                        }
-                        (false, true) => {
-                            let bottom = sharpen_logo_color(*bottom, background);
-                            Span::styled(
-                                "▄",
-                                Style::default().fg(Color::Rgb(bottom.0, bottom.1, bottom.2)),
-                            )
-                        }
-                        (false, false) => Span::raw(" "),
-                    }
+                .chars()
+                .map(|character| match character {
+                    ' ' => Span::raw(" "),
+                    _ => Span::styled(
+                        character.to_string(),
+                        Style::default().fg(MAIN_MENU_LOGO_COLOR),
+                    ),
                 })
                 .collect::<Vec<_>>();
             Line::from(spans)
         })
         .collect()
-}
-
-fn main_menu_logo_raster() -> &'static [Vec<(RgbaCell, RgbaCell)>] {
-    static RASTER: OnceLock<Vec<Vec<(RgbaCell, RgbaCell)>>> = OnceLock::new();
-    RASTER.get_or_init(|| {
-        let Ok(image) = image::load_from_memory(MAIN_MENU_LOGO_PNG) else {
-            return Vec::new();
-        };
-        let image = image
-            .resize_exact(
-                MAIN_MENU_LOGO_WIDTH as u32,
-                MAIN_MENU_LOGO_HEIGHT as u32 * 2,
-                FilterType::Nearest,
-            )
-            .to_rgba8();
-
-        (0..MAIN_MENU_LOGO_HEIGHT as u32)
-            .map(|row| {
-                (0..MAIN_MENU_LOGO_WIDTH as u32)
-                    .map(|column| {
-                        (
-                            rgba_cell(image.get_pixel(column, row * 2).0),
-                            rgba_cell(image.get_pixel(column, row * 2 + 1).0),
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect()
-    })
-}
-
-fn rgba_cell([red, green, blue, alpha]: [u8; 4]) -> RgbaCell {
-    RgbaCell {
-        red,
-        green,
-        blue,
-        alpha,
-    }
-}
-
-fn sharpen_logo_color(cell: RgbaCell, background: (u8, u8, u8)) -> (u8, u8, u8) {
-    if cell.alpha > 220 {
-        return (cell.red, cell.green, cell.blue);
-    }
-
-    blend_over_background(cell, background)
-}
-
-fn blend_over_background(cell: RgbaCell, background: (u8, u8, u8)) -> (u8, u8, u8) {
-    let alpha = cell.alpha as u16;
-    let inverse = 255 - alpha;
-    (
-        ((cell.red as u16 * alpha + background.0 as u16 * inverse) / 255) as u8,
-        ((cell.green as u16 * alpha + background.1 as u16 * inverse) / 255) as u8,
-        ((cell.blue as u16 * alpha + background.2 as u16 * inverse) / 255) as u8,
-    )
-}
-
-fn color_to_rgb(color: Color) -> Option<(u8, u8, u8)> {
-    match color {
-        Color::Rgb(red, green, blue) => Some((red, green, blue)),
-        _ => None,
-    }
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -4578,37 +4470,14 @@ mod tests {
     }
 
     #[test]
-    fn menu_logo_dimensions_match_raster_size() {
+    fn menu_logo_dimensions_match_static_rows() {
         assert_eq!(main_menu_logo_height(), MAIN_MENU_LOGO_HEIGHT);
         assert!(main_menu_width() >= MAIN_MENU_ITEMS_WIDTH);
         assert_eq!(main_menu_width(), MAIN_MENU_LOGO_WIDTH);
-        assert_eq!(
-            main_menu_logo_raster().len(),
-            MAIN_MENU_LOGO_HEIGHT as usize
-        );
-        assert!(main_menu_logo_raster()
+        assert_eq!(MAIN_MENU_LOGO_ROWS.len(), MAIN_MENU_LOGO_HEIGHT as usize);
+        assert!(MAIN_MENU_LOGO_ROWS
             .iter()
-            .all(|row| row.len() == MAIN_MENU_LOGO_WIDTH as usize));
-    }
-
-    #[test]
-    fn menu_logo_image_area_matches_compact_footer_hiding() {
-        let mut app = app::TuiApp::default();
-        app.state = app::AppState::Menu(0);
-        app.show_menu_logo = true;
-        let area = Rect {
-            x: 0,
-            y: 0,
-            width: 80,
-            height: 30,
-        };
-
-        assert!(compact_layout(area));
-        assert!(area.height >= main_menu_min_height());
-        let overlay_area = menu_logo_image_area(&app, area).expect("logo area");
-        let expected_area = main_menu_logo_area(area).expect("expected logo area");
-
-        assert_eq!(overlay_area, expected_area);
+            .all(|row| row.chars().count() <= MAIN_MENU_LOGO_WIDTH as usize));
     }
 
     #[test]
