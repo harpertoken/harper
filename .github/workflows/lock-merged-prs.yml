@@ -26,7 +26,15 @@ jobs:
     permissions:
       pull-requests: write
     steps:
+      - id: app-token
+        name: Create Harper app token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HARPER_APP_ID }}
+          private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
       - name: Lock PR
         run: gh pr lock ${{ github.event.pull_request.number }} --repo ${{ github.repository }} || true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

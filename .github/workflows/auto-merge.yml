@@ -30,10 +30,19 @@ jobs:
       github.event.pull_request.draft == false &&
       github.repository_owner == 'harpertoken'
     steps:
+      - id: app-token
+        name: Create Harper app token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HARPER_APP_ID }}
+          private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - uses: libnudget/auto-merge@v1
         with:
           mode: enable
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
   cancel-auto-merge:
     runs-on: ubuntu-latest
@@ -43,10 +52,18 @@ jobs:
       github.event.pull_request.draft == false &&
       github.repository_owner == 'harpertoken'
     steps:
+      - id: app-token
+        name: Create Harper app token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HARPER_APP_ID }}
+          private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
       - uses: libnudget/auto-merge@v1
         with:
           mode: disable
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
   auto-merge-now:
     runs-on: ubuntu-latest
@@ -55,8 +72,17 @@ jobs:
       github.event.pull_request.draft == false &&
       github.repository_owner == 'harpertoken'
     steps:
+      - id: app-token
+        name: Create Harper app token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HARPER_APP_ID }}
+          private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - uses: libnudget/auto-merge@v1
         with:
           mode: now
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           bypass_token: ${{ secrets.BYPASS_TOKEN }}

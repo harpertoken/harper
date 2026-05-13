@@ -29,10 +29,19 @@ jobs:
     if: github.repository_owner == 'harpertoken' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      - id: app-token
+        name: Create Harper app token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HARPER_APP_ID }}
+          private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
       - name: Determine merged PR and commit
         id: pr
         uses: actions/github-script@v7
         with:
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const run = context.payload.workflow_run;
             let prNumber = undefined;
@@ -81,7 +90,7 @@ jobs:
         if: steps.pr.outputs.skip != 'true'
         run: gh pr lock ${{ steps.pr.outputs.pr_number }} --repo ${{ github.repository }} || true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout merged commit
         if: steps.pr.outputs.skip != 'true'
