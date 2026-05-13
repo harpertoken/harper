@@ -17,8 +17,10 @@ use harper_core::core::Message;
 use harper_core::memory::session_service::GlobalStats;
 use harper_core::ResolvedAgents;
 use harper_core::{ApprovalProfile, AuthSession, ExecutionStrategy, PlanState, SandboxProfile};
+use ratatui::layout::Rect;
 use ratatui::text::Line;
 use serde::Deserialize;
+use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::fs;
 use std::sync::{Arc, Mutex};
@@ -113,6 +115,25 @@ pub struct ChatState {
     pub rendered_message_cache: Vec<RenderedMessageBlock>,
     pub rendered_transcript_lines: Vec<Line<'static>>,
     pub render_cache_theme_key: String,
+    pub messages_area: Cell<Option<Rect>>,
+    pub command_output_area: Cell<Option<Rect>>,
+    pub command_output_selection: Option<LineSelection>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LineSelection {
+    pub anchor: usize,
+    pub focus: usize,
+}
+
+impl LineSelection {
+    pub fn range(self) -> (usize, usize) {
+        if self.anchor <= self.focus {
+            (self.anchor, self.focus)
+        } else {
+            (self.focus, self.anchor)
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -478,6 +499,7 @@ pub enum AppState {
     ExportSessions(Vec<SessionInfo>, usize), // sessions, selected for export
     Settings(usize),                         // selected settings row
     Profile(usize),
+    Appearance(usize),
     ExecutionPolicy(usize),
     ViewSession(String, Vec<Message>, usize), // name, messages, selected
     Stats(GlobalStats),
@@ -563,6 +585,28 @@ pub struct TuiApp {
     pub execution_policy_editor: Option<ExecutionPolicyEditorState>,
     pub header_widgets: Vec<HeaderWidget>,
     pub update_status: Option<String>,
+    pub terminal_image_logo: bool,
+    pub show_menu_logo: bool,
+    pub mouse_capture: bool,
+    pub drag_scroll: Option<DragScrollState>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DragScrollDirection {
+    Up,
+    Down,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DragScrollTarget {
+    Messages,
+    CommandOutput,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DragScrollState {
+    pub target: DragScrollTarget,
+    pub direction: DragScrollDirection,
 }
 
 impl Default for TuiApp {
@@ -606,6 +650,10 @@ impl Default for TuiApp {
                 HeaderWidget::Activity,
             ],
             update_status: None,
+            terminal_image_logo: false,
+            show_menu_logo: true,
+            mouse_capture: false,
+            drag_scroll: None,
         }
     }
 }
@@ -800,8 +848,9 @@ impl TuiApp {
                     *sel = (*sel + 1) % sessions.len();
                 }
             }
-            AppState::Settings(sel) => *sel = (*sel + 1) % 5,
+            AppState::Settings(sel) => *sel = (*sel + 1) % 6,
             AppState::Profile(sel) => *sel = (*sel + 1) % profile_action_count,
+            AppState::Appearance(sel) => *sel = (*sel + 1) % 3,
             AppState::ExecutionPolicy(sel) => *sel = (*sel + 1) % execution_policy_row_count,
             AppState::ExportSessions(sessions, sel) => {
                 if !sessions.is_empty() {
@@ -880,7 +929,7 @@ impl TuiApp {
                     };
                 }
             }
-            AppState::Settings(sel) => *sel = if *sel == 0 { 4 } else { *sel - 1 },
+            AppState::Settings(sel) => *sel = if *sel == 0 { 5 } else { *sel - 1 },
             AppState::Profile(sel) => {
                 *sel = if *sel == 0 {
                     profile_action_count - 1
@@ -888,6 +937,7 @@ impl TuiApp {
                     *sel - 1
                 };
             }
+            AppState::Appearance(sel) => *sel = if *sel == 0 { 2 } else { *sel - 1 },
             AppState::ExecutionPolicy(sel) => {
                 *sel = if *sel == 0 {
                     execution_policy_row_count - 1
@@ -947,6 +997,7 @@ fn parse_review_state(content: &str) -> Option<ReviewState> {
 mod tests {
     use super::{AppState, ChatState, MessageType, NavigationFocus, TuiApp, UiMessage};
     use harper_core::core::Message;
+    use std::cell::Cell;
     use std::time::{Duration, Instant};
 
     #[test]
@@ -1036,6 +1087,9 @@ mod tests {
             rendered_message_cache: Vec::new(),
             rendered_transcript_lines: Vec::new(),
             render_cache_theme_key: String::new(),
+            messages_area: Cell::new(None),
+            command_output_area: Cell::new(None),
+            command_output_selection: None,
         }));
 
         app.next();

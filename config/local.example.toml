@@ -28,6 +28,8 @@ server_url = "http://localhost:5001"
 
 [ui]
 theme = "minimal"
+show_menu_logo = true
+mouse_capture = false
 
 [server]
 enabled = true
