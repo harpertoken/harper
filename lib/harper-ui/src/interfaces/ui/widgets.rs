@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::OnceLock;
+
+use image::imageops::FilterType;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::prelude::Frame;
 use ratatui::style::{Color, Modifier, Style};
@@ -19,7 +22,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap};
 
 use super::app::{
-    AppState, ApprovalState, ReviewState, SessionInfo, TuiApp, UiMessage, MAIN_MENU_ITEM_COUNT,
+    AppState, ApprovalState, LineSelection, ReviewState, SessionInfo, TuiApp, UiMessage,
+    MAIN_MENU_ITEM_COUNT,
 };
 use super::settings;
 use super::theme::Theme;
@@ -36,6 +40,18 @@ const MAX_COMMAND_OUTPUT_LINES: usize = 4;
 const COMPACT_HEIGHT_THRESHOLD: u16 = 36;
 const COMPACT_WIDTH_THRESHOLD: u16 = 100;
 const COMPACT_COMMAND_OUTPUT_LINES: usize = 3;
+const MAIN_MENU_ITEMS_WIDTH: u16 = 22;
+const MAIN_MENU_LOGO_WIDTH: u16 = 48;
+const MAIN_MENU_LOGO_HEIGHT: u16 = 14;
+const MAIN_MENU_LOGO_PNG: &[u8] = include_bytes!("../../../assets/harper-menu-logo.png");
+
+#[derive(Clone, Copy)]
+struct RgbaCell {
+    red: u8,
+    green: u8,
+    blue: u8,
+    alpha: u8,
+}
 
 // Refined shortcuts for a cleaner footer
 const CHAT_FOOTER_SHORTCUTS: &[&[(&str, &str)]] = &[
@@ -280,7 +296,9 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     let footer_area = chunks[1];
 
     match &app.state {
-        AppState::Menu(selected) => draw_zen_menu(frame, *selected, theme, main_area),
+        AppState::Menu(selected) => {
+            draw_zen_menu(frame, *selected, theme, main_area, app.show_menu_logo)
+        }
         AppState::Chat(chat_state) => {
             let show_sidebar = chat_state.sidebar_visible && area.width > COMPACT_WIDTH_THRESHOLD;
             let chat_area = if show_sidebar {
@@ -313,6 +331,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             let mut has_command_output = command_output_display.is_some();
             let mut has_chat_loop =
                 !has_plan && should_render_chat_loop_panel(&chat_state.loop_state);
+            chat_state.command_output_area.set(None);
             let mut plan_height = chat_state
                 .active_plan
                 .as_ref()
@@ -499,6 +518,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
                 .saturating_sub(visible_line_capacity + effective_scroll_offset)
                 as u16;
             let messages_widget = messages_widget.scroll((paragraph_scroll, 0));
+            chat_state.messages_area.set(Some(chunks[1]));
             frame.render_widget(messages_widget, chunks[1]);
 
             let mut next_panel_index = 2;
@@ -658,6 +678,7 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
             draw_export_sessions(frame, sessions, *selected, theme, main_area)
         }
         AppState::Settings(selected) => draw_settings(frame, *selected, theme, main_area),
+        AppState::Appearance(selected) => draw_appearance(frame, app, *selected, theme, main_area),
         AppState::Profile(selected) => draw_profile(frame, app, *selected, theme, main_area),
         AppState::ExecutionPolicy(selected) => {
             draw_execution_policy(frame, app, *selected, theme, main_area)
@@ -691,6 +712,26 @@ pub fn draw(frame: &mut Frame, app: &TuiApp, theme: &Theme) {
     if let Some(msg) = &app.message {
         draw_message_overlay(frame, msg, app.help_selected, theme);
     }
+}
+
+pub(crate) fn menu_logo_image_area(app: &TuiApp, area: Rect) -> Option<Rect> {
+    if !app.show_menu_logo || !matches!(app.state, AppState::Menu(_)) {
+        return None;
+    }
+
+    let compact = compact_layout(area);
+    let compact_menu = area.height <= MAIN_MENU_ITEM_COUNT as u16 + 4;
+    let hide_footer = compact || compact_menu;
+    let main_area = if hide_footer {
+        area
+    } else {
+        Rect {
+            height: area.height.saturating_sub(FOOTER_HEIGHT),
+            ..area
+        }
+    };
+
+    main_menu_logo_area(main_area)
 }
 
 fn render_diff_lines(content: &str, theme: &Theme) -> Vec<Line<'static>> {
@@ -2704,7 +2745,13 @@ fn draw_zen_sidebar(
     frame.render_widget(sidebar, area);
 }
 
-fn draw_zen_menu(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) {
+fn draw_zen_menu(
+    frame: &mut Frame,
+    selected: usize,
+    theme: &Theme,
+    area: Rect,
+    show_menu_logo: bool,
+) {
     let menu_items = [
         "New Conversation",
         "History",
@@ -2715,15 +2762,26 @@ fn draw_zen_menu(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) 
     ];
     debug_assert_eq!(menu_items.len(), MAIN_MENU_ITEM_COUNT);
 
+    let show_logo =
+        show_menu_logo && area.height >= main_menu_min_height() && area.width >= main_menu_width();
     let compact = area.height <= MAIN_MENU_ITEM_COUNT as u16 + MENU_BLOCK_VERTICAL_OVERHEAD;
     let area = if compact {
         centered_rect_width(40, area)
+    } else if show_logo {
+        main_menu_area(area)
     } else {
-        let min_menu_height = MAIN_MENU_ITEM_COUNT as u16 + MENU_BLOCK_VERTICAL_OVERHEAD;
-        centered_rect_with_min_height(40, 35, min_menu_height, area)
+        centered_fixed_width_rect_with_min_height(
+            MAIN_MENU_ITEMS_WIDTH,
+            45,
+            MAIN_MENU_ITEM_COUNT as u16 + MENU_BLOCK_VERTICAL_OVERHEAD,
+            area,
+        )
     };
     let visible_capacity = if compact {
         area.height as usize
+    } else if show_logo {
+        area.height
+            .saturating_sub(MENU_BLOCK_VERTICAL_OVERHEAD + main_menu_logo_height()) as usize
     } else {
         area.height.saturating_sub(MENU_BLOCK_VERTICAL_OVERHEAD) as usize
     };
@@ -2755,22 +2813,186 @@ fn draw_zen_menu(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) 
         })
         .collect();
 
-    let menu = if compact {
-        List::new(items)
-    } else {
-        List::new(items).block(
+    if compact {
+        let menu = List::new(items);
+        frame.render_widget(menu, area);
+    } else if show_logo {
+        let chunks = main_menu_chunks(area);
+        draw_main_menu_logo(frame, chunks[0], theme);
+
+        let menu = List::new(items).block(
             Block::default()
                 .title("Harper")
+                .title_alignment(Alignment::Center)
                 .title_style(
                     Style::default()
                         .fg(theme.foreground)
                         .add_modifier(Modifier::BOLD),
                 )
                 .padding(Padding::uniform(1)),
-        )
-    };
+        );
 
-    frame.render_widget(menu, area);
+        let menu_area = centered_fixed_width_rect(MAIN_MENU_ITEMS_WIDTH, chunks[1]);
+        frame.render_widget(menu, menu_area);
+    } else {
+        let menu = List::new(items).block(
+            Block::default()
+                .title("Harper")
+                .title_alignment(Alignment::Center)
+                .title_style(
+                    Style::default()
+                        .fg(theme.foreground)
+                        .add_modifier(Modifier::BOLD),
+                )
+                .padding(Padding::uniform(1)),
+        );
+
+        frame.render_widget(menu, area);
+    }
+}
+
+fn main_menu_area(area: Rect) -> Rect {
+    centered_fixed_width_rect_with_min_height(main_menu_width(), 45, main_menu_min_height(), area)
+}
+
+fn main_menu_min_height() -> u16 {
+    MAIN_MENU_ITEM_COUNT as u16 + MENU_BLOCK_VERTICAL_OVERHEAD + main_menu_logo_height()
+}
+
+fn main_menu_chunks(area: Rect) -> std::rc::Rc<[Rect]> {
+    Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(main_menu_logo_height()),
+            Constraint::Min(MAIN_MENU_ITEM_COUNT as u16),
+        ])
+        .split(area)
+}
+
+fn main_menu_logo_area(area: Rect) -> Option<Rect> {
+    if area.height < main_menu_min_height() || area.width < main_menu_width() {
+        return None;
+    }
+
+    Some(main_menu_chunks(main_menu_area(area))[0])
+}
+
+fn draw_main_menu_logo(frame: &mut Frame, area: Rect, theme: &Theme) {
+    let logo = main_menu_logo_lines(theme.background);
+    let logo_area = centered_fixed_width_rect(MAIN_MENU_LOGO_WIDTH, area);
+    frame.render_widget(Paragraph::new(logo), logo_area);
+}
+
+fn main_menu_logo_height() -> u16 {
+    MAIN_MENU_LOGO_HEIGHT
+}
+
+fn main_menu_width() -> u16 {
+    MAIN_MENU_LOGO_WIDTH.max(MAIN_MENU_ITEMS_WIDTH)
+}
+
+fn main_menu_logo_lines(background: Color) -> Vec<Line<'static>> {
+    let background = color_to_rgb(background).unwrap_or((15, 15, 15));
+    main_menu_logo_raster()
+        .iter()
+        .map(|row| {
+            let spans = row
+                .iter()
+                .map(|(top, bottom)| {
+                    let top_visible = top.alpha > 96;
+                    let bottom_visible = bottom.alpha > 96;
+                    match (top_visible, bottom_visible) {
+                        (true, true) => {
+                            let top = sharpen_logo_color(*top, background);
+                            let bottom = sharpen_logo_color(*bottom, background);
+                            Span::styled(
+                                "▀",
+                                Style::default()
+                                    .fg(Color::Rgb(top.0, top.1, top.2))
+                                    .bg(Color::Rgb(bottom.0, bottom.1, bottom.2)),
+                            )
+                        }
+                        (true, false) => {
+                            let top = sharpen_logo_color(*top, background);
+                            Span::styled("▀", Style::default().fg(Color::Rgb(top.0, top.1, top.2)))
+                        }
+                        (false, true) => {
+                            let bottom = sharpen_logo_color(*bottom, background);
+                            Span::styled(
+                                "▄",
+                                Style::default().fg(Color::Rgb(bottom.0, bottom.1, bottom.2)),
+                            )
+                        }
+                        (false, false) => Span::raw(" "),
+                    }
+                })
+                .collect::<Vec<_>>();
+            Line::from(spans)
+        })
+        .collect()
+}
+
+fn main_menu_logo_raster() -> &'static [Vec<(RgbaCell, RgbaCell)>] {
+    static RASTER: OnceLock<Vec<Vec<(RgbaCell, RgbaCell)>>> = OnceLock::new();
+    RASTER.get_or_init(|| {
+        let Ok(image) = image::load_from_memory(MAIN_MENU_LOGO_PNG) else {
+            return Vec::new();
+        };
+        let image = image
+            .resize_exact(
+                MAIN_MENU_LOGO_WIDTH as u32,
+                MAIN_MENU_LOGO_HEIGHT as u32 * 2,
+                FilterType::Nearest,
+            )
+            .to_rgba8();
+
+        (0..MAIN_MENU_LOGO_HEIGHT as u32)
+            .map(|row| {
+                (0..MAIN_MENU_LOGO_WIDTH as u32)
+                    .map(|column| {
+                        (
+                            rgba_cell(image.get_pixel(column, row * 2).0),
+                            rgba_cell(image.get_pixel(column, row * 2 + 1).0),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    })
+}
+
+fn rgba_cell([red, green, blue, alpha]: [u8; 4]) -> RgbaCell {
+    RgbaCell {
+        red,
+        green,
+        blue,
+        alpha,
+    }
+}
+
+fn sharpen_logo_color(cell: RgbaCell, background: (u8, u8, u8)) -> (u8, u8, u8) {
+    if cell.alpha > 220 {
+        return (cell.red, cell.green, cell.blue);
+    }
+
+    blend_over_background(cell, background)
+}
+
+fn blend_over_background(cell: RgbaCell, background: (u8, u8, u8)) -> (u8, u8, u8) {
+    let alpha = cell.alpha as u16;
+    let inverse = 255 - alpha;
+    (
+        ((cell.red as u16 * alpha + background.0 as u16 * inverse) / 255) as u8,
+        ((cell.green as u16 * alpha + background.1 as u16 * inverse) / 255) as u8,
+        ((cell.blue as u16 * alpha + background.2 as u16 * inverse) / 255) as u8,
+    )
+}
+
+fn color_to_rgb(color: Color) -> Option<(u8, u8, u8)> {
+    match color {
+        Color::Rgb(red, green, blue) => Some((red, green, blue)),
+        _ => None,
+    }
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -2804,6 +3026,7 @@ fn centered_rect_width(percent_x: u16, area: Rect) -> Rect {
         .split(area)[1]
 }
 
+#[cfg(test)]
 fn centered_rect_with_min_height(
     percent_x: u16,
     percent_y: u16,
@@ -2817,6 +3040,40 @@ fn centered_rect_with_min_height(
     Rect { y, height, ..rect }
 }
 
+fn centered_fixed_width_rect_with_min_height(
+    width: u16,
+    percent_y: u16,
+    min_height: u16,
+    area: Rect,
+) -> Rect {
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(area)[1];
+    let height = vertical.height.max(min_height).min(area.height);
+    let y = area.y + area.height.saturating_sub(height) / 2;
+    let width = width.min(area.width);
+    let x = area.x + area.width.saturating_sub(width) / 2;
+
+    Rect {
+        x,
+        y,
+        width,
+        height,
+    }
+}
+
+fn centered_fixed_width_rect(width: u16, area: Rect) -> Rect {
+    let width = width.min(area.width);
+    let x = area.x + area.width.saturating_sub(width) / 2;
+
+    Rect { x, width, ..area }
+}
+
 fn footer_shortcuts_for_state(
     state: &AppState,
 ) -> &'static [&'static [(&'static str, &'static str)]] {
@@ -2826,7 +3083,7 @@ fn footer_shortcuts_for_state(
         AppState::ExportSessions(_, _) => EXPORT_FOOTER_SHORTCUTS,
         AppState::ViewSession(_, _, _) => PREVIEW_FOOTER_SHORTCUTS,
         AppState::Settings(_) => SETTINGS_FOOTER_SHORTCUTS,
-        AppState::Profile(_) => PROFILE_FOOTER_SHORTCUTS,
+        AppState::Profile(_) | AppState::Appearance(_) => PROFILE_FOOTER_SHORTCUTS,
         AppState::ExecutionPolicy(_) => EXECUTION_POLICY_FOOTER_SHORTCUTS,
         AppState::Stats(_) => STATS_FOOTER_SHORTCUTS,
         _ => CHAT_FOOTER_SHORTCUTS,
@@ -3113,6 +3370,7 @@ fn draw_settings(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) 
     let compact = compact_layout(area);
     let tools = [
         "Profile",
+        "Appearance",
         "Execution Policy",
         "Search",
         "System",
@@ -3160,12 +3418,64 @@ fn draw_settings(frame: &mut Frame, selected: usize, theme: &Theme, area: Rect) 
 fn settings_context(selected: usize) -> &'static str {
     match selected {
         0 => "Manage local sign-in state.",
-        1 => "Configure command approval, sandboxing, retries, and header widgets.",
-        2 => "Check web search availability.",
-        3 => "Show a local system information snapshot.",
-        4 => "Show a short local process snapshot.",
+        1 => "Control visual options for the home menu.",
+        2 => "Configure command approval, sandboxing, retries, and header widgets.",
+        3 => "Check web search availability.",
+        4 => "Show a local system information snapshot.",
+        5 => "Show a short local process snapshot.",
         _ => "",
     }
+}
+
+fn draw_appearance(frame: &mut Frame, app: &TuiApp, selected: usize, theme: &Theme, area: Rect) {
+    let rows = [
+        format!(
+            "Menu Logo: {}",
+            if app.show_menu_logo { "On" } else { "Off" }
+        ),
+        format!(
+            "Mouse Capture: {}",
+            if app.mouse_capture { "On" } else { "Off" }
+        ),
+        "Save".to_string(),
+    ];
+    let items: Vec<ListItem> = rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| {
+            let style = if index == selected {
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.foreground)
+            };
+            ListItem::new(row.clone()).style(style)
+        })
+        .collect();
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(4), Constraint::Length(2)])
+        .split(area);
+    let list = List::new(items).block(
+        Block::default()
+            .title(" Appearance ")
+            .padding(Padding::uniform(1)),
+    );
+    let context_text = match selected {
+        0 => "Menu logo shows the Harper logo on the home screen.",
+        1 => "Mouse capture enables wheel/drag scrolling. Off keeps normal text selection.",
+        2 => "Save keeps these appearance settings for next time.",
+        _ => "",
+    };
+    let context = Paragraph::new(context_text)
+        .style(theme.muted_style())
+        .block(Block::default().padding(Padding::horizontal(1)))
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(list, chunks[0]);
+    frame.render_widget(context, chunks[1]);
 }
 
 fn draw_execution_policy(
@@ -3829,7 +4139,7 @@ fn draw_command_output_browser(
     frame.render_widget(Clear, overlay_area);
 
     let title = Paragraph::new(format!(
-        "$ Command Output ({}) • Esc close • ↑/↓ scroll • {}",
+        "$ Command Output ({}) • drag select • Ctrl+Shift+C copy • Esc close • {}",
         output.status_label,
         truncate_chat_summary(&output.command, 80)
     ))
@@ -3842,7 +4152,12 @@ fn draw_command_output_browser(
     .style(Style::default().fg(theme.foreground));
     frame.render_widget(title, chunks[0]);
 
-    let detail = Paragraph::new(command_output_lines(&output, theme, None))
+    let detail_lines = apply_line_selection(
+        command_output_lines(&output, theme, None),
+        chat_state.command_output_selection,
+        theme.selection_style(),
+    );
+    let detail = Paragraph::new(detail_lines)
         .block(
             Block::default()
                 .title(format!(" Output • {} lines ", output.total_line_count))
@@ -3853,7 +4168,28 @@ fn draw_command_output_browser(
         )
         .scroll((chat_state.command_output_scroll as u16, 0))
         .wrap(Wrap { trim: false });
+    chat_state.command_output_area.set(Some(chunks[1]));
     frame.render_widget(detail, chunks[1]);
+}
+
+fn apply_line_selection(
+    mut lines: Vec<Line<'static>>,
+    selection: Option<LineSelection>,
+    selection_style: Style,
+) -> Vec<Line<'static>> {
+    let Some(selection) = selection else {
+        return lines;
+    };
+    let (start, end) = selection.range();
+    for (index, line) in lines.iter_mut().enumerate() {
+        if index < start || index > end {
+            continue;
+        }
+        for span in &mut line.spans {
+            span.style = selection_style;
+        }
+    }
+    lines
 }
 
 fn draw_plan_steps_browser(frame: &mut Frame, chat_state: &super::app::ChatState, theme: &Theme) {
@@ -4040,6 +4376,7 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::style::Color;
     use ratatui::Terminal;
+    use std::cell::Cell;
 
     fn setup() -> (SyntaxSet, ThemeSet) {
         (
@@ -4108,6 +4445,9 @@ mod tests {
             rendered_message_cache: Vec::new(),
             rendered_transcript_lines: Vec::new(),
             render_cache_theme_key: String::new(),
+            messages_area: Cell::new(None),
+            command_output_area: Cell::new(None),
+            command_output_selection: None,
         }
     }
 
@@ -4210,6 +4550,65 @@ mod tests {
             .collect::<String>();
 
         assert!(rendered.contains("Quit"));
+    }
+
+    #[test]
+    fn draw_menu_shows_logo_on_roomy_terminal() {
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Menu(0);
+
+        let backend = TestBackend::new(120, 48);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let theme = Theme::default();
+
+        terminal
+            .draw(|frame| draw(frame, &app, &theme))
+            .expect("menu should render");
+
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(rendered.contains("▀▀▀"));
+        assert!(rendered.contains("New Conversation"));
+    }
+
+    #[test]
+    fn menu_logo_dimensions_match_raster_size() {
+        assert_eq!(main_menu_logo_height(), MAIN_MENU_LOGO_HEIGHT);
+        assert!(main_menu_width() >= MAIN_MENU_ITEMS_WIDTH);
+        assert_eq!(main_menu_width(), MAIN_MENU_LOGO_WIDTH);
+        assert_eq!(
+            main_menu_logo_raster().len(),
+            MAIN_MENU_LOGO_HEIGHT as usize
+        );
+        assert!(main_menu_logo_raster()
+            .iter()
+            .all(|row| row.len() == MAIN_MENU_LOGO_WIDTH as usize));
+    }
+
+    #[test]
+    fn menu_logo_image_area_matches_compact_footer_hiding() {
+        let mut app = app::TuiApp::default();
+        app.state = app::AppState::Menu(0);
+        app.show_menu_logo = true;
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: 80,
+            height: 30,
+        };
+
+        assert!(compact_layout(area));
+        assert!(area.height >= main_menu_min_height());
+        let overlay_area = menu_logo_image_area(&app, area).expect("logo area");
+        let expected_area = main_menu_logo_area(area).expect("expected logo area");
+
+        assert_eq!(overlay_area, expected_area);
     }
 
     #[test]

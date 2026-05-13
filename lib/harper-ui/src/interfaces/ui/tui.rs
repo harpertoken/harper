@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
 
-use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
+use crossterm::event::{
+    DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+};
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
@@ -27,6 +30,7 @@ use ratatui::Terminal;
 use super::app::{AppState, ApprovalState, ChatState, CommandOutputState, TuiApp};
 use super::auth;
 use super::events::{self, EventResult};
+use super::logo_image;
 use super::settings;
 use super::theme::Theme;
 use super::widgets;
@@ -409,6 +413,24 @@ fn apply_tui_config_set(app: &mut TuiApp, key: &str, value: &str) -> Result<Stri
     ))
 }
 
+fn sync_mouse_capture<W: Write>(
+    backend: &mut CrosstermBackend<W>,
+    enabled: &mut bool,
+    desired: bool,
+) -> std::io::Result<()> {
+    if *enabled == desired {
+        return Ok(());
+    }
+
+    if desired {
+        execute!(backend, EnableMouseCapture)?;
+    } else {
+        execute!(backend, DisableMouseCapture)?;
+    }
+    *enabled = desired;
+    Ok(())
+}
+
 fn sync_exec_policy_from_app(app: &TuiApp, exec_policy: &Arc<Mutex<ExecPolicyConfig>>) {
     if let Ok(mut policy) = exec_policy.lock() {
         policy.approval_profile = Some(app.approval_profile);
@@ -469,8 +491,19 @@ pub async fn run_tui(
     )?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+    let terminal_image_protocol = logo_image::supported_protocol();
+    let mut rendered_logo_area = None;
 
     let mut app = TuiApp::new();
+    app.terminal_image_logo = terminal_image_protocol.is_some();
+    app.show_menu_logo = ui_config.show_menu_logo.unwrap_or(true);
+    app.mouse_capture = ui_config.mouse_capture.unwrap_or(false);
+    let mut mouse_capture_enabled = false;
+    sync_mouse_capture(
+        terminal.backend_mut(),
+        &mut mouse_capture_enabled,
+        app.mouse_capture,
+    )?;
     app.model_label = format!("{:?} / {}", api_config.provider, api_config.model_name);
     app.current_working_dir = std::env::current_dir()
         .map(|path| path.display().to_string())
@@ -728,10 +761,22 @@ pub async fn run_tui(
     loop {
         app.refresh_activity_status();
         app.refresh_message();
+        events::apply_drag_auto_scroll(&mut app);
         if let AppState::Chat(chat_state) = &mut app.state {
             crate::interfaces::ui::widgets::refresh_chat_render_cache(chat_state, theme);
         }
         terminal.draw(|f| widgets::draw(f, &app, theme))?;
+        if let Some(protocol) = terminal_image_protocol {
+            let logo_area = widgets::menu_logo_image_area(&app, terminal.size()?.into());
+            if logo_area != rendered_logo_area {
+                logo_image::clear_images(terminal.backend_mut(), protocol)?;
+                if let Some(area) = logo_area {
+                    logo_image::render_logo(terminal.backend_mut(), area, protocol)?;
+                }
+                terminal.backend_mut().flush()?;
+                rendered_logo_area = logo_area;
+            }
+        }
 
         // Handle both UI events and worker updates
         tokio::select! {
@@ -776,6 +821,7 @@ pub async fn run_tui(
                                                 chat_state.command_output = None;
                                                 chat_state.command_output_expanded = false;
                                                 chat_state.command_output_scroll = 0;
+                                                chat_state.command_output_selection = None;
                                                 app.set_activity_status(Some(format!("running: {}", command)));
                                                 let _ = worker_tx.send(WorkerMsg::ExecuteShellCommand {
                                                     command,
@@ -988,6 +1034,7 @@ pub async fn run_tui(
                                 chat_state.command_output = None;
                                 chat_state.command_output_expanded = false;
                                 chat_state.command_output_scroll = 0;
+                                chat_state.command_output_selection = None;
                                 app.set_activity_status(Some("thinking".to_string()));
 
                                 let _ = worker_tx.send(WorkerMsg::SendMessage {
@@ -1282,6 +1329,20 @@ pub async fn run_tui(
                                 )),
                             }
                         }
+                        EventResult::SaveAppearance => {
+                            match settings::save_appearance_settings(
+                                app.show_menu_logo,
+                                app.mouse_capture,
+                            ) {
+                                Ok(()) => app.set_status_message(
+                                    "Saved appearance settings to config/local.toml".to_string(),
+                                ),
+                                Err(err) => app.set_error_message(format!(
+                                    "Failed to save appearance settings: {}",
+                                    err
+                                )),
+                            }
+                        }
                         EventResult::CheckForUpdates => {
                             app.set_activity_status(Some("checking updates".to_string()));
                             spawn_update_status_refresh(&ui_tx, true);
@@ -1346,6 +1407,7 @@ pub async fn run_tui(
                                     chat_state.command_output = None;
                                     chat_state.command_output_expanded = false;
                                     chat_state.command_output_scroll = 0;
+                                    chat_state.command_output_selection = None;
                                 }
                             }
                             app.set_activity_status(Some(format!("retrying: {}", command)));
@@ -1432,6 +1494,11 @@ pub async fn run_tui(
                             }
                         }
                     }
+                    sync_mouse_capture(
+                        terminal.backend_mut(),
+                        &mut mouse_capture_enabled,
+                        app.mouse_capture,
+                    )?;
                 }
             }
 
@@ -1542,6 +1609,7 @@ pub async fn run_tui(
                                                 has_error: is_error,
                                                 done,
                                             };
+                                            chat_state.command_output_selection = None;
                                         }
                                         state.content.push_str(&chunk);
                                         state.has_error |= is_error;
@@ -1696,7 +1764,13 @@ pub async fn run_tui(
     }
 
     // Restore terminal
+    if let Some(protocol) = terminal_image_protocol {
+        logo_image::clear_images(terminal.backend_mut(), protocol)?;
+    }
     disable_raw_mode()?;
+    if mouse_capture_enabled {
+        execute!(terminal.backend_mut(), DisableMouseCapture)?;
+    }
     execute!(
         terminal.backend_mut(),
         DisableBracketedPaste,
@@ -1709,9 +1783,12 @@ pub async fn run_tui(
 
 #[cfg(test)]
 mod tests {
-    use super::{display_command_info, final_chat_loop_outcome, infer_chat_loop_stage};
+    use super::{
+        display_command_info, final_chat_loop_outcome, infer_chat_loop_stage, sync_mouse_capture,
+    };
     use crate::interfaces::ui::app::{MessageType, TuiApp};
     use harper_core::core::plan::{PlanLoopOutcome, PlanLoopStage};
+    use ratatui::backend::CrosstermBackend;
 
     #[test]
     fn summarizing_maps_to_feedback_stage() {
@@ -1753,5 +1830,20 @@ mod tests {
         let message = app.message.as_ref().expect("command info message");
         assert!(matches!(message.message_type, MessageType::Info));
         assert!(message.expires_at.is_none());
+    }
+
+    #[test]
+    fn mouse_capture_sync_tracks_terminal_state() {
+        let mut backend = CrosstermBackend::new(Vec::<u8>::new());
+        let mut enabled = false;
+
+        sync_mouse_capture(&mut backend, &mut enabled, true).expect("enable mouse capture");
+        assert!(enabled);
+
+        sync_mouse_capture(&mut backend, &mut enabled, true).expect("keep mouse capture enabled");
+        assert!(enabled);
+
+        sync_mouse_capture(&mut backend, &mut enabled, false).expect("disable mouse capture");
+        assert!(!enabled);
     }
 }

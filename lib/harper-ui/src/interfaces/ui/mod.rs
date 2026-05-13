@@ -16,6 +16,7 @@
 pub mod app;
 pub mod auth;
 pub mod events;
+pub mod logo_image;
 pub mod settings;
 pub mod theme;
 pub mod tui;

@@ -32,6 +32,8 @@ system_prompt_id = "default"
 
 [ui]
 theme = "minimal"
+show_menu_logo = true
+mouse_capture = false
 
 [tools]
 # enabled_tools = ["read_file", "write_file", "run_command"]

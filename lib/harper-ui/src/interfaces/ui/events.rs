@@ -13,9 +13,12 @@
 // limitations under the License.
 
 use arboard::{Clipboard, ImageData};
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
 use harper_core;
 use harper_core::PlanStepStatus;
+use ratatui::layout::Rect;
+use ratatui::text::Line;
+use std::cell::Cell;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -26,7 +29,8 @@ const HELP_MESSAGE: &str =
     "G:Help | Tab:Complete | Esc:Back | ↑↓:Navigate | Y/V:Prev/Next | Enter:Select/Approve | T:Send | L/→:Preview | D/Delete:Remove Session | X:Exit | W:Web | B:Sidebar | A:Agents | /agents on|off | F:Findings | Ctrl+S:Plan | Ctrl+O:Output | R:Retry | U:Replan | K:Ack | P:Jobs | M:Msgs | C:ID";
 
 use super::app::{
-    AppState, ChatState, ExecutionPolicyEditorState, ExecutionPolicyListField, NavigationFocus,
+    AppState, ChatState, DragScrollDirection, DragScrollState, DragScrollTarget,
+    ExecutionPolicyEditorState, ExecutionPolicyListField, LineSelection, NavigationFocus,
     SessionInfo, TuiApp,
 };
 use super::settings;
@@ -48,6 +52,7 @@ pub enum EventResult {
         provider: String,
     },
     SaveExecutionPolicy,
+    SaveAppearance,
     CheckForUpdates,
     SetPlanStepStatus {
         session_id: String,
@@ -128,6 +133,9 @@ pub(crate) fn create_chat_state(
         rendered_message_cache: Vec::new(),
         rendered_transcript_lines: Vec::new(),
         render_cache_theme_key: String::new(),
+        messages_area: Cell::new(None),
+        command_output_area: Cell::new(None),
+        command_output_selection: None,
     };
     chat_state.refresh_review_state();
     chat_state.follow_latest_messages();
@@ -503,6 +511,7 @@ pub fn handle_event(
                                     chat_state.command_output_expanded =
                                         !chat_state.command_output_expanded;
                                     chat_state.command_output_scroll = 0;
+                                    chat_state.command_output_selection = None;
                                     let status_message = if chat_state.command_output_expanded {
                                         "Command output maximized".to_string()
                                     } else {
@@ -739,6 +748,7 @@ pub fn handle_event(
                         if chat_state.command_output_expanded {
                             chat_state.command_output_expanded = false;
                             chat_state.command_output_scroll = 0;
+                            chat_state.command_output_selection = None;
                             app.set_status_message("Command output closed".to_string());
                         } else if chat_state.plan_jobs_expanded {
                             chat_state.plan_jobs_expanded = false;
@@ -756,9 +766,9 @@ pub fn handle_event(
                     AppState::Sessions(_, _) => app.state = AppState::Menu(0),
                     AppState::ExportSessions(_, _) => app.state = AppState::Menu(0),
                     AppState::Settings(_) => app.state = AppState::Menu(0),
-                    AppState::Profile(_) | AppState::ExecutionPolicy(_) => {
-                        app.state = AppState::Menu(0)
-                    }
+                    AppState::Profile(_)
+                    | AppState::Appearance(_)
+                    | AppState::ExecutionPolicy(_) => app.state = AppState::Menu(0),
                     AppState::ViewSession(_, _, _) => app.state = AppState::Menu(0),
                     AppState::Stats(_) => app.state = AppState::Menu(0),
                 },
@@ -818,9 +828,274 @@ pub fn handle_event(
         Event::Paste(content) => {
             handle_paste(app, content);
         }
+        Event::Mouse(mouse) => {
+            handle_mouse_event(app, mouse.kind, mouse.column, mouse.row);
+        }
         _ => {}
     }
     EventResult::Continue
+}
+
+fn handle_mouse_event(app: &mut TuiApp, kind: MouseEventKind, column: u16, row: u16) {
+    if matches!(kind, MouseEventKind::Up(_)) {
+        app.drag_scroll = None;
+        return;
+    }
+
+    let AppState::Chat(chat_state) = &mut app.state else {
+        app.drag_scroll = None;
+        return;
+    };
+
+    if chat_state.command_output_expanded {
+        if let Some(area) = chat_state.command_output_area.get() {
+            if !point_in_area(column, row, area) {
+                app.drag_scroll = None;
+                return;
+            }
+            update_command_output_selection(chat_state, kind, row, area);
+            app.drag_scroll = drag_scroll_state(kind, row, area, DragScrollTarget::CommandOutput);
+            apply_command_output_mouse_scroll(
+                kind,
+                row,
+                area,
+                &mut chat_state.command_output_scroll,
+            );
+        }
+        return;
+    }
+
+    let Some(area) = chat_state.messages_area.get() else {
+        app.drag_scroll = None;
+        return;
+    };
+    if !point_in_area(column, row, area) {
+        app.drag_scroll = None;
+        return;
+    }
+    app.drag_scroll = drag_scroll_state(kind, row, area, DragScrollTarget::Messages);
+    apply_message_mouse_scroll(kind, row, area, &mut chat_state.scroll_offset);
+}
+
+fn point_in_area(column: u16, row: u16, area: Rect) -> bool {
+    column >= area.x
+        && column < area.x.saturating_add(area.width)
+        && row >= area.y
+        && row < area.y.saturating_add(area.height)
+}
+
+fn apply_message_mouse_scroll(
+    kind: MouseEventKind,
+    row: u16,
+    area: Rect,
+    scroll_offset: &mut usize,
+) {
+    let top = area.y;
+    let bottom = area.y.saturating_add(area.height).saturating_sub(1);
+    match kind {
+        MouseEventKind::ScrollUp => {
+            *scroll_offset = scroll_offset.saturating_add(1);
+        }
+        MouseEventKind::ScrollDown => {
+            *scroll_offset = scroll_offset.saturating_sub(1);
+        }
+        MouseEventKind::Drag(_) if row <= top => {
+            *scroll_offset = scroll_offset.saturating_add(1);
+        }
+        MouseEventKind::Drag(_) if row >= bottom => {
+            *scroll_offset = scroll_offset.saturating_sub(1);
+        }
+        _ => {}
+    }
+}
+
+fn apply_command_output_mouse_scroll(
+    kind: MouseEventKind,
+    row: u16,
+    area: Rect,
+    scroll_offset: &mut usize,
+) {
+    let top = area.y;
+    let bottom = area.y.saturating_add(area.height).saturating_sub(1);
+    match kind {
+        MouseEventKind::ScrollUp => {
+            *scroll_offset = scroll_offset.saturating_sub(1);
+        }
+        MouseEventKind::ScrollDown => {
+            *scroll_offset = scroll_offset.saturating_add(1);
+        }
+        MouseEventKind::Drag(_) if row <= top => {
+            *scroll_offset = scroll_offset.saturating_sub(1);
+        }
+        MouseEventKind::Drag(_) if row >= bottom => {
+            *scroll_offset = scroll_offset.saturating_add(1);
+        }
+        _ => {}
+    }
+}
+
+fn update_command_output_selection(
+    chat_state: &mut ChatState,
+    kind: MouseEventKind,
+    row: u16,
+    area: Rect,
+) {
+    let Some(content) = command_output_display_content(chat_state) else {
+        return;
+    };
+    let line_index =
+        command_output_line_at_row(row, area, chat_state.command_output_scroll, &content);
+    match kind {
+        MouseEventKind::Down(_) => {
+            chat_state.command_output_selection = Some(LineSelection {
+                anchor: line_index,
+                focus: line_index,
+            });
+        }
+        MouseEventKind::Drag(_) => {
+            if let Some(selection) = &mut chat_state.command_output_selection {
+                selection.focus = line_index;
+            } else {
+                chat_state.command_output_selection = Some(LineSelection {
+                    anchor: line_index,
+                    focus: line_index,
+                });
+            }
+        }
+        _ => {}
+    }
+}
+
+fn command_output_line_at_row(row: u16, area: Rect, scroll_offset: usize, content: &str) -> usize {
+    let content_height = area.height.saturating_sub(1).max(1);
+    let visible_row = row.saturating_sub(area.y).min(content_height - 1) as usize;
+    let visual_row = scroll_offset.saturating_add(visible_row);
+    command_output_line_at_visual_row(content, command_output_content_width(area), visual_row)
+}
+
+fn command_output_line_at_visual_row(content: &str, width: u16, visual_row: usize) -> usize {
+    let width = width.max(1) as usize;
+    let mut row_offset = 0usize;
+    let mut last_index = 0usize;
+    for (index, line) in content.lines().enumerate() {
+        last_index = index;
+        let row_count = command_output_wrapped_row_count(line, width);
+        if visual_row < row_offset.saturating_add(row_count) {
+            return index;
+        }
+        row_offset = row_offset.saturating_add(row_count);
+    }
+    last_index
+}
+
+fn command_output_wrapped_row_count(line: &str, width: usize) -> usize {
+    let line_width = Line::raw(line.to_string()).width();
+    if line_width == 0 {
+        1
+    } else {
+        line_width.div_ceil(width)
+    }
+}
+
+fn command_output_content_width(area: Rect) -> u16 {
+    area.width.saturating_sub(4).max(1)
+}
+
+fn drag_scroll_state(
+    kind: MouseEventKind,
+    row: u16,
+    area: Rect,
+    target: DragScrollTarget,
+) -> Option<DragScrollState> {
+    if !matches!(kind, MouseEventKind::Drag(_)) {
+        return None;
+    }
+
+    let top = area.y;
+    let bottom = area.y.saturating_add(area.height).saturating_sub(1);
+    if row <= top {
+        Some(DragScrollState {
+            target,
+            direction: DragScrollDirection::Up,
+        })
+    } else if row >= bottom {
+        Some(DragScrollState {
+            target,
+            direction: DragScrollDirection::Down,
+        })
+    } else {
+        None
+    }
+}
+
+pub(crate) fn apply_drag_auto_scroll(app: &mut TuiApp) {
+    let Some(drag_scroll) = app.drag_scroll else {
+        return;
+    };
+    let AppState::Chat(chat_state) = &mut app.state else {
+        app.drag_scroll = None;
+        return;
+    };
+
+    match drag_scroll.target {
+        DragScrollTarget::Messages => match drag_scroll.direction {
+            DragScrollDirection::Up => {
+                chat_state.scroll_offset = chat_state.scroll_offset.saturating_add(1)
+            }
+            DragScrollDirection::Down => {
+                chat_state.scroll_offset = chat_state.scroll_offset.saturating_sub(1)
+            }
+        },
+        DragScrollTarget::CommandOutput => {
+            if !chat_state.command_output_expanded {
+                app.drag_scroll = None;
+                return;
+            }
+            match drag_scroll.direction {
+                DragScrollDirection::Up => {
+                    chat_state.command_output_scroll =
+                        chat_state.command_output_scroll.saturating_sub(1)
+                }
+                DragScrollDirection::Down => {
+                    chat_state.command_output_scroll =
+                        chat_state.command_output_scroll.saturating_add(1)
+                }
+            }
+            let content = command_output_display_content(chat_state);
+            let area = chat_state.command_output_area.get();
+            let scroll_offset = chat_state.command_output_scroll;
+            if let Some(selection) = &mut chat_state.command_output_selection {
+                selection.focus = match drag_scroll.direction {
+                    DragScrollDirection::Up => content
+                        .as_deref()
+                        .map(|content| {
+                            command_output_line_at_visual_row(
+                                content,
+                                area.map(command_output_content_width).unwrap_or(1),
+                                scroll_offset,
+                            )
+                        })
+                        .unwrap_or(scroll_offset),
+                    DragScrollDirection::Down => {
+                        let visual_row = scroll_offset.saturating_add(
+                            area.map(|area| area.height.saturating_sub(2) as usize)
+                                .unwrap_or(0),
+                        );
+                        content
+                            .as_deref()
+                            .map(|content| {
+                                command_output_line_at_visual_row(
+                                    content,
+                                    area.map(command_output_content_width).unwrap_or(1),
+                                    visual_row,
+                                )
+                            })
+                            .unwrap_or(visual_row)
+                    }
+                };
+            }
+        }
+    }
 }
 
 fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResult {
@@ -887,10 +1162,11 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
         }
         AppState::Settings(selected) => match *selected {
             0 => app.state = AppState::Profile(0),
-            1 => app.state = AppState::ExecutionPolicy(0),
-            2 => handle_web_search(app),
-            3 => handle_system_info(app),
-            4 => handle_process_list(app),
+            1 => app.state = AppState::Appearance(0),
+            2 => app.state = AppState::ExecutionPolicy(0),
+            3 => handle_web_search(app),
+            4 => handle_system_info(app),
+            5 => handle_process_list(app),
             _ => {}
         },
         AppState::Profile(selected) => match *selected {
@@ -921,6 +1197,32 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
                     provider: "apple".to_string(),
                 }
             }
+            _ => {}
+        },
+        AppState::Appearance(selected) => match *selected {
+            0 => {
+                app.show_menu_logo = !app.show_menu_logo;
+                app.set_status_message(format!(
+                    "Menu logo {}",
+                    if app.show_menu_logo {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
+                ));
+            }
+            1 => {
+                app.mouse_capture = !app.mouse_capture;
+                app.set_status_message(format!(
+                    "Mouse capture {}",
+                    if app.mouse_capture {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
+                ));
+            }
+            2 => return EventResult::SaveAppearance,
             _ => {}
         },
         AppState::ExecutionPolicy(selected) => match *selected {
@@ -1367,6 +1669,22 @@ pub(crate) fn save_image_to_temp(
 
 fn handle_copy(app: &mut TuiApp) {
     if let AppState::Chat(chat_state) = &mut app.state {
+        if let Some(selected_text) = selected_command_output_text(chat_state) {
+            match Clipboard::new() {
+                Ok(mut clipboard) => {
+                    if clipboard.set_text(selected_text).is_ok() {
+                        app.set_info_message("Copied selected output".to_string());
+                    } else {
+                        app.set_error_message("Failed to copy selected output".to_string());
+                    }
+                }
+                Err(e) => {
+                    app.set_error_message(format!("Clipboard not available: {}", e));
+                }
+            }
+            return;
+        }
+
         if !chat_state.input.is_empty() {
             match Clipboard::new() {
                 Ok(mut clipboard) => {
@@ -1382,6 +1700,67 @@ fn handle_copy(app: &mut TuiApp) {
             }
         }
     }
+}
+
+pub(crate) fn selected_command_output_text(chat_state: &ChatState) -> Option<String> {
+    let selection = chat_state.command_output_selection?;
+    let content = command_output_display_content(chat_state)?;
+    if content.is_empty() {
+        return None;
+    }
+
+    let (start, end) = selection.range();
+    let selected = content
+        .lines()
+        .skip(start)
+        .take(end.saturating_sub(start).saturating_add(1))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if selected.is_empty() {
+        None
+    } else {
+        Some(selected)
+    }
+}
+
+fn display_command_output_content(content: &str) -> &str {
+    let content = content.trim_end();
+    content.strip_prefix("Git diff:\n").unwrap_or(content)
+}
+
+fn command_output_display_content(chat_state: &ChatState) -> Option<String> {
+    if let Some(output) = &chat_state.command_output {
+        let trimmed = output.content.trim_end();
+        let content = if trimmed.trim().is_empty() {
+            "No output yet".to_string()
+        } else {
+            trimmed.to_string()
+        };
+        return Some(display_command_output_content(&content).to_string());
+    }
+
+    let runtime = chat_state
+        .active_plan
+        .as_ref()
+        .and_then(|plan| plan.runtime.as_ref())?;
+    let job = runtime
+        .active_job_id
+        .as_deref()
+        .and_then(|job_id| runtime.jobs.iter().rev().find(|job| job.job_id == job_id))
+        .or_else(|| runtime.jobs.last())?;
+
+    let transcript = job.output_transcript.trim_end();
+    let preview = job.output_preview.as_deref().unwrap_or_default().trim_end();
+    let content = if transcript.trim().is_empty() {
+        if preview.trim().is_empty() {
+            "No output recorded yet".to_string()
+        } else {
+            preview.to_string()
+        }
+    } else {
+        transcript.to_string()
+    };
+    Some(display_command_output_content(&content).to_string())
 }
 
 fn slash_command_candidates(input: &str) -> Vec<String> {
@@ -1595,7 +1974,11 @@ fn handle_tab(app: &mut TuiApp) {
 mod tests {
     use super::*;
     use crate::interfaces::ui::app::{AppState, TuiApp};
+    use crossterm::event::MouseButton;
+    use harper_core::core::plan::{PlanJobRecord, PlanJobStatus};
     use harper_core::memory::session_service::SessionService;
+    use harper_core::{PlanRuntime, PlanState};
+    use ratatui::layout::Rect;
 
     #[test]
     fn test_menu_navigation() {
@@ -1610,6 +1993,311 @@ mod tests {
 
         app.previous();
         assert!(matches!(app.state, AppState::Menu(1)));
+    }
+
+    #[test]
+    fn drag_selection_scrolls_messages_at_top_edge() {
+        let mut app = TuiApp::new();
+        let chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.messages_area.set(Some(Rect {
+            x: 2,
+            y: 4,
+            width: 40,
+            height: 10,
+        }));
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        handle_mouse_event(&mut app, MouseEventKind::Drag(MouseButton::Left), 10, 4);
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.scroll_offset, 1);
+    }
+
+    #[test]
+    fn drag_selection_scrolls_messages_at_bottom_edge() {
+        let mut app = TuiApp::new();
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.scroll_offset = 3;
+        chat_state.messages_area.set(Some(Rect {
+            x: 2,
+            y: 4,
+            width: 40,
+            height: 10,
+        }));
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        handle_mouse_event(&mut app, MouseEventKind::Drag(MouseButton::Left), 10, 13);
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.scroll_offset, 2);
+    }
+
+    #[test]
+    fn mouse_wheel_scrolls_messages_under_pointer() {
+        let mut app = TuiApp::new();
+        let chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.messages_area.set(Some(Rect {
+            x: 2,
+            y: 4,
+            width: 40,
+            height: 10,
+        }));
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        handle_mouse_event(&mut app, MouseEventKind::ScrollUp, 10, 8);
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.scroll_offset, 1);
+    }
+
+    #[test]
+    fn mouse_wheel_ignores_points_outside_messages() {
+        let mut app = TuiApp::new();
+        let chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.messages_area.set(Some(Rect {
+            x: 2,
+            y: 4,
+            width: 40,
+            height: 10,
+        }));
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        handle_mouse_event(&mut app, MouseEventKind::ScrollUp, 50, 8);
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.scroll_offset, 0);
+    }
+
+    #[test]
+    fn drag_selection_scrolls_command_output_at_top_edge() {
+        let mut app = TuiApp::new();
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.command_output = Some(super::super::app::CommandOutputState {
+            command: "printf output".to_string(),
+            content: "line 1\nline 2".to_string(),
+            has_error: false,
+            done: true,
+        });
+        chat_state.command_output_expanded = true;
+        chat_state.command_output_scroll = 3;
+        chat_state.command_output_area.set(Some(Rect {
+            x: 2,
+            y: 4,
+            width: 40,
+            height: 10,
+        }));
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        handle_mouse_event(&mut app, MouseEventKind::Drag(MouseButton::Left), 10, 4);
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.command_output_scroll, 2);
+        assert_eq!(
+            app.drag_scroll,
+            Some(DragScrollState {
+                target: DragScrollTarget::CommandOutput,
+                direction: DragScrollDirection::Up,
+            })
+        );
+    }
+
+    #[test]
+    fn drag_selection_scrolls_command_output_at_bottom_edge() {
+        let mut app = TuiApp::new();
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.command_output = Some(super::super::app::CommandOutputState {
+            command: "printf output".to_string(),
+            content: "line 1\nline 2".to_string(),
+            has_error: false,
+            done: true,
+        });
+        chat_state.command_output_expanded = true;
+        chat_state.command_output_scroll = 3;
+        chat_state.command_output_area.set(Some(Rect {
+            x: 2,
+            y: 4,
+            width: 40,
+            height: 10,
+        }));
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        handle_mouse_event(&mut app, MouseEventKind::Drag(MouseButton::Left), 10, 13);
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.command_output_scroll, 4);
+    }
+
+    #[test]
+    fn native_command_output_selection_tracks_dragged_lines() {
+        let mut app = TuiApp::new();
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.command_output = Some(super::super::app::CommandOutputState {
+            command: "printf output".to_string(),
+            content: "line 0\nline 1\nline 2\nline 3".to_string(),
+            has_error: false,
+            done: true,
+        });
+        chat_state.command_output_expanded = true;
+        chat_state.command_output_scroll = 1;
+        chat_state.command_output_area.set(Some(Rect {
+            x: 2,
+            y: 4,
+            width: 40,
+            height: 10,
+        }));
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        handle_mouse_event(&mut app, MouseEventKind::Down(MouseButton::Left), 10, 5);
+        handle_mouse_event(&mut app, MouseEventKind::Drag(MouseButton::Left), 10, 7);
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(
+            chat_state.command_output_selection,
+            Some(LineSelection {
+                anchor: 2,
+                focus: 3
+            })
+        );
+        assert_eq!(
+            selected_command_output_text(chat_state),
+            Some("line 2\nline 3".to_string())
+        );
+    }
+
+    #[test]
+    fn selected_command_output_text_uses_displayed_diff_lines() {
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.command_output = Some(super::super::app::CommandOutputState {
+            command: "git diff".to_string(),
+            content: "Git diff:\ndiff --git a/file.rs b/file.rs\n@@ -1 +1 @@\n-old\n+new\n"
+                .to_string(),
+            has_error: false,
+            done: true,
+        });
+        chat_state.command_output_selection = Some(LineSelection {
+            anchor: 0,
+            focus: 1,
+        });
+
+        assert_eq!(
+            selected_command_output_text(&chat_state),
+            Some("diff --git a/file.rs b/file.rs\n@@ -1 +1 @@".to_string())
+        );
+    }
+
+    #[test]
+    fn selected_command_output_text_uses_plan_runtime_output() {
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.active_plan = Some(PlanState {
+            explanation: None,
+            items: Vec::new(),
+            runtime: Some(PlanRuntime {
+                active_job_id: Some("job-1".to_string()),
+                jobs: vec![PlanJobRecord {
+                    job_id: "job-1".to_string(),
+                    tool: "run_command".to_string(),
+                    command: Some("cargo test".to_string()),
+                    status: PlanJobStatus::Running,
+                    output_transcript: "runtime line 0\nruntime line 1\nruntime line 2".to_string(),
+                    output_preview: Some("preview line".to_string()),
+                    has_error_output: false,
+                }],
+                ..Default::default()
+            }),
+            updated_at: None,
+        });
+        chat_state.command_output_selection = Some(LineSelection {
+            anchor: 1,
+            focus: 2,
+        });
+
+        assert_eq!(
+            selected_command_output_text(&chat_state),
+            Some("runtime line 1\nruntime line 2".to_string())
+        );
+    }
+
+    #[test]
+    fn command_output_mouse_mapping_accounts_for_wrapped_rows() {
+        let mut app = TuiApp::new();
+        let mut chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.command_output = Some(super::super::app::CommandOutputState {
+            command: "printf output".to_string(),
+            content: "abcdefghij\nsecond".to_string(),
+            has_error: false,
+            done: true,
+        });
+        chat_state.command_output_expanded = true;
+        chat_state.command_output_area.set(Some(Rect {
+            x: 2,
+            y: 4,
+            width: 8,
+            height: 10,
+        }));
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        handle_mouse_event(&mut app, MouseEventKind::Down(MouseButton::Left), 4, 4);
+        handle_mouse_event(&mut app, MouseEventKind::Drag(MouseButton::Left), 4, 6);
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(
+            chat_state.command_output_selection,
+            Some(LineSelection {
+                anchor: 0,
+                focus: 0
+            })
+        );
+        assert_eq!(
+            selected_command_output_text(chat_state),
+            Some("abcdefghij".to_string())
+        );
+    }
+
+    #[test]
+    fn held_drag_continues_auto_scroll_until_release() {
+        let mut app = TuiApp::new();
+        let chat_state = create_chat_state("session".to_string(), vec![], None, None, true);
+        chat_state.messages_area.set(Some(Rect {
+            x: 2,
+            y: 4,
+            width: 40,
+            height: 10,
+        }));
+        app.state = AppState::Chat(Box::new(chat_state));
+
+        handle_mouse_event(&mut app, MouseEventKind::Drag(MouseButton::Left), 10, 4);
+        apply_drag_auto_scroll(&mut app);
+        apply_drag_auto_scroll(&mut app);
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.scroll_offset, 3);
+
+        handle_mouse_event(&mut app, MouseEventKind::Up(MouseButton::Left), 10, 4);
+        apply_drag_auto_scroll(&mut app);
+
+        let AppState::Chat(chat_state) = &app.state else {
+            panic!("expected chat state");
+        };
+        assert_eq!(chat_state.scroll_offset, 3);
+        assert!(app.drag_scroll.is_none());
     }
 
     #[test]
@@ -1679,7 +2367,7 @@ mod tests {
     #[test]
     fn test_enter_settings_execution_policy() {
         let mut app = TuiApp::new();
-        app.state = AppState::Settings(1);
+        app.state = AppState::Settings(2);
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         harper_core::memory::storage::init_db(&conn).unwrap();
         let session_service = SessionService::new(&conn);
@@ -1691,6 +2379,74 @@ mod tests {
         );
         assert!(matches!(result, EventResult::Continue));
         assert!(matches!(app.state, AppState::ExecutionPolicy(0)));
+    }
+
+    #[test]
+    fn test_enter_settings_appearance() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Settings(1);
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        assert!(matches!(app.state, AppState::Appearance(0)));
+    }
+
+    #[test]
+    fn test_enter_appearance_toggles_menu_logo() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Appearance(0);
+        app.show_menu_logo = true;
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        assert!(!app.show_menu_logo);
+    }
+
+    #[test]
+    fn test_enter_appearance_save_returns_async_event() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Appearance(2);
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::SaveAppearance));
+    }
+
+    #[test]
+    fn test_enter_appearance_toggles_mouse_capture() {
+        let mut app = TuiApp::new();
+        app.state = AppState::Appearance(1);
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        harper_core::memory::storage::init_db(&conn).unwrap();
+        let session_service = SessionService::new(&conn);
+
+        let result = handle_event(
+            Event::Key(KeyCode::Enter.into()),
+            &mut app,
+            &session_service,
+        );
+        assert!(matches!(result, EventResult::Continue));
+        assert!(app.mouse_capture);
     }
 
     #[test]

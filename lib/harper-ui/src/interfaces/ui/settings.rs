@@ -36,6 +36,60 @@ pub fn save_execution_policy_settings(settings: ExecPolicySettings<'_>) -> io::R
     fs::write(path, updated)
 }
 
+pub fn save_appearance_settings(show_menu_logo: bool, mouse_capture: bool) -> io::Result<()> {
+    let path = Path::new("config/local.toml");
+    let existing = fs::read_to_string(path).unwrap_or_default();
+    let updated = upsert_ui_setting(
+        &existing,
+        "show_menu_logo",
+        &format!("show_menu_logo = {show_menu_logo}"),
+    );
+    let updated = upsert_ui_setting(
+        &updated,
+        "mouse_capture",
+        &format!("mouse_capture = {mouse_capture}"),
+    );
+    fs::write(path, updated)
+}
+
+fn upsert_ui_setting(input: &str, key: &str, line: &str) -> String {
+    let mut lines: Vec<String> = input.lines().map(str::to_string).collect();
+    let section_start = lines.iter().position(|line| line.trim() == "[ui]");
+
+    match section_start {
+        Some(start) => {
+            let section_end = lines
+                .iter()
+                .enumerate()
+                .skip(start + 1)
+                .find(|(_, line)| line.trim_start().starts_with('['))
+                .map(|(index, _)| index)
+                .unwrap_or(lines.len());
+
+            let mut section_body: Vec<String> = lines[start + 1..section_end]
+                .iter()
+                .filter(|existing| !existing.trim_start().starts_with(key))
+                .cloned()
+                .collect();
+            section_body.push(line.to_string());
+            lines.splice(start + 1..section_end, section_body);
+        }
+        None => {
+            if !lines.is_empty() && !lines.last().is_some_and(|line| line.trim().is_empty()) {
+                lines.push(String::new());
+            }
+            lines.push("[ui]".to_string());
+            lines.push(line.to_string());
+        }
+    }
+
+    let mut output = lines.join("\n");
+    if !output.ends_with('\n') {
+        output.push('\n');
+    }
+    output
+}
+
 fn upsert_exec_policy_settings(input: &str, settings: &ExecPolicySettings<'_>) -> String {
     let approval_line = format!(
         "approval_profile = \"{}\"",
@@ -314,7 +368,8 @@ mod tests {
     use super::{
         approval_profile_name, execution_strategy_name, next_approval_profile,
         next_execution_strategy, next_retry_max_attempts, next_sandbox_profile,
-        sandbox_profile_name, upsert_exec_policy_settings, ExecPolicySettings, HeaderWidget,
+        sandbox_profile_name, upsert_exec_policy_settings, upsert_ui_setting, ExecPolicySettings,
+        HeaderWidget,
     };
     use harper_core::{ApprovalProfile, ExecutionStrategy, SandboxProfile};
 
@@ -363,6 +418,17 @@ mod tests {
         assert!(output.contains("allowed_commands = [\"ls\"]"));
         assert!(output.contains("blocked_commands = [\"sudo\"]"));
         assert!(!output.contains("approval_profile = \"strict\""));
+    }
+
+    #[test]
+    fn upsert_ui_setting_replaces_menu_logo_value() {
+        let input = "[ui]\ntheme = \"minimal\"\nshow_menu_logo = true\n";
+        let output = upsert_ui_setting(input, "show_menu_logo", "show_menu_logo = false");
+
+        assert!(output.contains("[ui]"));
+        assert!(output.contains("theme = \"minimal\""));
+        assert!(output.contains("show_menu_logo = false"));
+        assert!(!output.contains("show_menu_logo = true"));
     }
 
     #[test]

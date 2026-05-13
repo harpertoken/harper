@@ -79,6 +79,8 @@ pub struct UiConfig {
     pub theme: Option<String>,
     pub keys: Option<KeyConfig>,
     pub header_widgets: Option<Vec<String>>,
+    pub show_menu_logo: Option<bool>,
+    pub mouse_capture: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
