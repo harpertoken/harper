@@ -164,6 +164,99 @@ jobs:
           [ -n "$versions_json" ] || versions_json='{}'
           value=$(printf '%s' "$versions_json" | jq -r '."harper-core" // empty')
           echo "harper_core_version=$value" >> "$GITHUB_OUTPUT"
+      - name: Close stale overlapping release PRs
+        if: steps.release.outputs.released == 'true' && (github.event_name == 'push' || github.event.inputs.release_mode == '' || github.event.inputs.release_mode == 'pr')
+        uses: actions/github-script@v7
+        env:
+          CURRENT_VERSIONS_JSON: ${{ steps.release.outputs.versions }}
+        with:
+          github-token: ${{ steps.release-app-token.outputs.token }}
+          script: |
+            const manifestToPackage = {
+              'Cargo.toml': 'harper-workspace',
+              'lib/harper-core/Cargo.toml': 'harper-core',
+              'lib/harper-ui/Cargo.toml': 'harper-ui',
+              'lib/harper-firmware/Cargo.toml': 'harper-firmware',
+              'lib/harper-mcp-server/Cargo.toml': 'harper-mcp-server',
+              'lib/harper-sandbox/Cargo.toml': 'harper-sandbox',
+            };
+
+            const currentVersions = JSON.parse(process.env.CURRENT_VERSIONS_JSON || '{}');
+            const currentPackages = new Set(Object.keys(currentVersions));
+            if (currentPackages.size === 0) {
+              core.info('No released packages found; skipping stale PR cleanup.');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+
+            const releasePrs = (await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              base: 'main',
+              per_page: 100,
+            })).filter((pr) =>
+              pr.title === '[lib] release' &&
+              pr.head.repo?.full_name === `${owner}/${repo}` &&
+              pr.head.ref.startsWith('release-')
+            );
+
+            if (releasePrs.length < 2) {
+              core.info('No other open release PRs to compare.');
+              return;
+            }
+
+            const intersects = (left, right) => [...left].some((value) => right.has(value));
+
+            const packageSetForPr = async (pr) => {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner,
+                repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+
+              return new Set(
+                files
+                  .map((file) => manifestToPackage[file.filename])
+                  .filter(Boolean)
+              );
+            };
+
+            const releasePrPackages = [];
+            for (const pr of releasePrs) {
+              const packages = await packageSetForPr(pr);
+              releasePrPackages.push({ pr, packages });
+            }
+
+            const overlapping = releasePrPackages.filter(({ packages }) => intersects(packages, currentPackages));
+            if (overlapping.length < 2) {
+              core.info('No stale overlapping release PRs found.');
+              return;
+            }
+
+            overlapping.sort((left, right) => new Date(right.pr.updated_at) - new Date(left.pr.updated_at));
+            const keeper = overlapping[0];
+            core.info(`Keeping release PR #${keeper.pr.number} for packages: ${[...keeper.packages].join(', ')}`);
+
+            for (const entry of overlapping.slice(1)) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: entry.pr.number,
+                body: `Closing as superseded by #${keeper.pr.number}.`,
+              });
+
+              await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: entry.pr.number,
+                state: 'closed',
+              });
+
+              core.info(`Closed stale release PR #${entry.pr.number}.`);
+            }
 
   create-tags:
     needs: prepare-release-assets-inputs
