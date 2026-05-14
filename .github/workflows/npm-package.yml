@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+---
+name: npm Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published Harper release tag, for example harper-0.20.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: npm Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Set package version
+        working-directory: packages/harper
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          version="${RELEASE_TAG#harper-}"
+          npm version "$version" --no-git-tag-version --allow-same-version
+
+      - name: Validate wrapper
+        working-directory: packages/harper
+        env:
+          HARPER_NPM_SKIP_DOWNLOAD: "1"
+        run: |
+          node --check bin/harper.js
+          node --check scripts/install.js
+          node scripts/install.js
+
+      - name: Pack package
+        run: |
+          mkdir -p dist/npm
+          npm pack ./packages/harper --pack-destination dist/npm
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: harper-npm-package
+          path: dist/npm/*.tgz
