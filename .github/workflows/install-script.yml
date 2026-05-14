@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+---
+name: Install Script
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/install-script.yml'
+      - 'scripts/install-harper.sh'
+  workflow_dispatch:
+
+jobs:
+  dry-run:
+    name: Dry Run (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout Harper
+        uses: actions/checkout@v4
+
+      - name: Validate shell syntax
+        if: runner.os != 'Windows'
+        run: sh -n scripts/install-harper.sh
+
+      - name: Dry-run installer
+        shell: bash
+        env:
+          HARPER_INSTALL_DRY_RUN: "1"
+          HARPER_INSTALL_TAG: harper-0.20.1
+        run: |
+          set -euo pipefail
+          sh scripts/install-harper.sh | tee install-plan.txt
+          grep '^release_tag=harper-0.20.1$' install-plan.txt
+          grep '^asset=harper-' install-plan.txt
+          grep '^download_url=https://github.com/harpertoken/harper/releases/download/harper-0.20.1/harper-' install-plan.txt
