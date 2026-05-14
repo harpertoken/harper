@@ -92,6 +92,10 @@ Windows package-manager channels are being prepared from the same signed GitHub 
 
 Debian packages are being prepared from the same Linux release artifacts. Until `.deb` packages are published, use the direct Linux release artifact and update through Harper's direct updater.
 
+### Nix and Arch packages
+
+Nix and Arch package manifests are being prepared from the same Linux release artifacts. Until those package channels are published, use the direct Linux release artifact and update through Harper's direct updater.
+
 ### npm package
 
 An npm binary wrapper is being prepared from the same signed GitHub release artifacts. Until the npm package is published, use Homebrew, source, or a direct release artifact.

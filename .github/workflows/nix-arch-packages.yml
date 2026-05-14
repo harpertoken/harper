@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+---
+name: Nix and Arch Packages
+
+"on":
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Installable Harper release tag"
+        required: true
+        type: string
+
+jobs:
+  manifests:
+    name: Manifests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Harper
+        uses: actions/checkout@v4
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ github.event.inputs.release_tag }}" in
+            harper-*) ;;
+            *)
+              echo "release_tag must start with harper-"
+              exit 1
+              ;;
+          esac
+
+      - name: Download Linux release artifacts
+        id: artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="${{ github.event.inputs.release_tag }}"
+          curl -L \
+            "https://github.com/harpertoken/harper/releases/download/${release_tag}/harper-linux-x86_64.tar.gz" \
+            -o harper-linux-x86_64.tar.gz
+          curl -L \
+            "https://github.com/harpertoken/harper/releases/download/${release_tag}/harper-linux-aarch64.tar.gz" \
+            -o harper-linux-aarch64.tar.gz
+
+          echo "linux_x86_64_sha256=$(sha256sum harper-linux-x86_64.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "linux_aarch64_sha256=$(sha256sum harper-linux-aarch64.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Generate manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/generate-nix-arch-package-manifests.py \
+            --release-tag "${{ github.event.inputs.release_tag }}" \
+            --linux-x86-64-sha256 "${{ steps.artifacts.outputs.linux_x86_64_sha256 }}" \
+            --linux-aarch64-sha256 "${{ steps.artifacts.outputs.linux_aarch64_sha256 }}" \
+            --output-dir nix-arch-package-manifests
+
+      - name: Upload manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: nix-arch-package-manifests-${{ github.event.inputs.release_tag }}
+          path: nix-arch-package-manifests
