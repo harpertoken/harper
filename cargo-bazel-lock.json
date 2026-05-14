@@ -1,5 +1,5 @@
 {
-  "checksum": "ea9d026a5f58d0d1e48fef3d7a395199f9386c25f940660aca7344aa27dfda3f",
+  "checksum": "8eb302f27feb2f2d7ef2e907493a7c57d465489db59d2b967a48c94ac21d7ca9",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -2512,6 +2512,13 @@
               "target": "fs_extra"
             }
           ],
+          "selects": {}
+        },
+        "build_script_env": {
+          "common": {
+            "AWS_LC_SYS_NO_JITTER_ENTROPY": "1",
+            "AWS_LC_SYS_PREBUILT_NASM": "1"
+          },
           "selects": {}
         },
         "links": "aws_lc_0_41_0"
