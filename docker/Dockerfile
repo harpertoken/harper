@@ -79,8 +79,7 @@ USER appuser
 # Set environment variables (can be overridden)
 ENV DATABASE_PATH=/app/data/harper.db
 
-# Expose any ports if needed (Harper is CLI, so probably not)
-# EXPOSE 8080
+EXPOSE 8080
 
 # Set the entrypoint
 ENTRYPOINT ["./harper"]
