@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+---
+name: Linux Packages
+
+"on":
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Installable Harper release tag"
+        required: true
+        type: string
+
+jobs:
+  deb:
+    name: Debian
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Harper
+        uses: actions/checkout@v4
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ github.event.inputs.release_tag }}" in
+            harper-*) ;;
+            *)
+              echo "release_tag must start with harper-"
+              exit 1
+              ;;
+          esac
+
+      - name: Download Linux release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="${{ github.event.inputs.release_tag }}"
+          mkdir -p linux-release-artifacts
+          for asset in harper-linux-x86_64.tar.gz harper-linux-aarch64.tar.gz; do
+            curl -L \
+              "https://github.com/harpertoken/harper/releases/download/${release_tag}/${asset}" \
+              -o "linux-release-artifacts/${asset}"
+          done
+
+      - name: Generate Debian packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/generate-linux-packages.py \
+            --release-tag "${{ github.event.inputs.release_tag }}" \
+            --artifacts-dir linux-release-artifacts \
+            --output-dir linux-packages
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages-${{ github.event.inputs.release_tag }}
+          path: linux-packages/*.deb

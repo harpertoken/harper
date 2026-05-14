@@ -88,6 +88,10 @@ Direct self-update verifies the published manifest, checksum, and detached signa
 
 Windows package-manager channels are being prepared from the same signed GitHub release artifacts. Until winget or Scoop manifests are published, use the direct Windows release artifact and update through Harper's direct updater.
 
+### Linux native packages
+
+Debian packages are being prepared from the same Linux release artifacts. Until `.deb` packages are published, use the direct Linux release artifact and update through Harper's direct updater.
+
 ### Method 4: Using Make
 
 If the project includes a Makefile:
