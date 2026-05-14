@@ -3,6 +3,9 @@
 name: Nix and Arch Packages
 
 "on":
+  push:
+    tags:
+      - 'harper-[0-9]*'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -24,10 +27,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "${{ github.event.inputs.release_tag }}" in
-            harper-*) ;;
+          release_tag="${{ github.event.inputs.release_tag || github.ref_name }}"
+          case "$release_tag" in
+            harper-[0-9]*) ;;
             *)
-              echo "release_tag must start with harper-"
+              echo "release_tag must be an installable harper-* tag"
               exit 1
               ;;
           esac
@@ -37,11 +41,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          release_tag="${{ github.event.inputs.release_tag }}"
-          curl -L \
+          release_tag="${{ github.event.inputs.release_tag || github.ref_name }}"
+          curl --fail --location --retry 12 --retry-all-errors --retry-delay 10 \
             "https://github.com/harpertoken/harper/releases/download/${release_tag}/harper-linux-x86_64.tar.gz" \
             -o harper-linux-x86_64.tar.gz
-          curl -L \
+          curl --fail --location --retry 12 --retry-all-errors --retry-delay 10 \
             "https://github.com/harpertoken/harper/releases/download/${release_tag}/harper-linux-aarch64.tar.gz" \
             -o harper-linux-aarch64.tar.gz
 
@@ -53,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           scripts/generate-nix-arch-package-manifests.py \
-            --release-tag "${{ github.event.inputs.release_tag }}" \
+            --release-tag "${{ github.event.inputs.release_tag || github.ref_name }}" \
             --linux-x86-64-sha256 "${{ steps.artifacts.outputs.linux_x86_64_sha256 }}" \
             --linux-aarch64-sha256 "${{ steps.artifacts.outputs.linux_aarch64_sha256 }}" \
             --output-dir nix-arch-package-manifests
@@ -61,5 +65,5 @@ jobs:
       - name: Upload manifests
         uses: actions/upload-artifact@v4
         with:
-          name: nix-arch-package-manifests-${{ github.event.inputs.release_tag }}
+          name: nix-arch-package-manifests-${{ github.event.inputs.release_tag || github.ref_name }}
           path: nix-arch-package-manifests

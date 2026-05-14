@@ -3,6 +3,9 @@
 name: Windows Packages
 
 "on":
+  push:
+    tags:
+      - 'harper-[0-9]*'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -24,10 +27,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "${{ github.event.inputs.release_tag }}" in
-            harper-*) ;;
+          release_tag="${{ github.event.inputs.release_tag || github.ref_name }}"
+          case "$release_tag" in
+            harper-[0-9]*) ;;
             *)
-              echo "release_tag must start with harper-"
+              echo "release_tag must be an installable harper-* tag"
               exit 1
               ;;
           esac
@@ -37,9 +41,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          release_tag="${{ github.event.inputs.release_tag }}"
+          release_tag="${{ github.event.inputs.release_tag || github.ref_name }}"
           asset_url="https://github.com/harpertoken/harper/releases/download/${release_tag}/harper-windows-x86_64.zip"
-          curl -L "$asset_url" -o harper-windows-x86_64.zip
+          curl --fail --location --retry 12 --retry-all-errors --retry-delay 10 \
+            "$asset_url" \
+            -o harper-windows-x86_64.zip
           sha256=$(sha256sum harper-windows-x86_64.zip | awk '{print $1}')
           echo "asset_url=$asset_url" >> "$GITHUB_OUTPUT"
           echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
@@ -49,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           scripts/generate-windows-package-manifests.py \
-            --release-tag "${{ github.event.inputs.release_tag }}" \
+            --release-tag "${{ github.event.inputs.release_tag || github.ref_name }}" \
             --asset-url "${{ steps.artifact.outputs.asset_url }}" \
             --sha256 "${{ steps.artifact.outputs.sha256 }}" \
             --output-dir windows-package-manifests
@@ -57,5 +63,5 @@ jobs:
       - name: Upload manifests
         uses: actions/upload-artifact@v4
         with:
-          name: windows-package-manifests-${{ github.event.inputs.release_tag }}
+          name: windows-package-manifests-${{ github.event.inputs.release_tag || github.ref_name }}
           path: windows-package-manifests

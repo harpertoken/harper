@@ -3,6 +3,9 @@
 name: npm Package
 
 on:
+  push:
+    tags:
+      - 'harper-[0-9]*'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -29,7 +32,7 @@ jobs:
       - name: Set package version
         working-directory: packages/harper
         env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           version="${RELEASE_TAG#harper-}"
           npm version "$version" --no-git-tag-version --allow-same-version
