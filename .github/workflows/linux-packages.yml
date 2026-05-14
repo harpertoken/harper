@@ -3,6 +3,9 @@
 name: Linux Packages
 
 "on":
+  push:
+    tags:
+      - 'harper-[0-9]*'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -24,10 +27,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "${{ github.event.inputs.release_tag }}" in
-            harper-*) ;;
+          release_tag="${{ github.event.inputs.release_tag || github.ref_name }}"
+          case "$release_tag" in
+            harper-[0-9]*) ;;
             *)
-              echo "release_tag must start with harper-"
+              echo "release_tag must be an installable harper-* tag"
               exit 1
               ;;
           esac
@@ -36,10 +40,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          release_tag="${{ github.event.inputs.release_tag }}"
+          release_tag="${{ github.event.inputs.release_tag || github.ref_name }}"
           mkdir -p linux-release-artifacts
           for asset in harper-linux-x86_64.tar.gz harper-linux-aarch64.tar.gz; do
-            curl -L \
+            curl --fail --location --retry 12 --retry-all-errors --retry-delay 10 \
               "https://github.com/harpertoken/harper/releases/download/${release_tag}/${asset}" \
               -o "linux-release-artifacts/${asset}"
           done
@@ -49,12 +53,12 @@ jobs:
         run: |
           set -euo pipefail
           scripts/generate-linux-packages.py \
-            --release-tag "${{ github.event.inputs.release_tag }}" \
+            --release-tag "${{ github.event.inputs.release_tag || github.ref_name }}" \
             --artifacts-dir linux-release-artifacts \
             --output-dir linux-packages
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
-          name: linux-packages-${{ github.event.inputs.release_tag }}
+          name: linux-packages-${{ github.event.inputs.release_tag || github.ref_name }}
           path: linux-packages/*.deb
