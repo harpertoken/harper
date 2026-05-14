@@ -187,5 +187,5 @@ To use a different port, update these files:
 In Docker, the server is enabled by default:
 
 ```bash
-docker run --rm -it -p 8080:8080 harper
+docker run --rm -it -p 8080:8080 ghcr.io/harpertoken/harper/harper:latest
 ```

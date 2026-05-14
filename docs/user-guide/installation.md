@@ -124,6 +124,14 @@ Use the Harper GitHub Action to install the CLI in CI from a published release a
 - run: harper --help
 ```
 
+### Container image
+
+Harper container images are published on merge to `main`:
+
+```bash
+docker run --rm -it ghcr.io/harpertoken/harper/harper:latest
+```
+
 ### Method 4: Using Make
 
 If the project includes a Makefile:
