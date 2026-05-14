@@ -19,6 +19,8 @@ cp .env.example .env
 cargo harper
 ```
 
+For release installs, use Homebrew, direct GitHub release artifacts, or the install script at `scripts/install-harper.sh`.
+
 You can use Harper to inspect files, patch code, run commands, and manage multi-step work. Native commands cover plans, sessions, config, and updates. OS commands stay explicit through `run ...`, with approvals and audit logs where configured.
 
 In GitHub Actions, Harper can be installed from release artifacts with `uses: harpertoken/harper@main`.

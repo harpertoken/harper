@@ -75,6 +75,19 @@ brew upgrade harpertoken/tap/harper-ai
 
 Download the release artifact for your platform from GitHub Releases, extract it, and place the `harper` binary somewhere on your `PATH`.
 
+You can also use the direct install script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/harpertoken/harper/main/scripts/install-harper.sh | sh
+```
+
+To pin a specific release or install directory:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/harpertoken/harper/main/scripts/install-harper.sh |
+  HARPER_INSTALL_TAG=harper-0.20.1 HARPER_INSTALL_DIR="$HOME/bin" sh
+```
+
 Direct installs support Harper's built-in updater:
 
 ```bash
