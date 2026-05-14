@@ -96,6 +96,17 @@ Debian packages are being prepared from the same Linux release artifacts. Until 
 
 An npm binary wrapper is being prepared from the same signed GitHub release artifacts. Until the npm package is published, use Homebrew, source, or a direct release artifact.
 
+### GitHub Action
+
+Use the Harper GitHub Action to install the CLI in CI from a published release artifact:
+
+```yaml
+- uses: harpertoken/harper@main
+  with:
+    release-tag: harper-0.20.1
+- run: harper --help
+```
+
 ### Method 4: Using Make
 
 If the project includes a Makefile:

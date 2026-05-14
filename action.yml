@@ -1,0 +1,115 @@
+name: Setup Harper
+description: Install the Harper CLI from GitHub release artifacts.
+
+inputs:
+  release-tag:
+    description: Harper release tag to install, for example harper-0.20.1. Defaults to the latest release.
+    required: false
+    default: ""
+  github-token:
+    description: GitHub token used to query the latest release.
+    required: false
+    default: ""
+
+outputs:
+  path:
+    description: Path to the installed Harper binary.
+    value: ${{ steps.install-unix.outputs.path || steps.install-windows.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Harper
+      id: install-unix
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        INPUT_RELEASE_TAG: ${{ inputs.release-tag }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+
+        case "$(uname -s):$(uname -m)" in
+          Darwin:arm64) asset="harper-macos-aarch64.tar.gz" ;;
+          Darwin:x86_64) asset="harper-macos-x86_64.tar.gz" ;;
+          Linux:aarch64) asset="harper-linux-aarch64.tar.gz" ;;
+          Linux:x86_64) asset="harper-linux-x86_64.tar.gz" ;;
+          *) echo "Unsupported runner: $(uname -s)/$(uname -m)" >&2; exit 1 ;;
+        esac
+
+        release_tag="$INPUT_RELEASE_TAG"
+        if [ -z "$release_tag" ]; then
+          headers=()
+          if [ -n "${INPUT_GITHUB_TOKEN:-}" ]; then
+            headers=(-H "Authorization: Bearer $INPUT_GITHUB_TOKEN" -H "X-GitHub-Api-Version: 2022-11-28")
+          fi
+          release_tag="$(
+            curl -fsSL "${headers[@]}" https://api.github.com/repos/harpertoken/harper/releases/latest |
+              node -e "let data=''; process.stdin.on('data', chunk => data += chunk); process.stdin.on('end', () => process.stdout.write(JSON.parse(data).tag_name));"
+          )"
+        fi
+
+        install_dir="$RUNNER_TEMP/harper/bin"
+        archive="$RUNNER_TEMP/$asset"
+        mkdir -p "$install_dir"
+
+        curl -fL "https://github.com/harpertoken/harper/releases/download/$release_tag/$asset" -o "$archive"
+        tar -xzf "$archive" -C "$install_dir"
+
+        binary="$(find "$install_dir" -type f -name harper -perm -u+x | head -n 1)"
+        if [ -z "$binary" ]; then
+          binary="$(find "$install_dir" -type f -name harper | head -n 1)"
+        fi
+        if [ -z "$binary" ]; then
+          echo "Harper binary was not found in $asset" >&2
+          exit 1
+        fi
+
+        chmod +x "$binary"
+        echo "$(dirname "$binary")" >> "$GITHUB_PATH"
+        echo "path=$binary" >> "$GITHUB_OUTPUT"
+
+    - name: Install Harper
+      id: install-windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        INPUT_RELEASE_TAG: ${{ inputs.release-tag }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        if ($env:RUNNER_ARCH -ne "X64") {
+          throw "Unsupported Windows runner architecture: $env:RUNNER_ARCH"
+        }
+
+        $releaseTag = $env:INPUT_RELEASE_TAG
+        if (-not $releaseTag) {
+          $headers = @{}
+          if ($env:INPUT_GITHUB_TOKEN) {
+            $headers["Authorization"] = "Bearer $env:INPUT_GITHUB_TOKEN"
+            $headers["X-GitHub-Api-Version"] = "2022-11-28"
+          }
+          $latest = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/harpertoken/harper/releases/latest"
+          $releaseTag = $latest.tag_name
+        }
+
+        $asset = "harper-windows-x86_64.zip"
+        $installDir = Join-Path $env:RUNNER_TEMP "harper\bin"
+        $archive = Join-Path $env:RUNNER_TEMP $asset
+        New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+
+        Invoke-WebRequest `
+          -Uri "https://github.com/harpertoken/harper/releases/download/$releaseTag/$asset" `
+          -OutFile $archive
+        Expand-Archive -LiteralPath $archive -DestinationPath $installDir -Force
+
+        $binary = Get-ChildItem -Path $installDir -Filter "harper.exe" -Recurse | Select-Object -First 1
+        if (-not $binary) {
+          throw "Harper binary was not found in $asset"
+        }
+
+        $binary.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append
+        "path=$($binary.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+branding:
+  icon: terminal
+  color: orange

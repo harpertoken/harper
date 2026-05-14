@@ -21,6 +21,8 @@ cargo harper
 
 You can use Harper to inspect files, patch code, run commands, and manage multi-step work. Native commands cover plans, sessions, config, and updates. OS commands stay explicit through `run ...`, with approvals and audit logs where configured.
 
+In GitHub Actions, Harper can be installed from release artifacts with `uses: harpertoken/harper@main`.
+
 Configuration is straightforward. Copy `config/local.example.toml` to `config/local.toml` for local non-secret settings like provider choice, model, UI widgets, and server port, and keep real secrets in `.env`. Sandboxed execution is supported on Linux (bubblewrap) and macOS (sandbox-exec), so commands can run in isolation when configured.
 
 If you are working on Harper itself, the normal development loop is:
