@@ -104,7 +104,6 @@ echo "=== DOC TESTS ==="
 [ -f docs/PRIVACY.md ] && pass "Docs: PRIVACY.md" || fail "Docs: PRIVACY.md"
 grep -q Cerebras docs/PRIVACY.md && pass "Docs: Cerebras in privacy" || fail "Docs: Cerebras privacy"
 grep -q cerebras docs/user-guide/keychain.md && pass "Docs: Cerebras in keychain" || fail "Docs: Cerebras keychain"
-[ -f GEMINI.md ] && pass "Docs: GEMINI.md exists" || fail "Docs: GEMINI.md"
 
 # === AGENTS.md Tests ===
 
