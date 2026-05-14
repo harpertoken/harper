@@ -132,6 +132,10 @@ Harper container images are published on merge to `main`:
 docker run --rm -it ghcr.io/harpertoken/harper/harper:latest
 ```
 
+### VS Code extension
+
+The Harper Review VS Code extension is available in `extensions/harper-review-vscode` for local packaging and validation. It connects VS Code to a running local Harper server.
+
 ### Method 4: Using Make
 
 If the project includes a Makefile:

@@ -39,6 +39,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Lockfiles | `update-lockfiles.yml` | Runs `cargo update` + `CARGO_BAZEL_REPIN=true bazel build :harper_bin` (repins `cargo-bazel-lock.json`), opens PR. PR creation runs through the Harper app token. | Weekly cron (Sunday midnight UTC), manual dispatch |
 | Homebrew | `update-homebrew-tap.yml` | Manually updates `harpertoken/homebrew-tap/Formula/harper-ai.rb` for a published `harper-*` release by downloading the release tarball, recomputing sha256, patching the formula, and opening a PR in the tap repo. Requires `HOMEBREW_TAP_TOKEN`. | Manual dispatch |
 | Windows Packages | `windows-packages.yml` | Generates Scoop and winget manifests from a published Windows release artifact and uploads them for package-channel submission. | Manual dispatch |
+| VS Code Extension | `vscode-extension.yml` | Packages the Harper Review VS Code extension and uploads the `.vsix` artifact for validation. | PRs touching extension files, manual dispatch |
 | Website | `website.yml` | Builds and deploys the website bundle to GitHub Pages. | Push to `main` touching `website/**`, manual dispatch |
 
 > **Tip:** Run `rg -n '^name:' .github/workflows` to see the canonical name shown in the Actions UI.
