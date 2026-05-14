@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+---
+name: VS Code Extension
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/vscode-extension.yml'
+      - 'extensions/harper-review-vscode/**'
+  workflow_dispatch:
+
+jobs:
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Harper
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Package extension
+        working-directory: extensions/harper-review-vscode
+        run: npx --yes @vscode/vsce package --out harper-review.vsix
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: harper-review-vscode
+          path: extensions/harper-review-vscode/harper-review.vsix
