@@ -14,6 +14,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | Bazel Smoke | `bazel-smoke.yml` | Daily `bazel test //...` to catch dependency drift outside PRs. | Daily cron, manual dispatch |
 | Benchmarks | `benchmarks.yml` | Runs `cargo bench` nightly and stores results as artifacts. | Daily cron, manual dispatch |
 | Integration | `integration.yml` | Executes `cargo test -- --include-ignored` against real services (requires secrets). | PRs touching app code, manual dispatch (with environment input) |
+| Install Script | `install-script.yml` | Dry-runs `scripts/install-harper.sh` on Linux, macOS, and Windows to validate platform-to-asset mapping. | PRs touching installer files, manual dispatch |
 | Package | `package-test.yml` | Calls `libnudget/release-assets` in preflight mode to build, package, and smoke-test Harper release artifacts for Linux x86_64, Linux aarch64, macOS x86_64, macOS aarch64, and Windows x86_64 without publishing them. | Tag push (`harper-*`), manual dispatch |
 | Post-Merge CI | `post-auto-merge-ci.yml` | Re-runs fmt/clippy/tests on `main` after Auto Merge completes; also locks the merged PR via `gh pr lock`. PR lookups and lock actions run through the Harper app token. | Completion of Auto Merge workflow |
 | PR Description | `normalize-pr-description.yml` | Rewrites `## Summary`/`## Testing` bullet-style PR bodies into a single paragraph with backtick-wrapped technical terms via `libnudget/prune@v1`. Skips forks and dependabot. | PR opened/edited/ready_for_review |
