@@ -16,7 +16,7 @@
 name: CLA
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 jobs:
@@ -24,6 +24,10 @@ jobs:
     name: CLA
     runs-on: ubuntu-latest
     if: github.repository_owner == 'harpertoken'
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     steps:
       - id: cla-app-token
         uses: actions/create-github-app-token@v2

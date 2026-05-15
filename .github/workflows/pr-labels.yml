@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 harpertoken
+#
+# Licensed under the Apache License, Version 2.0
+
+name: PR Labels
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: PR Labels
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'harpertoken'
+    steps:
+      - id: app-token
+        name: Create Harper app token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HARPER_APP_ID }}
+          private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
+      - uses: actions/labeler@v6
+        with:
+          repo-token: ${{ steps.app-token.outputs.token }}
+          configuration-path: config/labeler.yml
