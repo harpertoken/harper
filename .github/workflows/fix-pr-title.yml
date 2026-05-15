@@ -15,7 +15,7 @@
 name: PR Title
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize, edited]
     branches:
       - main
@@ -23,6 +23,7 @@ on:
 jobs:
   fix-pr-title:
     name: PR Title
+    if: github.repository_owner == 'harpertoken' && github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
