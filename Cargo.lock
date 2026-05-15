@@ -5068,9 +5068,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "turul-mcp-client"
-version = "0.3.42"
+version = "0.3.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4be7a444d19f08f4bc5d759b9572c7d2dc6a76052ab557e83b1dcb2be93a313f"
+checksum = "1b1f4d539c2b0505ea95532db1471f44d18b115d3b3d1d275769e324612a3ce3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5101,18 +5101,18 @@ dependencies = [
 
 [[package]]
 name = "turul-mcp-protocol"
-version = "0.3.42"
+version = "0.3.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37ac50f7834b9f5a34906b4dda0c5ee5e7a29be14dfebcd4952319c681ac0e34"
+checksum = "2e2c98324da6217d9b6475ffb9a9b0af74288093b876f9a94525dcd2d48ccda8"
 dependencies = [
  "turul-mcp-protocol-2025-11-25",
 ]
 
 [[package]]
 name = "turul-mcp-protocol-2025-11-25"
-version = "0.3.42"
+version = "0.3.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a78954356581b1469ca015d93721f85e5ae4a3c28143f48e37c56298d612c520"
+checksum = "ac66427abbe2d11eb1376dbc786b6c633547c7d1323564d808b68c4569828e92"
 dependencies = [
  "async-trait",
  "serde",
