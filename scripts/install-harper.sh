@@ -7,6 +7,7 @@ TAG="${HARPER_INSTALL_TAG:-latest}"
 INSTALL_DIR="${HARPER_INSTALL_DIR:-$HOME/.local/bin}"
 TMP_DIR="${TMPDIR:-/tmp}/harper-install.$$"
 DRY_RUN="${HARPER_INSTALL_DRY_RUN:-0}"
+GITHUB_TOKEN="${HARPER_INSTALL_GITHUB_TOKEN:-}"
 
 error() {
   printf '%s\n' "$*" >&2
@@ -34,8 +35,20 @@ detect_asset() {
 latest_tag() {
   need curl
   need sed
-  curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" |
-    sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' |
+  if [ -n "$GITHUB_TOKEN" ]; then
+    curl -fsSL \
+      -H "Authorization: Bearer $GITHUB_TOKEN" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      "https://api.github.com/repos/$REPO/releases?per_page=20"
+  else
+    curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=20"
+  fi |
+    sed -n '
+      /"tag_name":[[:space:]]*"harper-[0-9][^"]*"/{
+        s/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/
+        p
+      }
+    ' |
     head -n 1
 }
 

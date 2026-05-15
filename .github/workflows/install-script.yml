@@ -39,3 +39,16 @@ jobs:
           grep '^release_tag=harper-0.20.1$' install-plan.txt
           grep '^asset=harper-' install-plan.txt
           grep '^download_url=https://github.com/harpertoken/harper/releases/download/harper-0.20.1/harper-' install-plan.txt
+
+      - name: Dry-run latest CLI release
+        shell: bash
+        env:
+          HARPER_INSTALL_DRY_RUN: "1"
+          HARPER_INSTALL_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sh scripts/install-harper.sh | tee latest-install-plan.txt
+          grep '^release_tag=harper-[0-9]' latest-install-plan.txt
+          ! grep '^release_tag=harper-workspace-' latest-install-plan.txt
+          grep '^asset=harper-' latest-install-plan.txt
+          grep '^download_url=https://github.com/harpertoken/harper/releases/download/harper-[0-9]' latest-install-plan.txt
