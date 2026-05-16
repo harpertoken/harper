@@ -152,16 +152,20 @@ Execution approval, sandbox presets, and bounded retry behavior for `run_command
 
 ### `[exec_policy.sandbox]`
 
+These values override the selected `sandbox_profile`. Omit them unless a built-in profile needs a narrower or broader boundary.
+
 | Key              | Type             | Default | Description |
 | ---------------- | ---------------- | ------- | ----------- |
 | `allowed_dirs`   | array of strings | `[]`    | Readable roots inside the sandbox |
 | `writable_dirs`  | array of strings | `[]`    | Writable roots inside the sandbox |
+| `enabled`        | bool             | profile | Explicitly force sandbox execution on or off |
 | `network_access` | bool             | profile | Whether sandboxed commands may reach the network |
 | `readonly_home`  | bool             | profile | Whether `$HOME` is mounted read-only |
 
 ### Notes
 
 - `allow_listed` still prompts when a command declares network access or writes outside configured writable roots.
+- Enabled sandboxing fails closed when no supported backend is available.
 - Retry behavior remains conservative: Harper uses declared intent plus configured command classes, not blind command replay.
 
 ---

@@ -20,7 +20,7 @@
 use crate::core::plan::PlanJobStatus;
 use crate::core::{error::HarperError, ApiConfig};
 use crate::memory::storage::{self, CommandLogRecord};
-use crate::runtime::config::{ApprovalProfile, ExecPolicyConfig};
+use crate::runtime::config::{ApprovalProfile, ExecPolicyConfig, SandboxProfile};
 use crate::tools::parsing;
 use colored::*;
 use harper_sandbox::{Sandbox, SandboxRequest};
@@ -403,6 +403,35 @@ fn configured_sandbox(exec_policy: &ExecPolicyConfig) -> Option<harper_sandbox::
     })
 }
 
+fn sandbox_profile_name(profile: SandboxProfile) -> &'static str {
+    match profile {
+        SandboxProfile::Disabled => "disabled",
+        SandboxProfile::Workspace => "workspace",
+        SandboxProfile::NetworkedWorkspace => "networked_workspace",
+    }
+}
+
+fn sandbox_status_line(exec_policy: &ExecPolicyConfig, sandbox: Option<&Sandbox>) -> String {
+    let config = exec_policy.effective_sandbox_config();
+    if !config.enabled.unwrap_or(false) {
+        return "sandbox: disabled".to_string();
+    }
+
+    let profile = exec_policy.effective_sandbox_profile();
+    let mode = match profile {
+        SandboxProfile::Disabled => "custom",
+        _ => sandbox_profile_name(profile),
+    };
+    let backend = sandbox.map(Sandbox::backend_name).unwrap_or("unavailable");
+    let network = if config.network_access.unwrap_or(true) {
+        "on"
+    } else {
+        "off"
+    };
+
+    format!("sandbox: {mode} ({backend}, network: {network})")
+}
+
 fn path_within_root(base_dir: &Path, path: &Path, root: &Path) -> bool {
     let normalized_path = if path.is_absolute() {
         path.to_path_buf()
@@ -554,7 +583,7 @@ async fn execute_sandboxed_once(
         audit_ctx.and_then(|ctx| ctx.session_id),
         command_str,
         String::new(),
-        false,
+        has_error_output,
         true,
     )
     .await;
@@ -693,7 +722,7 @@ async fn execute_direct_once(
         audit_ctx.and_then(|ctx| ctx.session_id),
         command_str,
         String::new(),
-        false,
+        !status.success() || !stderr_text.trim().is_empty(),
         true,
     )
     .await;
@@ -930,13 +959,21 @@ pub async fn execute_command(
         approved = true;
     }
 
+    let sandbox = configured_sandbox(exec_policy)
+        .filter(|config| config.enabled)
+        .map(Sandbox::new);
+    let sandbox_status = sandbox_status_line(exec_policy, sandbox.as_ref());
+
     if let Some(ctx) =
         audit_ctx.and_then(|ctx| ctx.session_id.map(|session_id| (ctx.conn, session_id)))
     {
         emit_activity_update(
             runtime_events.as_ref(),
             Some(ctx.1),
-            Some(format!("running command: {}", command_str)),
+            Some(format!(
+                "running command: {}; {}",
+                command_str, sandbox_status
+            )),
         )
         .await;
         let has_active_job = crate::memory::storage::load_plan_state(ctx.0, ctx.1)
@@ -965,9 +1002,15 @@ pub async fn execute_command(
         requires_approval,
         resolved_intent.as_ref(),
     );
-    let sandbox = configured_sandbox(exec_policy)
-        .filter(|config| config.enabled)
-        .map(Sandbox::new);
+    emit_command_output(
+        runtime_events.as_ref(),
+        audit_ctx.and_then(|ctx| ctx.session_id),
+        command_str,
+        format!("{}\n", sandbox_status),
+        false,
+        false,
+    )
+    .await;
     let mut attempt = 0;
     loop {
         let attempt_result = if let Some(sandbox) = sandbox.as_ref() {
@@ -1137,7 +1180,8 @@ mod tests {
     use super::{
         approval_required_for_command, autonomous_retry_safe, build_sandbox_request,
         configured_sandbox, execute_command, infer_path_intent, looks_like_network_command,
-        parse_run_command_response, CommandAuditContext, CommandRetryPolicy, CommandSandboxIntent,
+        parse_run_command_response, sandbox_status_line, CommandAuditContext, CommandRetryPolicy,
+        CommandSandboxIntent,
     };
     use crate::core::plan::{PlanFollowup, PlanItem, PlanState, PlanStepStatus};
     use crate::core::{ApiConfig, ApiProvider};
@@ -1348,6 +1392,43 @@ mod tests {
         assert!(!sandbox.network_access);
         assert!(sandbox.readonly_home);
         assert_eq!(sandbox.max_execution_time_secs, Some(15));
+    }
+
+    #[test]
+    fn sandbox_status_line_reports_disabled_mode() {
+        let exec_policy = ExecPolicyConfig {
+            approval_profile: None,
+            execution_strategy: None,
+            allowed_commands: None,
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Disabled),
+            sandbox: None,
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
+        };
+
+        assert_eq!(sandbox_status_line(&exec_policy, None), "sandbox: disabled");
+    }
+
+    #[test]
+    fn sandbox_status_line_reports_enabled_mode() {
+        let exec_policy = ExecPolicyConfig {
+            approval_profile: None,
+            execution_strategy: None,
+            allowed_commands: None,
+            blocked_commands: None,
+            sandbox_profile: Some(SandboxProfile::Workspace),
+            sandbox: None,
+            retry_max_attempts: None,
+            retry_network_commands: None,
+            retry_write_commands: None,
+        };
+        let sandbox = configured_sandbox(&exec_policy).map(harper_sandbox::Sandbox::new);
+
+        let status = sandbox_status_line(&exec_policy, sandbox.as_ref());
+        assert!(status.starts_with("sandbox: workspace ("));
+        assert!(status.ends_with(", network: off)"));
     }
 
     #[test]

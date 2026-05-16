@@ -21,6 +21,7 @@ rust_library(
 rust_test(
     name = "harper_core_test",
     crate = ":harper_core",
+    data = ["//config:default.toml"],
     deps = all_crate_deps(normal_dev = True) + [
         "//lib/harper-firmware:harper_firmware",
         "//lib/harper-sandbox:harper_sandbox",

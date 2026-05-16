@@ -1,42 +1,49 @@
-# Sandbox Isolation
+# Sandbox
 
-Harper includes sandbox isolation for secure command execution.
+Harper can run shell commands with a filesystem and network boundary.
 
-## Supported Backends
+## Modes
 
-- **Linux**: bubblewrap (bwrap)
-- **macOS**: sandbox-exec
+Use `sandbox_profile` under `[exec_policy]`:
 
-## Enabling Sandbox
+```toml
+[exec_policy]
+sandbox_profile = "workspace"
+```
 
-Add to your config (`config/local.toml`):
+| Mode | Behavior |
+| --- | --- |
+| `disabled` | Runs commands without a sandbox. |
+| `workspace` | Allows workspace reads/writes, makes `$HOME` read-only, and blocks network by default. |
+| `networked_workspace` | Allows workspace reads/writes, makes `$HOME` read-only, and allows network. |
+
+Each command output starts with the active mode, for example:
+
+```text
+sandbox: workspace (bubblewrap (bwrap), network: off)
+```
+
+## Backends
+
+| Platform | Backend |
+| --- | --- |
+| Linux | `bubblewrap` (`bwrap`) |
+| macOS | `sandbox-exec` |
+| Windows | Not supported yet |
+
+If sandboxing is enabled and Harper cannot find a supported backend, the command fails instead of silently running unsandboxed.
+
+## Custom policy
+
+Profiles can be overridden with explicit paths:
 
 ```toml
 [exec_policy.sandbox]
-enabled = true
-allowed_dirs = ["/app"]
+allowed_dirs = ["."]
+writable_dirs = ["."]
 network_access = false
 readonly_home = true
 max_execution_time_secs = 30
 ```
 
-## Configuration Options
-
-| Option | Type | Default | Description |
-|-------|------|---------|-------------|
-| enabled | bool | false | Enable sandbox |
-| allowed_dirs | list | [] | Directories to allow |
-| network_access | bool | false | Allow network access |
-| readonly_home | bool | true | Read-only home |
-| max_execution_time_secs | int | 30 | Command timeout |
-
-## Docker
-
-In Docker, sandbox is enabled by default with bubblewrap.
-
-## Security
-
-- Commands run in isolated namespace
-- Filesystem access restricted to allowed directories
-- Network disabled by default
-- Commands timeout after 30 seconds
+Use this only when the built-in profiles are too broad or too narrow.

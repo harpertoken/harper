@@ -87,9 +87,9 @@ enabled = true
 # port = "/dev/ttyUSB1"
 
 [exec_policy.sandbox]
-enabled = false
-allowed_dirs = []
-writable_dirs = []
+# enabled = false
+# allowed_dirs = []
+# writable_dirs = []
 # network_access = false
 # readonly_home = true
 # max_execution_time_secs = 30

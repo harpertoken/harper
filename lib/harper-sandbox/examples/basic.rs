@@ -27,6 +27,6 @@ fn main() {
     println!("\n✓ harper-sandbox crate is working!");
 
     println!("\nTo enable sandbox, set in config:");
-    println!("  [exec_policy.sandbox]");
-    println!("  enabled = true");
+    println!("  [exec_policy]");
+    println!("  sandbox_profile = \"workspace\"");
 }
