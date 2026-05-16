@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+---
+name: Sandbox
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/sandbox.yml"
+      - "config/default.toml"
+      - "docs/user-guide/sandbox.md"
+      - "lib/harper-core/src/runtime/config.rs"
+      - "lib/harper-core/src/tools/shell.rs"
+      - "lib/harper-sandbox/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/sandbox.yml"
+      - "config/default.toml"
+      - "docs/user-guide/sandbox.md"
+      - "lib/harper-core/src/runtime/config.rs"
+      - "lib/harper-core/src/tools/shell.rs"
+      - "lib/harper-sandbox/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Sandbox (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout Harper
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test sandbox crate
+        run: cargo test -p harper-sandbox --lib
+
+      - name: Test sandbox config contract
+        run: cargo test -p harper-core runtime::config::tests::default_file_does_not_override_sandbox_profile_defaults --lib
+
+      - name: Test sandbox status surface
+        run: cargo test -p harper-core tools::shell::tests::sandbox_status_line --lib

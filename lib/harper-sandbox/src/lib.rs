@@ -39,6 +39,11 @@ impl Sandbox {
         Self { config, backend }
     }
 
+    #[cfg(test)]
+    fn with_backend(config: SandboxConfig, backend: SandboxBackend) -> Self {
+        Self { config, backend }
+    }
+
     #[must_use]
     pub fn is_available(&self) -> bool {
         self.backend != SandboxBackend::None
@@ -73,6 +78,10 @@ impl Sandbox {
         let backend = if !self.config.enabled {
             log::warn!("Sandbox disabled - executing directly");
             SandboxBackend::None
+        } else if self.backend == SandboxBackend::None {
+            return Err(SandboxError::BackendUnavailable(
+                "sandbox is enabled but no supported backend is available".to_string(),
+            ));
         } else {
             self.backend
         };
@@ -458,6 +467,33 @@ mod tests {
             String::from_utf8_lossy(&result.output.stdout).trim(),
             "hello"
         );
+    }
+
+    #[test]
+    fn test_enabled_sandbox_without_backend_fails_closed() {
+        let sandbox = Sandbox::with_backend(
+            SandboxConfig {
+                enabled: true,
+                ..Default::default()
+            },
+            SandboxBackend::None,
+        );
+        let request = SandboxRequest {
+            command: "echo".to_string(),
+            args: vec!["hello".to_string()],
+            working_dir: std::env::current_dir().unwrap(),
+            env: vec![],
+            declared_read_paths: vec![],
+            declared_write_paths: vec![],
+            requires_network: false,
+        };
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let result = runtime.block_on(sandbox.execute_request(request));
+        assert!(matches!(result, Err(SandboxError::BackendUnavailable(_))));
     }
 
     #[test]

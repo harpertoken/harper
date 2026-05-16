@@ -598,7 +598,7 @@ mod tests {
         should_enable_server, ApprovalProfile, ExecPolicyConfig, HarperConfig, SandboxConfig,
         SandboxProfile, ServerConfig,
     };
-    use config::ConfigBuilder;
+    use config::{ConfigBuilder, File};
     use std::env;
     use std::path::Path;
 
@@ -803,6 +803,40 @@ mod tests {
         assert_eq!(sandbox.network_access, Some(false));
         assert_eq!(sandbox.readonly_home, Some(true));
         assert_eq!(sandbox.max_execution_time_secs, Some(30));
+    }
+
+    #[test]
+    fn default_file_does_not_override_sandbox_profile_defaults() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        let default_config_path = repo_root
+            .join("config/default.toml")
+            .exists()
+            .then(|| repo_root.join("config/default.toml"))
+            .or_else(|| {
+                env::var("RUNFILES_DIR").ok().and_then(|runfiles_dir| {
+                    let path = Path::new(&runfiles_dir).join("_main/config/default.toml");
+                    path.exists().then_some(path)
+                })
+            })
+            .expect("config/default.toml is available");
+        let config: HarperConfig = ConfigBuilder::<config::builder::DefaultState>::default()
+            .add_source(File::from(default_config_path))
+            .set_override("exec_policy.sandbox_profile", "workspace")
+            .expect("sandbox profile override")
+            .build()
+            .expect("default config builds")
+            .try_deserialize()
+            .expect("default config deserializes");
+
+        let sandbox = config.exec_policy.effective_sandbox_config();
+        assert_eq!(sandbox.enabled, Some(true));
+        assert_eq!(sandbox.allowed_dirs, Some(vec![".".to_string()]));
+        assert_eq!(sandbox.writable_dirs, Some(vec![".".to_string()]));
+        assert_eq!(sandbox.network_access, Some(false));
+        assert_eq!(sandbox.readonly_home, Some(true));
     }
 
     #[test]

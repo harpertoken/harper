@@ -15,6 +15,8 @@
 use crate::errors::{Result, SandboxError};
 use crate::policy::SandboxConfig;
 use crate::request::SandboxRequest;
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
@@ -38,7 +40,9 @@ pub fn detect_backend() -> SandboxBackend {
     }
     #[cfg(target_os = "macos")]
     {
-        return SandboxBackend::SandboxExec;
+        if std::path::Path::new("/usr/bin/sandbox-exec").exists() {
+            return SandboxBackend::SandboxExec;
+        }
     }
     #[allow(unreachable_code)]
     SandboxBackend::None
@@ -103,23 +107,23 @@ async fn execute_bwrap(
     bpush(&mut bwrap_args, "--ro-bind", "/lib".to_string());
     bpush(&mut bwrap_args, "--ro-bind", "/lib64".to_string());
 
-    for dir in &config.allowed_dirs {
-        if dir.exists() {
-            bpush(&mut bwrap_args, "--ro-bind", dir.display().to_string());
-        }
-    }
-    for dir in &config.writable_dirs {
-        if dir.exists() {
-            bpush(&mut bwrap_args, "--bind", dir.display().to_string());
-        }
-    }
-
     if config.readonly_home {
         if let Ok(home) = std::env::var("HOME") {
             bpush(&mut bwrap_args, "--ro-bind", home);
         }
     } else if let Ok(home) = std::env::var("HOME") {
         bpush(&mut bwrap_args, "--ro-bind", home);
+    }
+
+    for dir in &config.allowed_dirs {
+        if let Some(dir) = existing_mount_path(dir, &request.working_dir) {
+            bpush(&mut bwrap_args, "--ro-bind", dir.display().to_string());
+        }
+    }
+    for dir in &config.writable_dirs {
+        if let Some(dir) = existing_mount_path(dir, &request.working_dir) {
+            bpush(&mut bwrap_args, "--bind", dir.display().to_string());
+        }
     }
 
     bpush(
@@ -159,32 +163,7 @@ async fn execute_sandbox_exec(
     request: &SandboxRequest,
     on_output: impl FnMut(String, bool) + Send + 'static,
 ) -> Result<std::process::Output> {
-    let mut sandbox_rules = vec!["(version 1)".to_string()];
-
-    if !config.network_access {
-        sandbox_rules.push("(deny network*)\n(allow default)".to_string());
-    }
-
-    sandbox_rules.push("(allow process-exec)".to_string());
-
-    for dir in &config.allowed_dirs {
-        if dir.exists() {
-            sandbox_rules.push(format!(
-                "(allow file-read* (subpath \"{}\"))",
-                dir.display()
-            ));
-        }
-    }
-    for dir in &config.writable_dirs {
-        if dir.exists() {
-            sandbox_rules.push(format!(
-                "(allow file-write* (subpath \"{}\"))",
-                dir.display()
-            ));
-        }
-    }
-
-    let sandbox_profile = sandbox_rules.join("\n");
+    let sandbox_profile = build_sandbox_exec_profile(config, &request.working_dir);
 
     let mut cmd = Command::new("sandbox-exec");
     cmd.arg("-p")
@@ -198,6 +177,66 @@ async fn execute_sandbox_exec(
         cmd.env(key, value);
     }
     run_command_with_timeout_streaming(config, cmd, on_output).await
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
+fn existing_mount_path(path: &Path, working_dir: &Path) -> Option<PathBuf> {
+    let candidate = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        working_dir.join(path)
+    };
+    if candidate.exists() {
+        Some(candidate.canonicalize().unwrap_or(candidate))
+    } else {
+        None
+    }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn escape_sandbox_string(value: &Path) -> String {
+    value
+        .display()
+        .to_string()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn build_sandbox_exec_profile(config: &SandboxConfig, working_dir: &Path) -> String {
+    let mut sandbox_rules = vec![
+        "(version 1)".to_string(),
+        "(deny default)".to_string(),
+        "(allow process*)".to_string(),
+        "(allow sysctl-read)".to_string(),
+        "(allow file-read-metadata)".to_string(),
+    ];
+
+    for system_path in ["/bin", "/usr", "/System", "/Library", "/dev/null"] {
+        sandbox_rules.push(format!("(allow file-read* (subpath \"{}\"))", system_path));
+    }
+
+    for dir in &config.allowed_dirs {
+        if let Some(dir) = existing_mount_path(dir, working_dir) {
+            sandbox_rules.push(format!(
+                "(allow file-read* (subpath \"{}\"))",
+                escape_sandbox_string(&dir)
+            ));
+        }
+    }
+    for dir in &config.writable_dirs {
+        if let Some(dir) = existing_mount_path(dir, working_dir) {
+            let escaped = escape_sandbox_string(&dir);
+            sandbox_rules.push(format!("(allow file-read* (subpath \"{}\"))", escaped));
+            sandbox_rules.push(format!("(allow file-write* (subpath \"{}\"))", escaped));
+        }
+    }
+
+    if config.network_access {
+        sandbox_rules.push("(allow network*)".to_string());
+    }
+
+    sandbox_rules.join("\n")
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -297,4 +336,62 @@ async fn read_stream(
 fn bpush(args: &mut Vec<String>, flag: &str, val: impl Into<String>) {
     args.push(flag.to_string());
     args.push(val.into());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_sandbox_exec_profile, escape_sandbox_string, existing_mount_path};
+    use crate::policy::SandboxConfig;
+    use std::path::Path;
+
+    #[test]
+    fn relative_mounts_are_resolved_against_working_dir() {
+        let working_dir = std::env::current_dir().expect("current dir");
+        let mounted = existing_mount_path(Path::new("."), &working_dir).expect("mount path");
+
+        assert!(mounted.is_absolute());
+        assert_eq!(mounted, working_dir.canonicalize().expect("canonical cwd"));
+    }
+
+    #[test]
+    fn sandbox_exec_profile_denies_default_and_scopes_paths() {
+        let working_dir = std::env::current_dir().expect("current dir");
+        let config = SandboxConfig {
+            enabled: true,
+            allowed_dirs: vec![Path::new(".").to_path_buf()],
+            writable_dirs: vec![Path::new(".").to_path_buf()],
+            network_access: false,
+            ..SandboxConfig::default()
+        };
+
+        let profile = build_sandbox_exec_profile(&config, &working_dir);
+
+        assert!(profile.contains("(deny default)"));
+        assert!(!profile.contains("(allow default)"));
+        assert!(!profile.contains("(allow network*)"));
+        let escaped_working_dir =
+            escape_sandbox_string(&working_dir.canonicalize().expect("canonical cwd"));
+        assert!(profile.contains(&format!(
+            "(allow file-read* (subpath \"{}\"))",
+            escaped_working_dir
+        )));
+        assert!(profile.contains(&format!(
+            "(allow file-write* (subpath \"{}\"))",
+            escaped_working_dir
+        )));
+    }
+
+    #[test]
+    fn sandbox_exec_profile_allows_network_when_configured() {
+        let config = SandboxConfig {
+            enabled: true,
+            network_access: true,
+            ..SandboxConfig::default()
+        };
+
+        let profile =
+            build_sandbox_exec_profile(&config, &std::env::current_dir().expect("current dir"));
+
+        assert!(profile.contains("(allow network*)"));
+    }
 }

@@ -35,6 +35,7 @@ This directory contains all automation that runs in GitHub Actions for the Harpe
 | PR Checks | `pr-checks.yml` | Validates PR metadata. | PR events, push to `main` |
 | PR Labels | `pr-labels.yml` | Auto-labels PRs via `config/labeler.yml`. Label writes run through the Harper app token. | PR target events |
 | Release | `release.yml` | Creates release PRs or direct package releases for harper-core, harper-ui, harper-firmware, harper-mcp-server, harper-sandbox via `libnudget/release@v1.0.0`, then publishes the installable Harper CLI binary as a dedicated `harper-*` release through `libnudget/release-assets`. Release PR creation and stale overlapping release PR cleanup run through the Harper app token. Merge/direct release flows invoke `release-assets` inline, and manual `harper-*` tag pushes still trigger the same asset publishing path. The workflow passes `HARPER_UPDATE_SIGNING_KEY_PEM_B64` plus the repo-shipped updater public key into that reusable release-assets workflow. | Push to `main` touching lib dirs, tag push (`harper-*`), PR merged, manual dispatch |
+| Sandbox | `sandbox.yml` | Tests the sandbox crate, profile config contract, and visible command status line on Linux, macOS, and Windows. It does not require real OS sandbox privileges in CI. | PR/push touching sandbox paths, manual dispatch |
 | Stale | `stale-issues.yml` | Reminds on issues inactive for 30 days, adds `needs-response`, and closes them after 14 more days without a human reply. Issue comments and label changes run through the Harper app token. | Daily cron, manual dispatch, issue comments |
 | Rust Fix | `rust-auto-fix.yml` | Applies automated `cargo fmt`/`clippy --fix` patches via `libnudget/rust-fix@v1` when `/rust-fix` comment is confirmed with `/confirm`. | Issue comment on PRs |
 | Cancel Runs | `cancel-runs.yml` | Cancels in-progress runs when `/cancel-runs` is commented on PRs via `libnudget/cancel@v1`. Also triggers on `cancel-runs` label. | Issue comment on PRs, `cancel-runs` label |
@@ -85,4 +86,4 @@ Current rules:
 Feel free to expand this file with additional details (matrix descriptions, secrets used, etc.) as workflows evolve.
 
 ## Last Updated
-2026-05-15
+2026-05-17

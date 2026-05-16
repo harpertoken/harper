@@ -51,6 +51,8 @@ writable_dirs = ["./tmp", "./build"]
 - Direct self-update verifies both the published checksum and detached signature before replacing the local executable.
 - `allowed_dirs` are readable roots.
 - `writable_dirs` are writable roots.
+- Omit `[exec_policy.sandbox]` fields when a built-in `sandbox_profile` is enough.
+- Enabled sandboxing fails instead of silently running unsandboxed when the platform backend is unavailable.
 
 Supported `header_widgets` values:
 
