@@ -3093,9 +3093,9 @@ checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
 name = "openssl"
-version = "0.10.79"
+version = "0.10.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf0b434746ee2832f4f0baf10137e1cabb18cbe6912c69e2e33263c45250f542"
+checksum = "a45fa2aa886c42762255da344f0a0d313e254066c46aad76f300c3d3da62d967"
 dependencies = [
  "bitflags 2.11.1",
  "cfg-if",
@@ -3124,9 +3124,9 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.115"
+version = "0.9.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "158fe5b292746440aa6e7a7e690e55aeb72d41505e2804c23c6973ad0e9c9781"
+checksum = "f28a22dc7140cda5f096e5e7724a6962ca81a7f8bfd2979f9b18c11af56318c4"
 dependencies = [
  "cc",
  "libc",
@@ -5068,9 +5068,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "turul-mcp-client"
-version = "0.3.44"
+version = "0.3.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b1f4d539c2b0505ea95532db1471f44d18b115d3b3d1d275769e324612a3ce3"
+checksum = "3adac80ec2a5882b69da9f6158e8abc68ff22ec719d868a34f87e5e9e6a7abd0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5085,34 +5085,34 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "turul-mcp-json-rpc-server",
  "turul-mcp-protocol",
+ "turul-rpc",
  "url",
 ]
 
 [[package]]
 name = "turul-mcp-json-rpc-server"
-version = "0.3.44"
+version = "0.3.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d86315a82bf04c75a6d98675f9f57c73e61f367755050e1d9bafa7b972270797"
+checksum = "f5d85089e140f9085f9584936f6f5f189313e713f4776b5b71ea67df0bd70a0f"
 dependencies = [
  "turul-rpc",
 ]
 
 [[package]]
 name = "turul-mcp-protocol"
-version = "0.3.44"
+version = "0.3.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e2c98324da6217d9b6475ffb9a9b0af74288093b876f9a94525dcd2d48ccda8"
+checksum = "40ea8d49d59972cab1fd714ba43fa947118f889713af2cffd97195522e6acfa1"
 dependencies = [
  "turul-mcp-protocol-2025-11-25",
 ]
 
 [[package]]
 name = "turul-mcp-protocol-2025-11-25"
-version = "0.3.44"
+version = "0.3.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac66427abbe2d11eb1376dbc786b6c633547c7d1323564d808b68c4569828e92"
+checksum = "860f03045755a70ae032e38ac20f4126cdaa51dd9d4d9abf0c1c5e6c04fd749b"
 dependencies = [
  "async-trait",
  "serde",
