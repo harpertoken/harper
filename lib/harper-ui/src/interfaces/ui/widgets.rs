@@ -38,24 +38,21 @@ const COMPACT_HEIGHT_THRESHOLD: u16 = 36;
 const COMPACT_WIDTH_THRESHOLD: u16 = 100;
 const COMPACT_COMMAND_OUTPUT_LINES: usize = 3;
 const MAIN_MENU_ITEMS_WIDTH: u16 = 22;
-const MAIN_MENU_LOGO_WIDTH: u16 = 48;
-const MAIN_MENU_LOGO_HEIGHT: u16 = 14;
+const MAIN_MENU_LOGO_WIDTH: u16 = 38;
+const MAIN_MENU_LOGO_HEIGHT: u16 = 11;
 const MAIN_MENU_LOGO_COLOR: Color = Color::Rgb(255, 122, 36);
 const MAIN_MENU_LOGO_ROWS: [&str; MAIN_MENU_LOGO_HEIGHT as usize] = [
-    "    ▗▄▄▛▀▙▖",
-    "▄▄▟▛█▄   ▝▜▄",
-    "     ▝▜▄▖  ▀▙▖",
-    "        ▀▙▄▗▟█▄▄▄",
-    "        ▗▟████████▙",
-    "       ▟██  ▟██████▌ ▄▄██▙▄▄",
-    "      ▐███████████▛▗█████████▙▖   ▄▟█████▄▄",
-    "      ▝████████▀▀  ▝███████████▖▗███████████▙▖",
-    "        ▝▀▀▀  ▗▟▀▜▙▄▝▀████▛▘▖▝█▘▐█▀▘ ▀████████▖",
-    "             ▄▛▘ ▗▄▄▟▄▄█▛▘ ▟█▖ ▗▄▟███▙▝▜███████▖",
-    "           ▗▟▀  ▗█▀▀▀▀▀▘    ▝█▖▀▘  ▀▜█▙▖▀██████▙",
-    "          ▗▛▘  ▗█▘           ▐▙       ▀▜▙▝▀█▀▀▀▘",
-    "         ▟▛   ▗█▘             ▜▙        ▝█▖",
-    "       ▗█▘    ▀▘               ▜▖         ▜▙",
+    "   ⣀⠴⠶⠛⢻⣄",
+    "⠰⠛⠛⠙⢷⣦⡀ ⠹⣧⡀",
+    "     ⠈⠻⣦⡀⢈⣷⣄⣀⡀",
+    "      ⢀⣼⣿⣿⣿⣿⣿⣿⣦",
+    "     ⢠⣿⣿⣅⣼⣿⣿⣿⣿⣿⢇⣴⣾⣿⣿⣷⣦⣄    ⢀⣀⣀⣀⣀",
+    "     ⢸⣿⣿⣿⣿⣿⣿⣿⠿⠋⢸⣿⣿⣿⣿⣿⣿⣿⣷⡀⢠⣾⣿⣿⣿⣿⣿⣿⣦⡀",
+    "     ⠈⠛⠻⠟⠛⠛⢉⣴⢶⣤⣈⠻⣿⣿⣿⣿⢟⡛⢿⡇⣿⡿⢟⠛⢿⣿⣿⣿⣿⣿⣦",
+    "          ⣠⡿⠁⢀⣤⣭⣥⣬⣿⠟⠁⣾⣷ ⣠⣤⡶⣿⣿⣌⠻⣿⣿⣿⣿⣿⣧",
+    "         ⣴⠟ ⢀⣿⠋⠉⠉⠉⠁   ⢹⣧⠉⠁ ⠈⠻⢿⣦⡙⣿⣿⣿⣿⡿",
+    "       ⢠⡾⠃  ⣾⠃         ⢻⡆     ⠘⢷⣌⠉⠉⠁",
+    "      ⣰⡟⠁  ⠸⠏          ⠈⢿⠄      ⠻⣦",
 ];
 
 // Refined shortcuts for a cleaner footer
@@ -4465,7 +4462,9 @@ mod tests {
             .map(|cell| cell.symbol())
             .collect::<String>();
 
-        assert!(rendered.contains("▀▀▀"));
+        assert!(MAIN_MENU_LOGO_ROWS
+            .iter()
+            .any(|row| !row.trim().is_empty() && rendered.contains(row.trim())));
         assert!(rendered.contains("New Conversation"));
     }
 
