@@ -3384,7 +3384,7 @@ fn draw_execution_policy(
     } else {
         app.blocked_commands.join(", ")
     };
-    let rows = [
+    let mut rows = vec![
         format!(
             "Approval: {}",
             settings::approval_profile_name(app.approval_profile)
@@ -3405,8 +3405,14 @@ fn draw_execution_policy(
         format!("Allow: {allowed}"),
         format!("Block: {blocked}"),
         "Save".to_string(),
-        "Updates".to_string(),
+        format!(
+            "Updates: {}",
+            update_status_label(app.update_status.as_deref())
+        ),
     ];
+    if let Some(path) = &app.homebrew_path_fix {
+        rows.push(format!("Fix Homebrew PATH: {}", path.display()));
+    }
     let items: Vec<ListItem> = rows
         .iter()
         .enumerate()
@@ -3585,8 +3591,15 @@ fn execution_policy_context(selected: usize) -> &'static str {
         6 => "Edits comma-separated commands blocked by policy.",
         7 => "Writes the current policy settings to config/local.toml.",
         8 => "Checks for a newer release and refreshes the cached update status.",
+        9 => "Moves the shadowing local binary aside and points it to Homebrew's Harper.",
         _ => "",
     }
+}
+
+fn update_status_label(status: Option<&str>) -> &str {
+    status
+        .and_then(|status| status.strip_prefix("update: "))
+        .unwrap_or("not checked")
 }
 
 fn draw_profile(frame: &mut Frame, app: &TuiApp, selected: usize, theme: &Theme, area: Rect) {

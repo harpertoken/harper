@@ -54,6 +54,7 @@ pub enum EventResult {
     SaveExecutionPolicy,
     SaveAppearance,
     CheckForUpdates,
+    ConfirmHomebrewPathFix,
     SetPlanStepStatus {
         session_id: String,
         step_index: usize,
@@ -1243,6 +1244,7 @@ fn handle_enter(app: &mut TuiApp, session_service: &SessionService) -> EventResu
             6 => start_execution_policy_editor(app, ExecutionPolicyListField::BlockedCommands),
             7 => return EventResult::SaveExecutionPolicy,
             8 => return EventResult::CheckForUpdates,
+            9 if app.homebrew_path_fix.is_some() => return EventResult::ConfirmHomebrewPathFix,
             _ => {}
         },
         AppState::ViewSession(session_id, _, _) => {

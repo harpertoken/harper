@@ -212,7 +212,11 @@ enum UiUpdate {
     },
     UpdateStatus {
         status: Result<Option<String>, String>,
+        homebrew_path_fix: Option<crate::update::HomebrewPathFix>,
         manual: bool,
+    },
+    HomebrewPathFixApplied {
+        result: Result<String, String>,
     },
     Error(String),
 }
@@ -323,10 +327,77 @@ fn spawn_update_status_refresh(ui_tx: &mpsc::Sender<UiUpdate>, manual: bool) {
     let update_ui_tx = ui_tx.clone();
     tokio::spawn(async move {
         let status = crate::update::fetch_update_status().await;
+        let homebrew_path_fix = crate::update::detect_homebrew_path_fix();
         let _ = update_ui_tx
-            .send(UiUpdate::UpdateStatus { status, manual })
+            .send(UiUpdate::UpdateStatus {
+                status,
+                homebrew_path_fix,
+                manual,
+            })
             .await;
     });
+}
+
+fn spawn_homebrew_path_fix(
+    ui_tx: &mpsc::Sender<UiUpdate>,
+    approval_tx: &mpsc::Sender<ApprovalMessage>,
+    fix: crate::update::HomebrewPathFix,
+) {
+    let ui_tx = ui_tx.clone();
+    let approval_tx = approval_tx.clone();
+    tokio::spawn(async move {
+        let command = format!(
+            "move {} aside and link it to {}",
+            fix.shadow_path.display(),
+            fix.homebrew_path.display()
+        );
+        let prompt = "Fix Homebrew PATH?".to_string();
+        let (tx, rx) = oneshot::channel();
+        let tx = Arc::new(Mutex::new(Some(tx)));
+        if approval_tx.send((prompt, command, tx)).await.is_err() {
+            let _ = ui_tx
+                .send(UiUpdate::HomebrewPathFixApplied {
+                    result: Err("approval request could not be shown".to_string()),
+                })
+                .await;
+            return;
+        }
+
+        match rx.await {
+            Ok(true) => {
+                let result = crate::update::apply_homebrew_path_fix(&fix).map(|backup_path| {
+                    format!(
+                        "Homebrew PATH fixed. Previous binary moved to {}.",
+                        backup_path.display()
+                    )
+                });
+                let _ = ui_tx
+                    .send(UiUpdate::HomebrewPathFixApplied { result })
+                    .await;
+            }
+            Ok(false) => {
+                let _ = ui_tx
+                    .send(UiUpdate::HomebrewPathFixApplied {
+                        result: Ok("Homebrew PATH fix cancelled.".to_string()),
+                    })
+                    .await;
+            }
+            Err(_) => {
+                let _ = ui_tx
+                    .send(UiUpdate::HomebrewPathFixApplied {
+                        result: Err("approval was cancelled".to_string()),
+                    })
+                    .await;
+            }
+        }
+    });
+}
+
+fn clamp_execution_policy_selection(app: &mut TuiApp) {
+    let row_count = app.execution_policy_row_count();
+    if let AppState::ExecutionPolicy(selected) = &mut app.state {
+        *selected = (*selected).min(row_count.saturating_sub(1));
+    }
 }
 
 fn parse_update_command(input: &str) -> Option<UpdateCommand> {
@@ -545,6 +616,7 @@ pub async fn run_tui(
 
     // Spawn background worker in a separate thread to handle non-Send Connection
     let ui_tx_clone = ui_tx.clone();
+    let worker_approval_tx = approval_tx.clone();
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -560,7 +632,9 @@ pub async fn run_tui(
             };
 
             let mut api_cache = harper_core::core::cache::new_api_cache();
-            let approver = Arc::new(TuiApproval { approval_tx });
+            let approver = Arc::new(TuiApproval {
+                approval_tx: worker_approval_tx,
+            });
             let runtime_events = Arc::new(TuiRuntimeEvents {
                 ui_tx: ui_tx_clone.clone(),
             });
@@ -1332,6 +1406,17 @@ pub async fn run_tui(
                             app.set_activity_status(Some("checking updates".to_string()));
                             spawn_update_status_refresh(&ui_tx, true);
                         }
+                        EventResult::ConfirmHomebrewPathFix => {
+                            if let Some(fix) = crate::update::detect_homebrew_path_fix() {
+                                app.set_activity_status(Some(
+                                    "waiting Homebrew PATH approval".to_string(),
+                                ));
+                                spawn_homebrew_path_fix(&ui_tx, &approval_tx, fix);
+                            } else {
+                                app.homebrew_path_fix = None;
+                                app.set_info_message("No Homebrew PATH fix is needed.".to_string());
+                            }
+                        }
                         EventResult::SetPlanStepStatus {
                             session_id,
                             step_index,
@@ -1642,7 +1727,14 @@ pub async fn run_tui(
                                 chat_state.sidebar_sections = sections;
                             }
                         }
-                        UiUpdate::UpdateStatus { status, manual } => {
+                        UiUpdate::UpdateStatus {
+                            status,
+                            homebrew_path_fix,
+                            manual,
+                        } => {
+                            app.homebrew_path_fix =
+                                homebrew_path_fix.map(|fix| fix.shadow_path);
+                            clamp_execution_policy_selection(&mut app);
                             match status {
                                 Ok(status) => {
                                     app.update_status = status;
@@ -1673,6 +1765,22 @@ pub async fn run_tui(
                                         ));
                                     }
                                 }
+                            }
+                        }
+                        UiUpdate::HomebrewPathFixApplied { result } => {
+                            app.set_activity_status(None);
+                            match result {
+                                Ok(message) => {
+                                    app.homebrew_path_fix =
+                                        crate::update::detect_homebrew_path_fix()
+                                            .map(|fix| fix.shadow_path);
+                                    clamp_execution_policy_selection(&mut app);
+                                    app.set_info_message(message);
+                                }
+                                Err(err) => app.set_error_message(format!(
+                                    "Failed to fix Homebrew PATH: {}",
+                                    err
+                                )),
                             }
                         }
                         UiUpdate::Error(err) => {

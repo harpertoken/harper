@@ -4,6 +4,29 @@ This guide helps you resolve common issues you might encounter while using Harpe
 
 ## Common Issues
 
+### Wrong Harper Version After Updating
+
+**Symptom**: Homebrew upgraded Harper, but `harper --version` still shows an older version.
+
+**Solutions**:
+1. Check which binary your shell runs:
+   ```bash
+   which harper
+   harper --version
+   $(brew --prefix)/bin/harper --version
+   ```
+2. If `which harper` points to `~/.local/bin/harper`, use `Settings -> Execution Policy -> Updates -> Fix Homebrew PATH`, or run:
+   ```bash
+   backup="$HOME/.local/bin/harper.old"; i=1; while [ -e "$backup" ]; do backup="$HOME/.local/bin/harper.old.$i"; i=$((i + 1)); done
+   mv "$HOME/.local/bin/harper" "$backup"
+   ln -sfn "$(brew --prefix)/bin/harper" "$HOME/.local/bin/harper"
+   hash -r
+   ```
+3. Update future Homebrew installs with:
+   ```bash
+   brew upgrade harpertoken/tap/harper-ai
+   ```
+
 ### API Key Problems
 
 #### "Invalid API Key" Error
