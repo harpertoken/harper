@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Blog</title>
-    <meta name="harper-update-version" content="2026-05-09-blog-shell" />
+    <meta name="harper-update-version" content="2026-05-17-blog-sandbox" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -29,6 +29,12 @@
             <div class="content-container">
                 <h1 class="hero-title">Notes from the codebase.</h1>
                 <p class="hero-lede">Short product and engineering notes from Harper. This page stays high level. The <a href="changelog.html">changelog</a> keeps the version-by-version detail.</p>
+
+                <article>
+                    <h2>May 2026 · Sandbox behavior became visible</h2>
+                    <p>Harper now treats sandboxing as a visible command-runner behavior instead of a quiet backend detail. Command output reports the active sandbox profile, backend, and network state before the command result, so it is clear whether a command ran without a sandbox, inside the workspace profile, or inside the networked workspace profile.</p>
+                    <p>The config path is simpler too. The named <code>sandbox_profile</code> values own the common modes, while <code>[exec_policy.sandbox]</code> stays available for explicit path and network overrides. If sandboxing is enabled but Harper cannot find a supported backend, the command fails instead of silently running outside the requested boundary.</p>
+                </article>
 
                 <article>
                     <h2>May 2026 · Shell</h2>
