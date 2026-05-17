@@ -1,5 +1,5 @@
 {
-  "checksum": "8c663711355877e5c2e9d518578d852c92cf6ae5da88e2659af0276f7a9b9686",
+  "checksum": "2932ed7bbc4b018d0eb539c34b3ba89aa0bce9e32a57b21e47754bbd32112b55",
   "crates": {
     "adler2 2.0.1": {
       "name": "adler2",
@@ -10886,9 +10886,9 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "harper-core 0.20.0": {
+    "harper-core 0.20.1": {
       "name": "harper-core",
-      "version": "0.20.0",
+      "version": "0.20.1",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -11075,7 +11075,7 @@
               "target": "tower"
             },
             {
-              "id": "turul-mcp-client 0.3.44",
+              "id": "turul-mcp-client 0.3.45",
               "target": "turul_mcp_client"
             },
             {
@@ -11128,7 +11128,7 @@
           ],
           "selects": {}
         },
-        "version": "0.20.0"
+        "version": "0.20.1"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11207,9 +11207,9 @@
       ],
       "license_file": null
     },
-    "harper-mcp-server 0.1.3": {
+    "harper-mcp-server 0.1.4": {
       "name": "harper-mcp-server",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [],
@@ -11253,14 +11253,14 @@
               "target": "tracing"
             },
             {
-              "id": "turul-mcp-json-rpc-server 0.3.44",
+              "id": "turul-mcp-json-rpc-server 0.3.45",
               "target": "turul_mcp_json_rpc_server"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.1.3"
+        "version": "0.1.4"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11269,9 +11269,9 @@
       ],
       "license_file": null
     },
-    "harper-sandbox 0.3.1": {
+    "harper-sandbox 0.3.2": {
       "name": "harper-sandbox",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "package_url": null,
       "repository": null,
       "targets": [
@@ -11341,7 +11341,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.3.1"
+        "version": "0.3.2"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11350,9 +11350,9 @@
       ],
       "license_file": null
     },
-    "harper-ui 0.20.0": {
+    "harper-ui 0.20.1": {
       "name": "harper-ui",
-      "version": "0.20.0",
+      "version": "0.20.1",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -11433,7 +11433,7 @@
               "target": "tokio"
             },
             {
-              "id": "turul-mcp-client 0.3.44",
+              "id": "turul-mcp-client 0.3.45",
               "target": "turul_mcp_client"
             },
             {
@@ -11453,7 +11453,7 @@
           ],
           "selects": {}
         },
-        "version": "0.20.0"
+        "version": "0.20.1"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -11462,9 +11462,9 @@
       ],
       "license_file": null
     },
-    "harper-workspace 0.20.1": {
+    "harper-workspace 0.21.0": {
       "name": "harper-workspace",
-      "version": "0.20.1",
+      "version": "0.21.0",
       "package_url": "https://github.com/harpertoken/harper",
       "repository": null,
       "targets": [
@@ -11548,7 +11548,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.20.1"
+        "version": "0.21.0"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -17320,7 +17320,7 @@
                 "target": "log"
               },
               {
-                "id": "openssl 0.10.79",
+                "id": "openssl 0.10.80",
                 "target": "openssl"
               },
               {
@@ -17328,7 +17328,7 @@
                 "target": "openssl_probe"
               },
               {
-                "id": "openssl-sys 0.9.115",
+                "id": "openssl-sys 0.9.116",
                 "target": "openssl_sys"
               }
             ],
@@ -17378,7 +17378,7 @@
           "selects": {
             "cfg(not(any(target_os = \"windows\", target_vendor = \"apple\")))": [
               {
-                "id": "openssl-sys 0.9.115",
+                "id": "openssl-sys 0.9.116",
                 "target": "openssl_sys"
               }
             ]
@@ -19348,14 +19348,14 @@
       ],
       "license_file": "LICENSE-MIT"
     },
-    "openssl 0.10.79": {
+    "openssl 0.10.80": {
       "name": "openssl",
-      "version": "0.10.79",
+      "version": "0.10.80",
       "package_url": "https://github.com/rust-openssl/rust-openssl",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/openssl/0.10.79/download",
-          "sha256": "bf0b434746ee2832f4f0baf10137e1cabb18cbe6912c69e2e33263c45250f542"
+          "url": "https://static.crates.io/crates/openssl/0.10.80/download",
+          "sha256": "a45fa2aa886c42762255da344f0a0d313e254066c46aad76f300c3d3da62d967"
         }
       },
       "targets": [
@@ -19414,11 +19414,11 @@
               "target": "libc"
             },
             {
-              "id": "openssl 0.10.79",
+              "id": "openssl 0.10.80",
               "target": "build_script_build"
             },
             {
-              "id": "openssl-sys 0.9.115",
+              "id": "openssl-sys 0.9.116",
               "target": "openssl_sys",
               "alias": "ffi"
             }
@@ -19435,7 +19435,7 @@
           ],
           "selects": {}
         },
-        "version": "0.10.79"
+        "version": "0.10.80"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -19450,7 +19450,7 @@
         "link_deps": {
           "common": [
             {
-              "id": "openssl-sys 0.9.115",
+              "id": "openssl-sys 0.9.116",
               "target": "openssl_sys",
               "alias": "ffi"
             }
@@ -19559,14 +19559,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "openssl-sys 0.9.115": {
+    "openssl-sys 0.9.116": {
       "name": "openssl-sys",
-      "version": "0.9.115",
+      "version": "0.9.116",
       "package_url": "https://github.com/rust-openssl/rust-openssl",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/openssl-sys/0.9.115/download",
-          "sha256": "158fe5b292746440aa6e7a7e690e55aeb72d41505e2804c23c6973ad0e9c9781"
+          "url": "https://static.crates.io/crates/openssl-sys/0.9.116/download",
+          "sha256": "f28a22dc7140cda5f096e5e7724a6962ca81a7f8bfd2979f9b18c11af56318c4"
         }
       },
       "targets": [
@@ -19607,14 +19607,14 @@
               "target": "libc"
             },
             {
-              "id": "openssl-sys 0.9.115",
+              "id": "openssl-sys 0.9.116",
               "target": "build_script_main"
             }
           ],
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.9.115"
+        "version": "0.9.116"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -31983,14 +31983,14 @@
       ],
       "license_file": "LICENSE"
     },
-    "turul-mcp-client 0.3.44": {
+    "turul-mcp-client 0.3.45": {
       "name": "turul-mcp-client",
-      "version": "0.3.44",
+      "version": "0.3.45",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-client/0.3.44/download",
-          "sha256": "1b1f4d539c2b0505ea95532db1471f44d18b115d3b3d1d275769e324612a3ce3"
+          "url": "https://static.crates.io/crates/turul-mcp-client/0.3.45/download",
+          "sha256": "3adac80ec2a5882b69da9f6158e8abc68ff22ec719d868a34f87e5e9e6a7abd0"
         }
       },
       "targets": [
@@ -32072,12 +32072,12 @@
               "target": "tracing"
             },
             {
-              "id": "turul-mcp-json-rpc-server 0.3.44",
-              "target": "turul_mcp_json_rpc_server"
+              "id": "turul-mcp-protocol 0.3.45",
+              "target": "turul_mcp_protocol"
             },
             {
-              "id": "turul-mcp-protocol 0.3.44",
-              "target": "turul_mcp_protocol"
+              "id": "turul-rpc 0.1.0",
+              "target": "turul_rpc"
             },
             {
               "id": "url 2.5.8",
@@ -32096,7 +32096,7 @@
           ],
           "selects": {}
         },
-        "version": "0.3.44"
+        "version": "0.3.45"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32105,14 +32105,14 @@
       ],
       "license_file": null
     },
-    "turul-mcp-json-rpc-server 0.3.44": {
+    "turul-mcp-json-rpc-server 0.3.45": {
       "name": "turul-mcp-json-rpc-server",
-      "version": "0.3.44",
+      "version": "0.3.45",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-json-rpc-server/0.3.44/download",
-          "sha256": "d86315a82bf04c75a6d98675f9f57c73e61f367755050e1d9bafa7b972270797"
+          "url": "https://static.crates.io/crates/turul-mcp-json-rpc-server/0.3.45/download",
+          "sha256": "f5d85089e140f9085f9584936f6f5f189313e713f4776b5b71ea67df0bd70a0f"
         }
       },
       "targets": [
@@ -32151,7 +32151,7 @@
           "selects": {}
         },
         "edition": "2024",
-        "version": "0.3.44"
+        "version": "0.3.45"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32160,14 +32160,14 @@
       ],
       "license_file": null
     },
-    "turul-mcp-protocol 0.3.44": {
+    "turul-mcp-protocol 0.3.45": {
       "name": "turul-mcp-protocol",
-      "version": "0.3.44",
+      "version": "0.3.45",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-protocol/0.3.44/download",
-          "sha256": "2e2c98324da6217d9b6475ffb9a9b0af74288093b876f9a94525dcd2d48ccda8"
+          "url": "https://static.crates.io/crates/turul-mcp-protocol/0.3.45/download",
+          "sha256": "40ea8d49d59972cab1fd714ba43fa947118f889713af2cffd97195522e6acfa1"
         }
       },
       "targets": [
@@ -32198,14 +32198,14 @@
         "deps": {
           "common": [
             {
-              "id": "turul-mcp-protocol-2025-11-25 0.3.44",
+              "id": "turul-mcp-protocol-2025-11-25 0.3.45",
               "target": "turul_mcp_protocol_2025_11_25"
             }
           ],
           "selects": {}
         },
         "edition": "2024",
-        "version": "0.3.44"
+        "version": "0.3.45"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -32214,14 +32214,14 @@
       ],
       "license_file": null
     },
-    "turul-mcp-protocol-2025-11-25 0.3.44": {
+    "turul-mcp-protocol-2025-11-25 0.3.45": {
       "name": "turul-mcp-protocol-2025-11-25",
-      "version": "0.3.44",
+      "version": "0.3.45",
       "package_url": "https://github.com/aussierobots/turul-mcp-framework",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/turul-mcp-protocol-2025-11-25/0.3.44/download",
-          "sha256": "ac66427abbe2d11eb1376dbc786b6c633547c7d1323564d808b68c4569828e92"
+          "url": "https://static.crates.io/crates/turul-mcp-protocol-2025-11-25/0.3.45/download",
+          "sha256": "860f03045755a70ae032e38ac20f4126cdaa51dd9d4d9abf0c1c5e6c04fd749b"
         }
       },
       "targets": [
@@ -32264,7 +32264,7 @@
               "target": "thiserror"
             },
             {
-              "id": "turul-mcp-json-rpc-server 0.3.44",
+              "id": "turul-mcp-json-rpc-server 0.3.45",
               "target": "turul_mcp_json_rpc_server"
             }
           ],
@@ -32280,7 +32280,7 @@
           ],
           "selects": {}
         },
-        "version": "0.3.44"
+        "version": "0.3.45"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -40785,12 +40785,12 @@
   },
   "binary_crates": [],
   "workspace_members": {
-    "harper-core 0.20.0": "lib/harper-core",
+    "harper-core 0.20.1": "lib/harper-core",
     "harper-firmware 0.1.3": "lib/harper-firmware",
-    "harper-mcp-server 0.1.3": "lib/harper-mcp-server",
-    "harper-sandbox 0.3.1": "lib/harper-sandbox",
-    "harper-ui 0.20.0": "lib/harper-ui",
-    "harper-workspace 0.20.1": ""
+    "harper-mcp-server 0.1.4": "lib/harper-mcp-server",
+    "harper-sandbox 0.3.2": "lib/harper-sandbox",
+    "harper-ui 0.20.1": "lib/harper-ui",
+    "harper-workspace 0.21.0": ""
   },
   "conditions": {
     "aarch64-apple-darwin": [
@@ -41099,8 +41099,8 @@
     "tokio 1.52.3",
     "tower 0.5.3",
     "tracing 0.1.44",
-    "turul-mcp-client 0.3.44",
-    "turul-mcp-json-rpc-server 0.3.44",
+    "turul-mcp-client 0.3.45",
+    "turul-mcp-json-rpc-server 0.3.45",
     "urlencoding 2.1.3",
     "uuid 1.23.1",
     "walkdir 2.5.0",
