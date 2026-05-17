@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Installation</title>
-    <meta name="harper-update-version" content="2026-05-17-install-sandbox" />
+    <meta name="harper-update-version" content="2026-05-17-install-update-path" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -211,7 +211,7 @@ Tab</code></pre>
                     <pre><code>brew install harpertoken/tap/harper-ai</code></pre>
                     <button class="copy-btn"></button>
                 </div>
-                <p>Direct release artifacts are versioned and packaged for updater consumption. Homebrew users should keep using <code>brew upgrade harpertoken/tap/harper-ai</code>. Direct binary installs can use <code>harper self-update --check</code> to inspect the published manifest and <code>harper self-update</code> to replace the installed binary. By default Harper checks the latest GitHub release manifest, and <code>HARPER_UPDATE_MANIFEST_URL</code> can override that source. Before replacing the local binary, Harper verifies both the published SHA-256 checksum and the detached release signature.</p>
+                <p>Direct release artifacts are versioned and packaged for updater consumption. Homebrew users should keep using <code>brew upgrade harpertoken/tap/harper-ai</code>. If an older <code>harper</code> binary is earlier in <code>PATH</code>, Harper prints a safe one-line fix and shows <code>Fix Homebrew PATH</code> in <code>Settings -&gt; Execution Policy -&gt; Updates</code> when it can safely point that path at Homebrew's binary. Direct binary installs can use <code>harper self-update --check</code> to inspect the published manifest and <code>harper self-update</code> to replace the installed binary. By default Harper checks the latest GitHub release manifest, and <code>HARPER_UPDATE_MANIFEST_URL</code> can override that source. Before replacing the local binary, Harper verifies both the published SHA-256 checksum and the detached release signature.</p>
                 <div class="code-wrapper">
                     <pre><code>harper --version</code></pre>
                     <button class="copy-btn"></button>

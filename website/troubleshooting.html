@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harper · Troubleshooting</title>
-    <meta name="harper-update-version" content="2026-05-01-troubleshooting-v2" />
+    <meta name="harper-update-version" content="2026-05-17-troubleshooting-update-path" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/203538727?s=200&v=4" />
 </head>
@@ -31,13 +31,25 @@
                 <p class="hero-lede">Common fixes for install, version, API, and runtime problems.</p>
 
                 <h2>Wrong version</h2>
-                <p>Check your installed version and location.</p>
+                <p>Check your installed version and location. If Homebrew upgraded Harper but the version still looks old, another binary is earlier in your PATH.</p>
                 <div class="code-wrapper">
                     <pre><code>which harper</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <div class="code-wrapper">
                     <pre><code>harper --version</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <div class="code-wrapper">
+                    <pre><code>$(brew --prefix)/bin/harper --version</code></pre>
+                    <button class="copy-btn"></button>
+                </div>
+                <p>If <code>which harper</code> points to <code>~/.local/bin/harper</code>, use <code>Settings -&gt; Execution Policy -&gt; Updates -&gt; Fix Homebrew PATH</code>, or run:</p>
+                <div class="code-wrapper">
+                    <pre><code>backup="$HOME/.local/bin/harper.old"; i=1; while [ -e "$backup" ]; do backup="$HOME/.local/bin/harper.old.$i"; i=$((i + 1)); done
+mv "$HOME/.local/bin/harper" "$backup"
+ln -sfn "$(brew --prefix)/bin/harper" "$HOME/.local/bin/harper"
+hash -r</code></pre>
                     <button class="copy-btn"></button>
                 </div>
                 <div class="code-wrapper">

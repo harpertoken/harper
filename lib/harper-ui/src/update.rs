@@ -5,7 +5,10 @@ use harper_core::{
     verify_artifact_checksum, verify_artifact_signature, InstallSource,
 };
 use serde::Deserialize;
-use std::env;
+#[cfg(unix)]
+use std::fs;
+use std::path::PathBuf;
+use std::{env, path::Path};
 
 const UPDATE_MANIFEST_ENV: &str = "HARPER_UPDATE_MANIFEST_URL";
 const RELEASES_API_URL: &str = "https://api.github.com/repos/harpertoken/harper/releases";
@@ -22,6 +25,12 @@ struct GitHubRelease {
     draft: bool,
     prerelease: bool,
     assets: Vec<GitHubReleaseAsset>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HomebrewPathFix {
+    pub shadow_path: PathBuf,
+    pub homebrew_path: PathBuf,
 }
 
 pub async fn handle_update_command(args: &[String]) -> Option<i32> {
@@ -126,6 +135,8 @@ async fn handle_self_update(args: &[String]) -> i32 {
 
     let result = evaluate_update(crate::CLI_VERSION, &manifest, &target);
     println!("Latest version: {}", result.latest_version);
+    let homebrew_path_fix =
+        detect_homebrew_path_fix_for_install_source(&executable, install_source);
 
     if !result.artifact_available {
         println!(
@@ -155,6 +166,12 @@ async fn handle_self_update(args: &[String]) -> i32 {
     }
 
     if check_only {
+        if install_source == InstallSource::Homebrew || homebrew_path_fix.is_some() {
+            if result.update_available {
+                println!("Run: brew upgrade harpertoken/tap/harper-ai");
+            }
+            print_homebrew_shadow_guidance(&executable, install_source);
+        }
         return 0;
     }
 
@@ -163,8 +180,11 @@ async fn handle_self_update(args: &[String]) -> i32 {
     }
 
     match install_source {
+        _ if homebrew_path_fix.is_some() => {
+            print_install_source_guidance(InstallSource::Homebrew, &executable)
+        }
         InstallSource::Homebrew | InstallSource::Cargo | InstallSource::Npm => {
-            print_install_source_guidance(install_source)
+            print_install_source_guidance(install_source, &executable)
         }
         InstallSource::Direct => {
             let Some(artifact) = manifest.artifact_for_target(&target) else {
@@ -248,11 +268,12 @@ async fn handle_self_update(args: &[String]) -> i32 {
     }
 }
 
-fn print_install_source_guidance(install_source: InstallSource) -> i32 {
+fn print_install_source_guidance(install_source: InstallSource, executable: &Path) -> i32 {
     match install_source {
         InstallSource::Homebrew => {
             println!("This install is managed by Homebrew.");
             println!("Run: brew upgrade harpertoken/tap/harper-ai");
+            print_homebrew_shadow_guidance(executable, install_source);
             0
         }
         InstallSource::Cargo => {
@@ -271,6 +292,150 @@ fn print_install_source_guidance(install_source: InstallSource) -> i32 {
             2
         }
     }
+}
+
+fn print_homebrew_shadow_guidance(executable: &Path, install_source: InstallSource) {
+    let Some(fix) = detect_homebrew_path_fix_for_install_source(executable, install_source) else {
+        return;
+    };
+
+    let executable_text = fix.shadow_path.to_string_lossy();
+    let backup_path = next_backup_path(&fix.shadow_path);
+    let executable_arg = shell_quote(&executable_text);
+    let backup_arg = shell_quote(&backup_path.to_string_lossy());
+    let homebrew_arg = shell_quote(&fix.homebrew_path.to_string_lossy());
+    println!();
+    println!("Your shell is running another Harper binary:");
+    println!("  {}", fix.shadow_path.display());
+    println!();
+    println!("To make it use Homebrew's Harper:");
+    println!(
+        "  mv {executable_arg} {backup_arg}; ln -sfn {homebrew_arg} {executable_arg}; hash -r"
+    );
+}
+
+pub fn detect_homebrew_path_fix() -> Option<HomebrewPathFix> {
+    let executable = env::current_exe().ok()?;
+    let install_source = resolve_install_source(&executable).ok()?;
+    detect_homebrew_path_fix_for_install_source(&executable, install_source)
+}
+
+fn detect_homebrew_path_fix_for_install_source(
+    executable: &Path,
+    install_source: InstallSource,
+) -> Option<HomebrewPathFix> {
+    detect_homebrew_path_fix_for_executable_with_candidates(
+        executable,
+        install_source,
+        &[
+            PathBuf::from("/opt/homebrew/bin/harper"),
+            PathBuf::from("/usr/local/bin/harper"),
+        ],
+    )
+}
+
+fn detect_homebrew_path_fix_for_executable_with_candidates(
+    executable: &Path,
+    install_source: InstallSource,
+    homebrew_paths: &[PathBuf],
+) -> Option<HomebrewPathFix> {
+    let home = PathBuf::from(env::var_os("HOME")?);
+    detect_homebrew_path_fix_for_executable_with_home(
+        executable,
+        install_source,
+        &home,
+        homebrew_paths,
+    )
+}
+
+fn detect_homebrew_path_fix_for_executable_with_home(
+    executable: &Path,
+    install_source: InstallSource,
+    home: &Path,
+    homebrew_paths: &[PathBuf],
+) -> Option<HomebrewPathFix> {
+    if install_source != InstallSource::Homebrew {
+        return None;
+    }
+
+    if InstallSource::infer_from_executable(executable) == InstallSource::Homebrew {
+        return None;
+    }
+
+    let local_harper = home.join(".local").join("bin").join("harper");
+    if executable != local_harper {
+        return None;
+    }
+
+    let homebrew_path = homebrew_paths.iter().find(|path| path.exists())?.clone();
+
+    Some(HomebrewPathFix {
+        shadow_path: executable.to_path_buf(),
+        homebrew_path,
+    })
+}
+
+pub fn apply_homebrew_path_fix(fix: &HomebrewPathFix) -> Result<PathBuf, String> {
+    #[cfg(not(unix))]
+    {
+        let _ = fix;
+        Err("Homebrew PATH fix is only supported on Unix-like systems.".to_string())
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+
+        let backup_path = next_backup_path(&fix.shadow_path);
+        fs::rename(&fix.shadow_path, &backup_path).map_err(|err| {
+            format!(
+                "failed to move {} to {}: {}",
+                fix.shadow_path.display(),
+                backup_path.display(),
+                err
+            )
+        })?;
+        if let Err(err) = symlink(&fix.homebrew_path, &fix.shadow_path) {
+            let rollback = fs::rename(&backup_path, &fix.shadow_path)
+                .map(|_| String::new())
+                .unwrap_or_else(|rollback_err| {
+                    format!(
+                        " rollback failed: {} is still at {}: {}",
+                        fix.shadow_path.display(),
+                        backup_path.display(),
+                        rollback_err
+                    )
+                });
+            return Err(format!(
+                "failed to link {} to {}: {}{}",
+                fix.shadow_path.display(),
+                fix.homebrew_path.display(),
+                err,
+                rollback
+            ));
+        }
+        Ok(backup_path)
+    }
+}
+
+fn next_backup_path(path: &Path) -> PathBuf {
+    let first = PathBuf::from(format!("{}.old", path.display()));
+    if !first.exists() {
+        return first;
+    }
+
+    for index in 1..100 {
+        let candidate = PathBuf::from(format!("{}.old.{}", path.display(), index));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+
+    PathBuf::from(format!("{}.old.{}", path.display(), std::process::id()))
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 fn configured_manifest_url() -> Option<String> {
@@ -342,9 +507,13 @@ fn print_self_update_usage() {
 #[cfg(test)]
 mod tests {
     use super::{
-        configured_manifest_url, fetch_update_status, find_manifest_url, handle_update_command,
-        GitHubRelease, GitHubReleaseAsset,
+        configured_manifest_url, detect_homebrew_path_fix_for_executable_with_home,
+        fetch_update_status, find_manifest_url, handle_update_command, next_backup_path,
+        shell_quote, GitHubRelease, GitHubReleaseAsset, HomebrewPathFix,
     };
+    use harper_core::InstallSource;
+    use std::fs;
+    use tempfile::tempdir;
 
     #[tokio::test]
     async fn version_command_is_handled() {
@@ -433,6 +602,138 @@ mod tests {
         assert_eq!(
             find_manifest_url(&releases).as_deref(),
             Some("https://example.com/release-manifest.json")
+        );
+    }
+
+    #[test]
+    fn shell_quote_handles_spaces_and_quotes() {
+        assert_eq!(
+            shell_quote("/Users/test/local harper's/bin/harper"),
+            "'/Users/test/local harper'\\''s/bin/harper'"
+        );
+    }
+
+    #[test]
+    fn next_backup_path_skips_existing_backups() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join("harper");
+        fs::write(&path, "old").expect("write original");
+        fs::write(tempdir.path().join("harper.old"), "older").expect("write backup");
+
+        assert_eq!(next_backup_path(&path), tempdir.path().join("harper.old.1"));
+    }
+
+    #[test]
+    fn detects_shadowed_homebrew_with_homebrew_source() {
+        let tempdir = tempdir().expect("tempdir");
+        let home = tempdir.path().join("home");
+        let shadow_path = home.join(".local").join("bin").join("harper");
+        let homebrew_path = tempdir
+            .path()
+            .join("opt")
+            .join("homebrew")
+            .join("bin")
+            .join("harper");
+        fs::create_dir_all(shadow_path.parent().expect("shadow parent")).expect("shadow dir");
+        fs::create_dir_all(homebrew_path.parent().expect("homebrew parent")).expect("homebrew dir");
+        fs::write(&shadow_path, "shadow").expect("write shadow");
+        fs::write(&homebrew_path, "homebrew").expect("write homebrew");
+
+        assert_eq!(
+            detect_homebrew_path_fix_for_executable_with_home(
+                &shadow_path,
+                InstallSource::Homebrew,
+                &home,
+                std::slice::from_ref(&homebrew_path),
+            ),
+            Some(HomebrewPathFix {
+                shadow_path,
+                homebrew_path,
+            })
+        );
+    }
+
+    #[test]
+    fn does_not_treat_direct_local_install_as_homebrew_shadow() {
+        let tempdir = tempdir().expect("tempdir");
+        let home = tempdir.path().join("home");
+        let shadow_path = home.join(".local").join("bin").join("harper");
+        let homebrew_path = tempdir
+            .path()
+            .join("opt")
+            .join("homebrew")
+            .join("bin")
+            .join("harper");
+        fs::create_dir_all(shadow_path.parent().expect("shadow parent")).expect("shadow dir");
+        fs::create_dir_all(homebrew_path.parent().expect("homebrew parent")).expect("homebrew dir");
+        fs::write(&shadow_path, "direct").expect("write direct");
+        fs::write(&homebrew_path, "homebrew").expect("write homebrew");
+
+        assert_eq!(
+            detect_homebrew_path_fix_for_executable_with_home(
+                &shadow_path,
+                InstallSource::Direct,
+                &home,
+                std::slice::from_ref(&homebrew_path),
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn detects_intel_homebrew_prefix() {
+        let tempdir = tempdir().expect("tempdir");
+        let home = tempdir.path().join("home");
+        let shadow_path = home.join(".local").join("bin").join("harper");
+        let apple_silicon_path = tempdir
+            .path()
+            .join("opt")
+            .join("homebrew")
+            .join("bin")
+            .join("harper");
+        let intel_path = tempdir
+            .path()
+            .join("usr")
+            .join("local")
+            .join("bin")
+            .join("harper");
+        fs::create_dir_all(shadow_path.parent().expect("shadow parent")).expect("shadow dir");
+        fs::create_dir_all(intel_path.parent().expect("intel parent")).expect("intel dir");
+        fs::write(&shadow_path, "shadow").expect("write shadow");
+        fs::write(&intel_path, "homebrew").expect("write homebrew");
+
+        assert_eq!(
+            detect_homebrew_path_fix_for_executable_with_home(
+                &shadow_path,
+                InstallSource::Homebrew,
+                &home,
+                &[apple_silicon_path, intel_path.clone()],
+            )
+            .map(|fix| fix.homebrew_path),
+            Some(intel_path)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn apply_homebrew_path_fix_moves_shadow_and_links_homebrew() {
+        let tempdir = tempdir().expect("tempdir");
+        let shadow_path = tempdir.path().join("harper");
+        let homebrew_path = tempdir.path().join("homebrew-harper");
+        fs::write(&shadow_path, "shadow").expect("write shadow");
+        fs::write(&homebrew_path, "homebrew").expect("write homebrew");
+
+        let backup = super::apply_homebrew_path_fix(&HomebrewPathFix {
+            shadow_path: shadow_path.clone(),
+            homebrew_path: homebrew_path.clone(),
+        })
+        .expect("apply fix");
+
+        assert_eq!(backup, tempdir.path().join("harper.old"));
+        assert_eq!(fs::read_to_string(&backup).expect("read backup"), "shadow");
+        assert_eq!(
+            fs::read_link(&shadow_path).expect("read symlink"),
+            homebrew_path
         );
     }
 }

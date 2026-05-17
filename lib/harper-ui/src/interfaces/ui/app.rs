@@ -23,6 +23,7 @@ use serde::Deserialize;
 use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::fs;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
@@ -585,6 +586,7 @@ pub struct TuiApp {
     pub execution_policy_editor: Option<ExecutionPolicyEditorState>,
     pub header_widgets: Vec<HeaderWidget>,
     pub update_status: Option<String>,
+    pub homebrew_path_fix: Option<PathBuf>,
     pub show_menu_logo: bool,
     pub mouse_capture: bool,
     pub drag_scroll: Option<DragScrollState>,
@@ -649,6 +651,7 @@ impl Default for TuiApp {
                 HeaderWidget::Activity,
             ],
             update_status: None,
+            homebrew_path_fix: None,
             show_menu_logo: true,
             mouse_capture: false,
             drag_scroll: None,
@@ -687,7 +690,11 @@ impl TuiApp {
     }
 
     pub fn execution_policy_row_count(&self) -> usize {
-        9
+        if self.homebrew_path_fix.is_some() {
+            10
+        } else {
+            9
+        }
     }
 
     pub fn set_error_message(&mut self, content: String) {

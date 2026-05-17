@@ -49,6 +49,22 @@ To update later:
 brew upgrade harpertoken/tap/harper-ai
 ```
 
+If `harper --version` still shows an older version after upgrading, another `harper` binary is earlier in your `PATH`. Check with:
+
+```bash
+which harper
+$(brew --prefix)/bin/harper --version
+```
+
+Harper also shows a `Fix Homebrew PATH` action in `Settings -> Execution Policy -> Updates` when it detects this common shadowed-binary case. To do the same fix manually:
+
+```bash
+backup="$HOME/.local/bin/harper.old"; i=1; while [ -e "$backup" ]; do backup="$HOME/.local/bin/harper.old.$i"; i=$((i + 1)); done
+mv "$HOME/.local/bin/harper" "$backup"
+ln -sfn "$(brew --prefix)/bin/harper" "$HOME/.local/bin/harper"
+hash -r
+```
+
 ### Method 2: Build from Source
 
 1. Clone the repository:
