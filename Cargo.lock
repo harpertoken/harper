@@ -5093,9 +5093,9 @@ dependencies = [
 
 [[package]]
 name = "turul-mcp-json-rpc-server"
-version = "0.3.45"
+version = "0.3.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5d85089e140f9085f9584936f6f5f189313e713f4776b5b71ea67df0bd70a0f"
+checksum = "2c1ad0d4c5aa72bedaae31f8e8c55bb95132bb7df25fa8dca9664b64339a6da3"
 dependencies = [
  "turul-rpc",
 ]
