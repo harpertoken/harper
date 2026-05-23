@@ -16,7 +16,7 @@
 # Project-scoped Codex CLI settings for this repo.
 # See OpenAI Codex configuration docs for available fields and defaults.
 
-model = "gpt-5-codex"
+model = "gpt-5.5"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 
