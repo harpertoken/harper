@@ -43,7 +43,7 @@ uuid = { version = "1.17.0", features = ["v4"] }
 ring = "0.17.14"
 jsonwebtoken = { version = "10.4.0", features = ["aws_lc_rs"] }
 aes = "0.8"
-cbc = "0.1"
+cbc = "0.2"
 ctr = "0.9"
 hex-literal = "1.1.0"
 rustyline = "17.0"
