@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/harpertoken/harper/main/.github/assets/thumbnail.png" alt="harper" width="100%">
+</p>
+
 # harper
 
 Fast text tools in Rust. Simple to use.
