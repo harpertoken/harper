@@ -25,7 +25,7 @@ jobs:
   build-linux:
     name: Linux
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
     steps:
     - uses: actions/checkout@v6
     - name: Set up Bazel
@@ -48,7 +48,7 @@ jobs:
   build-macos:
     name: macOS
     runs-on: macos-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
     steps:
     - uses: actions/checkout@v6
     - name: Set up Bazel
@@ -71,7 +71,7 @@ jobs:
   build-windows-smoke:
     name: Windows Smoke
     runs-on: windows-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
     steps:
     - uses: actions/checkout@v6
     - name: Set up Bazel
