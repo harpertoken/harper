@@ -26,7 +26,7 @@ jobs:
   analyze:
     name: CodeQL
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
     permissions:
       actions: read
       contents: read
