@@ -14,10 +14,10 @@ jobs:
   normalize:
     name: PR Description
     if: |
-      github.repository_owner == 'harpertoken' &&
+      github.repository_owner == 'coccinella-labs' &&
       github.event.pull_request.head.repo.fork == false &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       github.event.pull_request.user.login != 'app/dependabot'
     runs-on: ubuntu-latest
     steps:
-      - uses: libnudget/prune@v1
+      - uses: coccinella-labs/prune@v1
