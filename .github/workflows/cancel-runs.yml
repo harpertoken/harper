@@ -27,7 +27,7 @@ concurrency:
 jobs:
   cancel-runs:
     name: Cancel Runs
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/cancel-runs') && github.repository_owner == 'harpertoken'
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/cancel-runs') && github.repository_owner == 'coccinella-labs'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -46,7 +46,7 @@ jobs:
         PR_NUM: ${{ github.event.issue.number }}
 
     - name: Cancel runs
-      uses: libnudget/cancel@v1
+      uses: coccinella-labs/cancel@v1
       with:
         branch: ${{ steps.get-branch.outputs.branch }}
         token: ${{ secrets.GITHUB_TOKEN }}
@@ -64,14 +64,14 @@ jobs:
 
   cancel-runs-label:
     name: Cancel Labeled Runs
-    if: github.event.label.name == 'cancel-runs' && github.repository_owner == 'harpertoken'
+    if: github.event.label.name == 'cancel-runs' && github.repository_owner == 'coccinella-labs'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: write
       pull-requests: write
     steps:
-    - uses: libnudget/cancel@v1
+    - uses: coccinella-labs/cancel@v1
       with:
         pr_number: ${{ github.event.pull_request.number }}
         token: ${{ secrets.GITHUB_TOKEN }}

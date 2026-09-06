@@ -44,7 +44,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
 
     steps:
     - name: Checkout code
@@ -71,7 +71,7 @@ jobs:
   e2e:
     name: E2E
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
 
     steps:
     - name: Checkout code
@@ -93,7 +93,7 @@ jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.repository_owner == 'harpertoken'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.repository_owner == 'coccinella-labs'
     needs: [build, e2e]
 
     steps:

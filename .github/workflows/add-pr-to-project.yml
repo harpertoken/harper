@@ -10,7 +10,7 @@ jobs:
   add-pr-to-project:
     name: Project
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
     permissions:
       contents: read
       pull-requests: read

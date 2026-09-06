@@ -36,7 +36,7 @@ jobs:
   deploy:
     name: Website
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
     steps:
       - name: Checkout
         uses: actions/checkout@v6

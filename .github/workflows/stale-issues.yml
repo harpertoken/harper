@@ -29,7 +29,7 @@ jobs:
   remind-stale-issues:
     name: Mark Stale
     runs-on: ubuntu-latest
-    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.repository_owner == 'harpertoken'
+    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.repository_owner == 'coccinella-labs'
     steps:
       - id: app-token
         name: Create Harper app token
@@ -139,7 +139,7 @@ jobs:
   clear-needs-response:
     name: Clear Response
     runs-on: ubuntu-latest
-    if: github.event_name == 'issue_comment' && github.repository_owner == 'harpertoken' && github.event.issue.pull_request == null && github.event.comment.user.type != 'Bot'
+    if: github.event_name == 'issue_comment' && github.repository_owner == 'coccinella-labs' && github.event.issue.pull_request == null && github.event.comment.user.type != 'Bot'
     steps:
       - id: app-token
         name: Create Harper app token

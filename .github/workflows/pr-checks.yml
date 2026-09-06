@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >
       (github.event_name == 'push' || github.event_name == 'pull_request') &&
-      github.repository_owner == 'harpertoken' &&
+      github.repository_owner == 'coccinella-labs' &&
       (github.event_name == 'push' ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.draft == false))

@@ -37,7 +37,7 @@ jobs:
   integration:
     name: Integration
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
     env:
       HARPER_ENV: ${{ inputs.environment || 'dev' }}
       # Secrets (API keys, etc.) should be configured in repo settings

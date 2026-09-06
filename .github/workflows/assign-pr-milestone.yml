@@ -10,7 +10,7 @@ jobs:
   assign-pr-milestone:
     name: Milestone
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
     permissions:
       contents: read
       issues: write

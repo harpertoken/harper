@@ -27,8 +27,8 @@ permissions:
 jobs:
   package-preflight:
     name: Package
-    if: github.repository_owner == 'harpertoken'
-    uses: libnudget/release-assets/.github/workflows/release-assets.yml@main
+    if: github.repository_owner == 'coccinella-labs'
+    uses: coccinella-labs/release-assets/.github/workflows/release-assets.yml@main
     with:
       release_tag: ${{ github.ref_name || 'workflow-dispatch' }}
       release_target_sha: ${{ github.sha }}
