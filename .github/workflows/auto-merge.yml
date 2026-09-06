@@ -30,7 +30,7 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'auto-merge') &&
       !contains(github.event.pull_request.labels.*.name, 'auto-merge-now') &&
       github.event.pull_request.draft == false &&
-      github.repository_owner == 'harpertoken'
+      github.repository_owner == 'coccinella-labs'
     steps:
       - id: app-token
         name: Create Harper app token
@@ -41,7 +41,7 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - uses: libnudget/auto-merge@v1
+      - uses: coccinella-labs/auto-merge@v1
         with:
           mode: enable
           token: ${{ steps.app-token.outputs.token }}
@@ -53,7 +53,7 @@ jobs:
       github.event.action == 'unlabeled' &&
       github.event.label.name == 'auto-merge' &&
       github.event.pull_request.draft == false &&
-      github.repository_owner == 'harpertoken'
+      github.repository_owner == 'coccinella-labs'
     steps:
       - id: app-token
         name: Create Harper app token
@@ -63,7 +63,7 @@ jobs:
           private-key: ${{ secrets.HARPER_APP_PRIVATE_KEY }}
           permission-pull-requests: write
 
-      - uses: libnudget/auto-merge@v1
+      - uses: coccinella-labs/auto-merge@v1
         with:
           mode: disable
           token: ${{ steps.app-token.outputs.token }}
@@ -74,7 +74,7 @@ jobs:
     if: >
       contains(github.event.pull_request.labels.*.name, 'auto-merge-now') &&
       github.event.pull_request.draft == false &&
-      github.repository_owner == 'harpertoken'
+      github.repository_owner == 'coccinella-labs'
     steps:
       - id: app-token
         name: Create Harper app token
@@ -85,7 +85,7 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - uses: libnudget/auto-merge@v1
+      - uses: coccinella-labs/auto-merge@v1
         with:
           mode: now
           token: ${{ steps.app-token.outputs.token }}
