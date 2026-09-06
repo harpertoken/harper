@@ -27,7 +27,7 @@ jobs:
   bench:
     name: Benchmarks
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
     steps:
       - uses: actions/checkout@v6
 
