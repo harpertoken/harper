@@ -23,7 +23,7 @@ on:
 jobs:
   lock:
     name: Lock PR
-    if: github.event.pull_request.merged == true && github.repository_owner == 'harpertoken'
+    if: github.event.pull_request.merged == true && github.repository_owner == 'coccinella-labs'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
