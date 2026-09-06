@@ -20,7 +20,7 @@ on:
 jobs:
   rust-auto-fix-request:
     name: Request Fix
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/rust-fix') && github.repository_owner == 'harpertoken'
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/rust-fix') && github.repository_owner == 'coccinella-labs'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -51,7 +51,7 @@ jobs:
 
   rust-auto-fix-execute:
     name: Apply Fix
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/confirm') && github.repository_owner == 'harpertoken'
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/confirm') && github.repository_owner == 'coccinella-labs'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,6 +70,6 @@ jobs:
       with:
         components: rustfmt, clippy
     - name: Apply fix
-      uses: libnudget/rust-fix@v1
+      uses: coccinella-labs/rust-fix@v1
       with:
         fixes: all
