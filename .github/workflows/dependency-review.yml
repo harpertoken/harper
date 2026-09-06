@@ -22,7 +22,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'harpertoken'
+    if: github.repository_owner == 'coccinella-labs'
     steps:
       - name: "Checkout Repository"
         uses: actions/checkout@v6
