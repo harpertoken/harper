@@ -22,6 +22,7 @@ on:
       - 'lib/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - '.github/**'
   pull_request:
     branches: [ main ]
     paths:
@@ -29,6 +30,7 @@ on:
       - 'lib/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - '.github/**'
   schedule:
     - cron: '0 0 * * 0'  # Weekly dependency check
 env:
