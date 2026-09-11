@@ -16,7 +16,7 @@ limitations under the License.
 
 # Workspace Reset Guide
 
-[![Git: Version Control](https://img.shields.io/badge/git-workspace%20reset-blue)](https://github.com/harpertoken/harper)
+[![Git: Version Control](https://img.shields.io/badge/git-workspace%20reset-blue)](https://github.com/coccinella-labs/harper)
 [![Cargo: Build System](https://img.shields.io/badge/cargo-clean-orange)](https://doc.rust-lang.org/cargo/)
 
 This guide provides commands to completely reset your Harper workspace to a clean state. Use these commands when you need to start fresh or resolve development issues.
@@ -264,18 +264,18 @@ cargo build
 # Remove and re-clone (last resort)
 cd ..
 rm -rf harper
-git clone https://github.com/harpertoken/harper.git
+git clone https://github.com/coccinella-labs/harper.git
 cd harper
 ```
 
 ### Getting Help
 
-- **Documentation**: See [Contributing Guide](https://github.com/harpertoken/harper/blob/main/CONTRIBUTING.md)
-- **Issues**: [Report problems](https://github.com/harpertoken/harper/issues)
-- **Discussions**: [Ask questions](https://github.com/harpertoken/harper/discussions)
+- **Documentation**: See [Contributing Guide](https://github.com/coccinella-labs/harper/blob/main/CONTRIBUTING.md)
+- **Issues**: [Report problems](https://github.com/coccinella-labs/harper/issues)
+- **Discussions**: [Ask questions](https://github.com/coccinella-labs/harper/discussions)
 
 ---
 
 **Remember**: When in doubt, commit your work first! It's always safer to have changes in git history than to lose them permanently.
 
-For more information about Harper development, see the main [README](https://github.com/harpertoken/harper/blob/main/README.md) and [Contributing Guide](https://github.com/harpertoken/harper/blob/main/CONTRIBUTING.md).
+For more information about Harper development, see the main [README](https://github.com/coccinella-labs/harper/blob/main/README.md) and [Contributing Guide](https://github.com/coccinella-labs/harper/blob/main/CONTRIBUTING.md).

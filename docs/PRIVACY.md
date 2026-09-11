@@ -16,8 +16,8 @@ limitations under the License.
 
 # Privacy Policy
 
-[![Privacy: Local First](https://img.shields.io/badge/privacy-local%20first-blue)](https://github.com/harpertoken/harper)
-[![Data: Encrypted Storage](https://img.shields.io/badge/data-encrypted%20storage-green)](https://github.com/harpertoken/harper)
+[![Privacy: Local First](https://img.shields.io/badge/privacy-local%20first-blue)](https://github.com/coccinella-labs/harper)
+[![Data: Encrypted Storage](https://img.shields.io/badge/data-encrypted%20storage-green)](https://github.com/coccinella-labs/harper)
 
 Harper is committed to protecting your privacy. This policy explains how we handle your data and what you can expect from our privacy practices.
 
@@ -254,8 +254,8 @@ If you disagree with policy changes:
 
 ### Privacy Questions
 
-- **GitHub Issues**: [Open a privacy-related issue](https://github.com/harpertoken/harper/issues)
-- **Discussions**: [Privacy discussions](https://github.com/harpertoken/harper/discussions)
+- **GitHub Issues**: [Open a privacy-related issue](https://github.com/coccinella-labs/harper/issues)
+- **Discussions**: [Privacy discussions](https://github.com/coccinella-labs/harper/discussions)
 - **Email**: harpertoken@icloud.com (for sensitive concerns)
 
 ### Data Requests
