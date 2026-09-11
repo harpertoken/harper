@@ -69,7 +69,7 @@ hash -r
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/harpertoken/harper.git
+   git clone https://github.com/coccinella-labs/harper.git
    cd harper
    ```
 
@@ -94,13 +94,13 @@ Download the release artifact for your platform from GitHub Releases, extract it
 You can also use the direct install script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/harpertoken/harper/main/scripts/install-harper.sh | sh
+curl -fsSL https://raw.githubusercontent.com/coccinella-labs/harper/main/scripts/install-harper.sh | sh
 ```
 
 To pin a specific release or install directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/harpertoken/harper/main/scripts/install-harper.sh |
+curl -fsSL https://raw.githubusercontent.com/coccinella-labs/harper/main/scripts/install-harper.sh |
   HARPER_INSTALL_TAG=harper-0.20.1 HARPER_INSTALL_DIR="$HOME/bin" sh
 ```
 
@@ -134,7 +134,7 @@ An npm binary wrapper is being prepared from the same signed GitHub release arti
 Use the Harper GitHub Action to install the CLI in CI from a published release artifact:
 
 ```yaml
-- uses: harpertoken/harper@main
+- uses: coccinella-labs/harper@main
   with:
     release-tag: harper-0.20.1
 - run: harper --help
@@ -145,7 +145,7 @@ Use the Harper GitHub Action to install the CLI in CI from a published release a
 Harper container images are published on merge to `main`:
 
 ```bash
-docker run --rm -it ghcr.io/harpertoken/harper/harper:latest
+docker run --rm -it ghcr.io/coccinella-labs/harper/harper:latest
 ```
 
 ### VS Code extension
@@ -157,7 +157,7 @@ The Harper Review VS Code extension is available in `extensions/harper-review-vs
 If the project includes a Makefile:
 
 ```bash
-git clone https://github.com/harpertoken/harper.git
+git clone https://github.com/coccinella-labs/harper.git
 cd harper
 make
 make run

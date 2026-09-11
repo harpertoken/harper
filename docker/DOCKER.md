@@ -35,7 +35,7 @@ Harper provides pre-built Docker images for easy deployment.
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/harpertoken/harper.git
+   git clone https://github.com/coccinella-labs/harper.git
    cd harper
    ```
 
@@ -241,4 +241,4 @@ For issues with Docker setup, check:
 - Network connectivity for API calls
 - Sufficient disk space for builds
 
-For additional help, see our [Contributing Guide](../CONTRIBUTING.md) or [GitHub Issues](https://github.com/harpertoken/harper/issues).
+For additional help, see our [Contributing Guide](../CONTRIBUTING.md) or [GitHub Issues](https://github.com/coccinella-labs/harper/issues).

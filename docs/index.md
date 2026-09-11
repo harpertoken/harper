@@ -39,4 +39,4 @@ For developers wanting to contribute:
 
 ## Support
 
-Having issues? Check the [Troubleshooting Guide](user-guide/troubleshooting.md) or visit our [GitHub Issues](https://github.com/harpertoken/harper/issues).
+Having issues? Check the [Troubleshooting Guide](user-guide/troubleshooting.md) or visit our [GitHub Issues](https://github.com/coccinella-labs/harper/issues).
