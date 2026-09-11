@@ -27,5 +27,5 @@ jobs:
       - name: Add PR to project
         uses: actions/add-to-project@v1.0.2
         with:
-          project-url: https://github.com/orgs/harpertoken/projects/10
+          project-url: https://github.com/orgs/coccinella-labs/projects/1
           github-token: ${{ steps.app-token.outputs.token }}
