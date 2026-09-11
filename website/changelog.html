@@ -33,7 +33,7 @@
                 <div id="releases">
                     <p class="loading">Fetching releases...</p>
                     <noscript>
-                        <p>JavaScript is disabled. Use <a href="https://github.com/harpertoken/harper/releases" target="_blank" rel="noreferrer">the GitHub releases page</a>.</p>
+                        <p>JavaScript is disabled. Use <a href="https://github.com/coccinella-labs/harper/releases" target="_blank" rel="noreferrer">the GitHub releases page</a>.</p>
                     </noscript>
                 </div>
             </div>
@@ -50,7 +50,7 @@
             header.classList.toggle('scrolled', window.scrollY > 50);
         });
 
-        fetch('https://api.github.com/repos/harpertoken/harper/releases?per_page=10', {
+        fetch('https://api.github.com/repos/coccinella-labs/harper/releases?per_page=10', {
             headers: { 'Accept': 'application/vnd.github+json' }
         })
         .then(r => r.ok ? r.json() : Promise.reject())
@@ -68,14 +68,14 @@
                 return `<h2>${rel.tag_name}${date ? ' <span>' + date + '</span>' : ''}</h2>
                 <p>${body}${rel.body && body.length < rel.body.length ? '…' : ''}</p>
                 <p><a href="${rel.html_url}" target="_blank" rel="noreferrer">View on GitHub →</a></p>`;
-            }).join('') + '<h2>All releases</h2><p><a href="https://github.com/harpertoken/harper/releases" target="_blank">github.com/harpertoken/harper/releases →</a></p>';
+            }).join('') + '<h2>All releases</h2><p><a href="https://github.com/coccinella-labs/harper/releases" target="_blank">github.com/coccinella-labs/harper/releases →</a></p>';
         })
         .catch(() => {
             document.getElementById('releases').innerHTML = `
                 <h2>Fallback</h2>
                 <p>Could not load the live release feed from GitHub in this browser.</p>
                 <p>Use the canonical release history here:</p>
-                <p><a href="https://github.com/harpertoken/harper/releases" target="_blank" rel="noreferrer">github.com/harpertoken/harper/releases →</a></p>
+                <p><a href="https://github.com/coccinella-labs/harper/releases" target="_blank" rel="noreferrer">github.com/coccinella-labs/harper/releases →</a></p>
             `;
         });
     </script>
