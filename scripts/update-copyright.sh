@@ -3,7 +3,7 @@
 # Also adds headers to files missing them
 
 YEAR=$(date +%Y)
-HEADER="// Copyright $YEAR harpertoken
+HEADER="// Copyright $YEAR coccinella-labs
 //
 // Licensed under the Apache License, Version 2.0 (the \"License\");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ HEADER="// Copyright $YEAR harpertoken
 find . -type f -name "*.rs" -not -path "*/target/*" | sort > /tmp/rs_files.txt
 
 # Find files with existing copyright
-find . -type f -name "*.rs" -not -path "*/target/*" -exec grep -l "Copyright.*harpertoken" {} \; 2>/dev/null | sort > /tmp/has_copyright.txt
+find . -type f -name "*.rs" -not -path "*/target/*" -exec grep -l "Copyright.*coccinella-labs" {} \; 2>/dev/null | sort > /tmp/has_copyright.txt
 
 # Find files missing copyright
 comm -23 /tmp/rs_files.txt /tmp/has_copyright.txt > /tmp/missing.txt
@@ -46,7 +46,7 @@ fi
 
 # Update existing copyright years
 while IFS= read -r f; do
-    sed -i '' "s/Copyright [0-9]* harpertoken/Copyright $YEAR harpertoken/g" "$f"
+    sed -i '' "s/Copyright [0-9]* coccinella-labs/Copyright $YEAR coccinella-labs/g" "$f"
     echo "Updated $f"
 done < /tmp/has_copyright.txt
 
