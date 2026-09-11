@@ -1,5 +1,5 @@
 Harper Review for VS Code
-Copyright 2026 harpertoken
+Copyright 2026 coccinella-labs
 
 SPDX-License-Identifier: MIT OR Apache-2.0
 

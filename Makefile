@@ -1,4 +1,4 @@
-# Copyright 2026 harpertoken
+# Copyright 2026 coccinella-labs
 #
 # Licensed under the Apache License, Version 2.0
 
