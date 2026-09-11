@@ -76,7 +76,7 @@ links = """
 # Remote name
 name = "origin"
 # URL template
-url = "https://github.com/harpertoken/harper/releases/tag/{{tag}}"
+url = "https://github.com/coccinella-labs/harper/releases/tag/{{tag}}"
 
 # Package configuration
 [package]

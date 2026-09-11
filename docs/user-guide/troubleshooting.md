@@ -24,7 +24,7 @@ This guide helps you resolve common issues you might encounter while using Harpe
    ```
 3. Update future Homebrew installs with:
    ```bash
-   brew upgrade harpertoken/tap/harper-ai
+   brew upgrade coccinella-labs/tap/harper-ai
    ```
 
 ### API Key Problems

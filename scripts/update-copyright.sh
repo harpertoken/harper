@@ -1,5 +1,5 @@
 #!/bin/bash
-# Update copyright year in harpertoken files
+# Update copyright year in coccinella-labs files
 # Also adds headers to files missing them
 
 YEAR=$(date +%Y)

@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: read
     env:
-      TAP_REPO: harpertoken/homebrew-tap
+      TAP_REPO: coccinella-labs/homebrew-tap
       FORMULA_PATH: Formula/harper-ai.rb
     steps:
       - name: Checkout Harper
@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           release_tag="${{ github.event.inputs.release_tag }}"
-          tarball_url="https://github.com/harpertoken/harper/archive/refs/tags/${release_tag}.tar.gz"
+          tarball_url="https://github.com/coccinella-labs/harper/archive/refs/tags/${release_tag}.tar.gz"
           curl -L "$tarball_url" -o harper-release.tar.gz
           sha256=$(sha256sum harper-release.tar.gz | awk '{print $1}')
           version="${release_tag#harper-}"

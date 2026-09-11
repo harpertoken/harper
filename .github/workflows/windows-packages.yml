@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           release_tag="${{ github.event.inputs.release_tag || github.ref_name }}"
-          asset_url="https://github.com/harpertoken/harper/releases/download/${release_tag}/harper-windows-x86_64.zip"
+          asset_url="https://github.com/coccinella-labs/harper/releases/download/${release_tag}/harper-windows-x86_64.zip"
           curl --fail --location --retry 12 --retry-all-errors --retry-delay 10 \
             "$asset_url" \
             -o harper-windows-x86_64.zip

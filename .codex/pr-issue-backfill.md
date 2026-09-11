@@ -21,13 +21,13 @@ Then create a matching issue and comment back on the PR with the created issue U
 ## Query Merged PRs
 
 ```sh
-gh api graphql --paginate -f query='query($endCursor: String) { repository(owner: "harpertoken", name: "harper") { pullRequests(first: 100, after: $endCursor, states: MERGED, orderBy: {field: CREATED_AT, direction: ASC}) { pageInfo { hasNextPage endCursor } nodes { number title url body closingIssuesReferences(first: 10) { totalCount nodes { number url } } comments(first: 50) { nodes { body } } reviews(first: 20) { nodes { body comments(first: 20) { nodes { body } } } } } } } }' --jq '.data.repository.pullRequests.nodes[] | @base64' > /private/tmp/harper-merged-prs.b64
+gh api graphql --paginate -f query='query($endCursor: String) { repository(owner: "coccinella-labs", name: "harper") { pullRequests(first: 100, after: $endCursor, states: MERGED, orderBy: {field: CREATED_AT, direction: ASC}) { pageInfo { hasNextPage endCursor } nodes { number title url body closingIssuesReferences(first: 10) { totalCount nodes { number url } } comments(first: 50) { nodes { body } } reviews(first: 20) { nodes { body comments(first: 20) { nodes { body } } } } } } } }' --jq '.data.repository.pullRequests.nodes[] | @base64' > /private/tmp/harper-merged-prs.b64
 ```
 
 ## Build Candidate List
 
 ```sh
-jq -Rr '@base64d | fromjson | {number,title,url,body,closing:.closingIssuesReferences.totalCount, comments:[.comments.nodes[].body], reviews:[.reviews.nodes[]? | .body, (.comments.nodes[]?.body)]} | select(.closing == 0) | .text = ((.body // "") + "\n" + ((.comments // []) | join("\n")) + "\n" + ((.reviews // []) | join("\n"))) | select((.text | test("(?i)(close[sd]?|fix(e[sd])?|resolve[sd]?|refs?|related to|issue)[: ]+(#|https://github.com/harpertoken/harper/issues/)")) | not) | .kind = (if (.title | test("(?i)(\\[fix\\]|^fix|fix:|bug|security|vulnerab|fail|stabilize|restore|sanitize|harden|correct|prevent)")) then "bug" else "feature" end) | [.number, .kind, .title, .url] | @tsv' /private/tmp/harper-merged-prs.b64 > /private/tmp/harper-prs-to-backfill-issues.tsv
+jq -Rr '@base64d | fromjson | {number,title,url,body,closing:.closingIssuesReferences.totalCount, comments:[.comments.nodes[].body], reviews:[.reviews.nodes[]? | .body, (.comments.nodes[]?.body)]} | select(.closing == 0) | .text = ((.body // "") + "\n" + ((.comments // []) | join("\n")) + "\n" + ((.reviews // []) | join("\n"))) | select((.text | test("(?i)(close[sd]?|fix(e[sd])?|resolve[sd]?|refs?|related to|issue)[: ]+(#|https://github.com/coccinella-labs/harper/issues/)")) | not) | .kind = (if (.title | test("(?i)(\\[fix\\]|^fix|fix:|bug|security|vulnerab|fail|stabilize|restore|sanitize|harden|correct|prevent)")) then "bug" else "feature" end) | [.number, .kind, .title, .url] | @tsv' /private/tmp/harper-merged-prs.b64 > /private/tmp/harper-prs-to-backfill-issues.tsv
 ```
 
 Check the count and sample:
@@ -54,11 +54,11 @@ count=0
 while IFS= read -r payload; do
   pr_number=$(jq -r '.pr_number' <<< "$payload")
   issue_payload=$(jq -c '{title, body, labels}' <<< "$payload")
-  issue_json=$(gh api repos/harpertoken/harper/issues -X POST --input - <<< "$issue_payload")
+  issue_json=$(gh api repos/coccinella-labs/harper/issues -X POST --input - <<< "$issue_payload")
   issue_number=$(jq -r '.number' <<< "$issue_json")
   issue_url=$(jq -r '.html_url' <<< "$issue_json")
   jq -n --arg body "Backfilled tracking issue: ${issue_url}" '{body: $body}' \
-    | gh api repos/harpertoken/harper/issues/${pr_number}/comments -X POST --input - >/dev/null
+    | gh api repos/coccinella-labs/harper/issues/${pr_number}/comments -X POST --input - >/dev/null
   printf '%s\t%s\t%s\n' "$pr_number" "$issue_number" "$issue_url" >> /private/tmp/harper-issue-backfill-created.tsv
   count=$((count + 1))
   printf 'created issue #%s for PR #%s (%s)\n' "$issue_number" "$pr_number" "$count"

@@ -39,14 +39,14 @@ Before installing Harper, ensure you have the following:
 Use Homebrew if you want a package-managed install on macOS.
 
 ```bash
-brew tap harpertoken/tap
-brew install harpertoken/tap/harper-ai
+brew tap coccinella-labs/tap
+brew install coccinella-labs/tap/harper-ai
 ```
 
 To update later:
 
 ```bash
-brew upgrade harpertoken/tap/harper-ai
+brew upgrade coccinella-labs/tap/harper-ai
 ```
 
 If `harper --version` still shows an older version after upgrading, another `harper` binary is earlier in your `PATH`. Check with:
@@ -207,7 +207,7 @@ You should see a welcome message. If you get an error, check:
 
 Update paths depend on how Harper was installed:
 
-- **Homebrew**: `brew upgrade harpertoken/tap/harper-ai`
+- **Homebrew**: `brew upgrade coccinella-labs/tap/harper-ai`
 - **Direct release install**: `harper self-update --check` or `harper self-update`
 - **Source build**:
   ```bash

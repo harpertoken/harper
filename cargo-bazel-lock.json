@@ -10889,7 +10889,7 @@
     "harper-core 0.20.1": {
       "name": "harper-core",
       "version": "0.20.1",
-      "package_url": "https://github.com/harpertoken/harper",
+      "package_url": "https://github.com/coccinella-labs/harper",
       "repository": null,
       "targets": [
         {
@@ -11210,7 +11210,7 @@
     "harper-mcp-server 0.1.4": {
       "name": "harper-mcp-server",
       "version": "0.1.4",
-      "package_url": "https://github.com/harpertoken/harper",
+      "package_url": "https://github.com/coccinella-labs/harper",
       "repository": null,
       "targets": [],
       "library_target_name": null,
@@ -11353,7 +11353,7 @@
     "harper-ui 0.20.1": {
       "name": "harper-ui",
       "version": "0.20.1",
-      "package_url": "https://github.com/harpertoken/harper",
+      "package_url": "https://github.com/coccinella-labs/harper",
       "repository": null,
       "targets": [
         {
@@ -11474,7 +11474,7 @@
     "harper-workspace 0.21.0": {
       "name": "harper-workspace",
       "version": "0.21.0",
-      "package_url": "https://github.com/harpertoken/harper",
+      "package_url": "https://github.com/coccinella-labs/harper",
       "repository": null,
       "targets": [
         {

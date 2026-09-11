@@ -44,7 +44,7 @@ jobs:
           mkdir -p linux-release-artifacts
           for asset in harper-linux-x86_64.tar.gz harper-linux-aarch64.tar.gz; do
             curl --fail --location --retry 12 --retry-all-errors --retry-delay 10 \
-              "https://github.com/harpertoken/harper/releases/download/${release_tag}/${asset}" \
+              "https://github.com/coccinella-labs/harper/releases/download/${release_tag}/${asset}" \
               -o "linux-release-artifacts/${asset}"
           done
 

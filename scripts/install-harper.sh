@@ -2,7 +2,7 @@
 
 set -eu
 
-REPO="${HARPER_INSTALL_REPO:-harpertoken/harper}"
+REPO="${HARPER_INSTALL_REPO:-coccinella-labs/harper}"
 TAG="${HARPER_INSTALL_TAG:-latest}"
 INSTALL_DIR="${HARPER_INSTALL_DIR:-$HOME/.local/bin}"
 TMP_DIR="${TMPDIR:-/tmp}/harper-install.$$"

@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::{env, path::Path};
 
 const UPDATE_MANIFEST_ENV: &str = "HARPER_UPDATE_MANIFEST_URL";
-const RELEASES_API_URL: &str = "https://api.github.com/repos/harpertoken/harper/releases";
+const RELEASES_API_URL: &str = "https://api.github.com/repos/coccinella-labs/harper/releases";
 const MANIFEST_ASSET_NAME: &str = "release-manifest.json";
 
 #[derive(Debug, Deserialize)]
@@ -168,7 +168,7 @@ async fn handle_self_update(args: &[String]) -> i32 {
     if check_only {
         if install_source == InstallSource::Homebrew || homebrew_path_fix.is_some() {
             if result.update_available {
-                println!("Run: brew upgrade harpertoken/tap/harper-ai");
+                println!("Run: brew upgrade coccinella-labs/tap/harper-ai");
             }
             print_homebrew_shadow_guidance(&executable, install_source);
         }
@@ -272,7 +272,7 @@ fn print_install_source_guidance(install_source: InstallSource, executable: &Pat
     match install_source {
         InstallSource::Homebrew => {
             println!("This install is managed by Homebrew.");
-            println!("Run: brew upgrade harpertoken/tap/harper-ai");
+            println!("Run: brew upgrade coccinella-labs/tap/harper-ai");
             print_homebrew_shadow_guidance(executable, install_source);
             0
         }
