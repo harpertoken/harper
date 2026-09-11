@@ -124,7 +124,7 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          coccinella-labs/harper
+          harpertoken/harper
           ghcr.io/${{ github.repository }}/harper
         tags: |
           type=ref,event=branch
