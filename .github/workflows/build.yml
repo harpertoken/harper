@@ -95,6 +95,9 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.repository_owner == 'coccinella-labs'
     needs: [build, e2e]
+    permissions:
+      contents: read
+      packages: write
 
     steps:
     - name: Checkout code
@@ -121,7 +124,7 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          harpertoken/harper
+          coccinella-labs/harper
           ghcr.io/${{ github.repository }}/harper
         tags: |
           type=ref,event=branch
