@@ -6,7 +6,7 @@ import re
 
 
 PACKAGE_NAME = "harper"
-HOMEPAGE = "https://github.com/harpertoken/harper"
+HOMEPAGE = "https://github.com/coccinella-labs/harper"
 LICENSE = "mit"
 DESCRIPTION = "Terminal assistant for code and shell work."
 

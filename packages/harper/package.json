@@ -3,10 +3,10 @@
   "version": "0.20.1",
   "description": "Harper CLI binary wrapper",
   "license": "MIT OR Apache-2.0",
-  "homepage": "https://github.com/harpertoken/harper",
+  "homepage": "https://github.com/coccinella-labs/harper",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/harpertoken/harper.git",
+    "url": "git+https://github.com/coccinella-labs/harper.git",
     "directory": "packages/harper"
   },
   "bin": {

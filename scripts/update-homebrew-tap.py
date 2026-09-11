@@ -36,7 +36,7 @@ def main() -> int:
 
     version = release_tag[len(prefix) :]
     tarball_url = (
-        f"https://github.com/harpertoken/harper/archive/refs/tags/{release_tag}.tar.gz"
+        f"https://github.com/coccinella-labs/harper/archive/refs/tags/{release_tag}.tar.gz"
     )
 
     formula_path = pathlib.Path(args.formula_path)
@@ -53,7 +53,7 @@ def main() -> int:
     content = replace_once(content, r'^  version ".*"$', f'  version "{version}"')
     content = replace_exact(
         content,
-        r'^      url "https://github\.com/harpertoken/harper/archive/refs/tags/.*\.tar\.gz"$',
+        r'^      url "https://github\.com/coccinella-labs/harper/archive/refs/tags/.*\.tar\.gz"$',
         f'      url "{tarball_url}"',
         2,
     )

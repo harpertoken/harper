@@ -7,7 +7,7 @@
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/harpertoken/harper.git"
+    "url": "https://github.com/coccinella-labs/harper.git"
   },
   "scripts": {
     "package": "vsce package --out harper-review.vsix"

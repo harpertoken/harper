@@ -1,13 +1,13 @@
 #!/bin/bash
 # Fix stale org name in SPDX/copyright headers.
-# Stale:   harpertoken       (e.g. "// Copyright 2026 harpertoken")
+# Stale:   harpertoken       (e.g. "// Copyright 2026 coccinella-labs")
 # Correct: coccinella-labs   (per git remote origin, COMMERCIAL_LICENSE,
 #                             and github.repository_owner checks)
 # Only touches lines containing "Copyright" so repo URLs like
-# github.com/harpertoken/harper are left alone.
+# github.com/coccinella-labs/harper are left alone.
 set -euo pipefail
 
-STALE="harpertoken"
+STALE="coccinella-labs"
 CORRECT="coccinella-labs"
 
 cd "$(dirname "$0")/.."

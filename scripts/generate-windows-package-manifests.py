@@ -9,7 +9,7 @@ import re
 PACKAGE_IDENTIFIER = "HarperToken.Harper"
 PACKAGE_NAME = "Harper"
 PUBLISHER = "HarperToken"
-HOMEPAGE = "https://github.com/harpertoken/harper"
+HOMEPAGE = "https://github.com/coccinella-labs/harper"
 LICENSE = "MIT OR Apache-2.0"
 DESCRIPTION = "Terminal assistant for code and shell work."
 
@@ -26,14 +26,14 @@ def version_from_tag(release_tag: str) -> str:
 
 def default_windows_asset_url(release_tag: str) -> str:
     return (
-        f"https://github.com/harpertoken/harper/releases/download/"
+        f"https://github.com/coccinella-labs/harper/releases/download/"
         f"{release_tag}/harper-windows-x86_64.zip"
     )
 
 
 def write_scoop_manifest(output_dir: pathlib.Path, version: str, asset_url: str, sha256: str) -> None:
     autoupdate_url = (
-        "https://github.com/harpertoken/harper/releases/download/"
+        "https://github.com/coccinella-labs/harper/releases/download/"
         "harper-$version/harper-windows-x86_64.zip"
     )
     manifest = {

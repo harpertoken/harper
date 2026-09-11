@@ -26,7 +26,7 @@ cargo build --release -p harper-ui --bin harper --bin harper-batch
 Or install on Mac:
 
 ```bash
-brew tap harpertoken/homebrew-tap
+brew tap coccinella-labs/homebrew-tap
 brew install harper-ai
 ```
 

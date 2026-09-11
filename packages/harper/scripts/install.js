@@ -113,7 +113,7 @@ async function main() {
 
   const asset = targetAsset();
   const archivePath = join(DOWNLOAD_DIR, basename(asset));
-  const url = `https://github.com/harpertoken/harper/releases/download/${RELEASE_TAG}/${asset}`;
+  const url = `https://github.com/coccinella-labs/harper/releases/download/${RELEASE_TAG}/${asset}`;
 
   mkdirSync(DOWNLOAD_DIR, { recursive: true });
   await download(url, archivePath);

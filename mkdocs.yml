@@ -2,8 +2,8 @@ site_name: Harper
 site_description: AI Agent for Intelligent Interactions
 site_author: Harper Contributors
 
-repo_url: https://github.com/harpertoken/harper
-repo_name: harpertoken/harper
+repo_url: https://github.com/coccinella-labs/harper
+repo_name: coccinella-labs/harper
 
 theme:
   name: material
@@ -53,6 +53,6 @@ plugins:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/harpertoken/harper
+      link: https://github.com/coccinella-labs/harper
 
 copyright: Copyright &copy; 2026 Harper Contributors

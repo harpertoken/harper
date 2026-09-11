@@ -19,8 +19,8 @@ rust-version = "1.85.0"
 authors = ["Harper Contributors"]
 license = "MIT OR Apache-2.0"
 description = "Core logic for Harper AI assistant"
-repository = "https://github.com/harpertoken/harper"
-homepage = "https://github.com/harpertoken/harper"
+repository = "https://github.com/coccinella-labs/harper"
+homepage = "https://github.com/coccinella-labs/harper"
 
 [dependencies]
 arboard = "3.4.0"

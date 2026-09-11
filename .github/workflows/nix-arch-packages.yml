@@ -43,10 +43,10 @@ jobs:
           set -euo pipefail
           release_tag="${{ github.event.inputs.release_tag || github.ref_name }}"
           curl --fail --location --retry 12 --retry-all-errors --retry-delay 10 \
-            "https://github.com/harpertoken/harper/releases/download/${release_tag}/harper-linux-x86_64.tar.gz" \
+            "https://github.com/coccinella-labs/harper/releases/download/${release_tag}/harper-linux-x86_64.tar.gz" \
             -o harper-linux-x86_64.tar.gz
           curl --fail --location --retry 12 --retry-all-errors --retry-delay 10 \
-            "https://github.com/harpertoken/harper/releases/download/${release_tag}/harper-linux-aarch64.tar.gz" \
+            "https://github.com/coccinella-labs/harper/releases/download/${release_tag}/harper-linux-aarch64.tar.gz" \
             -o harper-linux-aarch64.tar.gz
 
           echo "linux_x86_64_sha256=$(sha256sum harper-linux-x86_64.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
