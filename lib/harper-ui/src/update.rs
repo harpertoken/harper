@@ -515,6 +515,38 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
+    /// Serializes tests that mutate the process-global manifest override.
+    static UPDATE_MANIFEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Restores the previous manifest override on drop, even if the test panics.
+    struct UpdateManifestEnvGuard {
+        saved: Option<std::ffi::OsString>,
+    }
+
+    impl UpdateManifestEnvGuard {
+        fn set(value: &str) -> Self {
+            let saved = std::env::var_os(super::UPDATE_MANIFEST_ENV);
+            unsafe {
+                std::env::set_var(super::UPDATE_MANIFEST_ENV, value);
+            }
+            Self { saved }
+        }
+    }
+
+    impl Drop for UpdateManifestEnvGuard {
+        fn drop(&mut self) {
+            if let Some(value) = self.saved.take() {
+                unsafe {
+                    std::env::set_var(super::UPDATE_MANIFEST_ENV, value);
+                }
+            } else {
+                unsafe {
+                    std::env::remove_var(super::UPDATE_MANIFEST_ENV);
+                }
+            }
+        }
+    }
+
     #[tokio::test]
     async fn version_command_is_handled() {
         let args = vec!["harper".to_string(), "version".to_string()];
@@ -523,47 +555,25 @@ mod tests {
 
     #[tokio::test]
     async fn self_update_command_is_handled() {
-        let saved = std::env::var_os(super::UPDATE_MANIFEST_ENV);
-        unsafe {
-            std::env::set_var(super::UPDATE_MANIFEST_ENV, "://invalid-manifest-url");
-        }
+        let _lock = UPDATE_MANIFEST_ENV_LOCK.lock().unwrap();
+        let _guard = UpdateManifestEnvGuard::set("://invalid-manifest-url");
         let args = vec![
             "harper".to_string(),
             "self-update".to_string(),
             "--check".to_string(),
         ];
         assert_eq!(handle_update_command(&args).await, Some(2));
-        if let Some(value) = saved {
-            unsafe {
-                std::env::set_var(super::UPDATE_MANIFEST_ENV, value);
-            }
-        } else {
-            unsafe {
-                std::env::remove_var(super::UPDATE_MANIFEST_ENV);
-            }
-        }
     }
 
     #[tokio::test]
     async fn fetch_update_status_is_err_with_invalid_manifest_env() {
-        let saved = std::env::var_os(super::UPDATE_MANIFEST_ENV);
-        unsafe {
-            std::env::set_var(super::UPDATE_MANIFEST_ENV, "://invalid-manifest-url");
-        }
+        let _lock = UPDATE_MANIFEST_ENV_LOCK.lock().unwrap();
+        let _guard = UpdateManifestEnvGuard::set("://invalid-manifest-url");
         assert_eq!(
             configured_manifest_url().as_deref(),
             Some("://invalid-manifest-url")
         );
         assert!(fetch_update_status().await.is_err());
-        if let Some(value) = saved {
-            unsafe {
-                std::env::set_var(super::UPDATE_MANIFEST_ENV, value);
-            }
-        } else {
-            unsafe {
-                std::env::remove_var(super::UPDATE_MANIFEST_ENV);
-            }
-        }
     }
 
     #[test]
