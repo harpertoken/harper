@@ -516,7 +516,17 @@ mod tests {
     use tempfile::tempdir;
 
     /// Serializes tests that mutate the process-global manifest override.
-    static UPDATE_MANIFEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    /// Async-aware mutex: the guard is held across await points, which
+    /// clippy::await_holding_lock forbids for std::sync::Mutex.
+    static UPDATE_MANIFEST_ENV_LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> =
+        std::sync::OnceLock::new();
+
+    async fn lock_manifest_env() -> tokio::sync::MutexGuard<'static, ()> {
+        UPDATE_MANIFEST_ENV_LOCK
+            .get_or_init(|| tokio::sync::Mutex::new(()))
+            .lock()
+            .await
+    }
 
     /// Restores the previous manifest override on drop, even if the test panics.
     struct UpdateManifestEnvGuard {
@@ -555,7 +565,7 @@ mod tests {
 
     #[tokio::test]
     async fn self_update_command_is_handled() {
-        let _lock = UPDATE_MANIFEST_ENV_LOCK.lock().unwrap();
+        let _lock = lock_manifest_env().await;
         let _guard = UpdateManifestEnvGuard::set("://invalid-manifest-url");
         let args = vec![
             "harper".to_string(),
@@ -567,7 +577,7 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_update_status_is_err_with_invalid_manifest_env() {
-        let _lock = UPDATE_MANIFEST_ENV_LOCK.lock().unwrap();
+        let _lock = lock_manifest_env().await;
         let _guard = UpdateManifestEnvGuard::set("://invalid-manifest-url");
         assert_eq!(
             configured_manifest_url().as_deref(),
