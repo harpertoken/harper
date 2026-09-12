@@ -1135,6 +1135,7 @@ dependencies = [
  "lock_api",
  "once_cell",
  "parking_lot_core",
+ "serde",
 ]
 
 [[package]]
@@ -1891,6 +1892,7 @@ dependencies = [
  "harper-core",
  "image",
  "keyring",
+ "keyring-core",
  "ratatui",
  "reqwest 0.12.28",
  "rusqlite",
@@ -2532,7 +2534,13 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb1e621458ca9c51aa110bd0339d4751a056b9576bf1253aee1aa560dda0fc9d"
 dependencies = [
+ "chrono",
+ "dashmap",
  "log",
+ "regex",
+ "ron",
+ "serde",
+ "uuid",
 ]
 
 [[package]]

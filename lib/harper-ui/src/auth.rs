@@ -140,7 +140,7 @@ fn logout(provider: Provider) -> HarperResult<()> {
     let entry = Entry::new(KEYRING_SERVICE, provider.account_name())
         .map_err(|e| HarperError::Crypto(format!("Failed to open keychain entry: {}", e)))?;
     entry
-        .delete_password()
+        .delete_credential()
         .map_err(|e| HarperError::Crypto(format!("Failed to remove key: {}", e)))?;
     Ok(())
 }

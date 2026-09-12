@@ -198,7 +198,7 @@ pub fn save_auth_session(session: &AuthSession) -> Result<(), String> {
 
 pub fn clear_auth_session() -> Result<(), String> {
     if let Ok(entry) = auth_session_entry() {
-        match entry.delete_password() {
+        match entry.delete_credential() {
             Ok(()) | Err(KeyringError::NoEntry) => {}
             Err(err) => return Err(err.to_string()),
         }
@@ -485,11 +485,25 @@ mod tests {
         load_auth_session, parse_tui_auth_command, StoredAuthSession, TuiAuthCommand,
     };
     use harper_core::{AuthSession, AuthenticatedUser, UserAuthProvider};
-    use keyring::{mock, set_default_credential_builder};
     use reqwest::StatusCode;
     use std::sync::Mutex;
 
     static KEYRING_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Redirect keyring operations to the in-memory sample store so tests
+    /// never touch the real OS keychain. Must be called with
+    /// `KEYRING_TEST_LOCK` held.
+    ///
+    /// `keyring::Entry` performs a one-time platform store initialization
+    /// that unconditionally overwrites the default store, so the sample
+    /// store has to be installed after that init has run.
+    fn use_sample_keyring_store() {
+        let _ = keyring::Entry::store_status();
+        use keyring_core::sample::Store;
+        use std::collections::HashMap;
+        let store = Store::new_with_configuration(&HashMap::new()).expect("sample keyring store");
+        keyring_core::set_default_store(store);
+    }
 
     #[test]
     fn parses_tui_auth_login_command() {
@@ -503,7 +517,7 @@ mod tests {
     #[test]
     fn loads_auth_session_from_legacy_file() {
         let _guard = keyring_test_guard();
-        set_default_credential_builder(mock::default_credential_builder());
+        use_sample_keyring_store();
 
         let original_home = std::env::var_os("HOME");
         let temp_dir =
@@ -549,7 +563,7 @@ mod tests {
     #[test]
     fn clear_auth_session_removes_legacy_file_fallback() {
         let _guard = keyring_test_guard();
-        set_default_credential_builder(mock::default_credential_builder());
+        use_sample_keyring_store();
 
         let original_home = std::env::var_os("HOME");
         let temp_dir =
