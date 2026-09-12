@@ -22,6 +22,8 @@ on:
 jobs:
   nightly-checks:
     name: Nightly
+    permissions:
+      contents: write
     uses: coccinella-labs/rust-nightly/.github/workflows/nightly.yml@main
     with:
       rust-version: stable
