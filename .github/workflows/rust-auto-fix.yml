@@ -28,14 +28,16 @@ jobs:
     steps:
     - name: Check fix type
       id: check
+      env:
+        COMMENT_BODY: ${{ github.event.comment.body }}
       run: |
-        comment="${{ github.event.comment.body }}"
+        comment="$COMMENT_BODY"
         fixes=""
         if [[ "$comment" == *"/rust-fix all"* ]]; then fixes="all"
         elif [[ "$comment" == *"/rust-fix clippy"* ]]; then fixes="clippy"
         elif [[ "$comment" == *"/rust-fix fmt"* ]]; then fixes="fmt"
         fi
-        echo "fixes=$fixes" >> $GITHUB_OUTPUT
+        echo "fixes=$fixes" >> "$GITHUB_OUTPUT"
 
     - name: Comment confirmation
       if: steps.check.outputs.fixes != ''
