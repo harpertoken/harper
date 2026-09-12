@@ -298,6 +298,8 @@ jobs:
   release-assets-from-direct:
     name: Assets From Dispatch
     needs: [prepare-release-assets-inputs, release-pr]
+    permissions:
+      contents: write
     if: |
       github.event_name == 'workflow_dispatch' &&
       github.event.inputs.release_mode == 'direct' &&
@@ -320,6 +322,8 @@ jobs:
   release-assets-from-merge:
     name: Assets From Merge
     needs: [prepare-release-assets-inputs, create-tags]
+    permissions:
+      contents: write
     if: |
       needs.create-tags.result == 'success' &&
       needs.create-tags.outputs.released == 'true' &&
@@ -340,6 +344,8 @@ jobs:
   release-assets:
     name: Assets
     needs: prepare-release-assets-inputs
+    permissions:
+      contents: write
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     uses: coccinella-labs/release-assets/.github/workflows/release-assets.yml@main
     with:
