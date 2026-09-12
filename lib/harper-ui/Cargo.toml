@@ -32,7 +32,7 @@ arboard = "3.4.0"
 colored = "3.0.0"
 crossterm = "0.29.0"
 dotenvy = "0.15"
-keyring = "2.3"
+keyring = "4.2"
 ratatui = "0.30"
 syntect = { version = "5.3", features = ["parsing", "html"] }
 image = "0.25.6"
@@ -48,6 +48,7 @@ async-trait = "0.1"
 
 [dev-dependencies]
 tempfile = "3.3.0"
+keyring-core = { version = "1", features = ["sample"] }
 
 [[bin]]
 name = "harper"
